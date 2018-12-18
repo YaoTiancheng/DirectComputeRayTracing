@@ -1,0 +1,94 @@
+#include "stdafx.h"
+#include "D3D11RenderSystem.h"
+
+ID3D11Device*           g_Device = nullptr;
+ID3D11DeviceContext*    g_DeviceContext = nullptr;
+IDXGISwapChain*         g_SwapChain = nullptr;
+
+ID3D11Device* GetDevice()
+{
+    return g_Device;
+}
+
+ID3D11DeviceContext* GetDeviceContext()
+{
+    return g_DeviceContext;
+}
+
+IDXGISwapChain* GetSwapChain()
+{
+    return g_SwapChain;
+}
+
+bool InitRenderSystem(HWND hWnd)
+{
+    DXGI_SWAP_CHAIN_DESC swapChainDesc;
+    ZeroMemory(&swapChainDesc, sizeof(DXGI_SWAP_CHAIN_DESC));
+    swapChainDesc.BufferDesc.RefreshRate.Numerator = 60;
+    swapChainDesc.BufferDesc.RefreshRate.Denominator = 1;
+    swapChainDesc.BufferDesc.Format = DXGI_FORMAT::DXGI_FORMAT_R8G8B8A8_UNORM;
+    swapChainDesc.SampleDesc.Count = 1;
+    swapChainDesc.BufferUsage = DXGI_USAGE_BACK_BUFFER;
+    swapChainDesc.BufferCount = 1;
+    swapChainDesc.OutputWindow = hWnd;
+    swapChainDesc.Windowed = TRUE;
+    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT::DXGI_SWAP_EFFECT_DISCARD;
+
+    HRESULT hr = D3D11CreateDeviceAndSwapChain(NULL
+        , D3D_DRIVER_TYPE_HARDWARE
+        , NULL
+        , D3D11_CREATE_DEVICE_SINGLETHREADED || D3D11_CREATE_DEVICE_DEBUG
+        , NULL
+        , 0
+        , D3D11_SDK_VERSION
+        , &swapChainDesc
+        , &g_SwapChain
+        , &g_Device
+        , NULL
+        , &g_DeviceContext);
+
+    if (FAILED(hr))
+        return false;
+
+    return true;
+}
+
+void FiniRenderSystem()
+{
+    g_SwapChain->Release();
+    g_DeviceContext->Release();
+    g_Device->Release();
+
+    g_SwapChain = nullptr;
+    g_DeviceContext = nullptr;
+    g_Device = nullptr;
+}
+
+ID3DBlob* CompileFromFile(LPCWSTR filename, LPCSTR entryPoint, LPCSTR target)
+{
+    ID3DBlob* shaderBlob = nullptr;
+    ID3DBlob* errorBlob = nullptr;
+    HRESULT hr = D3DCompileFromFile(filename, NULL, NULL, entryPoint, target, D3DCOMPILE_DEBUG, 0, &shaderBlob, &errorBlob);
+    if (FAILED(hr))
+    {
+        if (errorBlob)
+        {
+            OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+            errorBlob->Release();
+        }
+
+        if (shaderBlob)
+            shaderBlob->Release();
+    }
+
+    return shaderBlob;
+}
+
+ID3D11ComputeShader* CreateComputeShader(ID3DBlob* shaderBlob)
+{
+    ID3D11ComputeShader* computeShader = nullptr;
+    HRESULT hr = GetDevice()->CreateComputeShader(shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), NULL, &computeShader);
+    return computeShader;
+}
+
+

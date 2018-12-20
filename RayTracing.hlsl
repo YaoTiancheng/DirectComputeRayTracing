@@ -12,6 +12,7 @@ struct RayTracingConstants
     uint        maxBounceCount;
     uint        sphereCount;
     uint        samplesCount;
+    uint        samplesCountPerPixel;
     float2      resolution;
     float2      filmSize;
     float       filmDistance;
@@ -22,7 +23,7 @@ struct RayTracingConstants
 
 StructuredBuffer<Sphere>                g_Spheres;
 StructuredBuffer<RayTracingConstants>   g_Constants;
-Buffer<float>                           g_Samples;
+StructuredBuffer<float>                 g_Samples;
 RWTexture2D<float4>                     g_FilmTexture;
 
 #define PI 3.1415
@@ -168,9 +169,9 @@ void SampleLambertBRDF(float4 wo
     , float4 albedo
     , float4 normal
     , float4 tangent
-	, out float4 wi
-	, out float4 value
-	, out float4 pdf)
+    , out float4 wi
+    , out float4 value
+    , out float4 pdf)
 {
     wi = ConsineSampleHemisphere(sample);
     value = albedo / PI;
@@ -187,7 +188,7 @@ bool IntersectScene(float4 origin
 	, out float4 position
 	, out float4 normal
     , out float4 tangent
-	, out float4 albedo)
+    , out float4 albedo)
 {
     float tMin = 1.0f / 0.0f;
 
@@ -215,7 +216,9 @@ void AddSampleToFilm(float4 l
     , float2 sample
     , uint2 pixelPos)
 {
-    g_FilmTexture[pixelPos] = l;
+    float4 c = g_FilmTexture[pixelPos];
+    c = (c * g_Constants[0].samplesCountPerPixel + l) / (g_Constants[0].samplesCountPerPixel + 1);
+    g_FilmTexture[pixelPos] = c;
 }
 
 [numthreads(1, 1, 1)]

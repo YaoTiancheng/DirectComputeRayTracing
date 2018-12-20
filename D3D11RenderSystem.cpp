@@ -37,7 +37,7 @@ bool InitRenderSystem(HWND hWnd)
     HRESULT hr = D3D11CreateDeviceAndSwapChain(NULL
         , D3D_DRIVER_TYPE_HARDWARE
         , NULL
-        , D3D11_CREATE_DEVICE_SINGLETHREADED || D3D11_CREATE_DEVICE_DEBUG
+        , D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_DEBUG
         , NULL
         , 0
         , D3D11_SDK_VERSION
@@ -57,6 +57,13 @@ void FiniRenderSystem()
 {
     g_SwapChain->Release();
     g_DeviceContext->Release();
+
+    ID3D11Debug *d3dDebug;
+    HRESULT hr = g_Device->QueryInterface(__uuidof(ID3D11Debug), reinterpret_cast<void**>(&d3dDebug));
+    if (SUCCEEDED(hr))
+        hr = d3dDebug->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL);
+    if (d3dDebug)
+        d3dDebug->Release();
     g_Device->Release();
 
     g_SwapChain = nullptr;

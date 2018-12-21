@@ -2,6 +2,22 @@
 #include "Scene.h"
 #include "D3D11RenderSystem.h"
 
+using namespace DirectX;
+
+XMFLOAT4 kScreenQuadVertices[6] = 
+{
+    { -1.0f,  1.0f,  0.0f,  1.0f },
+    {  1.0f,  1.0f,  0.0f,  1.0f },
+    { -1.0f, -1.0f,  0.0f,  1.0f },
+    { -1.0f, -1.0f,  0.0f,  1.0f },
+    {  1.0f,  1.0f,  0.0f,  1.0f },
+    {  1.0f, -1.0f,  0.0f,  1.0f },
+};
+
+D3D11_INPUT_ELEMENT_DESC kScreenQuadInputElementDesc[1]
+{
+    { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+};
 
 bool Scene::Init(uint32_t resolutionWidth, uint32_t resolutionHeight)
 {
@@ -29,12 +45,12 @@ bool Scene::Init(uint32_t resolutionWidth, uint32_t resolutionHeight)
     if (FAILED(hr))
         return false;
 
-    ID3DBlob* csBlob = CompileFromFile(L"RayTracing.hlsl", "main", "cs_5_0");
-    if (!csBlob)
+    ID3DBlob* shaderBlob = CompileFromFile(L"RayTracing.hlsl", "main", "cs_5_0");
+    if (!shaderBlob)
         return false;
 
-    m_RayTracingComputeShader.Attach(CreateComputeShader(csBlob));
-    csBlob->Release();
+    m_RayTracingComputeShader.Attach(CreateComputeShader(shaderBlob));
+    shaderBlob->Release();
     if (!m_RayTracingComputeShader)
         return false;
 
@@ -92,5 +108,121 @@ bool Scene::Init(uint32_t resolutionWidth, uint32_t resolutionHeight)
     if (FAILED(hr))
         return false;
 
+    shaderBlob = CompileFromFile(L"PostProcessings.hlsl", "ScreenQuadMainVS", "vs_5_0");
+    if (!shaderBlob)
+        return false;
+
+    m_ScreenQuadVertexShader.Attach(CreateVertexShader(shaderBlob));
+    hr = device->CreateInputLayout(kScreenQuadInputElementDesc, 1, shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), &m_ScreenQuadVertexInputLayout);
+    shaderBlob->Release();
+    if (!m_ScreenQuadVertexShader || !m_ScreenQuadVertexInputLayout)
+        return false;
+
+    shaderBlob = CompileFromFile(L"PostProcessings.hlsl", "CopyMainPS", "ps_5_0");
+    if (!shaderBlob)
+        return false;
+
+    m_CopyPixelShader.Attach(CreatePixelShader(shaderBlob));
+    shaderBlob->Release();
+    if (!m_CopyPixelShader)
+        return false;
+
+    bufferDesc.ByteWidth = sizeof(kScreenQuadVertices);
+    bufferDesc.Usage = D3D11_USAGE_IMMUTABLE;
+    bufferDesc.CPUAccessFlags = 0;
+    bufferDesc.StructureByteStride = sizeof(XMFLOAT4);
+    bufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    bufferDesc.MiscFlags = 0;
+    subresourceData.pSysMem = kScreenQuadVertices;
+    hr = device->CreateBuffer(&bufferDesc, &subresourceData, &m_ScreenQuadVertexBuffer);
+    if (FAILED(hr))
+        return false;
+
+    ID3D11Texture2D *backBuffer = nullptr;
+    GetSwapChain()->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)(&backBuffer));
+    hr = device->CreateRenderTargetView(backBuffer, nullptr, &m_DefaultRenderTargetView);
+    backBuffer->Release();
+    if (FAILED(hr))
+        return false;
+
+    D3D11_SAMPLER_DESC samplerDesc;
+    ZeroMemory(&samplerDesc, sizeof(D3D11_SAMPLER_DESC));
+    samplerDesc.Filter = D3D11_FILTER_COMPARISON_MIN_MAG_MIP_POINT;
+    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+    hr = device->CreateSamplerState(&samplerDesc, &m_CopySamplerState);
+    if (FAILED(hr))
+        return false;
+
+    m_ResolutionWidth = resolutionWidth;
+    m_ResolutionHeight = resolutionHeight;
+    m_DefaultViewport = { 0.0f, 0.0f, (float)resolutionWidth, (float)resolutionHeight, 0.0f, 1.0f };
+
     return true;
 }
+
+void Scene::ResetScene()
+{
+    m_Spheres[0].center = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+    m_Spheres[0].radius = 0.5f;
+    m_Spheres[0].albedo = XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);
+    m_RayTracingConstants.sphereCount = 1;
+}
+
+void Scene::AddOneSampleAndRender()
+{
+    AddOneSample();
+    OnPostProcessing();
+}
+
+void Scene::AddOneSample()
+{
+    ID3D11DeviceContext* deviceContext = GetDeviceContext();
+
+    deviceContext->CSSetShader(m_RayTracingComputeShader.Get(), nullptr, 0);
+
+    ID3D11UnorderedAccessView* rawFilmTextureUAV = m_FilmTextureUAV.Get();
+    deviceContext->CSSetUnorderedAccessViews(0, 1, &rawFilmTextureUAV, nullptr);
+
+    ID3D11ShaderResourceView* rawSRVs[] = { m_SpheresSRV.Get(), m_RayTracingConstantsSRV.Get(), m_SamplesSRV.Get() };
+    deviceContext->CSSetShaderResources(0, 3, rawSRVs);
+
+    UINT threadGroupCountX = (UINT)ceil(m_ResolutionWidth / 16.0f);
+    UINT threadGroupCountY = (UINT)ceil(m_ResolutionHeight / 16.0f);
+    deviceContext->Dispatch(threadGroupCountX, threadGroupCountY, 1);
+
+    rawFilmTextureUAV = nullptr;
+    deviceContext->CSSetUnorderedAccessViews(0, 1, &rawFilmTextureUAV, nullptr);
+}
+
+void Scene::OnPostProcessing()
+{
+    ID3D11DeviceContext* deviceContext = GetDeviceContext();
+
+    UINT vertexStride = sizeof(XMFLOAT4);
+    UINT vertexOffset = 0;
+    ID3D11Buffer* rawScreenQuadVertexBuffer = m_ScreenQuadVertexBuffer.Get();
+    deviceContext->IASetVertexBuffers(0, 1, &rawScreenQuadVertexBuffer, &vertexStride, &vertexOffset);
+    deviceContext->IASetInputLayout(m_ScreenQuadVertexInputLayout.Get());
+    deviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    ID3D11RenderTargetView* rawDefaultRenderTargetView = m_DefaultRenderTargetView.Get();
+    deviceContext->OMSetRenderTargets(1, &rawDefaultRenderTargetView, nullptr);
+
+    deviceContext->RSSetViewports(1, &m_DefaultViewport);
+
+    deviceContext->VSSetShader(m_ScreenQuadVertexShader.Get(), nullptr, 0);
+    deviceContext->PSSetShader(m_CopyPixelShader.Get(), nullptr, 0);
+
+    ID3D11SamplerState* rawCopySamplerState = m_CopySamplerState.Get();
+    deviceContext->PSSetSamplers(0, 1, &rawCopySamplerState);
+    ID3D11ShaderResourceView* rawFilmTextureSRV = m_FilmTextureSRV.Get();
+    deviceContext->PSSetShaderResources(0, 1, &rawFilmTextureSRV);
+
+    deviceContext->Draw(6, 0);
+}
+
+

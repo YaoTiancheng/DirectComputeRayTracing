@@ -13,3 +13,7 @@ void                    FiniRenderSystem();
 ID3DBlob*               CompileFromFile(LPCWSTR filename, LPCSTR entryPoint, LPCSTR target);
 
 ID3D11ComputeShader*    CreateComputeShader(ID3DBlob* shaderBlob);
+
+ID3D11VertexShader*     CreateVertexShader(ID3DBlob* shaderBlob);
+
+ID3D11PixelShader*      CreatePixelShader(ID3DBlob* shaderBlob);

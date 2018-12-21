@@ -62,6 +62,7 @@
     </Image>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="RayTracing.hlsl" />
+    <None Include="RayTracing.hlsl" />
+    <None Include="PostProcessings.hlsl" />
   </ItemGroup>
 </Project>

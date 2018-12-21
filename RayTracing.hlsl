@@ -218,10 +218,11 @@ void AddSampleToFilm(float4 l
 {
     float4 c = g_FilmTexture[pixelPos];
     c = (c * g_Constants[0].samplesCountPerPixel + l) / (g_Constants[0].samplesCountPerPixel + 1);
-    g_FilmTexture[pixelPos] = c;
+    //g_FilmTexture[pixelPos] = c;
+    g_FilmTexture[pixelPos] = 1.0f;
 }
 
-[numthreads(1, 1, 1)]
+[numthreads(16, 16, 1)]
 void main(uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID)
 {
     float4 pathThroughput = (float4) 1.0f;

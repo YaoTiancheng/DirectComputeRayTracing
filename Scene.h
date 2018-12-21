@@ -17,7 +17,7 @@ struct RayTracingConstants
     DirectX::XMFLOAT2   resolution;
     DirectX::XMFLOAT2   filmSize;
     float               filmDistance;
-    DirectX::XMMATRIX   cameraTransform;
+    DirectX::XMFLOAT4X4 cameraTransform;
     DirectX::XMFLOAT4   background;
 };
 
@@ -28,9 +28,24 @@ public:
 
     bool Init(uint32_t resolutionWidth, uint32_t resolutionHeight);
 
+    void ResetScene();
+
+    void AddOneSampleAndRender();
+
+private:
+    void AddOneSample();
+
+    void OnPostProcessing();
+
+
 private:
     static const int kMaxSamplesCount = 65536;
     static const int kMaxSpheresCount = 32;
+
+    uint32_t                            m_ResolutionWidth;
+    uint32_t                            m_ResolutionHeight;
+
+    D3D11_VIEWPORT                      m_DefaultViewport;
 
     RayTracingConstants                 m_RayTracingConstants;
     float                               m_Samples[kMaxSamplesCount];
@@ -38,7 +53,10 @@ private:
 
     template <typename T>
     using ComPtr = Microsoft::WRL::ComPtr<T>;
+    ComPtr<ID3D11SamplerState>          m_CopySamplerState;
     ComPtr<ID3D11ComputeShader>         m_RayTracingComputeShader;
+    ComPtr<ID3D11VertexShader>          m_ScreenQuadVertexShader;
+    ComPtr<ID3D11PixelShader>           m_CopyPixelShader;
     ComPtr<ID3D11ShaderResourceView>    m_RayTracingConstantsSRV;
     ComPtr<ID3D11ShaderResourceView>    m_SamplesSRV;
     ComPtr<ID3D11ShaderResourceView>    m_SpheresSRV;
@@ -48,4 +66,7 @@ private:
     ComPtr<ID3D11Buffer>                m_RayTracingConstantsBuffer;
     ComPtr<ID3D11Buffer>                m_SamplesBuffer;
     ComPtr<ID3D11Buffer>                m_SpheresBuffer;
+    ComPtr<ID3D11Buffer>                m_ScreenQuadVertexBuffer;
+    ComPtr<ID3D11InputLayout>           m_ScreenQuadVertexInputLayout;
+    ComPtr<ID3D11RenderTargetView>      m_DefaultRenderTargetView;
 };

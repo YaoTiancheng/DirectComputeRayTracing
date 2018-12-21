@@ -75,7 +75,7 @@ ID3DBlob* CompileFromFile(LPCWSTR filename, LPCSTR entryPoint, LPCSTR target)
 {
     ID3DBlob* shaderBlob = nullptr;
     ID3DBlob* errorBlob = nullptr;
-    HRESULT hr = D3DCompileFromFile(filename, NULL, NULL, entryPoint, target, D3DCOMPILE_DEBUG, 0, &shaderBlob, &errorBlob);
+    HRESULT hr = D3DCompileFromFile(filename, NULL, NULL, entryPoint, target, D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION, 0, &shaderBlob, &errorBlob);
     if (FAILED(hr))
     {
         if (errorBlob)

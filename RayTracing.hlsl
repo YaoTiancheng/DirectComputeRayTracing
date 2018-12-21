@@ -21,9 +21,9 @@ struct RayTracingConstants
 };
 
 
-StructuredBuffer<Sphere>                g_Spheres;
-StructuredBuffer<RayTracingConstants>   g_Constants;
-StructuredBuffer<float>                 g_Samples;
+StructuredBuffer<Sphere>                g_Spheres   : register(t0);
+StructuredBuffer<RayTracingConstants>   g_Constants : register(t1);
+StructuredBuffer<float>                 g_Samples   : register(t2);
 RWTexture2D<float4>                     g_FilmTexture;
 
 #define PI 3.1415
@@ -159,6 +159,7 @@ void GenerateRay(float2 sample
     float2 filmSample = float2(sample.x - 0.5f, -sample.y + 0.5f) * filmSize;
     origin = float4(0.0f, 0.0f, filmDistance, 1.0f);
     direction = normalize(origin - float4(filmSample, 0.0f, 1.0f));
+    direction.xy = -direction.xy;
 
     origin = mul(origin, cameraTransform);
     direction = mul(direction, cameraTransform);
@@ -173,12 +174,16 @@ void SampleLambertBRDF(float4 wo
     , out float4 value
     , out float4 pdf)
 {
-    wi = ConsineSampleHemisphere(sample);
-    value = albedo / PI;
-    pdf = dot(wo, wi) / PI;
-
     float4 biNormal = float4(cross(tangent.xyz, normal.xyz), 0.0f);
     float4x4 tbn2world = float4x4(tangent, biNormal, normal, float4(0.0f, 0.0f, 0.0f, 1.0f));
+    float4x4 world2tbn = transpose(tbn2world);
+
+    wo = mul(wo, world2tbn);
+
+    wi = ConsineSampleHemisphere(sample);
+    value = wi.z > 0.0f ? albedo / PI : 0.0f;
+    pdf = dot(float4(0.0f, 0.0f, 1.0f, 0.0f), wi) / PI;
+
     wi = mul(wi, tbn2world);
 }
 
@@ -196,7 +201,7 @@ bool IntersectScene(float4 origin
     {
         float t;
         float4 testPosition, testNormal, testTangent, testAlbedo;
-        if (RaySphereIntersect(origin, direction, g_Spheres[i], t, testPosition, testNormal, testTangent, testAlbedo))
+        if (RaySphereIntersect(origin + direction * epsilon, direction, g_Spheres[i], t, testPosition, testNormal, testTangent, testAlbedo))
         {
             if (t < tMin)
             {
@@ -217,9 +222,8 @@ void AddSampleToFilm(float4 l
     , uint2 pixelPos)
 {
     float4 c = g_FilmTexture[pixelPos];
-    c = (c * g_Constants[0].samplesCountPerPixel + l) / (g_Constants[0].samplesCountPerPixel + 1);
-    //g_FilmTexture[pixelPos] = c;
-    g_FilmTexture[pixelPos] = 1.0f;
+    c += float4(l.xyz, 1.0f);
+    g_FilmTexture[pixelPos] = c;
 }
 
 [numthreads(16, 16, 1)]
@@ -228,28 +232,44 @@ void main(uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID)
     float4 pathThroughput = (float4) 1.0f;
     float4 normal, tangent, position, l, wi, wo, albedo;
 
-    float2 pixelSample = (GetNextSample2() + pixelPos) / g_Constants[0].resolution;
-    GenerateRay(pixelSample, g_Constants[0].filmSize, g_Constants[0].filmDistance, g_Constants[0].cameraTransform, position, wo);
+    float2 pixelSample = GetNextSample2();
+    float2 filmSample = (pixelSample + pixelPos) / g_Constants[0].resolution;
+    GenerateRay(filmSample, g_Constants[0].filmSize, g_Constants[0].filmDistance, g_Constants[0].cameraTransform, position, wo);
 
-    uint iBounce = 0;
-    while (1)
+    if (IntersectScene(position, wo, 0.00001f, position, normal, tangent, albedo))
     {
-        if (iBounce == g_Constants[0].maxBounceCount)
-            break;
-
-        float4 brdf, pdf;
-        SampleLambertBRDF(wo, GetNextSample2(), albedo, normal, tangent, wi, brdf, pdf);
-
-        float NdotL = dot(wi, normal);
-        pathThroughput = pathThroughput * brdf * NdotL / pdf;
-
-        if (!IntersectScene(position, wi, 0.00001f, position, normal, tangent, albedo))
+        uint iBounce = 0;
+        while (1)
         {
-            l += pathThroughput * g_Constants[0].background;
-            break;
-        }
+            if (iBounce == g_Constants[0].maxBounceCount)
+                break;
 
-        ++iBounce;
+            float4 brdf, pdf;
+            SampleLambertBRDF(-wo, GetNextSample2(), albedo, normal, tangent, wi, brdf, pdf);
+
+            // Sometimes BRDF value at wi is zero.
+            if (all(brdf == 0.0f))
+                break;
+
+            float NdotL = dot(wi, normal);
+            pathThroughput = pathThroughput * brdf * NdotL / pdf;
+
+            if (!IntersectScene(position, wi, 0.00001f, position, normal, tangent, albedo))
+            {
+                l += pathThroughput * g_Constants[0].background;
+                break;
+            }
+            else
+            {
+                wo = wi;
+            }
+
+            ++iBounce;
+        }
+    }
+    else
+    {
+        l = g_Constants[0].background;
     }
 
     AddSampleToFilm(l, pixelSample, pixelPos);

@@ -25,6 +25,7 @@ struct RayTracingConstants
 class Scene
 {
 public:
+    Scene();
 
     bool Init(uint32_t resolutionWidth, uint32_t resolutionHeight);
 
@@ -35,20 +36,22 @@ public:
 private:
     void AddOneSample();
 
-    void OnPostProcessing();
+    void DoPostProcessing();
+
+    bool UpdateResources();
+
+    void DispatchRayTracing();
+
+    void ClearFilmTexture();
 
 
 private:
     static const int kMaxSamplesCount = 65536;
     static const int kMaxSpheresCount = 32;
 
-    uint32_t                            m_ResolutionWidth;
-    uint32_t                            m_ResolutionHeight;
-
     D3D11_VIEWPORT                      m_DefaultViewport;
 
     RayTracingConstants                 m_RayTracingConstants;
-    float                               m_Samples[kMaxSamplesCount];
     Sphere                              m_Spheres[kMaxSpheresCount];
 
     template <typename T>
@@ -69,4 +72,5 @@ private:
     ComPtr<ID3D11Buffer>                m_ScreenQuadVertexBuffer;
     ComPtr<ID3D11InputLayout>           m_ScreenQuadVertexInputLayout;
     ComPtr<ID3D11RenderTargetView>      m_DefaultRenderTargetView;
+    ComPtr<ID3D11RenderTargetView>      m_FilmTextureRenderTargetView;
 };

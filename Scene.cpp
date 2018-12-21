@@ -19,6 +19,11 @@ D3D11_INPUT_ELEMENT_DESC kScreenQuadInputElementDesc[1]
     { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 };
 
+Scene::Scene()
+{
+    m_RayTracingConstants.maxBounceCount = 1;
+}
+
 bool Scene::Init(uint32_t resolutionWidth, uint32_t resolutionHeight)
 {
     ID3D11Device* device = GetDevice();
@@ -32,7 +37,7 @@ bool Scene::Init(uint32_t resolutionWidth, uint32_t resolutionHeight)
     textureDesc.Format              = DXGI_FORMAT_R32G32B32A32_FLOAT;
     textureDesc.SampleDesc.Count    = 1;
     textureDesc.Usage               = D3D11_USAGE_DEFAULT;
-    textureDesc.BindFlags           = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+    textureDesc.BindFlags           = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_RENDER_TARGET;
     HRESULT hr = device->CreateTexture2D(&textureDesc, nullptr, &m_FilmTexture);
     if (FAILED(hr))
         return false;
@@ -66,24 +71,13 @@ bool Scene::Init(uint32_t resolutionWidth, uint32_t resolutionHeight)
     if (FAILED(hr))
         return false;
 
-    for (auto& sample : m_Samples)
-        sample = (float)rand() / RAND_MAX;
-
-    bufferDesc.ByteWidth = sizeof(m_Samples);
-    bufferDesc.Usage = D3D11_USAGE_IMMUTABLE;
-    bufferDesc.CPUAccessFlags = 0;
+    bufferDesc.ByteWidth = kMaxSamplesCount * sizeof(float);
     bufferDesc.StructureByteStride = sizeof(float);
-    D3D11_SUBRESOURCE_DATA subresourceData;
-    subresourceData.pSysMem = m_Samples;
-    subresourceData.SysMemPitch = 0;
-    subresourceData.SysMemSlicePitch = 0;
-    hr = device->CreateBuffer(&bufferDesc, &subresourceData, &m_SamplesBuffer);
+    hr = device->CreateBuffer(&bufferDesc, nullptr, &m_SamplesBuffer);
     if (FAILED(hr))
         return false;
 
     bufferDesc.ByteWidth = sizeof(m_Spheres);
-    bufferDesc.Usage = D3D11_USAGE_DYNAMIC;
-    bufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     bufferDesc.StructureByteStride = sizeof(Sphere);
     hr = device->CreateBuffer(&bufferDesc, nullptr, &m_SpheresBuffer);
     if (FAILED(hr))
@@ -133,6 +127,9 @@ bool Scene::Init(uint32_t resolutionWidth, uint32_t resolutionHeight)
     bufferDesc.StructureByteStride = sizeof(XMFLOAT4);
     bufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
     bufferDesc.MiscFlags = 0;
+    D3D11_SUBRESOURCE_DATA subresourceData;
+    subresourceData.SysMemPitch = 0;
+    subresourceData.SysMemSlicePitch = 0;
     subresourceData.pSysMem = kScreenQuadVertices;
     hr = device->CreateBuffer(&bufferDesc, &subresourceData, &m_ScreenQuadVertexBuffer);
     if (FAILED(hr))
@@ -147,58 +144,72 @@ bool Scene::Init(uint32_t resolutionWidth, uint32_t resolutionHeight)
 
     D3D11_SAMPLER_DESC samplerDesc;
     ZeroMemory(&samplerDesc, sizeof(D3D11_SAMPLER_DESC));
-    samplerDesc.Filter = D3D11_FILTER_COMPARISON_MIN_MAG_MIP_POINT;
+    samplerDesc.Filter = D3D11_FILTER_MAXIMUM_MIN_MAG_MIP_POINT;
     samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
     samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
     samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-    samplerDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    samplerDesc.MaxAnisotropy = 1;
+    samplerDesc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
     samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
     hr = device->CreateSamplerState(&samplerDesc, &m_CopySamplerState);
     if (FAILED(hr))
         return false;
 
-    m_ResolutionWidth = resolutionWidth;
-    m_ResolutionHeight = resolutionHeight;
+    hr = device->CreateRenderTargetView(m_FilmTexture.Get(), nullptr, &m_FilmTextureRenderTargetView);
+    if (FAILED(hr))
+        return false;
+
     m_DefaultViewport = { 0.0f, 0.0f, (float)resolutionWidth, (float)resolutionHeight, 0.0f, 1.0f };
+    m_RayTracingConstants.samplesCount = kMaxSamplesCount;
+    m_RayTracingConstants.resolution = { (float)resolutionWidth, (float)resolutionHeight };
 
     return true;
 }
 
 void Scene::ResetScene()
 {
-    m_Spheres[0].center = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+    ClearFilmTexture();
+
+    m_Spheres[0].center = XMFLOAT4(0.0f, 0.0f, 2.6f, 1.0f);
     m_Spheres[0].radius = 0.5f;
-    m_Spheres[0].albedo = XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);
-    m_RayTracingConstants.sphereCount = 1;
+    m_Spheres[0].albedo = XMFLOAT4(0.18f, 0.18f, 0.18f, 1.0f);
+
+    m_Spheres[1].center = XMFLOAT4(1.0f, 0.0f, 2.6f, 1.0f);
+    m_Spheres[1].radius = 0.5f;
+    m_Spheres[1].albedo = XMFLOAT4(0.78f, 0.38f, 0.38f, 1.0f);
+
+    m_Spheres[2].center = XMFLOAT4(-1.0f, 0.0f, 2.6f, 1.0f);
+    m_Spheres[2].radius = 0.5f;
+    m_Spheres[2].albedo = XMFLOAT4(0.78f, 0.78f, 0.38f, 1.0f);
+
+    m_RayTracingConstants.maxBounceCount = 1;
+    m_RayTracingConstants.sphereCount = 3;
+    m_RayTracingConstants.samplesCountPerPixel = 0;
+    m_RayTracingConstants.filmSize = XMFLOAT2(0.04f, 0.03f);
+    m_RayTracingConstants.filmDistance = 0.03f;
+    m_RayTracingConstants.cameraTransform =
+        { 1.0f, 0.0f, 0.0f, 0.0f,
+          0.0f, 1.0f, 0.0f, 0.0f,
+          0.0f, 0.0f, 1.0f, 0.0f,
+          0.0f, 0.0f, 0.0f, 1.0f };
+    m_RayTracingConstants.background = { 1.f, 1.f, 1.f, 1.f };
 }
 
 void Scene::AddOneSampleAndRender()
 {
     AddOneSample();
-    OnPostProcessing();
+    DoPostProcessing();
 }
 
 void Scene::AddOneSample()
 {
-    ID3D11DeviceContext* deviceContext = GetDeviceContext();
+    UpdateResources();
+    DispatchRayTracing();
 
-    deviceContext->CSSetShader(m_RayTracingComputeShader.Get(), nullptr, 0);
-
-    ID3D11UnorderedAccessView* rawFilmTextureUAV = m_FilmTextureUAV.Get();
-    deviceContext->CSSetUnorderedAccessViews(0, 1, &rawFilmTextureUAV, nullptr);
-
-    ID3D11ShaderResourceView* rawSRVs[] = { m_SpheresSRV.Get(), m_RayTracingConstantsSRV.Get(), m_SamplesSRV.Get() };
-    deviceContext->CSSetShaderResources(0, 3, rawSRVs);
-
-    UINT threadGroupCountX = (UINT)ceil(m_ResolutionWidth / 16.0f);
-    UINT threadGroupCountY = (UINT)ceil(m_ResolutionHeight / 16.0f);
-    deviceContext->Dispatch(threadGroupCountX, threadGroupCountY, 1);
-
-    rawFilmTextureUAV = nullptr;
-    deviceContext->CSSetUnorderedAccessViews(0, 1, &rawFilmTextureUAV, nullptr);
+    m_RayTracingConstants.samplesCountPerPixel++;
 }
 
-void Scene::OnPostProcessing()
+void Scene::DoPostProcessing()
 {
     ID3D11DeviceContext* deviceContext = GetDeviceContext();
 
@@ -223,6 +234,83 @@ void Scene::OnPostProcessing()
     deviceContext->PSSetShaderResources(0, 1, &rawFilmTextureSRV);
 
     deviceContext->Draw(6, 0);
+
+    rawFilmTextureSRV = nullptr;
+    deviceContext->PSSetShaderResources(0, 1, &rawFilmTextureSRV);
 }
+
+bool Scene::UpdateResources()
+{
+    ID3D11DeviceContext* deviceContext = GetDeviceContext();
+
+    D3D11_MAPPED_SUBRESOURCE mappedSubresource;
+
+    HRESULT hr = deviceContext->Map(m_RayTracingConstantsBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource);
+    if (SUCCEEDED(hr))
+    {
+        memcpy(mappedSubresource.pData, &m_RayTracingConstants, sizeof(m_RayTracingConstants));
+        deviceContext->Unmap(m_RayTracingConstantsBuffer.Get(), 0);
+    }
+    else
+    {
+        return false;
+    }
+
+    hr = deviceContext->Map(m_SpheresBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource);
+    if (SUCCEEDED(hr))
+    {
+        memcpy(mappedSubresource.pData, m_Spheres, sizeof(m_Spheres) * m_RayTracingConstants.sphereCount);
+        deviceContext->Unmap(m_SpheresBuffer.Get(), 0);
+    }
+    else
+    {
+        return false;
+    }
+
+    hr = deviceContext->Map(m_SamplesBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource);
+    if (SUCCEEDED(hr))
+    {
+        float* samples = reinterpret_cast<float*>(mappedSubresource.pData);
+        for (int i = 0; i < kMaxSamplesCount; ++i)
+            samples[i] = (float)rand() / RAND_MAX;
+
+        deviceContext->Unmap(m_SamplesBuffer.Get(), 0);
+    }
+    else
+    {
+        return false;
+    }
+
+    return true;
+}
+
+void Scene::DispatchRayTracing()
+{
+    ID3D11DeviceContext* deviceContext = GetDeviceContext();
+
+    deviceContext->CSSetShader(m_RayTracingComputeShader.Get(), nullptr, 0);
+
+    ID3D11UnorderedAccessView* rawFilmTextureUAV = m_FilmTextureUAV.Get();
+    deviceContext->CSSetUnorderedAccessViews(0, 1, &rawFilmTextureUAV, nullptr);
+
+    ID3D11ShaderResourceView* rawSRVs[] = { m_SpheresSRV.Get(), m_RayTracingConstantsSRV.Get(), m_SamplesSRV.Get() };
+    deviceContext->CSSetShaderResources(0, 3, rawSRVs);
+
+    UINT threadGroupCountX = (UINT)ceil(m_RayTracingConstants.resolution.x / 16.0f);
+    UINT threadGroupCountY = (UINT)ceil(m_RayTracingConstants.resolution.y / 16.0f);
+    deviceContext->Dispatch(threadGroupCountX, threadGroupCountY, 1);
+
+    rawFilmTextureUAV = nullptr;
+    deviceContext->CSSetUnorderedAccessViews(0, 1, &rawFilmTextureUAV, nullptr);
+}
+
+void Scene::ClearFilmTexture()
+{
+    ID3D11DeviceContext* deviceContext = GetDeviceContext();
+    const static float kClearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    deviceContext->ClearRenderTargetView(m_FilmTextureRenderTargetView.Get(), kClearColor);
+}
+
+
 
 

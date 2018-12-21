@@ -19,6 +19,6 @@ VertexOut ScreenQuadMainVS(float4 pos : POSITION)
 
 float4 CopyMainPS(VertexOut i) : SV_TARGET
 {
-	return g_FilmTexture.Sample(CopySampler, i.texcoord);
-    //return float4(i.texcoord, 0.0f, 1.0f);
+	float4 c = g_FilmTexture.Sample(CopySampler, i.texcoord);
+    return float4(c.xyz / c.w, 1.0f);
 }

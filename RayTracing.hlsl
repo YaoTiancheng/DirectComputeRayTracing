@@ -9,15 +9,15 @@ struct Sphere
 
 struct RayTracingConstants
 {
-    uint        maxBounceCount;
-    uint        sphereCount;
-    uint        samplesCount;
-    uint        samplesCountPerPixel;
-    float2      resolution;
-    float2      filmSize;
-    float       filmDistance;
-    float4x4    cameraTransform;
-    float4      background;
+    uint                maxBounceCount;
+    uint                sphereCount;
+    uint                samplesCount;
+    uint                samplesCountPerPixel;
+    float2              resolution;
+    float2              filmSize;
+    float               filmDistance;
+    row_major float4x4  cameraTransform;
+    float4              background;
 };
 
 
@@ -226,11 +226,15 @@ void AddSampleToFilm(float4 l
     g_FilmTexture[pixelPos] = c;
 }
 
-[numthreads(16, 16, 1)]
+[numthreads(32, 32, 1)]
 void main(uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID)
 {
+    if (any(pixelPos > g_Constants[0].resolution))
+        return;
+
     float4 pathThroughput = (float4) 1.0f;
-    float4 normal, tangent, position, l, wi, wo, albedo;
+    float4 l = (float4) 0.0f;
+    float4 normal, tangent, position, wi, wo, albedo;
 
     float2 pixelSample = GetNextSample2();
     float2 filmSample = (pixelSample + pixelPos) / g_Constants[0].resolution;

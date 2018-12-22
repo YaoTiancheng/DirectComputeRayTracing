@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Camera.h"
+
 struct Sphere
 {
     DirectX::XMFLOAT4   center;
@@ -33,6 +35,8 @@ public:
 
     void AddOneSampleAndRender();
 
+    bool OnWndMessage(UINT message, WPARAM wParam, LPARAM lParam);
+
 private:
     void AddOneSample();
 
@@ -49,10 +53,14 @@ private:
     static const int kMaxSamplesCount = 65536;
     static const int kMaxSpheresCount = 32;
 
+    Camera                              m_Camera;
+
     D3D11_VIEWPORT                      m_DefaultViewport;
 
     RayTracingConstants                 m_RayTracingConstants;
     Sphere                              m_Spheres[kMaxSpheresCount];
+
+    bool                                m_IsFilmDirty;
 
     template <typename T>
     using ComPtr = Microsoft::WRL::ComPtr<T>;

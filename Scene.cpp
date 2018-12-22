@@ -20,6 +20,7 @@ D3D11_INPUT_ELEMENT_DESC kScreenQuadInputElementDesc[1]
 };
 
 Scene::Scene()
+    : m_IsFilmDirty(true)
 {
     m_RayTracingConstants.maxBounceCount = 1;
 }
@@ -168,11 +169,9 @@ bool Scene::Init(uint32_t resolutionWidth, uint32_t resolutionHeight)
 
 void Scene::ResetScene()
 {
-    ClearFilmTexture();
-
     m_Spheres[0].center = XMFLOAT4(0.0f, 0.0f, 2.6f, 1.0f);
     m_Spheres[0].radius = 0.5f;
-    m_Spheres[0].albedo = XMFLOAT4(0.18f, 0.18f, 0.18f, 1.0f);
+    m_Spheres[0].albedo = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
 
     m_Spheres[1].center = XMFLOAT4(1.0f, 0.0f, 2.6f, 1.0f);
     m_Spheres[1].radius = 0.5f;
@@ -182,10 +181,10 @@ void Scene::ResetScene()
     m_Spheres[2].radius = 0.5f;
     m_Spheres[2].albedo = XMFLOAT4(0.78f, 0.78f, 0.38f, 1.0f);
 
-    m_RayTracingConstants.maxBounceCount = 1;
+    m_RayTracingConstants.maxBounceCount = 4;
     m_RayTracingConstants.sphereCount = 3;
     m_RayTracingConstants.samplesCountPerPixel = 0;
-    m_RayTracingConstants.filmSize = XMFLOAT2(0.04f, 0.03f);
+    m_RayTracingConstants.filmSize = XMFLOAT2(0.05333f, 0.03f);
     m_RayTracingConstants.filmDistance = 0.03f;
     m_RayTracingConstants.cameraTransform =
         { 1.0f, 0.0f, 0.0f, 0.0f,
@@ -193,6 +192,8 @@ void Scene::ResetScene()
           0.0f, 0.0f, 1.0f, 0.0f,
           0.0f, 0.0f, 0.0f, 1.0f };
     m_RayTracingConstants.background = { 1.f, 1.f, 1.f, 1.f };
+
+    m_IsFilmDirty = true;
 }
 
 void Scene::AddOneSampleAndRender()
@@ -201,12 +202,26 @@ void Scene::AddOneSampleAndRender()
     DoPostProcessing();
 }
 
+bool Scene::OnWndMessage(UINT message, WPARAM wParam, LPARAM lParam)
+{
+    return m_Camera.OnWndMessage(message, wParam, lParam);
+}
+
 void Scene::AddOneSample()
 {
-    UpdateResources();
-    DispatchRayTracing();
+    m_Camera.Update();
 
-    m_RayTracingConstants.samplesCountPerPixel++;
+    if (m_Camera.IsDirty() || m_IsFilmDirty)
+    {
+        ClearFilmTexture();
+        m_IsFilmDirty = false;
+
+        if (m_Camera.IsDirty())
+            m_Camera.GetTransformMatrixAndClearDirty(&m_RayTracingConstants.cameraTransform);
+    }
+
+    if (UpdateResources())
+        DispatchRayTracing();
 }
 
 void Scene::DoPostProcessing()
@@ -245,6 +260,7 @@ bool Scene::UpdateResources()
 
     D3D11_MAPPED_SUBRESOURCE mappedSubresource;
 
+    ZeroMemory(&mappedSubresource, sizeof(D3D11_MAPPED_SUBRESOURCE));
     HRESULT hr = deviceContext->Map(m_RayTracingConstantsBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource);
     if (SUCCEEDED(hr))
     {
@@ -256,10 +272,11 @@ bool Scene::UpdateResources()
         return false;
     }
 
+    ZeroMemory(&mappedSubresource, sizeof(D3D11_MAPPED_SUBRESOURCE));
     hr = deviceContext->Map(m_SpheresBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource);
     if (SUCCEEDED(hr))
     {
-        memcpy(mappedSubresource.pData, m_Spheres, sizeof(m_Spheres) * m_RayTracingConstants.sphereCount);
+        memcpy(mappedSubresource.pData, m_Spheres, sizeof(Sphere) * m_RayTracingConstants.sphereCount);
         deviceContext->Unmap(m_SpheresBuffer.Get(), 0);
     }
     else
@@ -267,6 +284,7 @@ bool Scene::UpdateResources()
         return false;
     }
 
+    ZeroMemory(&mappedSubresource, sizeof(D3D11_MAPPED_SUBRESOURCE));
     hr = deviceContext->Map(m_SamplesBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource);
     if (SUCCEEDED(hr))
     {
@@ -296,8 +314,8 @@ void Scene::DispatchRayTracing()
     ID3D11ShaderResourceView* rawSRVs[] = { m_SpheresSRV.Get(), m_RayTracingConstantsSRV.Get(), m_SamplesSRV.Get() };
     deviceContext->CSSetShaderResources(0, 3, rawSRVs);
 
-    UINT threadGroupCountX = (UINT)ceil(m_RayTracingConstants.resolution.x / 16.0f);
-    UINT threadGroupCountY = (UINT)ceil(m_RayTracingConstants.resolution.y / 16.0f);
+    UINT threadGroupCountX = (UINT)ceil(m_RayTracingConstants.resolution.x / 32.0f);
+    UINT threadGroupCountY = (UINT)ceil(m_RayTracingConstants.resolution.y / 32.0f);
     deviceContext->Dispatch(threadGroupCountX, threadGroupCountY, 1);
 
     rawFilmTextureUAV = nullptr;

@@ -151,6 +151,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Camera.h" />
     <ClInclude Include="D3D11RenderSystem.h" />
     <ClInclude Include="Application.h" />
     <ClInclude Include="Resource.h" />
@@ -159,6 +160,7 @@
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Camera.cpp" />
     <ClCompile Include="D3D11RenderSystem.cpp" />
     <ClCompile Include="Application.cpp" />
     <ClCompile Include="Scene.cpp" />

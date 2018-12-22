@@ -29,10 +29,10 @@ bool InitRenderSystem(HWND hWnd)
     swapChainDesc.BufferDesc.Format = DXGI_FORMAT::DXGI_FORMAT_R8G8B8A8_UNORM;
     swapChainDesc.SampleDesc.Count = 1;
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    swapChainDesc.BufferCount = 1;
+    swapChainDesc.BufferCount = 2;
     swapChainDesc.OutputWindow = hWnd;
     swapChainDesc.Windowed = TRUE;
-    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT::DXGI_SWAP_EFFECT_DISCARD;
+    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT::DXGI_SWAP_EFFECT_FLIP_DISCARD;
 
     HRESULT hr = D3D11CreateDeviceAndSwapChain(NULL
         , D3D_DRIVER_TYPE_HARDWARE

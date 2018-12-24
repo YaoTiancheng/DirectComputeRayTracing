@@ -12,7 +12,6 @@ struct RayTracingConstants
     uint                maxBounceCount;
     uint                sphereCount;
     uint                samplesCount;
-    uint                samplesCountPerPixel;
     float2              resolution;
     float2              filmSize;
     float               filmDistance;

@@ -15,7 +15,6 @@ struct RayTracingConstants
     uint32_t            maxBounceCount;
     uint32_t            sphereCount;
     uint32_t            samplesCount;
-    uint32_t            samplesCountPerPixel;
     DirectX::XMFLOAT2   resolution;
     DirectX::XMFLOAT2   filmSize;
     float               filmDistance;

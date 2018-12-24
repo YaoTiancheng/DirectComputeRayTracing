@@ -183,7 +183,6 @@ void Scene::ResetScene()
 
     m_RayTracingConstants.maxBounceCount = 4;
     m_RayTracingConstants.sphereCount = 3;
-    m_RayTracingConstants.samplesCountPerPixel = 0;
     m_RayTracingConstants.filmSize = XMFLOAT2(0.05333f, 0.03f);
     m_RayTracingConstants.filmDistance = 0.03f;
     m_RayTracingConstants.cameraTransform =

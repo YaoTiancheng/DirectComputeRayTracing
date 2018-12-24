@@ -4,6 +4,7 @@ struct Sphere
     float4  position;
     float   radius;
     float4  albedo;
+    float4  emission;
 };
 
 
@@ -91,7 +92,7 @@ float2 ConcentricSampleDisk(float2 sample)
 float4 ConsineSampleHemisphere(float2 sample)
 {
     sample = ConcentricSampleDisk(sample);
-    return float4(sample.xy, max(0.0f, 1.0f - dot(sample.xy, sample.xy)), 0.0f);
+    return float4(sample.xy, sqrt(max(0.0f, 1.0f - dot(sample.xy, sample.xy))), 0.0f);
 }
 
 bool RaySphereIntersect(float4 origin
@@ -101,13 +102,15 @@ bool RaySphereIntersect(float4 origin
     , out float4 position
     , out float4 normal
     , out float4 tangent
-    , out float4 albedo)
+    , out float4 albedo
+    , out float4 emission)
 {
     t = 0.0f;
     position = (float4) 0.0f;
     normal = (float4) 0.0f;
     tangent = (float4) 0.0f;
     albedo = (float4) 0.0f;
+    emission = (float4) 0.0f;
 
     float radius2 = sphere.radius * sphere.radius;
     float t0, t1;
@@ -144,6 +147,7 @@ bool RaySphereIntersect(float4 origin
     else 
         tangent = normalize(tangent);
     albedo = sphere.albedo;
+    emission = sphere.emission;
 
     return true;
 }
@@ -192,15 +196,16 @@ bool IntersectScene(float4 origin
 	, out float4 position
 	, out float4 normal
     , out float4 tangent
-    , out float4 albedo)
+    , out float4 albedo
+    , out float4 emission)
 {
     float tMin = 1.0f / 0.0f;
 
     for (int i = 0; i < g_Constants[0].sphereCount; ++i)
     {
         float t;
-        float4 testPosition, testNormal, testTangent, testAlbedo;
-        if (RaySphereIntersect(origin + direction * epsilon, direction, g_Spheres[i], t, testPosition, testNormal, testTangent, testAlbedo))
+        float4 testPosition, testNormal, testTangent, testAlbedo, testEmission;
+        if (RaySphereIntersect(origin + direction * epsilon, direction, g_Spheres[i], t, testPosition, testNormal, testTangent, testAlbedo, testEmission))
         {
             if (t < tMin)
             {
@@ -209,6 +214,7 @@ bool IntersectScene(float4 origin
                 normal = testNormal;
                 tangent = testTangent;
                 albedo = testAlbedo;
+                emission = testEmission;
             }
         }
     }
@@ -233,17 +239,19 @@ void main(uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID)
 
     float4 pathThroughput = (float4) 1.0f;
     float4 l = (float4) 0.0f;
-    float4 normal, tangent, position, wi, wo, albedo;
+    float4 normal, tangent, position, wi, wo, albedo, emission;
 
     float2 pixelSample = GetNextSample2();
     float2 filmSample = (pixelSample + pixelPos) / g_Constants[0].resolution;
     GenerateRay(filmSample, g_Constants[0].filmSize, g_Constants[0].filmDistance, g_Constants[0].cameraTransform, position, wo);
 
-    if (IntersectScene(position, wo, 0.00001f, position, normal, tangent, albedo))
+    if (IntersectScene(position, wo, 0.00001f, position, normal, tangent, albedo, emission))
     {
         uint iBounce = 0;
         while (1)
         {
+            l += pathThroughput * emission;
+
             if (iBounce == g_Constants[0].maxBounceCount)
                 break;
 
@@ -257,7 +265,7 @@ void main(uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID)
             float NdotL = dot(wi, normal);
             pathThroughput = pathThroughput * brdf * NdotL / pdf;
 
-            if (!IntersectScene(position, wi, 0.00001f, position, normal, tangent, albedo))
+            if (!IntersectScene(position, wi, 0.00001f, position, normal, tangent, albedo, emission))
             {
                 l += pathThroughput * g_Constants[0].background;
                 break;

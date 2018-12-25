@@ -11,10 +11,18 @@ struct Sphere
 };
 
 
+struct PointLight
+{
+    DirectX::XMFLOAT4   position;
+    DirectX::XMFLOAT4   color;
+};
+
+
 struct RayTracingConstants
 {
     uint32_t            maxBounceCount;
     uint32_t            sphereCount;
+    uint32_t            pointLightCount;
     uint32_t            samplesCount;
     DirectX::XMFLOAT2   resolution;
     DirectX::XMFLOAT2   filmSize;
@@ -52,6 +60,7 @@ private:
 private:
     static const int kMaxSamplesCount = 65536;
     static const int kMaxSpheresCount = 32;
+    static const int kMaxPointLightsCount = 8;
 
     Camera                              m_Camera;
 
@@ -59,7 +68,8 @@ private:
 
     RayTracingConstants                 m_RayTracingConstants;
     Sphere                              m_Spheres[kMaxSpheresCount];
-
+    PointLight                          m_PointLights[kMaxPointLightsCount];
+    
     bool                                m_IsFilmDirty;
 
     template <typename T>
@@ -71,12 +81,14 @@ private:
     ComPtr<ID3D11ShaderResourceView>    m_RayTracingConstantsSRV;
     ComPtr<ID3D11ShaderResourceView>    m_SamplesSRV;
     ComPtr<ID3D11ShaderResourceView>    m_SpheresSRV;
+    ComPtr<ID3D11ShaderResourceView>    m_PointLightsSRV;
     ComPtr<ID3D11ShaderResourceView>    m_FilmTextureSRV;
     ComPtr<ID3D11UnorderedAccessView>   m_FilmTextureUAV;
     ComPtr<ID3D11Texture2D>             m_FilmTexture;
     ComPtr<ID3D11Buffer>                m_RayTracingConstantsBuffer;
     ComPtr<ID3D11Buffer>                m_SamplesBuffer;
     ComPtr<ID3D11Buffer>                m_SpheresBuffer;
+    ComPtr<ID3D11Buffer>                m_PointLightBuffer;
     ComPtr<ID3D11Buffer>                m_ScreenQuadVertexBuffer;
     ComPtr<ID3D11InputLayout>           m_ScreenQuadVertexInputLayout;
     ComPtr<ID3D11RenderTargetView>      m_DefaultRenderTargetView;

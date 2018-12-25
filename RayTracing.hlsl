@@ -8,10 +8,18 @@ struct Sphere
 };
 
 
+struct PointLight
+{
+    float4 position;
+    float4 color;
+};
+
+
 struct RayTracingConstants
 {
     uint                maxBounceCount;
     uint                sphereCount;
+    uint                pointLightCount;
     uint                samplesCount;
     float2              resolution;
     float2              filmSize;
@@ -21,29 +29,27 @@ struct RayTracingConstants
 };
 
 
-StructuredBuffer<Sphere>                g_Spheres   : register(t0);
-StructuredBuffer<RayTracingConstants>   g_Constants : register(t1);
-StructuredBuffer<float>                 g_Samples   : register(t2);
+StructuredBuffer<Sphere>                g_Spheres       : register(t0);
+StructuredBuffer<PointLight>            g_PointLights   : register(t1);
+StructuredBuffer<RayTracingConstants>   g_Constants     : register(t2);
+StructuredBuffer<float>                 g_Samples       : register(t3);
 RWTexture2D<float4>                     g_FilmTexture;
 
 #define PI 3.1415
 
 groupshared uint gs_NextSampleIndex = 0;
 
+float GetNextSample()
+{
+    uint sampleIndex;
+    InterlockedAdd(gs_NextSampleIndex, 1, sampleIndex);
+    sampleIndex = sampleIndex % g_Constants[0].samplesCount;
+    return g_Samples[sampleIndex];
+}
+
 float2 GetNextSample2()
 {
-    float2 sample;
-    uint sampleIndex;
-
-    InterlockedAdd(gs_NextSampleIndex, 1, sampleIndex);
-    sampleIndex = sampleIndex % g_Constants[0].samplesCount;
-    sample.x = g_Samples[sampleIndex];
-
-    InterlockedAdd(gs_NextSampleIndex, 1, sampleIndex);
-    sampleIndex = sampleIndex % g_Constants[0].samplesCount;
-    sample.y = g_Samples[sampleIndex];
-
-    return sample;
+    return float2(GetNextSample(), GetNextSample());
 }
 
 float2 ConcentricSampleDisk(float2 sample)
@@ -152,6 +158,40 @@ bool RaySphereIntersect(float4 origin
     return true;
 }
 
+bool RaySphereIntersect(float4 origin
+    , float4 direction
+    , Sphere sphere
+    , out float t)
+{
+    float radius2 = sphere.radius * sphere.radius;
+    float t0, t1;
+    float4 l = sphere.position - origin;
+    float tca = dot(l, direction);
+    if (tca < 0.0f)
+        return false;
+    float d2 = dot(l, l) - tca * tca;
+    if (d2 > radius2)
+        return false;
+    float thc = sqrt(radius2 - d2);
+    t0 = tca - thc;
+    t1 = tca + thc;
+
+    if (t0 > t1)
+    {
+        float temp = t0;
+        t0 = t1;
+        t1 = temp;
+    }
+    if (t0 < 0)
+    {
+        t0 = t1;
+        if (t0 < 0)
+            return false;
+    }
+    t = t0;
+    return true;
+}
+
 void GenerateRay(float2 sample
 	, float2 filmSize
 	, float filmDistance
@@ -190,6 +230,11 @@ void SampleLambertBRDF(float4 wo
     wi = mul(wi, tbn2world);
 }
 
+float4 EvaluateLambertBRDF(float4 wo, float4 wi, float4 albedo)
+{
+    return albedo / PI;
+}
+
 bool IntersectScene(float4 origin
 	, float4 direction
     , float4 epsilon
@@ -222,6 +267,23 @@ bool IntersectScene(float4 origin
     return !isinf(tMin);
 }
 
+bool IsOcculuded(float4 origin
+    , float4 direction
+    , float4 epsilon
+    , float distance)
+{
+    for (int i = 0; i < g_Constants[0].sphereCount; ++i)
+    {
+        float t;
+        if (RaySphereIntersect(origin + direction * epsilon, direction, g_Spheres[i], t))
+        {
+            if (t < distance)
+                return true;
+        }
+    }
+    return false;
+}
+
 void AddSampleToFilm(float4 l
     , float2 sample
     , uint2 pixelPos)
@@ -229,6 +291,29 @@ void AddSampleToFilm(float4 l
     float4 c = g_FilmTexture[pixelPos];
     c += float4(l.xyz, 1.0f);
     g_FilmTexture[pixelPos] = c;
+}
+
+float4 EstimateDirect(PointLight pointLight, float4 position, float4 normal, float epsilon, float4 wo, float4 albedo)
+{
+    float4 wi = pointLight.position - position;
+    float len = length(wi);
+    wi /= len;
+
+    if (!IsOcculuded(position, wi, epsilon, len))
+    {
+        float4 l = pointLight.color / (len * len);
+        float4 brdf = EvaluateLambertBRDF(wo, wi, albedo);
+        float NdotL = max(0, dot(normal, wi));
+        return l * brdf * NdotL;
+    }
+
+    return 0.0f;
+}
+
+float4 UniformSampleOneLight(float sample, float4 position, float4 normal, float4 wo, float4 albedo, float epsilon)
+{
+    uint lightIndex = floor(GetNextSample() * g_Constants[0].pointLightCount);
+    return EstimateDirect(g_PointLights[lightIndex], position, normal, epsilon, wo, albedo) * g_Constants[0].pointLightCount; 
 }
 
 [numthreads(32, 32, 1)]
@@ -250,7 +335,8 @@ void main(uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID)
         uint iBounce = 0;
         while (1)
         {
-            l += pathThroughput * emission;
+            float lightSelectionSample = GetNextSample();
+            l += pathThroughput * (UniformSampleOneLight(lightSelectionSample, position, normal, -wo, albedo, 0.000001f) + emission);
 
             if (iBounce == g_Constants[0].maxBounceCount)
                 break;

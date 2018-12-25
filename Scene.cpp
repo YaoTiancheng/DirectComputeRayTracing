@@ -84,6 +84,12 @@ bool Scene::Init(uint32_t resolutionWidth, uint32_t resolutionHeight)
     if (FAILED(hr))
         return false;
 
+    bufferDesc.ByteWidth = sizeof(m_PointLights);
+    bufferDesc.StructureByteStride = sizeof(PointLight);
+    hr = device->CreateBuffer(&bufferDesc, nullptr, &m_PointLightBuffer);
+    if (FAILED(hr))
+        return false;
+
     D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc;
     SRVDesc.Format = DXGI_FORMAT_UNKNOWN;
     SRVDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
@@ -100,6 +106,11 @@ bool Scene::Init(uint32_t resolutionWidth, uint32_t resolutionHeight)
 
     SRVDesc.Buffer.NumElements = kMaxSpheresCount;
     hr = device->CreateShaderResourceView(m_SpheresBuffer.Get(), &SRVDesc, &m_SpheresSRV);
+    if (FAILED(hr))
+        return false;
+
+    SRVDesc.Buffer.NumElements = kMaxPointLightsCount;
+    hr = device->CreateShaderResourceView(m_PointLightBuffer.Get(), &SRVDesc, &m_PointLightsSRV);
     if (FAILED(hr))
         return false;
 
@@ -169,28 +180,37 @@ bool Scene::Init(uint32_t resolutionWidth, uint32_t resolutionHeight)
 
 void Scene::ResetScene()
 {
-    m_Spheres[0].center = XMFLOAT4(0.0f, 0.0f, 2.6f, 1.0f);
+    m_Spheres[0].center = XMFLOAT4(0.0f, 0.5f, 2.6f, 1.0f);
     m_Spheres[0].radius = 0.5f;
-    m_Spheres[0].albedo = XMFLOAT4(0.18f, 0.18f, 0.18f, 1.0f);
-    m_Spheres[0].emission = XMFLOAT4(1.0f, 1.0f, 1.0f, 0.0f);
+    m_Spheres[0].albedo = XMFLOAT4(0.98f, 0.98f, 0.98f, 1.0f);
+    m_Spheres[0].emission = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
 
-    m_Spheres[1].center = XMFLOAT4(1.0f, 0.0f, 2.6f, 1.0f);
+    m_Spheres[1].center = XMFLOAT4(1.0f, 0.5f, 2.6f, 1.0f);
     m_Spheres[1].radius = 0.5f;
     m_Spheres[1].albedo = XMFLOAT4(0.78f, 0.38f, 0.38f, 1.0f);
     m_Spheres[1].emission = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
 
-    m_Spheres[2].center = XMFLOAT4(-2.0f, 0.0f, 2.6f, 1.0f);
+    m_Spheres[2].center = XMFLOAT4(-2.0f, 0.5f, 2.6f, 1.0f);
     m_Spheres[2].radius = 0.5f;
     m_Spheres[2].albedo = XMFLOAT4(0.78f, 0.78f, 0.38f, 1.0f);
     m_Spheres[2].emission = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
 
-    m_Spheres[3].center = XMFLOAT4(-0.5f, 1.5f, 2.6f, 1.0f);
-    m_Spheres[3].radius = 0.5f;
-    m_Spheres[3].albedo = XMFLOAT4(0.78f, 0.78f, 0.78f, 1.0f);
+    m_Spheres[3].center = XMFLOAT4(-0.5f, 1.0f, 3.6f, 1.0f);
+    m_Spheres[3].radius = 1.0f;
+    m_Spheres[3].albedo = XMFLOAT4(0.78f, 0.48f, 0.78f, 1.0f);
     m_Spheres[3].emission = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
 
-    m_RayTracingConstants.maxBounceCount = 1;
-    m_RayTracingConstants.sphereCount = 4;
+    m_Spheres[4].center = XMFLOAT4(0.0f, -100.0f, 0.0f, 1.0f);
+    m_Spheres[4].radius = 100.0f;
+    m_Spheres[4].albedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+    m_Spheres[4].emission = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+
+    m_PointLights[0].position = XMFLOAT4(1000.0f, 300.0f, -500.0f, 1.0f);
+    m_PointLights[0].color = XMFLOAT4(3000000.0f, 3000000.0f, 3000000.0f, 1.0f);
+
+    m_RayTracingConstants.maxBounceCount = 5;
+    m_RayTracingConstants.sphereCount = 5;
+    m_RayTracingConstants.pointLightCount = 1;
     m_RayTracingConstants.filmSize = XMFLOAT2(0.05333f, 0.03f);
     m_RayTracingConstants.filmDistance = 0.03f;
     m_RayTracingConstants.cameraTransform =
@@ -198,7 +218,7 @@ void Scene::ResetScene()
           0.0f, 1.0f, 0.0f, 0.0f,
           0.0f, 0.0f, 1.0f, 0.0f,
           0.0f, 0.0f, 0.0f, 1.0f };
-    m_RayTracingConstants.background = { 0.f, 0.f, 0.f, 0.f };
+    m_RayTracingConstants.background = { 0.3f, 0.3f, 0.38f, 0.f };
 
     m_IsFilmDirty = true;
 }
@@ -292,6 +312,18 @@ bool Scene::UpdateResources()
     }
 
     ZeroMemory(&mappedSubresource, sizeof(D3D11_MAPPED_SUBRESOURCE));
+    hr = deviceContext->Map(m_PointLightBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource);
+    if (SUCCEEDED(hr))
+    {
+        memcpy(mappedSubresource.pData, m_PointLights, sizeof(PointLight) * m_RayTracingConstants.pointLightCount);
+        deviceContext->Unmap(m_PointLightBuffer.Get(), 0);
+    }
+    else
+    {
+        return false;
+    }
+
+    ZeroMemory(&mappedSubresource, sizeof(D3D11_MAPPED_SUBRESOURCE));
     hr = deviceContext->Map(m_SamplesBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource);
     if (SUCCEEDED(hr))
     {
@@ -318,8 +350,8 @@ void Scene::DispatchRayTracing()
     ID3D11UnorderedAccessView* rawFilmTextureUAV = m_FilmTextureUAV.Get();
     deviceContext->CSSetUnorderedAccessViews(0, 1, &rawFilmTextureUAV, nullptr);
 
-    ID3D11ShaderResourceView* rawSRVs[] = { m_SpheresSRV.Get(), m_RayTracingConstantsSRV.Get(), m_SamplesSRV.Get() };
-    deviceContext->CSSetShaderResources(0, 3, rawSRVs);
+    ID3D11ShaderResourceView* rawSRVs[] = { m_SpheresSRV.Get(), m_PointLightsSRV.Get(), m_RayTracingConstantsSRV.Get(), m_SamplesSRV.Get() };
+    deviceContext->CSSetShaderResources(0, 4, rawSRVs);
 
     UINT threadGroupCountX = (UINT)ceil(m_RayTracingConstants.resolution.x / 32.0f);
     UINT threadGroupCountY = (UINT)ceil(m_RayTracingConstants.resolution.y / 32.0f);

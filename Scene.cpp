@@ -180,10 +180,10 @@ bool Scene::Init(uint32_t resolutionWidth, uint32_t resolutionHeight)
 
 void Scene::ResetScene()
 {
-    m_Spheres[0].center = XMFLOAT4(0.0f, 3.5f, 2.6f, 1.0f);
+    m_Spheres[0].center = XMFLOAT4(0.0f, 0.5f, 2.6f, 1.0f);
     m_Spheres[0].radius = 0.5f;
     m_Spheres[0].albedo = XMFLOAT4(0.98f, 0.98f, 0.98f, 1.0f);
-    m_Spheres[0].emission = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+    m_Spheres[0].emission = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
 
     m_Spheres[1].center = XMFLOAT4(1.0f, 0.5f, 2.6f, 1.0f);
     m_Spheres[1].radius = 0.5f;
@@ -205,19 +205,11 @@ void Scene::ResetScene()
     m_Spheres[4].albedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
     m_Spheres[4].emission = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
 
-    m_Spheres[5].center = XMFLOAT4(0.0f, 0.8f, 1.0f, 1.0f);
-    m_Spheres[5].radius = 0.8f;
-    m_Spheres[5].albedo = XMFLOAT4(0.0f, 1.0f, 1.0f, 1.0f);
-    m_Spheres[5].emission = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
-
-    /*m_PointLights[0].position = XMFLOAT4(1000.0f, 300.0f, -500.0f, 1.0f);
-    m_PointLights[0].color = XMFLOAT4(2000000.0f, 2000000.0f, 2000000.0f, 1.0f);*/
-
-    m_PointLights[0].position = XMFLOAT4(0.0f, 8.0f, 0.0f, 1.0f);
-    m_PointLights[0].color = XMFLOAT4(64.0f, 64.0f, 64.0f, 1.0f);
+    m_PointLights[0].position = XMFLOAT4(1000.0f, 300.0f, -500.0f, 1.0f);
+    m_PointLights[0].color = XMFLOAT4(3000000.0f, 3000000.0f, 3000000.0f, 1.0f);
 
     m_RayTracingConstants.maxBounceCount = 5;
-    m_RayTracingConstants.sphereCount = 6;
+    m_RayTracingConstants.sphereCount = 5;
     m_RayTracingConstants.pointLightCount = 1;
     m_RayTracingConstants.filmSize = XMFLOAT2(0.05333f, 0.03f);
     m_RayTracingConstants.filmDistance = 0.03f;
@@ -226,7 +218,7 @@ void Scene::ResetScene()
           0.0f, 1.0f, 0.0f, 0.0f,
           0.0f, 0.0f, 1.0f, 0.0f,
           0.0f, 0.0f, 0.0f, 1.0f };
-    m_RayTracingConstants.background = { 0.0f, 0.0f, 0.0f, 0.f };
+    m_RayTracingConstants.background = { 0.3f, 0.3f, 0.38f, 0.f };
 
     m_IsFilmDirty = true;
 }

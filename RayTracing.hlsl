@@ -302,14 +302,16 @@ void main(uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID)
         uint iBounce = 0;
         while (1)
         {
+            wo = -wo;
+
             float lightSelectionSample = GetNextSample();
-            l += pathThroughput * (UniformSampleOneLight(lightSelectionSample, position, normal, -wo, albedo, 0.000001f) + emission);
+            l += pathThroughput * (UniformSampleOneLight(lightSelectionSample, position, normal, wo, albedo, 0.000001f) + emission);
 
             if (iBounce == g_Constants[0].maxBounceCount)
                 break;
 
             float4 brdf, pdf;
-            SampleLambertBRDF(-wo, GetNextSample2(), albedo, normal, tangent, wi, brdf, pdf);
+            SampleLambertBRDF(wo, GetNextSample2(), albedo, normal, tangent, wi, brdf, pdf);
 
             // Sometimes BRDF value at wi is zero.
             if (all(brdf == 0.0f))

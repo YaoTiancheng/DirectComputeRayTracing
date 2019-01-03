@@ -41,9 +41,3 @@ float2 ConcentricSampleDisk(float2 sample)
     theta *= PI / 4.0f;
     return r * float2(cos(theta), sin(theta));
 }
-
-float4 ConsineSampleHemisphere(float2 sample)
-{
-    sample = ConcentricSampleDisk(sample);
-    return float4(sample.xy, sqrt(max(0.0f, 1.0f - dot(sample.xy, sample.xy))), 0.0f);
-}

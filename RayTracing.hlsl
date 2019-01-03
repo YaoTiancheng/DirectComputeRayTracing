@@ -37,10 +37,10 @@ RWTexture2D<float4>                     g_FilmTexture;
 static const float PI       = 3.14159265359;
 static const float INV_PI   = 1 / PI;
 
-#include "Samples.hlsl.inc"
-#include "MonteCarlo.hlsl.inc"
-#include "BSDFs.hlsl.inc"
-#include "Primitives.hlsl.inc"
+#include "Samples.inc.hlsl"
+#include "MonteCarlo.inc.hlsl"
+#include "BSDFs.inc.hlsl"
+#include "Primitives.inc.hlsl"
 
 
 void GenerateRay(float2 sample

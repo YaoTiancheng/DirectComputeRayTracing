@@ -70,16 +70,16 @@
   <ItemGroup>
     <None Include="RayTracing.hlsl" />
     <None Include="PostProcessings.hlsl" />
-    <None Include="Samples.hlsl.inc">
-      <Filter>Header Files</Filter>
-    </None>
-    <None Include="MonteCarlo.hlsl.inc">
-      <Filter>Header Files</Filter>
-    </None>
-    <None Include="BSDFs.hlsl.inc">
-      <Filter>Header Files</Filter>
-    </None>
     <None Include="Primitives.hlsl.inc">
+      <Filter>Header Files</Filter>
+    </None>
+    <None Include="BSDFs.inc.hlsl">
+      <Filter>Header Files</Filter>
+    </None>
+    <None Include="MonteCarlo.inc.hlsl">
+      <Filter>Header Files</Filter>
+    </None>
+    <None Include="Samples.inc.hlsl">
       <Filter>Header Files</Filter>
     </None>
   </ItemGroup>

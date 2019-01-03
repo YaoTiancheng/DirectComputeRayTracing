@@ -25,3 +25,7 @@ float4 EvaluateLambertBRDF(float4 wo, float4 wi, float4 albedo)
 {
     return albedo * INV_PI;
 }
+
+float4 SampleGGXHemisphere(float2 sample, float alpha)
+{
+}

@@ -37,22 +37,19 @@ bool RaySphereIntersect(float4 origin
     , float4 direction
     , Sphere sphere
     , out float t
-    , out float4 position
-    , out float4 normal
-    , out float4 tangent
-    , out float4 albedo
-    , out float4 emission)
+    , out Intersection intersection)
 {
     bool intersect = false;
     if (intersect = RaySphereIntersect(origin, direction, sphere, t))
     {
-        position = origin + t * direction;
-        normal = normalize(position - sphere.position);
-        tangent = normalize(float4(cross(float3(0.0f, 1.0f, 0.0f), normal.xyz), 0.0f));
-        if (isinf(tangent.x))
-            tangent = float4(1.0f, 0.0f, 0.0f, 0.0f);
-        albedo = sphere.albedo;
-        emission = sphere.emission;
+        intersection.position = origin + t * direction;
+        intersection.normal = normalize(intersection.position - sphere.position);
+        intersection.tangent = normalize(float4(cross(float3(0.0f, 1.0f, 0.0f), intersection.normal.xyz), 0.0f));
+        if (isinf(intersection.tangent.x))
+            intersection.tangent = float4(1.0f, 0.0f, 0.0f, 0.0f);
+        intersection.albedo = sphere.albedo;
+        intersection.emission = sphere.emission;
+        intersection.alpha = 0.0f;
     }
     return intersect;
 }

@@ -29,6 +29,17 @@ struct RayTracingConstants
 };
 
 
+struct Intersection
+{
+    float4  albedo;
+    float4  emission;
+    float   alpha;
+    float4  position;
+    float4  normal;
+    float4  tangent;
+};
+
+
 StructuredBuffer<Sphere>                g_Spheres       : register(t0);
 StructuredBuffer<PointLight>            g_PointLights   : register(t1);
 StructuredBuffer<RayTracingConstants>   g_Constants     : register(t2);
@@ -62,28 +73,20 @@ void GenerateRay(float2 sample
 bool IntersectScene(float4 origin
 	, float4 direction
     , float4 epsilon
-	, out float4 position
-	, out float4 normal
-    , out float4 tangent
-    , out float4 albedo
-    , out float4 emission)
+	, out Intersection intersection)
 {
     float tMin = 1.0f / 0.0f;
 
     for (int i = 0; i < g_Constants[0].sphereCount; ++i)
     {
         float t;
-        float4 testPosition, testNormal, testTangent, testAlbedo, testEmission;
-        if (RaySphereIntersect(origin + direction * epsilon, direction, g_Spheres[i], t, testPosition, testNormal, testTangent, testAlbedo, testEmission))
+        Intersection testIntersection;
+        if (RaySphereIntersect(origin + direction * epsilon, direction, g_Spheres[i], t, testIntersection))
         {
             if (t < tMin)
             {
                 tMin = t;
-                position = testPosition;
-                normal = testNormal;
-                tangent = testTangent;
-                albedo = testAlbedo;
-                emission = testEmission;
+                intersection = testIntersection;
             }
         }
     }
@@ -117,27 +120,27 @@ void AddSampleToFilm(float4 l
     g_FilmTexture[pixelPos] = c;
 }
 
-float4 EstimateDirect(PointLight pointLight, float4 position, float4 normal, float epsilon, float4 wo, float4 albedo)
+float4 EstimateDirect(PointLight pointLight, Intersection intersection, float epsilon, float4 wo)
 {
-    float4 wi = pointLight.position - position;
+    float4 wi = pointLight.position - intersection.position;
     float len = length(wi);
     wi /= len;
 
-    if (!IsOcculuded(position, wi, epsilon, len))
+    if (!IsOcculuded(intersection.position, wi, epsilon, len))
     {
         float4 l = pointLight.color / (len * len);
-        float4 brdf = EvaluateLambertBRDF(wo, wi, albedo);
-        float NdotL = max(0, dot(normal, wi));
+        float4 brdf = EvaluateBSDF(wi, wo, intersection);
+        float NdotL = max(0, dot(intersection.normal, wi));
         return l * brdf * NdotL;
     }
 
     return 0.0f;
 }
 
-float4 UniformSampleOneLight(float sample, float4 position, float4 normal, float4 wo, float4 albedo, float epsilon)
+float4 UniformSampleOneLight(float sample, Intersection intersection, float4 wo, float epsilon)
 {
     uint lightIndex = floor(GetNextSample() * g_Constants[0].pointLightCount);
-    return EstimateDirect(g_PointLights[lightIndex], position, normal, epsilon, wo, albedo) * g_Constants[0].pointLightCount; 
+    return EstimateDirect(g_PointLights[lightIndex], intersection, epsilon, wo) * g_Constants[0].pointLightCount; 
 }
 
 [numthreads(32, 32, 1)]
@@ -148,13 +151,14 @@ void main(uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID)
 
     float4 pathThroughput = (float4) 1.0f;
     float4 l = (float4) 0.0f;
-    float4 normal, tangent, position, wi, wo, albedo, emission;
+    float4 wi, wo;
+    Intersection intersection;
 
     float2 pixelSample = GetNextSample2();
     float2 filmSample = (pixelSample + pixelPos) / g_Constants[0].resolution;
-    GenerateRay(filmSample, g_Constants[0].filmSize, g_Constants[0].filmDistance, g_Constants[0].cameraTransform, position, wo);
+    GenerateRay(filmSample, g_Constants[0].filmSize, g_Constants[0].filmDistance, g_Constants[0].cameraTransform, intersection.position, wo);
 
-    if (IntersectScene(position, wo, 0.00001f, position, normal, tangent, albedo, emission))
+    if (IntersectScene(intersection.position, wo, 0.00001f, intersection))
     {
         uint iBounce = 0;
         while (1)
@@ -162,22 +166,23 @@ void main(uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID)
             wo = -wo;
 
             float lightSelectionSample = GetNextSample();
-            l += pathThroughput * (UniformSampleOneLight(lightSelectionSample, position, normal, wo, albedo, 0.000001f) + emission);
+            l += pathThroughput * (UniformSampleOneLight(lightSelectionSample, intersection, wo, 0.000001f) + intersection.emission);
 
             if (iBounce == g_Constants[0].maxBounceCount)
                 break;
 
-            float4 brdf, pdf;
-            SampleLambertBRDF(wo, GetNextSample2(), albedo, normal, tangent, wi, brdf, pdf);
+            float4 brdf;
+            float pdf;
+            SampleBSDF(wo, GetNextSample2(), intersection, wi, brdf, pdf);
 
             // Sometimes BRDF value at wi is zero.
             if (all(brdf == 0.0f))
                 break;
 
-            float NdotL = dot(wi, normal);
+            float NdotL = dot(wi, intersection.normal);
             pathThroughput = pathThroughput * brdf * NdotL / pdf;
 
-            if (!IntersectScene(position, wi, 0.00001f, position, normal, tangent, albedo, emission))
+            if (!IntersectScene(intersection.position, wi, 0.00001f, intersection))
             {
                 l += pathThroughput * g_Constants[0].background;
                 break;

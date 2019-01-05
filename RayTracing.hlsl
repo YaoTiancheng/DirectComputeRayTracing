@@ -37,6 +37,7 @@ struct Intersection
     float4  position;
     float4  normal;
     float4  tangent;
+    float   rayEpsilon;
 };
 
 
@@ -158,7 +159,7 @@ void main(uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID)
     float2 filmSample = (pixelSample + pixelPos) / g_Constants[0].resolution;
     GenerateRay(filmSample, g_Constants[0].filmSize, g_Constants[0].filmDistance, g_Constants[0].cameraTransform, intersection.position, wo);
 
-    if (IntersectScene(intersection.position, wo, 0.00001f, intersection))
+    if (IntersectScene(intersection.position, wo, 0.0f, intersection))
     {
         uint iBounce = 0;
         while (1)
@@ -166,7 +167,7 @@ void main(uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID)
             wo = -wo;
 
             float lightSelectionSample = GetNextSample();
-            l += pathThroughput * (UniformSampleOneLight(lightSelectionSample, intersection, wo, 0.000001f) + intersection.emission);
+            l += pathThroughput * (UniformSampleOneLight(lightSelectionSample, intersection, wo, intersection.rayEpsilon) + intersection.emission);
 
             if (iBounce == g_Constants[0].maxBounceCount)
                 break;
@@ -182,7 +183,7 @@ void main(uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID)
             float NdotL = dot(wi, intersection.normal);
             pathThroughput = pathThroughput * brdf * NdotL / pdf;
 
-            if (!IntersectScene(intersection.position, wi, 0.00001f, intersection))
+            if (!IntersectScene(intersection.position, wi, intersection.rayEpsilon, intersection))
             {
                 l += pathThroughput * g_Constants[0].background;
                 break;

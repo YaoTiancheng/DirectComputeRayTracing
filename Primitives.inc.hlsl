@@ -8,8 +8,6 @@ bool RaySphereIntersect(float4 origin
     float t0, t1;
     float4 l = sphere.position - origin;
     float tca = dot(l, direction);
-    if (tca < 0.0f)
-        return false;
     float d2 = dot(l, l) - tca * tca;
     if (d2 > radius2)
         return false;
@@ -17,12 +15,6 @@ bool RaySphereIntersect(float4 origin
     t0 = tca - thc;
     t1 = tca + thc;
 
-    if (t0 > t1)
-    {
-        float temp = t0;
-        t0 = t1;
-        t1 = temp;
-    }
     if (t0 < 0)
     {
         t0 = t1;
@@ -49,7 +41,8 @@ bool RaySphereIntersect(float4 origin
             intersection.tangent = float4(1.0f, 0.0f, 0.0f, 0.0f);
         intersection.albedo = sphere.albedo;
         intersection.emission = sphere.emission;
-        intersection.alpha = 0.0f;
+        intersection.alpha = 0.6f;
+        intersection.rayEpsilon = 1e-3f * t;
     }
     return intersect;
 }

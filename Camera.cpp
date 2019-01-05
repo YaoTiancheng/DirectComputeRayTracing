@@ -4,7 +4,7 @@
 using namespace DirectX;
 
 Camera::Camera()
-    : m_Position(0.0f, 0.0f, 0.0f, 1.0f)
+    : m_Position(0.0f, 1.0f, 0.0f, 1.0f)
     , m_EulerAngles(0.0f, 0.0f, 0.0f, 0.0f)
     , m_Velocity(0.0f, 0.0f, 0.0f, 0.0f)
     , m_LastPointerPosition(0.0f, 0.0f)

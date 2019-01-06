@@ -171,12 +171,16 @@ float4 EvaluateBSDF(float4 wi, float4 wo, Intersection intersection)
     wo = mul(wo, world2tbn);
     wi = mul(wi, world2tbn);
 
-    //return EvaluateLambertBRDF(wi, intersection.albedo);
-    return EvaluateCookTorranceMircofacetBRDF(wi, wo, intersection.albedo, intersection.alpha, 0.2f);
+    float4 lambertBRDF = EvaluateLambertBRDF(wi, intersection.albedo);
+    float4 cooktorranceBRDF = EvaluateCookTorranceMircofacetBRDF(wi, wo, intersection.specular, intersection.alpha, intersection.f0);
+    return lambertBRDF + cooktorranceBRDF;
 }
 
+static const float4 GRAYSCALE_VECTOR = float4(0.2126f, 0.7152f, 0.0722f, 1.0f);
+
 void SampleBSDF(float4 wo
-    , float2 sample
+    , float2 BRDFSample
+    , float BRDFSelectionSample
     , Intersection intersection
     , out float4 wi
     , out float4 value
@@ -188,8 +192,25 @@ void SampleBSDF(float4 wo
 
     wo = mul(wo, world2tbn);
 
-    //SampleLambertBRDF(wo, sample, intersection.albedo, intersection.normal, intersection.tangent, wi, value, pdf);
-    SampleCookTorranceMicrofacetBRDF(wo, sample, intersection.albedo, intersection.alpha, 1.0f, wi, value, pdf);
+    float albedoGrayscale = intersection.albedo * GRAYSCALE_VECTOR;
+    float specularGrayscale = intersection.specular * GRAYSCALE_VECTOR;
+    float lambertProbability = albedoGrayscale / (albedoGrayscale + specularGrayscale);
+    float cookTorranceProbability = 1.0f - lambertProbability;
+
+    if (BRDFSelectionSample < lambertProbability)
+    {
+        SampleLambertBRDF(wo, BRDFSample, intersection.albedo, intersection.normal, intersection.tangent, wi, value, pdf);
+        value += EvaluateCookTorranceMircofacetBRDF(wi, wo, intersection.specular, intersection.alpha, intersection.f0);
+        pdf += EvaluateCookTorranceMicrofacetBRDFPdf(wi, wo, intersection.alpha);
+        pdf *= lambertProbability;
+    }
+    else
+    {
+        SampleCookTorranceMicrofacetBRDF(wo, BRDFSample, intersection.specular, intersection.alpha, intersection.f0, wi, value, pdf);
+        value += EvaluateLambertBRDF(wi, intersection.albedo);
+        pdf += EvaluateLambertBRDFPdf(wi);
+        pdf *= cookTorranceProbability;
+    }
 
     wi = mul(wi, tbn2world);
 }

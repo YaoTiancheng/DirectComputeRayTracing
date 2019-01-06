@@ -4,6 +4,7 @@ struct Sphere
     float4  position;
     float   radius;
     float4  albedo;
+    float   metallic;
     float4  emission;
 };
 
@@ -32,12 +33,14 @@ struct RayTracingConstants
 struct Intersection
 {
     float4  albedo;
+    float4  specular;
     float4  emission;
     float   alpha;
     float4  position;
     float4  normal;
     float4  tangent;
     float   rayEpsilon;
+    float   f0;
 };
 
 
@@ -174,7 +177,7 @@ void main(uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID)
 
             float4 brdf;
             float pdf;
-            SampleBSDF(wo, GetNextSample2(), intersection, wi, brdf, pdf);
+            SampleBSDF(wo, GetNextSample2(), GetNextSample(), intersection, wi, brdf, pdf);
 
             // Sometimes BRDF value at wi is zero.
             if (all(brdf == 0.0f))

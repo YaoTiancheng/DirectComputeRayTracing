@@ -7,6 +7,7 @@ struct Sphere
     DirectX::XMFLOAT4   center;
     float               radius;
     DirectX::XMFLOAT4   albedo;
+    float               metallic;
     DirectX::XMFLOAT4   emission;
 };
 

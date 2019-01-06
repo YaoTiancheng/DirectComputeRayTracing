@@ -183,26 +183,31 @@ void Scene::ResetScene()
     m_Spheres[0].center = XMFLOAT4(0.0f, 0.5f, 2.6f, 1.0f);
     m_Spheres[0].radius = 0.5f;
     m_Spheres[0].albedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+    m_Spheres[0].metallic = 0.0f;
     m_Spheres[0].emission = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
 
     m_Spheres[1].center = XMFLOAT4(1.0f, 0.5f, 2.6f, 1.0f);
     m_Spheres[1].radius = 0.5f;
     m_Spheres[1].albedo = XMFLOAT4(0.78f, 0.38f, 0.38f, 1.0f);
+    m_Spheres[1].metallic = 1.0f;
     m_Spheres[1].emission = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
 
     m_Spheres[2].center = XMFLOAT4(-2.0f, 0.5f, 2.6f, 1.0f);
     m_Spheres[2].radius = 0.5f;
-    m_Spheres[2].albedo = XMFLOAT4(0.78f, 0.78f, 0.38f, 1.0f);
+    m_Spheres[2].albedo = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+    m_Spheres[2].metallic = 0.0f;
     m_Spheres[2].emission = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
 
     m_Spheres[3].center = XMFLOAT4(-0.5f, 1.0f, 3.6f, 1.0f);
     m_Spheres[3].radius = 1.0f;
     m_Spheres[3].albedo = XMFLOAT4(0.78f, 0.48f, 0.78f, 1.0f);
+    m_Spheres[3].metallic = 0.0f;
     m_Spheres[3].emission = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
 
     m_Spheres[4].center = XMFLOAT4(0.0f, -100.0f, 0.0f, 1.0f);
     m_Spheres[4].radius = 100.0f;
-    m_Spheres[4].albedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+    m_Spheres[4].albedo = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
+    m_Spheres[4].metallic = 0.0f;
     m_Spheres[4].emission = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
 
     m_PointLights[0].position = XMFLOAT4(10.0f, 3.0f, -5.0f, 1.0f);

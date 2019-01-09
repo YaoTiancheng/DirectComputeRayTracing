@@ -39,13 +39,12 @@ bool RaySphereIntersect(float4 origin
         intersection.tangent = normalize(float4(cross(float3(0.0f, 1.0f, 0.0f), intersection.normal.xyz), 0.0f));
         if (isinf(intersection.tangent.x))
             intersection.tangent = float4(1.0f, 0.0f, 0.0f, 0.0f);
-        float albedoAmount = lerp(0.95f, 0.0f, sphere.metallic);
-        intersection.albedo = sphere.albedo * albedoAmount;
-        intersection.specular = lerp(1.0f, sphere.albedo, sphere.metallic) * (1.0f - albedoAmount);
+        intersection.albedo = sphere.albedo;
+        intersection.specular = lerp(1.0f, sphere.albedo, sphere.metallic);
         intersection.emission = sphere.emission;
-        intersection.alpha = 0.001f;
+        intersection.alpha = 0.1f;
         intersection.rayEpsilon = 1e-3f * t;
-        intersection.f0 = lerp(0.07f, 1.0f, sphere.metallic);
+        intersection.f0 = lerp(0.1f, 1.0f, sphere.metallic);
     }
     return intersect;
 }

@@ -73,6 +73,9 @@ private:
     
     bool                                m_IsFilmDirty;
 
+    std::mt19937                        m_MersenneURBG;
+    std::uniform_real_distribution<float>   m_UniformRealDistribution;
+
     template <typename T>
     using ComPtr = Microsoft::WRL::ComPtr<T>;
     ComPtr<ID3D11SamplerState>          m_CopySamplerState;

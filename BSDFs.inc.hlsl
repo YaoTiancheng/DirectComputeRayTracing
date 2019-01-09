@@ -176,7 +176,7 @@ float4 EvaluateBSDF(float4 wi, float4 wo, Intersection intersection)
     return lambertBRDF + cooktorranceBRDF;
 }
 
-static const float4 GRAYSCALE_VECTOR = float4(0.2126f, 0.7152f, 0.0722f, 1.0f);
+static const float4 GRAYSCALE_VECTOR = float4(0.2126f, 0.7152f, 0.0722f, 0.0f);
 
 void SampleBSDF(float4 wo
     , float2 BRDFSample

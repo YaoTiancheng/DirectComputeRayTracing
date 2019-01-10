@@ -179,8 +179,7 @@ void main(uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID)
             float pdf;
             SampleBSDF(wo, GetNextSample2(), GetNextSample(), intersection, wi, brdf, pdf);
 
-            // Sometimes BRDF value at wi is zero.
-            if (all(brdf.xyz == 0.0f))
+            if (all(brdf.xyz == 0.0f) || pdf == 0.0f)
                 break;
 
             float NdotL = dot(wi, intersection.normal);

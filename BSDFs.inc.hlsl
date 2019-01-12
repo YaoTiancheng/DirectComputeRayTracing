@@ -16,7 +16,7 @@ float4 EvaluateLambertBRDF(float4 wi, float4 albedo)
 
 float EvaluateLambertBRDFPdf(float4 wi)
 {
-    return wi.z * INV_PI;
+    return max(0.0f, wi.z * INV_PI);
 }
 
 void SampleLambertBRDF(float4 wo
@@ -37,23 +37,23 @@ void SampleLambertBRDF(float4 wo
 
 float4 GGXSampleHemisphere(float2 sample, float alpha)
 {
-	float theta = atan(alpha * sqrt(sample.x / (1.0f - sample.x)));
-	float phi = 2 * PI * sample.y;
+    float theta = atan(alpha * sqrt(sample.x / (1.0f - sample.x)));
+    float phi = 2 * PI * sample.y;
 
     float4 v = float4(cos(phi), sin(phi), 0.0f, 0.0f);
-	v *= sin(theta);
-	v.z = cos(theta);
-	return v;
+    v *= sin(theta);
+    v.z = cos(theta);
+    return v;
 }
 
 float EvaluateGGXMicrofacetDistribution(float4 m, float alpha)
 {
-	float alpha2 = alpha * alpha;
-	float NdotM = m.z;
-	float NdotM2 = NdotM * NdotM;
+    float alpha2 = alpha * alpha;
+    float NdotM = m.z;
+    float NdotM2 = NdotM * NdotM;
     float factor = NdotM2 * (alpha2 - 1) + 1;
-	float denominator = factor * factor * PI;
-	return alpha2 / denominator;
+    float denominator = factor * factor * PI;
+    return alpha2 / denominator;
 }
 
 float EvaluateGGXMicrofacetDistributionPdf(float4 m, float alpha)
@@ -190,39 +190,17 @@ void SampleBSDF(float4 wo
 
     wo = mul(wo, world2tbn);
 
-    float4 m;
-    SampleGGXMicrofacetDistribution(wo, BRDFSample, intersection.alpha, m);
-
-    float WOdotM = dot(wo, m);
-    if (WOdotM < 0.0f)
+    float fresnel = EvaluateSchlickFresnel(wo.z, intersection.f0);
+    if (BRDFSelectionSample < fresnel)
     {
-        value = 0.0f;
+        SampleCookTorranceMicrofacetBRDF(wo, BRDFSample, intersection.specular, intersection.alpha, intersection.f0, wi, value, pdf);
+        pdf *= fresnel;
     }
     else
     {
-        float fresnel = EvaluateSchlickFresnel(WOdotM, intersection.f0);
-
-        if (BRDFSelectionSample < fresnel)
-        {
-            wi = -reflect(wo, m);
-            if (wi.z * wo.z <= 0.0f)
-            {
-                value = 0.0f;
-                pdf = 0.0f;
-            }
-            else
-            {
-                value = EvaluateCookTorranceMircofacetBRDF(wi, wo, intersection.specular, intersection.alpha, intersection.f0);
-                pdf = EvaluateCookTorranceMicrofacetBRDFPdf(wi, wo, intersection.alpha);
-            }
-            pdf *= fresnel;
-        }
-        else
-        {
-            SampleLambertBRDF(wo, GetNextSample2(), intersection.albedo, wi, value, pdf);
-            value *= EvaluateGGXMicrofacetDistribution(m, intersection.alpha) * (1.0f - fresnel);
-            pdf *= EvaluateGGXMicrofacetDistributionPdf(m, intersection.alpha) * (1.0f - fresnel);
-        }
+        SampleLambertBRDF(wo, BRDFSample, intersection.albedo, wi, value, pdf);
+        value *= 1.0f - fresnel;
+        pdf *= 1.0f - fresnel;
     }
 
     wi = mul(wi, tbn2world);

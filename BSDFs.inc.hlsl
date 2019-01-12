@@ -169,7 +169,8 @@ float4 EvaluateBSDF(float4 wi, float4 wo, Intersection intersection)
     wo = mul(wo, world2tbn);
     wi = mul(wi, world2tbn);
 
-    float4 lambertBRDF = EvaluateLambertBRDF(wi, intersection.albedo);
+    float fresnel = EvaluateSchlickFresnel(wo.z, intersection.f0);
+    float4 lambertBRDF = EvaluateLambertBRDF(wi, intersection.albedo) * (1.0f - fresnel);
     float4 cooktorranceBRDF = EvaluateCookTorranceMircofacetBRDF(wi, wo, intersection.specular, intersection.alpha, intersection.f0);
     return lambertBRDF + cooktorranceBRDF;
 }

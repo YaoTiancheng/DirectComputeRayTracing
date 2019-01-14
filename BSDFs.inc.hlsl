@@ -196,12 +196,16 @@ void SampleBSDF(float4 wo
     {
         SampleCookTorranceMicrofacetBRDF(wo, BRDFSample, intersection.specular, intersection.alpha, intersection.f0, wi, value, pdf);
         pdf *= fresnel;
+        value += EvaluateLambertBRDF(wi, intersection.albedo) * (1.0f - fresnel);
+        pdf += EvaluateLambertBRDFPdf(wi) * (1.0f - fresnel);
     }
     else
     {
         SampleLambertBRDF(wo, BRDFSample, intersection.albedo, wi, value, pdf);
         value *= 1.0f - fresnel;
         pdf *= 1.0f - fresnel;
+        value += EvaluateCookTorranceMircofacetBRDF(wi, wo, intersection.specular, intersection.alpha, intersection.f0);
+        pdf += EvaluateCookTorranceMicrofacetBRDFPdf(wi, wo, intersection.alpha) * fresnel;
     }
 
     wi = mul(wi, tbn2world);

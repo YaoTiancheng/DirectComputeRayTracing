@@ -143,8 +143,15 @@ float4 EstimateDirect(PointLight pointLight, Intersection intersection, float ep
 
 float4 UniformSampleOneLight(float sample, Intersection intersection, float4 wo, float epsilon)
 {
-    uint lightIndex = floor(GetNextSample() * g_Constants[0].pointLightCount);
-    return EstimateDirect(g_PointLights[lightIndex], intersection, epsilon, wo) * g_Constants[0].pointLightCount; 
+    if (g_Constants[0].pointLightCount == 0)
+    {
+        return 0.0f;
+    }
+    else
+    {
+        uint lightIndex = floor(GetNextSample() * g_Constants[0].pointLightCount);
+        return EstimateDirect(g_PointLights[lightIndex], intersection, epsilon, wo) * g_Constants[0].pointLightCount; 
+    }
 }
 
 [numthreads(32, 32, 1)]

@@ -61,20 +61,13 @@ float EvaluateGGXMicrofacetDistributionPdf(float4 m, float alpha)
     return EvaluateGGXMicrofacetDistribution(m, alpha) * m.z;
 }
 
-void SampleGGXMicrofacetDistribution(float4 wo
-    , float2 sample
-    , float alpha
-    , out float4 m
-    , out float pdf)
+void SampleGGXMicrofacetDistribution(float2 sample, float alpha, out float4 m, out float pdf)
 {
     m = GGXSampleHemisphere(sample, alpha);
     pdf = EvaluateGGXMicrofacetDistributionPdf(m, alpha);
 }
 
-void SampleGGXMicrofacetDistribution(float4 wo
-    , float2 sample
-    , float alpha
-    , out float4 m)
+void SampleGGXMicrofacetDistribution(float2 sample, float alpha, out float4 m)
 {
     m = GGXSampleHemisphere(sample, alpha);
 }
@@ -85,7 +78,7 @@ void SampleGGXMicrofacetDistribution(float4 wo
 
 float EvaluateGGXGeometricShadowingOneDirection(float alpha2, float4 w)
 {
-    float NdotW = w.z;
+    float NdotW = abs(w.z);
     float denominator = sqrt(alpha2 + (1 - alpha2) * NdotW * NdotW) + NdotW;
     return 2 * NdotW / denominator;
 }
@@ -142,7 +135,7 @@ float EvaluateCookTorranceMicrofacetBRDFPdf(float4 wi, float4 wo, float alpha)
 void SampleCookTorranceMicrofacetBRDF(float4 wo, float2 sample, float4 reflectance, float alpha, float f0, out float4 wi, out float4 value, out float pdf)
 {
     float4 m;
-    SampleGGXMicrofacetDistribution(wo, sample, alpha, m);
+    SampleGGXMicrofacetDistribution(sample, alpha, m);
     wi = -reflect(wo, m);
     if (wi.z * wo.z <= 0.0f)
     {
@@ -154,6 +147,18 @@ void SampleCookTorranceMicrofacetBRDF(float4 wo, float2 sample, float4 reflectan
         value = EvaluateCookTorranceMircofacetBRDF(wi, wo, reflectance, alpha, f0);
         pdf = EvaluateCookTorranceMicrofacetBRDFPdf(wi, wo, alpha);
     }
+}
+
+//
+// Cook-Torrance BTDF
+//
+
+float EvaluateCookTorranceMicrofacetBTDFPdf(float4 wi, float4 wo, float4 m, float alpha)
+{
+    float WIdotN = abs(wi.z);
+    float WOdotN = abs(wo.z);
+    float pdf = EvaluateGGXMicrofacetDistributionPdf(m, alpha);
+    return pdf / (4 * dot(wo, m));
 }
 
 //
@@ -169,13 +174,18 @@ float4 EvaluateBSDF(float4 wi, float4 wo, Intersection intersection)
     wo = mul(wo, world2tbn);
     wi = mul(wi, world2tbn);
 
-    float fresnel = EvaluateSchlickFresnel(wo.z, intersection.f0);
+    float4 m;
+    SampleGGXMicrofacetDistribution(GetNextSample2(), intersection.alpha, m);
+    float WOdotM = max(dot(wo, m), 0.0f);
+    float fresnel = EvaluateSchlickFresnel(WOdotM, intersection.ior);
     float4 lambertBRDF = EvaluateLambertBRDF(wi, intersection.albedo) * (1.0f - fresnel);
-    float4 cooktorranceBRDF = EvaluateCookTorranceMircofacetBRDF(wi, wo, intersection.specular, intersection.alpha, intersection.f0);
+    float4 cooktorranceBRDF = EvaluateCookTorranceMircofacetBRDF(wi, wo, intersection.specular, intersection.alpha, intersection.ior);
     return lambertBRDF + cooktorranceBRDF;
 }
 
-static const float4 GRAYSCALE_VECTOR = float4(0.2126f, 0.7152f, 0.0722f, 0.0f);
+static const int BRDFComponentLambert = 0;
+static const int BRDFComponentReflection = 1;
+static const int BRDFComponentRefraction = 2;
 
 void SampleBSDF(float4 wo
     , float2 BRDFSample
@@ -191,22 +201,118 @@ void SampleBSDF(float4 wo
 
     wo = mul(wo, world2tbn);
 
-    float fresnel = EvaluateSchlickFresnel(wo.z, intersection.f0);
-    if (BRDFSelectionSample < fresnel)
+    bool isBTDF = false;
+    float no, ni, f0;
+    if (wo.z < 0.0f)
     {
-        SampleCookTorranceMicrofacetBRDF(wo, BRDFSample, intersection.specular, intersection.alpha, intersection.f0, wi, value, pdf);
-        pdf *= fresnel;
-        value += EvaluateLambertBRDF(wi, intersection.albedo) * (1.0f - fresnel);
-        pdf += EvaluateLambertBRDFPdf(wi) * (1.0f - fresnel);
+        wo.z = -wo.z;
+        no = intersection.ior;
+        ni = 1.0f;
+        isBTDF = true;
     }
     else
     {
-        SampleLambertBRDF(wo, BRDFSample, intersection.albedo, wi, value, pdf);
-        value *= 1.0f - fresnel;
-        pdf *= 1.0f - fresnel;
-        value += EvaluateCookTorranceMircofacetBRDF(wi, wo, intersection.specular, intersection.alpha, intersection.f0);
-        pdf += EvaluateCookTorranceMicrofacetBRDFPdf(wi, wo, intersection.alpha) * fresnel;
+        no = 1.0f;
+        ni = intersection.ior;
     }
+
+    int BRDFComponent = 0;
+    float BRDFComponentPdf = 0.0f;
+
+    float4 m;
+    SampleGGXMicrofacetDistribution(BRDFSample, intersection.alpha, m);
+
+    float WOdotM = dot(wo, m);
+
+    f0 = (1.0f - intersection.ior) / (1.0f + intersection.ior);
+    f0 *= f0;
+    float fresnel = EvaluateSchlickFresnel(WOdotM, f0);
+    wi = -reflect(wo, m);
+
+    if (WOdotM < 0.0f)
+    {
+        fresnel = 0.0f;
+        BRDFComponent = BRDFComponentLambert;
+        BRDFComponentPdf = 1.0f;
+    }
+    else if (wi.z < 0.0f || BRDFSelectionSample > fresnel)
+    {
+        if (GetNextSample() <= intersection.albedo.a)
+        {
+            BRDFComponent = BRDFComponentLambert;
+            BRDFComponentPdf = intersection.albedo.a;
+        }
+        else
+        {
+            BRDFComponent = BRDFComponentRefraction;
+            BRDFComponentPdf = 1.0f - intersection.albedo.a;
+        }
+
+        if (wi.z < 0.0f)
+        {
+            fresnel = 0.0f;
+        }
+
+        BRDFComponentPdf *= 1.0f - fresnel;
+    }
+    else
+    {
+        BRDFComponent = BRDFComponentReflection;
+        BRDFComponentPdf = fresnel;
+    }
+
+    if (BRDFComponent == BRDFComponentLambert)
+    {
+        if (!isBTDF)
+        {
+            SampleLambertBRDF(wo, GetNextSample2(), intersection.albedo, wi, value, pdf);
+            value *= intersection.albedo.a * (1.0f - fresnel);
+        }
+        else
+        {
+            value = 0.0f;
+        }
+    }
+    else if (BRDFComponent == BRDFComponentReflection)
+    {
+        value = EvaluateCookTorranceMircofacetBRDF(wi, wo, intersection.specular, intersection.alpha, f0);
+        pdf = EvaluateCookTorranceMicrofacetBRDFPdf(wi, wo, intersection.alpha);
+    }
+    else if (BRDFComponent == BRDFComponentRefraction)
+    {
+        wi = refract(-wo, m, no / ni);
+
+        if (all(wi.xyz == 0.0f))
+        {
+            value = 0.0f;
+            pdf = 0.0f;
+        }
+        else
+        {
+            float WIdotM = dot(wi, m);
+            value = no * no * abs(WIdotM) * abs(WOdotM) * (1.0f - fresnel) * EvaluateGGXGeometricShadowing(wi, wo, intersection.alpha) * EvaluateGGXMicrofacetDistribution(m, intersection.alpha);
+            float term = ni * abs(WIdotM) + no * abs(WOdotM);
+            value /= abs(wi.z) * abs(wo.z) * term * term;
+            value *= 1.0f - intersection.albedo.a;
+            pdf = EvaluateCookTorranceMicrofacetBTDFPdf(wi, wo, m, intersection.alpha);
+        }
+    }
+
+    pdf *= BRDFComponentPdf;
+
+    if (isBTDF)
+        wi.z = -wi.z;
+
+    //if (WOdotM > 0.0f && wi.z >= 0.0f && BRDFSelectionSample < fresnel)
+    //{
+    //    value = EvaluateCookTorranceMircofacetBRDF(wi, wo, intersection.specular, intersection.alpha, intersection.f0);
+    //    pdf = EvaluateCookTorranceMicrofacetBRDFPdf(wi, wo, intersection.alpha);
+    //    pdf *= fresnel;
+    //}
+    //else
+    //{
+    //    SampleLambertBRDF(wo, GetNextSample2(), intersection.albedo, wi, value, pdf);
+    //}
 
     wi = mul(wi, tbn2world);
 }

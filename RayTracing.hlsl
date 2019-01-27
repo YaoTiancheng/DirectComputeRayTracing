@@ -40,7 +40,7 @@ struct Intersection
     float4  normal;
     float4  tangent;
     float   rayEpsilon;
-    float   f0;
+    float   ior;
 };
 
 
@@ -189,7 +189,7 @@ void main(uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID)
             if (all(brdf.xyz == 0.0f) || pdf == 0.0f)
                 break;
 
-            float NdotL = dot(wi, intersection.normal);
+            float NdotL = abs(dot(wi, intersection.normal));
             pathThroughput = pathThroughput * brdf * NdotL / pdf;
 
             if (!IntersectScene(intersection.position, wi, intersection.rayEpsilon, intersection))

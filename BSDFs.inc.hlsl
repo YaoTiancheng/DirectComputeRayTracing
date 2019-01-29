@@ -201,14 +201,14 @@ void SampleBSDF(float4 wo
 
     wo = mul(wo, world2tbn);
 
-    bool isBTDF = false;
+    bool isInverted = false;
     float no, ni, f0;
     if (wo.z < 0.0f)
     {
         wo.z = -wo.z;
         no = intersection.ior;
         ni = 1.0f;
-        isBTDF = true;
+        isInverted = true;
     }
     else
     {
@@ -263,7 +263,7 @@ void SampleBSDF(float4 wo
 
     if (BRDFComponent == BRDFComponentLambert)
     {
-        if (!isBTDF)
+        if (!isInverted)
         {
             SampleLambertBRDF(wo, GetNextSample2(), intersection.albedo, wi, value, pdf);
             value *= intersection.albedo.a * (1.0f - fresnel);
@@ -290,7 +290,7 @@ void SampleBSDF(float4 wo
         else
         {
             float WIdotM = dot(wi, m);
-            value = no * no * abs(WIdotM) * abs(WOdotM) * (1.0f - fresnel) * EvaluateGGXGeometricShadowing(wi, wo, intersection.alpha) * EvaluateGGXMicrofacetDistribution(m, intersection.alpha);
+            value = ni * ni * abs(WIdotM) * abs(WOdotM) * (1.0f - fresnel) * EvaluateGGXGeometricShadowing(wi, wo, intersection.alpha) * EvaluateGGXMicrofacetDistribution(m, intersection.alpha);
             float term = ni * abs(WIdotM) + no * abs(WOdotM);
             value /= abs(wi.z) * abs(wo.z) * term * term;
             value *= 1.0f - intersection.albedo.a;
@@ -300,19 +300,8 @@ void SampleBSDF(float4 wo
 
     pdf *= BRDFComponentPdf;
 
-    if (isBTDF)
+    if (isInverted)
         wi.z = -wi.z;
-
-    //if (WOdotM > 0.0f && wi.z >= 0.0f && BRDFSelectionSample < fresnel)
-    //{
-    //    value = EvaluateCookTorranceMircofacetBRDF(wi, wo, intersection.specular, intersection.alpha, intersection.f0);
-    //    pdf = EvaluateCookTorranceMicrofacetBRDFPdf(wi, wo, intersection.alpha);
-    //    pdf *= fresnel;
-    //}
-    //else
-    //{
-    //    SampleLambertBRDF(wo, GetNextSample2(), intersection.albedo, wi, value, pdf);
-    //}
 
     wi = mul(wi, tbn2world);
 }

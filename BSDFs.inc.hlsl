@@ -124,7 +124,7 @@ float EvaluateCookTorranceMicrofacetBRDFPdf(float4 wi, float4 wo, float alpha)
     {
         float4 m = normalize(wi + wo);
         float pdf = EvaluateGGXMicrofacetDistributionPdf(m, alpha);
-        return pdf / (4 * dot(wo, m));
+        return pdf / (4 * dot(wi, m));
     }
     else
     {
@@ -153,12 +153,13 @@ void SampleCookTorranceMicrofacetBRDF(float4 wo, float2 sample, float4 reflectan
 // Cook-Torrance BTDF
 //
 
-float EvaluateCookTorranceMicrofacetBTDFPdf(float4 wi, float4 wo, float4 m, float alpha)
+float EvaluateCookTorranceMicrofacetBTDFPdf(float4 wi, float4 wo, float4 m, float alpha, float no, float ni)
 {
-    float WIdotN = abs(wi.z);
-    float WOdotN = abs(wo.z);
+    float WIdotM = abs(dot(wi, m));
+    float WOdotM = abs(dot(wo, m));
     float pdf = EvaluateGGXMicrofacetDistributionPdf(m, alpha);
-    return pdf / (4 * dot(wo, m));
+    float term = no * WOdotM + ni * WIdotM;
+    return pdf * WOdotM * ni * ni / (term * term);
 }
 
 //
@@ -294,7 +295,7 @@ void SampleBSDF(float4 wo
             float term = ni * abs(WIdotM) + no * abs(WOdotM);
             value /= abs(wi.z) * abs(wo.z) * term * term;
             value *= 1.0f - intersection.albedo.a;
-            pdf = EvaluateCookTorranceMicrofacetBTDFPdf(wi, wo, m, intersection.alpha);
+            pdf = EvaluateCookTorranceMicrofacetBTDFPdf(wi, wo, m, intersection.alpha, no, ni);
         }
     }
 

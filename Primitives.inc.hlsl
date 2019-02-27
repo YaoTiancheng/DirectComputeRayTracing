@@ -9,7 +9,7 @@ bool RaySphereIntersect(float4 origin
     float4 l = sphere.position - origin;
     float tca = dot(l, direction);
     float d2 = dot(l, l) - tca * tca;
-    if (d2 > radius2)
+    if (d2 >= radius2)
         return false;
     float thc = sqrt(radius2 - d2);
     t0 = tca - thc;

@@ -21,7 +21,7 @@ D3D11_INPUT_ELEMENT_DESC kScreenQuadInputElementDesc[1]
 
 Scene::Scene()
     : m_IsFilmDirty(true)
-    , m_UniformRealDistribution(0.0f, 1.0f)
+    , m_UniformRealDistribution(0.0f, std::nexttoward(1.0f, 0.0f))
 {
     std::random_device randomDevice;
     m_MersenneURBG = std::mt19937(randomDevice());
@@ -342,7 +342,9 @@ bool Scene::UpdateResources()
     {
         float* samples = reinterpret_cast<float*>(mappedSubresource.pData);
         for (int i = 0; i < kMaxSamplesCount; ++i)
-            samples[i] = m_UniformRealDistribution(m_MersenneURBG);
+        {
+            samples[i] = m_UniformRealDistribution( m_MersenneURBG );
+        }
 
         deviceContext->Unmap(m_SamplesBuffer.Get(), 0);
     }

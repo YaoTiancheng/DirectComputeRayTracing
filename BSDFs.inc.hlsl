@@ -230,15 +230,15 @@ void SampleBSDF(float4 wo
     float fresnel = EvaluateSchlickFresnel(WOdotM, f0);
     wi = -reflect(wo, m);
 
-    if (WOdotM < 0.0f)
+    if (WOdotM <= 0.0f)
     {
         fresnel = 0.0f;
         BRDFComponent = BRDFComponentLambert;
         BRDFComponentPdf = 1.0f;
     }
-    else if (wi.z < 0.0f || BRDFSelectionSample > fresnel)
+    else if (wi.z < 0.0f || BRDFSelectionSample >= fresnel)
     {
-        if (GetNextSample() <= intersection.albedo.a)
+        if (GetNextSample() < intersection.albedo.a)
         {
             BRDFComponent = BRDFComponentLambert;
             BRDFComponentPdf = intersection.albedo.a;

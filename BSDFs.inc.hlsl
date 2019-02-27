@@ -283,7 +283,7 @@ void SampleBSDF(float4 wo
     {
         wi = refract(-wo, m, no / ni);
 
-        if (all(wi.xyz == 0.0f))
+        if (all(wi.xyz == 0.0f) || wi.z == 0.0f)
         {
             value = 0.0f;
             pdf = 0.0f;

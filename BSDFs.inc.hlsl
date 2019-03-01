@@ -93,16 +93,26 @@ float EvaluateGGXGeometricShadowing(float4 wi, float4 wo, float alpha)
 // SchlickFresnel
 //
 
-float EvaluateSchlickFresnel(float WOdotM, float f0)
+float EvaluateSchlickFresnel(float WOdotM, float ior, bool isInverted)
 {
-    return (1 - f0) * pow(1 - WOdotM, 5) + f0;
+    float f0 = (1.0f - ior) / (1.0f + ior);
+    f0 *= f0;
+    
+    float x = WOdotM;
+    if (isInverted)
+    {
+        float ratio = 1.0f / ior;
+        float d = sqrt(1 - ratio * ratio);
+        x = max(0, x / d - d);
+    }
+    return (1 - f0) * pow(1 - x, 5) + f0;
 }
 
 //
 // Cook-Torrance microfacet BRDF
 //
 
-float4 EvaluateCookTorranceMircofacetBRDF(float4 wi, float4 wo, float4 reflectance, float alpha, float f0)
+float4 EvaluateCookTorranceMircofacetBRDF(float4 wi, float4 wo, float4 reflectance, float alpha, float ior, bool isInverted)
 {
     float WIdotN = wi.z;
     float WOdotN = wo.z;
@@ -113,7 +123,7 @@ float4 EvaluateCookTorranceMircofacetBRDF(float4 wi, float4 wo, float4 reflectan
         return 0.0f;
     m = normalize(m);
     float WOdotM = dot(wo, m);
-    return reflectance * EvaluateGGXMicrofacetDistribution(m, alpha) * EvaluateGGXGeometricShadowing(wi, wo, alpha) * EvaluateSchlickFresnel(WOdotM, f0) / (4 * WIdotN * WOdotN);
+    return reflectance * EvaluateGGXMicrofacetDistribution(m, alpha) * EvaluateGGXGeometricShadowing(wi, wo, alpha) * EvaluateSchlickFresnel(WOdotM, ior, isInverted) / (4 * WIdotN * WOdotN);
 }
 
 float EvaluateCookTorranceMicrofacetBRDFPdf(float4 wi, float4 wo, float alpha)
@@ -132,7 +142,7 @@ float EvaluateCookTorranceMicrofacetBRDFPdf(float4 wi, float4 wo, float alpha)
     }
 }
 
-void SampleCookTorranceMicrofacetBRDF(float4 wo, float2 sample, float4 reflectance, float alpha, float f0, out float4 wi, out float4 value, out float pdf)
+void SampleCookTorranceMicrofacetBRDF(float4 wo, float2 sample, float4 reflectance, float alpha, float ior, bool isInverted, out float4 wi, out float4 value, out float pdf)
 {
     float4 m;
     SampleGGXMicrofacetDistribution(sample, alpha, m);
@@ -144,7 +154,7 @@ void SampleCookTorranceMicrofacetBRDF(float4 wo, float2 sample, float4 reflectan
     }
     else
     {
-        value = EvaluateCookTorranceMircofacetBRDF(wi, wo, reflectance, alpha, f0);
+        value = EvaluateCookTorranceMircofacetBRDF(wi, wo, reflectance, alpha, ior, isInverted);
         pdf = EvaluateCookTorranceMicrofacetBRDFPdf(wi, wo, alpha);
     }
 }
@@ -178,9 +188,10 @@ float4 EvaluateBSDF(float4 wi, float4 wo, Intersection intersection)
     float4 m;
     SampleGGXMicrofacetDistribution(GetNextSample2(), intersection.alpha, m);
     float WOdotM = max(dot(wo, m), 0.0f);
-    float fresnel = EvaluateSchlickFresnel(WOdotM, intersection.ior);
+    bool isInverted = wo.z < 0.0f;
+    float fresnel = EvaluateSchlickFresnel(WOdotM, intersection.ior, isInverted);
     float4 lambertBRDF = EvaluateLambertBRDF(wi, intersection.albedo) * (1.0f - fresnel);
-    float4 cooktorranceBRDF = EvaluateCookTorranceMircofacetBRDF(wi, wo, intersection.specular, intersection.alpha, intersection.ior);
+    float4 cooktorranceBRDF = EvaluateCookTorranceMircofacetBRDF(wi, wo, intersection.specular, intersection.alpha, intersection.ior, isInverted);
     return lambertBRDF + cooktorranceBRDF;
 }
 
@@ -203,7 +214,7 @@ void SampleBSDF(float4 wo
     wo = mul(wo, world2tbn);
 
     bool isInverted = false;
-    float no, ni, f0;
+    float no, ni;
     if (wo.z < 0.0f)
     {
         wo.z = -wo.z;
@@ -225,9 +236,7 @@ void SampleBSDF(float4 wo
 
     float WOdotM = dot(wo, m);
 
-    f0 = (1.0f - intersection.ior) / (1.0f + intersection.ior);
-    f0 *= f0;
-    float fresnel = EvaluateSchlickFresnel(WOdotM, f0);
+    float fresnel = EvaluateSchlickFresnel(WOdotM, intersection.ior, isInverted);
     wi = -reflect(wo, m);
 
     if (WOdotM <= 0.0f)
@@ -276,7 +285,7 @@ void SampleBSDF(float4 wo
     }
     else if (BRDFComponent == BRDFComponentReflection)
     {
-        value = EvaluateCookTorranceMircofacetBRDF(wi, wo, intersection.specular, intersection.alpha, f0);
+        value = EvaluateCookTorranceMircofacetBRDF(wi, wo, intersection.specular, intersection.alpha, intersection.ior, isInverted);
         pdf = EvaluateCookTorranceMicrofacetBRDFPdf(wi, wo, intersection.alpha);
     }
     else if (BRDFComponent == BRDFComponentRefraction)
@@ -286,7 +295,6 @@ void SampleBSDF(float4 wo
         if (all(wi.xyz == 0.0f) || wi.z == 0.0f)
         {
             value = 0.0f;
-            pdf = 0.0f;
         }
         else
         {

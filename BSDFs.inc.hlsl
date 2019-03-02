@@ -98,14 +98,16 @@ float EvaluateSchlickFresnel(float WOdotM, float ior, bool isInverted)
     float f0 = (1.0f - ior) / (1.0f + ior);
     f0 *= f0;
     
-    float x = WOdotM;
+    float cosThetaO = WOdotM;
+
     if (isInverted)
     {
         float ratio = 1.0f / ior;
-        float d = sqrt(1 - ratio * ratio);
-        x = max(0, x / d - d);
+        float cosThetaC = sqrt(1 - ratio * ratio);
+        cosThetaO = max(0, (cosThetaO - cosThetaC) / (1 - cosThetaC));
     }
-    return (1 - f0) * pow(1 - x, 5) + f0;
+
+    return (1 - f0) * pow(1 - cosThetaO, 5) + f0;
 }
 
 //

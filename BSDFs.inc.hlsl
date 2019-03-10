@@ -124,7 +124,7 @@ float4 EvaluateCookTorranceMircofacetBRDF(float4 wi, float4 wo, float4 reflectan
     if (all(m == 0.0f))
         return 0.0f;
     m = normalize(m);
-    float WOdotM = dot(wo, m);
+    float WOdotM = abs(dot(wo, m));
     return reflectance * EvaluateGGXMicrofacetDistribution(m, alpha) * EvaluateGGXGeometricShadowing(wi, wo, alpha) * EvaluateSchlickFresnel(WOdotM, ior, isInverted) / (4 * WIdotN * WOdotN);
 }
 
@@ -200,6 +200,7 @@ float4 EvaluateBSDF(float4 wi, float4 wo, Intersection intersection)
 static const int BRDFComponentLambert = 0;
 static const int BRDFComponentReflection = 1;
 static const int BRDFComponentRefraction = 2;
+static const float4 LuminosityVector = { 0.21f, 0.72f, 0.07f, 0.0f };
 
 void SampleBSDF(float4 wo
     , float2 BRDFSample
@@ -230,86 +231,89 @@ void SampleBSDF(float4 wo
         ni = intersection.ior;
     }
 
-    int BRDFComponent = 0;
-    float BRDFComponentPdf = 0.0f;
+    //float4 m;
+    //SampleGGXMicrofacetDistribution(BRDFSample, intersection.alpha, m);
 
-    float4 m;
-    SampleGGXMicrofacetDistribution(BRDFSample, intersection.alpha, m);
+    //float WOdotM = dot(wo, m);
+    //float normalFresnel = EvaluateSchlickFresnel(wo.z, intersection.ior, isInverted);
 
-    float WOdotM = dot(wo, m);
+    float BRDFWeights[3];
+    BRDFWeights[BRDFComponentLambert] = dot(intersection.albedo * intersection.albedo.a, LuminosityVector);
+    BRDFWeights[BRDFComponentReflection] = dot(intersection.specular, LuminosityVector);
+    BRDFWeights[BRDFComponentRefraction] = (1 - intersection.albedo.a);
 
-    float fresnel = EvaluateSchlickFresnel(WOdotM, intersection.ior, isInverted);
-    wi = -reflect(wo, m);
-
-    if (WOdotM <= 0.0f)
+    float totalWeight = BRDFWeights[BRDFComponentLambert] + BRDFWeights[BRDFComponentReflection] + BRDFWeights[BRDFComponentRefraction];
+    if (totalWeight == 0.0f)
     {
-        fresnel = 0.0f;
-        BRDFComponent = BRDFComponentLambert;
-        BRDFComponentPdf = 1.0f;
+        value = 0.0f;
+        return;
     }
-    else if (wi.z < 0.0f || BRDFSelectionSample >= fresnel)
+
+    BRDFWeights[BRDFComponentLambert] = BRDFWeights[BRDFComponentLambert] / totalWeight;
+    BRDFWeights[BRDFComponentReflection] = BRDFWeights[BRDFComponentReflection] / totalWeight;
+    BRDFWeights[BRDFComponentRefraction] = BRDFWeights[BRDFComponentRefraction] / totalWeight;
+
+    if (BRDFSelectionSample < BRDFWeights[BRDFComponentLambert])
     {
-        if (GetNextSample() < intersection.albedo.a)
-        {
-            BRDFComponent = BRDFComponentLambert;
-            BRDFComponentPdf = intersection.albedo.a;
-        }
-        else
-        {
-            BRDFComponent = BRDFComponentRefraction;
-            BRDFComponentPdf = 1.0f - intersection.albedo.a;
-        }
+        SampleLambertBRDF(wo, GetNextSample2(), intersection.albedo, wi, value, pdf);
 
-        if (wi.z < 0.0f)
-        {
-            fresnel = 0.0f;
-        }
+        float4 m = normalize(wi + wo);
+        float WOdotM = dot(wo, m);
+        float fresnel = 0.0f;
+        if (WOdotM >= 0.0f)
+            fresnel = EvaluateSchlickFresnel(WOdotM, intersection.ior, isInverted);
 
-        BRDFComponentPdf *= 1.0f - fresnel;
+        value *= intersection.albedo.a * (1 - fresnel);
+        pdf *= BRDFWeights[BRDFComponentLambert];
+        
+        value += EvaluateCookTorranceMircofacetBRDF(wi, wo, intersection.specular, intersection.alpha, intersection.ior, isInverted);
+        pdf += EvaluateCookTorranceMicrofacetBRDFPdf(wi, wo, intersection.alpha) * BRDFWeights[BRDFComponentReflection];
+    }
+    else if (BRDFSelectionSample < BRDFWeights[BRDFComponentLambert] + BRDFWeights[BRDFComponentReflection])
+    {
+        SampleCookTorranceMicrofacetBRDF(wo, GetNextSample2(), intersection.specular, intersection.alpha, intersection.ior, isInverted, wi, value, pdf);
+        pdf *= BRDFWeights[BRDFComponentReflection];
+
+        float4 m = normalize(wi + wo);
+        float WOdotM = dot(wo, m);
+        float fresnel = 0.0f;
+        if (WOdotM >= 0.0f)
+            fresnel = EvaluateSchlickFresnel(WOdotM, intersection.ior, isInverted);
+        
+        value += EvaluateLambertBRDF(wi, intersection.albedo) * intersection.albedo.a * (1 - fresnel);
+        pdf += EvaluateLambertBRDFPdf(wi) * BRDFWeights[BRDFComponentLambert];
     }
     else
     {
-        BRDFComponent = BRDFComponentReflection;
-        BRDFComponentPdf = fresnel;
-    }
+        float4 m;
+        SampleGGXMicrofacetDistribution(GetNextSample2(), intersection.alpha, m, pdf);
 
-    if (BRDFComponent == BRDFComponentLambert)
-    {
-        if (!isInverted)
-        {
-            SampleLambertBRDF(wo, GetNextSample2(), intersection.albedo, wi, value, pdf);
-            value *= intersection.albedo.a * (1.0f - fresnel);
-        }
-        else
-        {
-            value = 0.0f;
-        }
-    }
-    else if (BRDFComponent == BRDFComponentReflection)
-    {
-        value = EvaluateCookTorranceMircofacetBRDF(wi, wo, intersection.specular, intersection.alpha, intersection.ior, isInverted);
-        pdf = EvaluateCookTorranceMicrofacetBRDFPdf(wi, wo, intersection.alpha);
-    }
-    else if (BRDFComponent == BRDFComponentRefraction)
-    {
-        wi = refract(-wo, m, no / ni);
-
-        if (all(wi.xyz == 0.0f) || wi.z == 0.0f)
+        float WOdotM = dot(wo, m);
+        if (WOdotM < 0.0f)
         {
             value = 0.0f;
         }
         else
         {
-            float WIdotM = dot(wi, m);
-            value = ni * ni * abs(WIdotM) * abs(WOdotM) * (1.0f - fresnel) * EvaluateGGXGeometricShadowing(wi, wo, intersection.alpha) * EvaluateGGXMicrofacetDistribution(m, intersection.alpha);
-            float term = ni * abs(WIdotM) + no * abs(WOdotM);
-            value /= abs(wi.z) * abs(wo.z) * term * term;
-            value *= 1.0f - intersection.albedo.a;
-            pdf = EvaluateCookTorranceMicrofacetBTDFPdf(wi, wo, m, intersection.alpha, no, ni);
+            wi = refract(-wo, m, no / ni);
+
+            if (all(wi.xyz == 0.0f) || wi.z == 0.0f)
+            {
+                value = 0.0f;
+            }
+            else
+            {
+                float WIdotM = dot(wi, m);
+            
+                float fresnel = EvaluateSchlickFresnel(WOdotM, intersection.ior, isInverted);
+                value = ni * ni * abs(WIdotM) * abs(WOdotM) * (1.0f - fresnel) * EvaluateGGXGeometricShadowing(wi, wo, intersection.alpha) * EvaluateGGXMicrofacetDistribution(m, intersection.alpha);
+                float term = ni * abs(WIdotM) + no * abs(WOdotM);
+                value /= abs(wi.z) * abs(wo.z) * term * term;
+                value *= 1 - intersection.albedo.a;
+                pdf = EvaluateCookTorranceMicrofacetBTDFPdf(wi, wo, m, intersection.alpha, no, ni) * BRDFWeights[BRDFComponentRefraction];
+            }
         }
     }
-
-    pdf *= BRDFComponentPdf;
 
     if (isInverted)
         wi.z = -wi.z;

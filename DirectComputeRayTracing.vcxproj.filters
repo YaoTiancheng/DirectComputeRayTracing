@@ -13,15 +13,15 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Shaders">
+      <UniqueIdentifier>{ecfaa768-456e-4864-a641-d3b44d565294}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="targetver.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="D3D11RenderSystem.h">
@@ -34,6 +34,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Camera.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DDSTextureLoader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -53,6 +59,9 @@
     <ClCompile Include="Camera.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="DDSTextureLoader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="DirectComputeRayTracing.rc">
@@ -68,19 +77,23 @@
     </Image>
   </ItemGroup>
   <ItemGroup>
-    <None Include="RayTracing.hlsl" />
-    <None Include="PostProcessings.hlsl" />
-    <None Include="Primitives.hlsl.inc">
-      <Filter>Header Files</Filter>
+    <None Include="PostProcessings.hlsl">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="Primitives.inc.hlsl">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="RayTracing.hlsl">
+      <Filter>Shaders</Filter>
     </None>
     <None Include="BSDFs.inc.hlsl">
-      <Filter>Header Files</Filter>
+      <Filter>Shaders</Filter>
     </None>
     <None Include="MonteCarlo.inc.hlsl">
-      <Filter>Header Files</Filter>
+      <Filter>Shaders</Filter>
     </None>
     <None Include="Samples.inc.hlsl">
-      <Filter>Header Files</Filter>
+      <Filter>Shaders</Filter>
     </None>
   </ItemGroup>
 </Project>

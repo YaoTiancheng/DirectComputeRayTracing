@@ -5,15 +5,15 @@ class Camera
 public:
     Camera();
 
-    bool OnWndMessage(UINT message, WPARAM wParam, LPARAM lParam);
+    bool OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam );
 
     void Update();
 
     bool IsDirty() const { return m_IsDirty; }
 
-    void GetTransformMatrix(DirectX::XMFLOAT4X4* m) const;
+    void GetTransformMatrix( DirectX::XMFLOAT4X4* m ) const;
 
-    void GetTransformMatrixAndClearDirty(DirectX::XMFLOAT4X4* m);
+    void GetTransformMatrixAndClearDirty( DirectX::XMFLOAT4X4* m );
 
 private:
     DirectX::XMFLOAT4 m_Position;

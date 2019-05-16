@@ -38,13 +38,13 @@ class Scene
 public:
     Scene();
 
-    bool Init(uint32_t resolutionWidth, uint32_t resolutionHeight);
+    bool Init( uint32_t resolutionWidth, uint32_t resolutionHeight );
 
     void ResetScene();
 
     void AddOneSampleAndRender();
 
-    bool OnWndMessage(UINT message, WPARAM wParam, LPARAM lParam);
+    bool OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam );
 
 private:
     void AddOneSample();
@@ -68,9 +68,9 @@ private:
     D3D11_VIEWPORT                      m_DefaultViewport;
 
     RayTracingConstants                 m_RayTracingConstants;
-    Sphere                              m_Spheres[kMaxSpheresCount];
-    PointLight                          m_PointLights[kMaxPointLightsCount];
-    
+    Sphere                              m_Spheres[ kMaxSpheresCount ];
+    PointLight                          m_PointLights[ kMaxPointLightsCount ];
+
     bool                                m_IsFilmDirty;
 
     std::mt19937                        m_MersenneURBG;
@@ -79,6 +79,7 @@ private:
     template <typename T>
     using ComPtr = Microsoft::WRL::ComPtr<T>;
     ComPtr<ID3D11SamplerState>          m_CopySamplerState;
+    ComPtr<ID3D11SamplerState>          m_UVClampSamplerState;
     ComPtr<ID3D11ComputeShader>         m_RayTracingComputeShader;
     ComPtr<ID3D11VertexShader>          m_ScreenQuadVertexShader;
     ComPtr<ID3D11PixelShader>           m_CopyPixelShader;
@@ -89,7 +90,16 @@ private:
     ComPtr<ID3D11ShaderResourceView>    m_FilmTextureSRV;
     ComPtr<ID3D11UnorderedAccessView>   m_FilmTextureUAV;
     ComPtr<ID3D11Texture2D>             m_FilmTexture;
+    ComPtr<ID3D11Texture2D>             m_CookTorranceCompETexture;
+    ComPtr<ID3D11ShaderResourceView>    m_CookTorranceCompETextureSRV;
+    ComPtr<ID3D11Texture2D>             m_CookTorranceCompEAvgTexture;
+    ComPtr<ID3D11ShaderResourceView>    m_CookTorranceCompEAvgTextureSRV;
+    ComPtr<ID3D11Texture2D>             m_CookTorranceCompInvCDFTexture;
+    ComPtr<ID3D11ShaderResourceView>    m_CookTorranceCompInvCDFTextureSRV;
+    ComPtr<ID3D11Texture2D>             m_CookTorranceCompPdfScaleTexture;
+    ComPtr<ID3D11ShaderResourceView>    m_CookTorranceCompPdfScaleTextureSRV;
     ComPtr<ID3D11Buffer>                m_RayTracingConstantsBuffer;
+    ComPtr<ID3D11Buffer>                m_CookTorranceCompTextureConstantsBuffer;
     ComPtr<ID3D11Buffer>                m_SamplesBuffer;
     ComPtr<ID3D11Buffer>                m_SpheresBuffer;
     ComPtr<ID3D11Buffer>                m_PointLightBuffer;

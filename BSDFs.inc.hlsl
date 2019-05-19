@@ -265,7 +265,7 @@ float4 EvaluateCookTorranceCompFresnel( float4 ior, float EAvg )
     //return 0.04f * f0 + 0.66f * f02 + 0.3f * f03;
 
     float4 FAvg = FresnelAverage( ior );
-    return FAvg * EAvg / ( 1.0f - FAvg * ( 1.0f - EAvg ) );
+    return FAvg * FAvg * EAvg / ( 1.0f - FAvg * ( 1.0f - EAvg ) );
 }
 
 float4 EvaluateCookTorranceCompBRDF( float4 wi, float4 wo, float4 reflectance, float alpha, float4 ior )

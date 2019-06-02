@@ -98,6 +98,8 @@ private:
     ComPtr<ID3D11ShaderResourceView>    m_CookTorranceCompInvCDFTextureSRV;
     ComPtr<ID3D11Texture2D>             m_CookTorranceCompPdfScaleTexture;
     ComPtr<ID3D11ShaderResourceView>    m_CookTorranceCompPdfScaleTextureSRV;
+    ComPtr<ID3D11Texture2D>             m_CookTorranceCompEFresnelTexture;
+    ComPtr<ID3D11ShaderResourceView>    m_CookTorranceCompEFresnelTextureSRV;
     ComPtr<ID3D11Buffer>                m_RayTracingConstantsBuffer;
     ComPtr<ID3D11Buffer>                m_CookTorranceCompTextureConstantsBuffer;
     ComPtr<ID3D11Buffer>                m_SamplesBuffer;

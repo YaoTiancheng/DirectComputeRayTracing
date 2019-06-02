@@ -11,6 +11,8 @@ struct CookTorranceCompTextureConstants
     XMFLOAT4 compEAvgTextureSize;
     XMFLOAT4 compInvCDFTextureSize;
     XMFLOAT4 compPdfScaleTextureSize;
+    XMFLOAT4 compEFresnelTextureSize;
+    XMFLOAT4 compEFresnelTextureSizeRcp;
 };
 
 XMFLOAT4 kScreenQuadVertices[ 6 ] =
@@ -78,6 +80,10 @@ bool Scene::Init( uint32_t resolutionWidth, uint32_t resolutionHeight )
     if ( FAILED( hr ) )
         return false;
 
+    hr = CreateDDSTextureFromFile( device, L"BuiltinResources\\CookTorranceComp_EFresnel.DDS", ( ID3D11Resource** ) m_CookTorranceCompEFresnelTexture .ReleaseAndGetAddressOf(), &m_CookTorranceCompEFresnelTextureSRV );
+    if ( FAILED( hr ) )
+        return false;
+
     ID3DBlob* shaderBlob = CompileFromFile( L"RayTracing.hlsl", "main", "cs_5_0" );
     if ( !shaderBlob )
         return false;
@@ -126,10 +132,12 @@ bool Scene::Init( uint32_t resolutionWidth, uint32_t resolutionHeight )
 
     // Fill in the subresource data.
     CookTorranceCompTextureConstants cooktorranceCompTextureConstants;
-    cooktorranceCompTextureConstants.compETextureSize = XMFLOAT4( 32.0f, 32.0f, 1.0f / 32.0f, 1.0f / 32.0f );
-    cooktorranceCompTextureConstants.compEAvgTextureSize = XMFLOAT4( 32.0f, 1.0f, 1.0f / 32.0f, 1.0f );
-    cooktorranceCompTextureConstants.compInvCDFTextureSize = XMFLOAT4( 32.0f, 32.0f, 1.0f / 32.0f, 1.0f / 32.0f );
-    cooktorranceCompTextureConstants.compPdfScaleTextureSize = XMFLOAT4( 32.0f, 1.0f, 1.0f / 32.0f, 1.0f );
+    cooktorranceCompTextureConstants.compETextureSize           = XMFLOAT4( 32.0f, 32.0f, 1.0f / 32.0f, 1.0f / 32.0f );
+    cooktorranceCompTextureConstants.compEAvgTextureSize        = XMFLOAT4( 32.0f, 1.0f, 1.0f / 32.0f, 1.0f );
+    cooktorranceCompTextureConstants.compInvCDFTextureSize      = XMFLOAT4( 32.0f, 32.0f, 1.0f / 32.0f, 1.0f / 32.0f );
+    cooktorranceCompTextureConstants.compPdfScaleTextureSize    = XMFLOAT4( 32.0f, 1.0f, 1.0f / 32.0f, 1.0f );
+    cooktorranceCompTextureConstants.compEFresnelTextureSize    = XMFLOAT4( 32.0f, 16.0f, 16.0f, 0.0f );
+    cooktorranceCompTextureConstants.compEFresnelTextureSizeRcp = XMFLOAT4( 1.0f / 32.0f, 1.0f / 16.0f, 1.0f / 16.0f, 0.0f );
     D3D11_SUBRESOURCE_DATA subresourceData;
     subresourceData.pSysMem = &cooktorranceCompTextureConstants;
     subresourceData.SysMemPitch = 0;
@@ -436,8 +444,9 @@ void Scene::DispatchRayTracing()
         , m_CookTorranceCompEAvgTextureSRV.Get()
         , m_CookTorranceCompInvCDFTextureSRV.Get()
         , m_CookTorranceCompPdfScaleTextureSRV.Get()
+        , m_CookTorranceCompEFresnelTextureSRV.Get()
     };
-    deviceContext->CSSetShaderResources( 0, 8, rawSRVs );
+    deviceContext->CSSetShaderResources( 0, 9, rawSRVs );
 
     ID3D11Buffer* rawConstantBuffers[] = { m_CookTorranceCompTextureConstantsBuffer.Get() };
     deviceContext->CSSetConstantBuffers( 0, 1, rawConstantBuffers );

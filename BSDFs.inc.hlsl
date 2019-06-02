@@ -87,13 +87,13 @@ float EvaluateGGXGeometricShadowing( float4 wi, float4 wo, float alpha )
     return EvaluateGGXGeometricShadowingOneDirection( alpha2, wi ) * EvaluateGGXGeometricShadowingOneDirection( alpha2, wo );
 }
 
-float4 EvaluateFresnelF0( float4 ior )
+float EvaluateFresnelF0( float ior )
 {
     float f0 = ( 1.0f - ior ) / ( 1.0f + ior );
     return f0 * f0;
 }
 
-float4 FresnelAverage( float4 ior )
+float FresnelAverage( float ior )
 {
     return ( ior - 1.0f ) / ( 4.08567f + 1.00071f * ior );
 }
@@ -111,13 +111,13 @@ float EvaluateSchlickFresnel( float WOdotM, float ior )
     return ( 1.0f - f0 ) * pow( 1.0f - cosThetaO, 5.0f ) + f0;
 }
 
-float4 EvaluateCookTorranceFresnel( float WOdotM, float4 ior )
+float4 EvaluateCookTorranceFresnel( float WOdotM, float ior )
 {
-    float4 g = sqrt( ior * ior + WOdotM * WOdotM - 1.0f );
-    float4 term0 = g - WOdotM;
-    float4 term1 = g + WOdotM;
-    float4 term2 = term0 / term1;
-    float4 term3 = ( term1 * WOdotM - 1.0f ) / ( term0 * WOdotM + 1.0f );
+    float g = sqrt( ior * ior + WOdotM * WOdotM - 1.0f );
+    float term0 = g - WOdotM;
+    float term1 = g + WOdotM;
+    float term2 = term0 / term1;
+    float term3 = ( term1 * WOdotM - 1.0f ) / ( term0 * WOdotM + 1.0f );
     return 0.5f * term2 * term2 * ( 1.0f -  term3 * term3 );
 }
 
@@ -189,12 +189,15 @@ cbuffer CookTorranceCompTextureConstants : register( b0 )
     float4 g_CompEAvgTextureSize;
     float4 g_CompInvCDFTextureSize;
     float4 g_CompPdfScaleTextureSize;
+    float4 g_CompEFresnelTextureSize;
+    float4 g_CompEFresnelTextureSizeRcp;
 }
 
-Texture2D g_CookTorranceCompETexture : register( t4 );
-Texture2D g_CookTorranceCompEAvgTexture : register( t5 );
-Texture2D g_CookTorranceCompInvCDFTexture : register( t6 );
+Texture2D g_CookTorranceCompETexture        : register( t4 );
+Texture2D g_CookTorranceCompEAvgTexture     : register( t5 );
+Texture2D g_CookTorranceCompInvCDFTexture   : register( t6 );
 Texture2D g_CookTorranceCompPdfScaleTexture : register( t7 );
+Texture2DArray g_CookTorranceCompEFresnelTexture : register( t8 );
 
 SamplerState UVClampSampler;
 
@@ -248,6 +251,18 @@ float EvaluateCookTorranceCompPdfScale( float alpha )
     //return -0.0039323f + 0.35268906f * alpha + 6.88429598f * alpha2 - 10.29970127f * alpha3 + 6.94830677f * alpha4 - 1.91625088f * alpha5;
 }
 
+float EvaluateCookTorranceCompEFresnel( float cosTheta, float alpha, float ior )
+{
+    float3 texelPos = float3( cosTheta, alpha, ( ior - 1.0f ) / 2.0f ) * ( g_CompEFresnelTextureSize.xyz - 1.0f );
+    float3 uvw = ( texelPos + 0.5f ) * g_CompEFresnelTextureSizeRcp.xyz;
+    float3 fraction = frac( texelPos );
+    float4 values0 = g_CookTorranceCompEFresnelTexture.Gather( UVClampSampler, float3( uvw.xy, ( float ) ( int ) texelPos.z ) );
+    float4 values1 = g_CookTorranceCompEFresnelTexture.Gather( UVClampSampler, float3( uvw.xy, ( float ) ( int ) texelPos.z + 1 ) );
+    float2 value0 = lerp( values0.wx, values0.zy, fraction.x );
+    float2 value1 = lerp( values1.wx, values1.zy, fraction.x );
+    return lerp( lerp( value0.x, value0.y, fraction.y ), lerp( value1.x, value1.y, fraction.y ), fraction.z ) * 0.4f;
+}
+
 float4 CookTorranceCompSampleHemisphere( float2 sample, float alpha )
 {
     //return ConsineSampleHemisphere(sample);
@@ -257,18 +272,18 @@ float4 CookTorranceCompSampleHemisphere( float2 sample, float alpha )
     return float4( cos( phi ) * s, sin( phi ) * s, cosTheta, 0.0f );
 }
 
-float4 EvaluateCookTorranceCompFresnel( float4 ior, float EAvg )
+float EvaluateCookTorranceCompFresnel( float ior, float EAvg )
 {
     //float4 f0 = EvaluateFresnelF0( ior );
     //float  f02 = f0 * f0;
     //float  f03 = f02 * f0;
     //return 0.04f * f0 + 0.66f * f02 + 0.3f * f03;
 
-    float4 FAvg = FresnelAverage( ior );
+    float FAvg = FresnelAverage( ior );
     return FAvg * FAvg * EAvg / ( 1.0f - FAvg * ( 1.0f - EAvg ) );
 }
 
-float4 EvaluateCookTorranceCompBRDF( float4 wi, float4 wo, float4 reflectance, float alpha, float4 ior )
+float4 EvaluateCookTorranceCompBRDF( float4 wi, float4 wo, float4 reflectance, float alpha, float ior )
 {
     float WIdotN = wi.z;
     float WOdotN = wo.z;
@@ -293,7 +308,7 @@ float EvaluateCookTorranceCompPdf( float4 wi, float alpha )
     return ( 1.0f - EvaluateCookTorranceCompE( cosTheta, alpha ) ) * cosTheta / pdfScale;
 }
 
-void SampleCookTorranceCompBRDF( float4 wo, float2 sample, float4 reflectance, float alpha, float4 ior, out float4 wi, out float4 value, out float pdf )
+void SampleCookTorranceCompBRDF( float4 wo, float2 sample, float4 reflectance, float alpha, float ior, out float4 wi, out float4 value, out float pdf )
 {
     wi = CookTorranceCompSampleHemisphere( sample, alpha );
     value = EvaluateCookTorranceCompBRDF( wi, wo, reflectance, alpha, ior );
@@ -313,12 +328,12 @@ float EvaluateCookTorranceMicrofacetBTDFPdf( float4 wi, float4 wo, float4 m, flo
     return pdf * WOdotM * ni * ni / ( term * term );
 }
 
-float4 SpecularWeight( float4 ior, float E )
+float SpecularWeight( float cosTheta, float alpha, float ior )
 {
-    return FresnelAverage( ior ) * E;
+    return EvaluateCookTorranceCompEFresnel( cosTheta, alpha, ior );
 }
 
-float4 SpecularCompWeight( float4 ior, float E, float EAvg )
+float SpecularCompWeight( float ior, float E, float EAvg )
 {
     return EvaluateCookTorranceCompFresnel( ior, EAvg ) * ( 1.0f - E );
 }
@@ -341,7 +356,8 @@ float4 EvaluateBSDF( float4 wi, float4 wo, Intersection intersection )
 
     float E = EvaluateCookTorranceCompE( wo.z, intersection.alpha );
     float EAvg = EvaluateCookTorranceCompEAvg( intersection.alpha );
-    float specularWeight        = SpecularWeight( intersection.ior, E );
+    float cosThetaO = wo.z;
+    float specularWeight        = SpecularWeight( cosThetaO, intersection.alpha, intersection.ior );
     float specularCompWeight    = SpecularCompWeight( intersection.ior, E, EAvg );
     float diffuseWeight = 1.0f - specularWeight - specularCompWeight;
     value += EvaluateLambertBRDF( wi, intersection.albedo ) * diffuseWeight;
@@ -366,9 +382,9 @@ void SampleBSDF( float4 wo
     float cosThetaO = wo.z;
     float E = EvaluateCookTorranceCompE( cosThetaO, intersection.alpha );
     float EAvg = EvaluateCookTorranceCompEAvg( intersection.alpha );
-    float specularWeight        = SpecularWeight( intersection.ior, E );
-    float specularCompWeight    = SpecularCompWeight( intersection.ior, E, EAvg );
-    float diffuseWeight         = 1.0f - specularWeight - specularCompWeight;
+    float specularWeight = SpecularWeight( cosThetaO, intersection.alpha, intersection.ior );
+    float specularCompWeight = SpecularCompWeight( intersection.ior, E, EAvg );
+    float diffuseWeight = 1.0f - specularWeight - specularCompWeight;
     if ( BRDFSelectionSample < specularWeight )
     {
         SampleCookTorranceMicrofacetBRDF( wo, BRDFSample, intersection.specular, intersection.alpha, intersection.ior, wi, value, pdf );

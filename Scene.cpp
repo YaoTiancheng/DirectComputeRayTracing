@@ -254,7 +254,7 @@ void Scene::ResetScene()
 
     m_Spheres[ 1 ].center = XMFLOAT4( 1.0f, 0.5f, 2.6f, 1.0f );
     m_Spheres[ 1 ].radius = 0.5f;
-    m_Spheres[ 1 ].albedo = XMFLOAT4( 0.78f, 0.38f, 0.38f, 1.0f );
+    m_Spheres[ 1 ].albedo = XMFLOAT4( 1.0f, 0.15f, 0.15f, 1.0f );
     m_Spheres[ 1 ].metallic = 0.0f;
     m_Spheres[ 1 ].emission = XMFLOAT4( 0.0f, 0.0f, 0.0f, 0.0f );
 
@@ -266,7 +266,7 @@ void Scene::ResetScene()
 
     m_Spheres[ 3 ].center = XMFLOAT4( -0.5f, 1.0f, 3.6f, 1.0f );
     m_Spheres[ 3 ].radius = 1.0f;
-    m_Spheres[ 3 ].albedo = XMFLOAT4( 0.78f, 0.48f, 0.78f, 1.0f );
+    m_Spheres[ 3 ].albedo = XMFLOAT4( 0.78f, 0.28f, 0.78f, 1.0f );
     m_Spheres[ 3 ].metallic = 0.0f;
     m_Spheres[ 3 ].emission = XMFLOAT4( 0.0f, 0.0f, 0.0f, 0.0f );
 
@@ -278,7 +278,7 @@ void Scene::ResetScene()
 
     m_Spheres[ 5 ].center = XMFLOAT4( -0.95f, 0.4f, 1.9f, 1.0f );
     m_Spheres[ 5 ].radius = 0.4f;
-    m_Spheres[ 5 ].albedo = XMFLOAT4( 0.8f, 1.0f, 0.8f, 0.0f );
+    m_Spheres[ 5 ].albedo = XMFLOAT4( 0.4f, 1.0f, 0.4f, 0.0f );
     m_Spheres[ 5 ].metallic = 0.0f;
     m_Spheres[ 5 ].emission = XMFLOAT4( 0.0f, 0.0f, 0.0f, 0.0f );
 
@@ -287,7 +287,7 @@ void Scene::ResetScene()
 
     m_RayTracingConstants.maxBounceCount = 4;
     m_RayTracingConstants.sphereCount = 6;
-    m_RayTracingConstants.pointLightCount = 1;
+    m_RayTracingConstants.pointLightCount = 0;
     m_RayTracingConstants.filmSize = XMFLOAT2( 0.05333f, 0.03f );
     m_RayTracingConstants.filmDistance = 0.03f;
     m_RayTracingConstants.cameraTransform =
@@ -295,7 +295,7 @@ void Scene::ResetScene()
       0.0f, 1.0f, 0.0f, 0.0f,
       0.0f, 0.0f, 1.0f, 0.0f,
       0.0f, 0.0f, 0.0f, 1.0f };
-    m_RayTracingConstants.background = { 0.0f, 0.0f, 0.0f, 0.f };
+    m_RayTracingConstants.background = { 1.0f, 1.0f, 1.0f, 0.f };
 
     m_IsFilmDirty = true;
 }

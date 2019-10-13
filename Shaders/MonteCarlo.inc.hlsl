@@ -1,3 +1,7 @@
+#ifndef _MONTECARLO_H_
+#define _MONTECARLO_H_
+
+#include "Math.inc.hlsl"
 
 float2 ConcentricSampleDisk( float2 sample )
 {
@@ -41,3 +45,5 @@ float2 ConcentricSampleDisk( float2 sample )
     theta *= PI / 4.0f;
     return r * float2( cos( theta ), sin( theta ) );
 }
+
+#endif

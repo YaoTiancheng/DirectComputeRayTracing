@@ -1,3 +1,5 @@
+#ifndef _SAMPLES_H_
+#define _SAMPLES_H_
 
 StructuredBuffer<float> g_Samples : register( t3 );
 
@@ -15,3 +17,5 @@ float2 GetNextSample2()
 {
     return float2( GetNextSample(), GetNextSample() );
 }
+
+#endif

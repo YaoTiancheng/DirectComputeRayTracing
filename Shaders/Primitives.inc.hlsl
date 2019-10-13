@@ -1,3 +1,27 @@
+#ifndef _PRIMITIVES_H_
+#define _PRIMITIVES_H_
+
+struct Sphere
+{
+    float4  position;
+    float   radius;
+    float4  albedo;
+    float   metallic;
+    float4  emission;
+};
+
+struct Intersection
+{
+    float4  albedo;
+    float4  specular;
+    float4  emission;
+    float   alpha;
+    float4  position;
+    float4  normal;
+    float4  tangent;
+    float   rayEpsilon;
+    float   ior;
+};
 
 bool RaySphereIntersect( float4 origin
     , float4 direction
@@ -44,8 +68,10 @@ bool RaySphereIntersect( float4 origin
         intersection.albedo = float4( lerp( sphere.albedo.rgb, 0.0f, sphere.metallic ), sphere.albedo.a );
         intersection.specular = lerp( 1.0f, sphere.albedo, sphere.metallic );
         intersection.emission = sphere.emission;
-        intersection.alpha = 0.01f;
-        intersection.ior = 1.5f /*lerp(1.5f, 0.0f, sphere.metallic)*/;
+        intersection.alpha = 0.3f;
+        intersection.ior = 1.8f /*lerp(1.5f, 0.0f, sphere.metallic)*/;
     }
     return intersect;
 }
+
+#endif

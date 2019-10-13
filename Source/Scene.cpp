@@ -84,7 +84,7 @@ bool Scene::Init( uint32_t resolutionWidth, uint32_t resolutionHeight )
     if ( FAILED( hr ) )
         return false;
 
-    ID3DBlob* shaderBlob = CompileFromFile( L"RayTracing.hlsl", "main", "cs_5_0" );
+    ID3DBlob* shaderBlob = CompileFromFile( L"Shaders\\RayTracing.hlsl", "main", "cs_5_0" );
     if ( !shaderBlob )
         return false;
 
@@ -170,7 +170,7 @@ bool Scene::Init( uint32_t resolutionWidth, uint32_t resolutionHeight )
     if ( FAILED( hr ) )
         return false;
 
-    shaderBlob = CompileFromFile( L"PostProcessings.hlsl", "ScreenQuadMainVS", "vs_5_0" );
+    shaderBlob = CompileFromFile( L"Shaders\\PostProcessings.hlsl", "ScreenQuadMainVS", "vs_5_0" );
     if ( !shaderBlob )
         return false;
 
@@ -180,7 +180,7 @@ bool Scene::Init( uint32_t resolutionWidth, uint32_t resolutionHeight )
     if ( !m_ScreenQuadVertexShader || !m_ScreenQuadVertexInputLayout )
         return false;
 
-    shaderBlob = CompileFromFile( L"PostProcessings.hlsl", "CopyMainPS", "ps_5_0" );
+    shaderBlob = CompileFromFile( L"Shaders\\PostProcessings.hlsl", "CopyMainPS", "ps_5_0" );
     if ( !shaderBlob )
         return false;
 
@@ -287,7 +287,7 @@ void Scene::ResetScene()
 
     m_RayTracingConstants.maxBounceCount = 4;
     m_RayTracingConstants.sphereCount = 6;
-    m_RayTracingConstants.pointLightCount = 0;
+    m_RayTracingConstants.pointLightCount = 1;
     m_RayTracingConstants.filmSize = XMFLOAT2( 0.05333f, 0.03f );
     m_RayTracingConstants.filmDistance = 0.03f;
     m_RayTracingConstants.cameraTransform =
@@ -295,7 +295,7 @@ void Scene::ResetScene()
       0.0f, 1.0f, 0.0f, 0.0f,
       0.0f, 0.0f, 1.0f, 0.0f,
       0.0f, 0.0f, 0.0f, 1.0f };
-    m_RayTracingConstants.background = { 1.0f, 1.0f, 1.0f, 0.f };
+    m_RayTracingConstants.background = { 0.0f, 0.0f, 0.0f, 0.f };
 
     m_IsFilmDirty = true;
 }

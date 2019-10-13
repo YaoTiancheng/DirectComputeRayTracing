@@ -1,13 +1,4 @@
 
-struct Sphere
-{
-    float4              position;
-    float               radius;
-    float4              albedo;
-    float               metallic;
-    float4              emission;
-};
-
 struct PointLight
 {
     float4              position;
@@ -27,31 +18,15 @@ struct RayTracingConstants
     float4              background;
 };
 
-struct Intersection
-{
-    float4              albedo;
-    float4              specular;
-    float4              emission;
-    float               alpha;
-    float4              position;
-    float4              normal;
-    float4              tangent;
-    float               rayEpsilon;
-    float               ior;
-};
+StructuredBuffer<RayTracingConstants>   g_Constants     : register( t2 );
+
+#include "Samples.inc.hlsl"
+#include "BSDFs.inc.hlsl"
+#include "Primitives.inc.hlsl"
 
 StructuredBuffer<Sphere>                g_Spheres       : register( t0 );
 StructuredBuffer<PointLight>            g_PointLights   : register( t1 );
-StructuredBuffer<RayTracingConstants>   g_Constants     : register( t2 );
 RWTexture2D<float4>                     g_FilmTexture;
-
-static const float PI = 3.14159265359;
-static const float INV_PI = 1 / PI;
-
-#include "Samples.inc.hlsl"
-#include "MonteCarlo.inc.hlsl"
-#include "BSDFs.inc.hlsl"
-#include "Primitives.inc.hlsl"
 
 void GenerateRay( float2 sample
 	, float2 filmSize

@@ -8,7 +8,7 @@ struct PointLight
 struct RayTracingConstants
 {
     uint                maxBounceCount;
-    uint                sphereCount;
+    uint                primitiveCount;
     uint                pointLightCount;
     uint                samplesCount;
     float2              resolution;
@@ -18,14 +18,15 @@ struct RayTracingConstants
     float4              background;
 };
 
-StructuredBuffer<RayTracingConstants>   g_Constants     : register( t2 );
+StructuredBuffer<RayTracingConstants>   g_Constants     : register( t3 );
 
 #include "Samples.inc.hlsl"
 #include "BSDFs.inc.hlsl"
 #include "Primitives.inc.hlsl"
 
-StructuredBuffer<Sphere>                g_Spheres       : register( t0 );
-StructuredBuffer<PointLight>            g_PointLights   : register( t1 );
+StructuredBuffer<Vertex>                g_Vertices      : register( t0 );
+StructuredBuffer<uint>                  g_Triangles     : register( t1 );
+StructuredBuffer<PointLight>            g_PointLights   : register( t2 );
 RWTexture2D<float4>                     g_FilmTexture;
 
 void GenerateRay( float2 sample
@@ -51,11 +52,14 @@ bool IntersectScene( float4 origin
 {
     float tMin = 1.0f / 0.0f;
 
-    for ( int i = 0; i < g_Constants[ 0 ].sphereCount; ++i )
+    for ( int i = 0; i < g_Constants[ 0 ].primitiveCount; ++i )
     {
+        Vertex v0 = g_Vertices[ g_Triangles[ i * 3 ] ];
+        Vertex v1 = g_Vertices[ g_Triangles[ i * 3 + 1 ] ];
+        Vertex v2 = g_Vertices[ g_Triangles[ i * 3 + 2 ] ];
         float t;
         Intersection testIntersection;
-        if ( RaySphereIntersect( origin + direction * epsilon, direction, g_Spheres[ i ], t, testIntersection ) )
+        if ( RayTriangleIntersect( origin + direction * epsilon, direction, v0, v1, v2, t, testIntersection ) )
         {
             if ( t < tMin )
             {
@@ -73,10 +77,13 @@ bool IsOcculuded( float4 origin
     , float4 epsilon
     , float distance )
 {
-    for ( int i = 0; i < g_Constants[ 0 ].sphereCount; ++i )
+    for ( int i = 0; i < g_Constants[ 0 ].primitiveCount; ++i )
     {
-        float t;
-        if ( RaySphereIntersect( origin + direction * epsilon, direction, g_Spheres[ i ], t ) )
+        Vertex v0 = g_Vertices[ g_Triangles[ i * 3 ] ];
+        Vertex v1 = g_Vertices[ g_Triangles[ i * 3 + 1 ] ];
+        Vertex v2 = g_Vertices[ g_Triangles[ i * 3 + 2 ] ];
+        float t, u, v;
+        if ( RayTriangleIntersect( origin + direction * epsilon, direction, v0, v1, v2, t, u, v ) )
         {
             if ( t < distance )
                 return true;

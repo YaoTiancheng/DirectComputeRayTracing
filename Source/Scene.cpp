@@ -111,9 +111,15 @@ bool Scene::Init( uint32_t resolutionWidth, uint32_t resolutionHeight )
     if ( FAILED( hr ) )
         return false;
 
-    bufferDesc.ByteWidth = sizeof( m_Spheres );
-    bufferDesc.StructureByteStride = sizeof( Sphere );
-    hr = device->CreateBuffer( &bufferDesc, nullptr, &m_SpheresBuffer );
+    bufferDesc.ByteWidth = sizeof( m_Vertices );
+    bufferDesc.StructureByteStride = sizeof( Vertex );
+    hr = device->CreateBuffer( &bufferDesc, nullptr, &m_VerticesBuffer );
+    if ( FAILED( hr ) )
+        return false;
+
+    bufferDesc.ByteWidth = sizeof( m_Triangles );
+    bufferDesc.StructureByteStride = sizeof( uint32_t );
+    hr = device->CreateBuffer( &bufferDesc, nullptr, &m_TrianglesBuffer );
     if ( FAILED( hr ) )
         return false;
 
@@ -160,8 +166,13 @@ bool Scene::Init( uint32_t resolutionWidth, uint32_t resolutionHeight )
     if ( FAILED( hr ) )
         return false;
 
-    SRVDesc.Buffer.NumElements = kMaxSpheresCount;
-    hr = device->CreateShaderResourceView( m_SpheresBuffer.Get(), &SRVDesc, &m_SpheresSRV );
+    SRVDesc.Buffer.NumElements = kMaxVertexCount;
+    hr = device->CreateShaderResourceView( m_VerticesBuffer.Get(), &SRVDesc, &m_VerticesSRV );
+    if ( FAILED( hr ) )
+        return false;
+
+    SRVDesc.Buffer.NumElements = kMaxVertexIndexCount;
+    hr = device->CreateShaderResourceView( m_TrianglesBuffer.Get(), &SRVDesc, &m_TrianglesSRV );
     if ( FAILED( hr ) )
         return false;
 
@@ -246,56 +257,125 @@ bool Scene::Init( uint32_t resolutionWidth, uint32_t resolutionHeight )
 
 void Scene::ResetScene()
 {
-    m_Spheres[ 0 ].center = XMFLOAT4( 0.0f, 0.5f, 2.6f, 1.0f );
-    m_Spheres[ 0 ].radius = 0.5f;
-    m_Spheres[ 0 ].albedo = XMFLOAT4( 1.0f, 1.0f, 1.0f, 1.0f );
-    m_Spheres[ 0 ].metallic = 0.0f;
-    m_Spheres[ 0 ].emission = XMFLOAT4( 0.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 0 ].position = XMFLOAT4( -1.0f, 0.0f, 1.0f, 1.0f );
+    m_Vertices[ 0 ].normal = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 0 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 1 ].position = XMFLOAT4( 1.0f, 0.0f, 1.0f, 1.0f );
+    m_Vertices[ 1 ].normal = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 1 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 2 ].position = XMFLOAT4( 1.0f, 0.0f, -1.0f, 1.0f );
+    m_Vertices[ 2 ].normal = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 2 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 3 ].position = XMFLOAT4( -1.0f, 0.0f, -1.0f, 1.0f );
+    m_Vertices[ 3 ].normal = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 3 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
 
-    m_Spheres[ 1 ].center = XMFLOAT4( 1.0f, 0.5f, 2.6f, 1.0f );
-    m_Spheres[ 1 ].radius = 0.5f;
-    m_Spheres[ 1 ].albedo = XMFLOAT4( 1.0f, 0.15f, 0.15f, 1.0f );
-    m_Spheres[ 1 ].metallic = 0.0f;
-    m_Spheres[ 1 ].emission = XMFLOAT4( 0.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 4 ].position = XMFLOAT4( -1.0f, 0.0f, 1.0f, 1.0f );
+    m_Vertices[ 4 ].normal = XMFLOAT4( 0.0f, 0.0f, -1.0f, 0.0f );
+    m_Vertices[ 4 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 5 ].position = XMFLOAT4( 1.0f, 0.0f, 1.0f, 1.0f );
+    m_Vertices[ 5 ].normal = XMFLOAT4( 0.0f, 0.0f, -1.0f, 0.0f );
+    m_Vertices[ 5 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 6 ].position = XMFLOAT4( -1.0f, 2.0f, 1.0f, 1.0f );
+    m_Vertices[ 6 ].normal = XMFLOAT4( 0.0f, 0.0f, -1.0f, 0.0f );
+    m_Vertices[ 6 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 7 ].position = XMFLOAT4( 1.0f, 2.0f, 1.0f, 1.0f );
+    m_Vertices[ 7 ].normal = XMFLOAT4( 0.0f, 0.0f, -1.0f, 0.0f );
+    m_Vertices[ 7 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
 
-    m_Spheres[ 2 ].center = XMFLOAT4( -2.0f, 0.5f, 2.6f, 1.0f );
-    m_Spheres[ 2 ].radius = 0.5f;
-    m_Spheres[ 2 ].albedo = XMFLOAT4( 1.0f, 1.0f, 1.0f, 1.0f );
-    m_Spheres[ 2 ].metallic = 0.0f;
-    m_Spheres[ 2 ].emission = XMFLOAT4( 0.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 8 ].position = XMFLOAT4( -1.0f, 2.0f, 1.0f, 1.0f );
+    m_Vertices[ 8 ].normal = XMFLOAT4( 0.0f, -1.0f, 0.0f, 0.0f );
+    m_Vertices[ 8 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 9 ].position = XMFLOAT4( 1.0f, 2.0f, 1.0f, 1.0f );
+    m_Vertices[ 9 ].normal = XMFLOAT4( 0.0f, -1.0f, 0.0f, 0.0f );
+    m_Vertices[ 9 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 10 ].position = XMFLOAT4( 1.0f, 2.0f, -1.0f, 1.0f );
+    m_Vertices[ 10 ].normal = XMFLOAT4( 0.0f, -1.0f, 0.0f, 0.0f );
+    m_Vertices[ 10 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 11 ].position = XMFLOAT4( -1.0f, 2.0f, -1.0f, 1.0f );
+    m_Vertices[ 11 ].normal = XMFLOAT4( 0.0f, -1.0f, 0.0f, 0.0f );
+    m_Vertices[ 11 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
 
-    m_Spheres[ 3 ].center = XMFLOAT4( -0.5f, 1.0f, 3.6f, 1.0f );
-    m_Spheres[ 3 ].radius = 1.0f;
-    m_Spheres[ 3 ].albedo = XMFLOAT4( 0.78f, 0.28f, 0.78f, 1.0f );
-    m_Spheres[ 3 ].metallic = 0.0f;
-    m_Spheres[ 3 ].emission = XMFLOAT4( 0.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 12 ].position = XMFLOAT4( -1.0f, 0.0f, 1.0f, 1.0f );
+    m_Vertices[ 12 ].normal = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 12 ].tangent = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 13 ].position = XMFLOAT4( -1.0f, 0.0f, -1.0f, 1.0f );
+    m_Vertices[ 13 ].normal = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 13 ].tangent = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 14 ].position = XMFLOAT4( -1.0f, 2.0f, -1.0f, 1.0f );
+    m_Vertices[ 14 ].normal = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 14 ].tangent = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 15 ].position = XMFLOAT4( -1.0f, 2.0f, 1.0f, 1.0f );
+    m_Vertices[ 15 ].normal = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 15 ].tangent = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
 
-    m_Spheres[ 4 ].center = XMFLOAT4( 0.0f, -100.0f, 0.0f, 1.0f );
-    m_Spheres[ 4 ].radius = 100.0f;
-    m_Spheres[ 4 ].albedo = XMFLOAT4( 0.4f, 0.4f, 0.4f, 1.0f );
-    m_Spheres[ 4 ].metallic = 0.0f;
-    m_Spheres[ 4 ].emission = XMFLOAT4( 0.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 16 ].position = XMFLOAT4( 1.0f, 0.0f, 1.0f, 1.0f );
+    m_Vertices[ 16 ].normal = XMFLOAT4( -1.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 16 ].tangent = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 17 ].position = XMFLOAT4( 1.0f, 0.0f, -1.0f, 1.0f );
+    m_Vertices[ 17 ].normal = XMFLOAT4( -1.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 17 ].tangent = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 18 ].position = XMFLOAT4( 1.0f, 2.0f, -1.0f, 1.0f );
+    m_Vertices[ 18 ].normal = XMFLOAT4( -1.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 18 ].tangent = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 19 ].position = XMFLOAT4( 1.0f, 2.0f, 1.0f, 1.0f );
+    m_Vertices[ 19 ].normal = XMFLOAT4( -1.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 19 ].tangent = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
 
-    m_Spheres[ 5 ].center = XMFLOAT4( -0.95f, 0.4f, 1.9f, 1.0f );
-    m_Spheres[ 5 ].radius = 0.4f;
-    m_Spheres[ 5 ].albedo = XMFLOAT4( 0.4f, 1.0f, 0.4f, 0.0f );
-    m_Spheres[ 5 ].metallic = 0.0f;
-    m_Spheres[ 5 ].emission = XMFLOAT4( 0.0f, 0.0f, 0.0f, 0.0f );
+    m_Triangles[ 0 ] = 0;
+    m_Triangles[ 1 ] = 1;
+    m_Triangles[ 2 ] = 2;
 
-    m_PointLights[ 0 ].position = XMFLOAT4( 5.0f, 5.0f, -5.0f, 1.0f );
+    m_Triangles[ 3 ] = 0;
+    m_Triangles[ 4 ] = 2;
+    m_Triangles[ 5 ] = 3;
+
+    m_Triangles[ 6 ] = 5;
+    m_Triangles[ 7 ] = 4;
+    m_Triangles[ 8 ] = 6;
+
+    m_Triangles[ 9 ] = 5;
+    m_Triangles[ 10 ] = 6;
+    m_Triangles[ 11 ] = 7;
+
+    m_Triangles[ 12 ] = 9;
+    m_Triangles[ 13 ] = 8;
+    m_Triangles[ 14 ] = 10;
+
+    m_Triangles[ 15 ] = 10;
+    m_Triangles[ 16 ] = 8;
+    m_Triangles[ 17 ] = 11;
+
+    m_Triangles[ 18 ] = 12;
+    m_Triangles[ 19 ] = 13;
+    m_Triangles[ 20 ] = 15;
+
+    m_Triangles[ 21 ] = 13;
+    m_Triangles[ 22 ] = 14;
+    m_Triangles[ 23 ] = 15;
+
+    m_Triangles[ 24 ] = 17;
+    m_Triangles[ 25 ] = 16;
+    m_Triangles[ 26 ] = 19;
+
+    m_Triangles[ 27 ] = 19;
+    m_Triangles[ 28 ] = 18;
+    m_Triangles[ 29 ] = 17;
+
+    m_PointLights[ 0 ].position = XMFLOAT4( 4.0f, 7.0f, -5.0f, 1.0f );
     m_PointLights[ 0 ].color = XMFLOAT4( 200.0f, 200.0f, 200.0f, 1.0f );
 
-    m_RayTracingConstants.maxBounceCount = 4;
-    m_RayTracingConstants.sphereCount = 6;
+    m_RayTracingConstants.maxBounceCount = 3;
+    m_RayTracingConstants.primitiveCount = 10;
     m_RayTracingConstants.pointLightCount = 1;
     m_RayTracingConstants.filmSize = XMFLOAT2( 0.05333f, 0.03f );
-    m_RayTracingConstants.filmDistance = 0.03f;
+    m_RayTracingConstants.filmDistance = 0.04f;
     m_RayTracingConstants.cameraTransform =
     { 1.0f, 0.0f, 0.0f, 0.0f,
       0.0f, 1.0f, 0.0f, 0.0f,
       0.0f, 0.0f, 1.0f, 0.0f,
       0.0f, 0.0f, 0.0f, 1.0f };
-    m_RayTracingConstants.background = { 0.0f, 0.0f, 0.0f, 0.f };
+    m_RayTracingConstants.background = { 0.8f, 0.8f, 0.8f, 0.f };
 
     m_IsFilmDirty = true;
 }
@@ -379,11 +459,23 @@ bool Scene::UpdateResources()
     }
 
     ZeroMemory( &mappedSubresource, sizeof( D3D11_MAPPED_SUBRESOURCE ) );
-    hr = deviceContext->Map( m_SpheresBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource );
+    hr = deviceContext->Map( m_VerticesBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource );
     if ( SUCCEEDED( hr ) )
     {
-        memcpy( mappedSubresource.pData, m_Spheres, sizeof( Sphere ) * m_RayTracingConstants.sphereCount );
-        deviceContext->Unmap( m_SpheresBuffer.Get(), 0 );
+        memcpy( mappedSubresource.pData, m_Vertices, sizeof( Vertex ) * kMaxVertexCount );
+        deviceContext->Unmap( m_VerticesBuffer.Get(), 0 );
+    }
+    else
+    {
+        return false;
+    }
+
+    ZeroMemory( &mappedSubresource, sizeof( D3D11_MAPPED_SUBRESOURCE ) );
+    hr = deviceContext->Map( m_TrianglesBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource );
+    if ( SUCCEEDED( hr ) )
+    {
+        memcpy( mappedSubresource.pData, m_Triangles, sizeof( uint32_t ) * kMaxVertexIndexCount );
+        deviceContext->Unmap( m_TrianglesBuffer.Get(), 0 );
     }
     else
     {
@@ -436,7 +528,8 @@ void Scene::DispatchRayTracing()
 
     ID3D11ShaderResourceView* rawSRVs[] =
     {
-          m_SpheresSRV.Get()
+          m_VerticesSRV.Get()
+        , m_TrianglesSRV.Get()
         , m_PointLightsSRV.Get()
         , m_RayTracingConstantsSRV.Get()
         , m_SamplesSRV.Get()
@@ -446,7 +539,7 @@ void Scene::DispatchRayTracing()
         , m_CookTorranceCompPdfScaleTextureSRV.Get()
         , m_CookTorranceCompEFresnelTextureSRV.Get()
     };
-    deviceContext->CSSetShaderResources( 0, 9, rawSRVs );
+    deviceContext->CSSetShaderResources( 0, 10, rawSRVs );
 
     ID3D11Buffer* rawConstantBuffers[] = { m_CookTorranceCompTextureConstantsBuffer.Get() };
     deviceContext->CSSetConstantBuffers( 0, 1, rawConstantBuffers );

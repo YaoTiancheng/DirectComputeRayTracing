@@ -12,6 +12,14 @@ struct Sphere
 };
 
 
+struct Vertex
+{
+    DirectX::XMFLOAT4   position;
+    DirectX::XMFLOAT4   normal;
+    DirectX::XMFLOAT4   tangent;
+};
+
+
 struct PointLight
 {
     DirectX::XMFLOAT4   position;
@@ -22,7 +30,7 @@ struct PointLight
 struct RayTracingConstants
 {
     uint32_t            maxBounceCount;
-    uint32_t            sphereCount;
+    uint32_t            primitiveCount;
     uint32_t            pointLightCount;
     uint32_t            samplesCount;
     DirectX::XMFLOAT2   resolution;
@@ -60,15 +68,19 @@ private:
 
 private:
     static const int kMaxSamplesCount = 65536;
-    static const int kMaxSpheresCount = 32;
     static const int kMaxPointLightsCount = 8;
+    static const int kMaxVertexCount = 256;
+    static const int kMaxTriangleCount = 256;
+    static const int kMaxVertexIndexCount = kMaxTriangleCount * 3;
+
 
     Camera                              m_Camera;
 
     D3D11_VIEWPORT                      m_DefaultViewport;
 
     RayTracingConstants                 m_RayTracingConstants;
-    Sphere                              m_Spheres[ kMaxSpheresCount ];
+    Vertex                              m_Vertices[ kMaxVertexCount ];
+    uint32_t                            m_Triangles[ kMaxVertexIndexCount ];
     PointLight                          m_PointLights[ kMaxPointLightsCount ];
 
     bool                                m_IsFilmDirty;
@@ -85,7 +97,8 @@ private:
     ComPtr<ID3D11PixelShader>           m_CopyPixelShader;
     ComPtr<ID3D11ShaderResourceView>    m_RayTracingConstantsSRV;
     ComPtr<ID3D11ShaderResourceView>    m_SamplesSRV;
-    ComPtr<ID3D11ShaderResourceView>    m_SpheresSRV;
+    ComPtr<ID3D11ShaderResourceView>    m_VerticesSRV;
+    ComPtr<ID3D11ShaderResourceView>    m_TrianglesSRV;
     ComPtr<ID3D11ShaderResourceView>    m_PointLightsSRV;
     ComPtr<ID3D11ShaderResourceView>    m_FilmTextureSRV;
     ComPtr<ID3D11UnorderedAccessView>   m_FilmTextureUAV;
@@ -103,7 +116,8 @@ private:
     ComPtr<ID3D11Buffer>                m_RayTracingConstantsBuffer;
     ComPtr<ID3D11Buffer>                m_CookTorranceCompTextureConstantsBuffer;
     ComPtr<ID3D11Buffer>                m_SamplesBuffer;
-    ComPtr<ID3D11Buffer>                m_SpheresBuffer;
+    ComPtr<ID3D11Buffer>                m_VerticesBuffer;
+    ComPtr<ID3D11Buffer>                m_TrianglesBuffer;
     ComPtr<ID3D11Buffer>                m_PointLightBuffer;
     ComPtr<ID3D11Buffer>                m_ScreenQuadVertexBuffer;
     ComPtr<ID3D11InputLayout>           m_ScreenQuadVertexInputLayout;

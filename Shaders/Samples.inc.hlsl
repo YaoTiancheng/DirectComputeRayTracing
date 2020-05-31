@@ -1,7 +1,7 @@
 #ifndef _SAMPLES_H_
 #define _SAMPLES_H_
 
-StructuredBuffer<float> g_Samples : register( t3 );
+StructuredBuffer<float> g_Samples : register( t4 );
 
 groupshared uint gs_NextSampleIndex = 0;
 

@@ -13,11 +13,11 @@ cbuffer CookTorranceCompTextureConstants : register( b0 )
     float4 g_CompEFresnelTextureSizeRcp;
 }
 
-Texture2D g_CookTorranceCompETexture        : register( t4 );
-Texture2D g_CookTorranceCompEAvgTexture     : register( t5 );
-Texture2D g_CookTorranceCompInvCDFTexture   : register( t6 );
-Texture2D g_CookTorranceCompPdfScaleTexture : register( t7 );
-Texture2DArray g_CookTorranceCompEFresnelTexture : register( t8 );
+Texture2D g_CookTorranceCompETexture        : register( t5 );
+Texture2D g_CookTorranceCompEAvgTexture     : register( t6 );
+Texture2D g_CookTorranceCompInvCDFTexture   : register( t7 );
+Texture2D g_CookTorranceCompPdfScaleTexture : register( t8 );
+Texture2DArray g_CookTorranceCompEFresnelTexture : register( t9 );
 
 SamplerState UVClampSampler;
 

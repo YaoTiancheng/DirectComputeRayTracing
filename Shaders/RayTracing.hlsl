@@ -50,7 +50,7 @@ bool IntersectScene( float4 origin
     , float4 epsilon
 	, out Intersection intersection )
 {
-    float tMin = 1.0f / 0.0f;
+    float tMax = 1.0f / 0.0f;
 
     for ( int i = 0; i < g_Constants[ 0 ].primitiveCount; ++i )
     {
@@ -59,17 +59,14 @@ bool IntersectScene( float4 origin
         Vertex v2 = g_Vertices[ g_Triangles[ i * 3 + 2 ] ];
         float t;
         Intersection testIntersection;
-        if ( RayTriangleIntersect( origin + direction * epsilon, direction, v0, v1, v2, t, testIntersection ) )
+        if ( RayTriangleIntersect( origin, direction, epsilon, tMax, v0, v1, v2, t, testIntersection ) )
         {
-            if ( t < tMin )
-            {
-                tMin = t;
-                intersection = testIntersection;
-            }
+            tMax = t;
+            intersection = testIntersection;
         }
     }
 
-    return !isinf( tMin );
+    return !isinf( tMax );
 }
 
 bool IsOcculuded( float4 origin
@@ -83,10 +80,9 @@ bool IsOcculuded( float4 origin
         Vertex v1 = g_Vertices[ g_Triangles[ i * 3 + 1 ] ];
         Vertex v2 = g_Vertices[ g_Triangles[ i * 3 + 2 ] ];
         float t, u, v;
-        if ( RayTriangleIntersect( origin + direction * epsilon, direction, v0, v1, v2, t, u, v ) )
+        if ( RayTriangleIntersect( origin, direction, epsilon, distance, v0, v1, v2, t, u, v ) )
         {
-            if ( t < distance )
-                return true;
+            return true;
         }
     }
     return false;

@@ -48,6 +48,9 @@
     <ClInclude Include="Source\BVHAccel.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Source\CommandLineArgs.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\Application.cpp">
@@ -69,6 +72,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\BVHAccel.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\CommandLineArgs.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -101,13 +107,11 @@
     <None Include="Shaders\CookTorranceBRDF.inc.hlsl" />
     <None Include="Shaders\CookTorranceCompensationBRDF.inc.hlsl" />
     <None Include="Shaders\Math.inc.hlsl" />
+    <None Include="Shaders\BVHAccel.inc.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resources\DirectComputeRayTracing.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="Shaders\BVHAccel.inc.hlsl" />
   </ItemGroup>
 </Project>

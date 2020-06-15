@@ -2,6 +2,7 @@
 #include "Scene.h"
 #include "D3D11RenderSystem.h"
 #include "DDSTextureLoader.h"
+#include "CommandLineArgs.h"
 
 using namespace DirectX;
 
@@ -38,8 +39,11 @@ Scene::Scene()
     m_MersenneURBG = std::mt19937( randomDevice() );
 }
 
-bool Scene::Init( uint32_t resolutionWidth, uint32_t resolutionHeight )
+bool Scene::Init()
 {
+    uint32_t resolutionWidth = CommandLineArgs::Singleton()->ResolutionX();
+    uint32_t resolutionHeight = CommandLineArgs::Singleton()->ResolutionY();
+
     ID3D11Device* device = GetDevice();
 
     D3D11_TEXTURE2D_DESC textureDesc;

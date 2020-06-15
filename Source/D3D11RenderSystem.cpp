@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "D3D11RenderSystem.h"
+#include "CommandLineArgs.h"
 
 ID3D11Device*           g_Device = nullptr;
 ID3D11DeviceContext*    g_DeviceContext = nullptr;
@@ -34,10 +35,13 @@ bool InitRenderSystem( HWND hWnd )
     swapChainDesc.Windowed = TRUE;
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT::DXGI_SWAP_EFFECT_FLIP_DISCARD;
 
+    UINT flags = D3D11_CREATE_DEVICE_SINGLETHREADED;
+    if ( CommandLineArgs::Singleton()->UseDebugDevice() )
+        flags |= D3D11_CREATE_DEVICE_DEBUG;
     HRESULT hr = D3D11CreateDeviceAndSwapChain( NULL
         , D3D_DRIVER_TYPE_HARDWARE
         , NULL
-        , D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_DEBUG
+        , flags
         , NULL
         , 0
         , D3D11_SDK_VERSION
@@ -75,7 +79,8 @@ ID3DBlob* CompileFromFile( LPCWSTR filename, LPCSTR entryPoint, LPCSTR target )
 {
     ID3DBlob* shaderBlob = nullptr;
     ID3DBlob* errorBlob = nullptr;
-    HRESULT hr = D3DCompileFromFile( filename, NULL, D3D_COMPILE_STANDARD_FILE_INCLUDE, entryPoint, target, D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_PREFER_FLOW_CONTROL, 0, &shaderBlob, &errorBlob );
+    UINT flags1 = CommandLineArgs::Singleton()->ShaderDebugEnabled() ? D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_PREFER_FLOW_CONTROL : D3DCOMPILE_OPTIMIZATION_LEVEL3;
+    HRESULT hr = D3DCompileFromFile( filename, NULL, D3D_COMPILE_STANDARD_FILE_INCLUDE, entryPoint, target, flags1, 0, &shaderBlob, &errorBlob );
     if ( FAILED( hr ) )
     {
         if ( errorBlob )

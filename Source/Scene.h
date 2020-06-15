@@ -31,7 +31,7 @@ class Scene
 public:
     Scene();
 
-    bool Init( uint32_t resolutionWidth, uint32_t resolutionHeight );
+    bool Init();
 
     void ResetScene();
 

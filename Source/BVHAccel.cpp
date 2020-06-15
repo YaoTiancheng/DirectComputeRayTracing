@@ -6,9 +6,9 @@ static const uint8_t k_MaxPrimCountInNode = 2;
 
 static void CalculateTriangleBoundingBox( const Vertex& vert0, const Vertex& vert1, const Vertex& vert2, DirectX::BoundingBox* bbox )
 {
-    DirectX::XMVECTOR v0 = DirectX::XMLoadFloat4( &vert0.position );
-    DirectX::XMVECTOR v1 = DirectX::XMLoadFloat4( &vert1.position );
-    DirectX::XMVECTOR v2 = DirectX::XMLoadFloat4( &vert2.position );
+    DirectX::XMVECTOR v0 = DirectX::XMLoadFloat3( &vert0.position );
+    DirectX::XMVECTOR v1 = DirectX::XMLoadFloat3( &vert1.position );
+    DirectX::XMVECTOR v2 = DirectX::XMLoadFloat3( &vert2.position );
     DirectX::XMVECTOR vMin = DirectX::XMVectorMin( v2, DirectX::XMVectorMin( v0, v1 ) ); // Min
     DirectX::XMVECTOR vMax = DirectX::XMVectorMax( v2, DirectX::XMVectorMax( v0, v1 ) ); // Max
     DirectX::BoundingBox::CreateFromPoints( *bbox, vMin, vMax );

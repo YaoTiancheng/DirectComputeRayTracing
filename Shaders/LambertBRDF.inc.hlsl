@@ -4,27 +4,27 @@
 #include "MonteCarlo.inc.hlsl"
 #include "Math.inc.hlsl"
 
-float4 ConsineSampleHemisphere( float2 sample )
+float3 ConsineSampleHemisphere( float2 sample )
 {
     sample = ConcentricSampleDisk( sample );
-    return float4( sample.xy, sqrt( max( 0.0f, 1.0f - dot( sample.xy, sample.xy ) ) ), 0.0f );
+    return float3( sample.xy, sqrt( max( 0.0f, 1.0f - dot( sample.xy, sample.xy ) ) ) );
 }
 
-float4 EvaluateLambertBRDF( float4 wi, float4 albedo )
+float3 EvaluateLambertBRDF( float3 wi, float3 albedo )
 {
     return wi.z > 0.0f ? albedo * INV_PI : 0.0f;
 }
 
-float EvaluateLambertBRDFPdf( float4 wi )
+float EvaluateLambertBRDFPdf( float3 wi )
 {
     return max( 0.0f, wi.z * INV_PI );
 }
 
-void SampleLambertBRDF( float4 wo
+void SampleLambertBRDF( float3 wo
 	, float2 sample
-    , float4 albedo
-    , out float4 wi
-    , out float4 value
+    , float3 albedo
+    , out float3 wi
+    , out float3 value
     , out float pdf )
 {
     wi = ConsineSampleHemisphere( sample );

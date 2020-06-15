@@ -83,13 +83,13 @@ float EvaluateCookTorranceCompEFresnel( float cosTheta, float alpha, float ior )
     return lerp( lerp( value0.x, value0.y, fraction.y ), lerp( value1.x, value1.y, fraction.y ), fraction.z );
 }
 
-float4 CookTorranceCompSampleHemisphere( float2 sample, float alpha )
+float3 CookTorranceCompSampleHemisphere( float2 sample, float alpha )
 {
     //return ConsineSampleHemisphere(sample);
     float cosTheta = EvaluateCookTorranceCompInvCDF( sample.x, alpha );
     float phi = 2.0f * PI * sample.y;
     float s = sqrt( 1 - cosTheta * cosTheta );
-    return float4( cos( phi ) * s, sin( phi ) * s, cosTheta, 0.0f );
+    return float3( cos( phi ) * s, sin( phi ) * s, cosTheta );
 }
 
 float FresnelAverage( float ior )
@@ -108,7 +108,7 @@ float EvaluateCookTorranceCompFresnel( float ior, float EAvg )
     return FAvg * FAvg * EAvg / ( 1.0f - FAvg * ( 1.0f - EAvg ) );
 }
 
-float4 EvaluateCookTorranceCompBRDF( float4 wi, float4 wo, float4 reflectance, float alpha, float ior )
+float3 EvaluateCookTorranceCompBRDF( float3 wi, float3 wo, float3 reflectance, float alpha, float ior )
 {
     float WIdotN = wi.z;
     float WOdotN = wo.z;
@@ -118,11 +118,11 @@ float4 EvaluateCookTorranceCompBRDF( float4 wi, float4 wo, float4 reflectance, f
     float eI = EvaluateCookTorranceCompE( WIdotN, alpha );
     float eO = EvaluateCookTorranceCompE( WOdotN, alpha );
     float eAvg = EvaluateCookTorranceCompEAvg( alpha );
-    float4 fresnel = EvaluateCookTorranceCompFresnel( ior, eAvg );
+    float3 fresnel = EvaluateCookTorranceCompFresnel( ior, eAvg );
     return reflectance * ( 1.0f - eI ) * ( 1.0f - eO ) * fresnel / ( PI * ( 1.0f - eAvg ) );
 }
 
-float EvaluateCookTorranceCompPdf( float4 wi, float alpha )
+float EvaluateCookTorranceCompPdf( float3 wi, float alpha )
 {
     //return EvaluateLambertBRDFPdf(wi);
     float cosTheta = wi.z;
@@ -133,7 +133,7 @@ float EvaluateCookTorranceCompPdf( float4 wi, float alpha )
     return ( 1.0f - EvaluateCookTorranceCompE( cosTheta, alpha ) ) * cosTheta / pdfScale;
 }
 
-void SampleCookTorranceCompBRDF( float4 wo, float2 sample, float4 reflectance, float alpha, float ior, out float4 wi, out float4 value, out float pdf )
+void SampleCookTorranceCompBRDF( float3 wo, float2 sample, float3 reflectance, float alpha, float ior, out float3 wi, out float3 value, out float pdf )
 {
     wi = CookTorranceCompSampleHemisphere( sample, alpha );
     value = EvaluateCookTorranceCompBRDF( wi, wo, reflectance, alpha, ior );

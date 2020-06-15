@@ -261,77 +261,78 @@ bool Scene::Init( uint32_t resolutionWidth, uint32_t resolutionHeight )
 
     m_DefaultViewport = { 0.0f, 0.0f, ( float ) resolutionWidth, ( float ) resolutionHeight, 0.0f, 1.0f };
     m_RayTracingConstants.samplesCount = kMaxSamplesCount;
-    m_RayTracingConstants.resolution = { ( float ) resolutionWidth, ( float ) resolutionHeight };
+    m_RayTracingConstants.resolutionX = resolutionWidth;
+    m_RayTracingConstants.resolutionY = resolutionHeight;
 
     return true;
 }
 
 void Scene::ResetScene()
 {
-    m_Vertices[ 0 ].position = XMFLOAT4( -1.0f, 0.0f, 1.0f, 1.0f );
-    m_Vertices[ 0 ].normal = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 0 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
-    m_Vertices[ 1 ].position = XMFLOAT4( 1.0f, 0.0f, 1.0f, 1.0f );
-    m_Vertices[ 1 ].normal = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 1 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
-    m_Vertices[ 2 ].position = XMFLOAT4( 1.0f, 0.0f, -1.0f, 1.0f );
-    m_Vertices[ 2 ].normal = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 2 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
-    m_Vertices[ 3 ].position = XMFLOAT4( -1.0f, 0.0f, -1.0f, 1.0f );
-    m_Vertices[ 3 ].normal = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 3 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 0 ].position = XMFLOAT3( -1.0f, 0.0f, 1.0f );
+    m_Vertices[ 0 ].normal = XMFLOAT3( 0.0f, 1.0f, 0.0f );
+    m_Vertices[ 0 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 1 ].position = XMFLOAT3( 1.0f, 0.0f, 1.0f );
+    m_Vertices[ 1 ].normal = XMFLOAT3( 0.0f, 1.0f, 0.0f );
+    m_Vertices[ 1 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 2 ].position = XMFLOAT3( 1.0f, 0.0f, -1.0f );
+    m_Vertices[ 2 ].normal = XMFLOAT3( 0.0f, 1.0f, 0.0f );
+    m_Vertices[ 2 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 3 ].position = XMFLOAT3( -1.0f, 0.0f, -1.0f );
+    m_Vertices[ 3 ].normal = XMFLOAT3( 0.0f, 1.0f, 0.0f );
+    m_Vertices[ 3 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
 
-    m_Vertices[ 4 ].position = XMFLOAT4( -1.0f, 0.0f, 1.0f, 1.0f );
-    m_Vertices[ 4 ].normal = XMFLOAT4( 0.0f, 0.0f, -1.0f, 0.0f );
-    m_Vertices[ 4 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
-    m_Vertices[ 5 ].position = XMFLOAT4( 1.0f, 0.0f, 1.0f, 1.0f );
-    m_Vertices[ 5 ].normal = XMFLOAT4( 0.0f, 0.0f, -1.0f, 0.0f );
-    m_Vertices[ 5 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
-    m_Vertices[ 6 ].position = XMFLOAT4( -1.0f, 2.0f, 1.0f, 1.0f );
-    m_Vertices[ 6 ].normal = XMFLOAT4( 0.0f, 0.0f, -1.0f, 0.0f );
-    m_Vertices[ 6 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
-    m_Vertices[ 7 ].position = XMFLOAT4( 1.0f, 2.0f, 1.0f, 1.0f );
-    m_Vertices[ 7 ].normal = XMFLOAT4( 0.0f, 0.0f, -1.0f, 0.0f );
-    m_Vertices[ 7 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 4 ].position = XMFLOAT3( -1.0f, 0.0f, 1.0f );
+    m_Vertices[ 4 ].normal = XMFLOAT3( 0.0f, 0.0f, -1.0f );
+    m_Vertices[ 4 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 5 ].position = XMFLOAT3( 1.0f, 0.0f, 1.0f );
+    m_Vertices[ 5 ].normal = XMFLOAT3( 0.0f, 0.0f, -1.0f );
+    m_Vertices[ 5 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 6 ].position = XMFLOAT3( -1.0f, 2.0f, 1.0f );
+    m_Vertices[ 6 ].normal = XMFLOAT3( 0.0f, 0.0f, -1.0f );
+    m_Vertices[ 6 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 7 ].position = XMFLOAT3( 1.0f, 2.0f, 1.0f );
+    m_Vertices[ 7 ].normal = XMFLOAT3( 0.0f, 0.0f, -1.0f );
+    m_Vertices[ 7 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
 
-    m_Vertices[ 8 ].position = XMFLOAT4( -1.0f, 2.0f, 1.0f, 1.0f );
-    m_Vertices[ 8 ].normal = XMFLOAT4( 0.0f, -1.0f, 0.0f, 0.0f );
-    m_Vertices[ 8 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
-    m_Vertices[ 9 ].position = XMFLOAT4( 1.0f, 2.0f, 1.0f, 1.0f );
-    m_Vertices[ 9 ].normal = XMFLOAT4( 0.0f, -1.0f, 0.0f, 0.0f );
-    m_Vertices[ 9 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
-    m_Vertices[ 10 ].position = XMFLOAT4( 1.0f, 2.0f, -1.0f, 1.0f );
-    m_Vertices[ 10 ].normal = XMFLOAT4( 0.0f, -1.0f, 0.0f, 0.0f );
-    m_Vertices[ 10 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
-    m_Vertices[ 11 ].position = XMFLOAT4( -1.0f, 2.0f, -1.0f, 1.0f );
-    m_Vertices[ 11 ].normal = XMFLOAT4( 0.0f, -1.0f, 0.0f, 0.0f );
-    m_Vertices[ 11 ].tangent = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
+    m_Vertices[ 8 ].position = XMFLOAT3( -1.0f, 2.0f, 1.0f );
+    m_Vertices[ 8 ].normal = XMFLOAT3( 0.0f, -1.0f, 0.0f );
+    m_Vertices[ 8 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 9 ].position = XMFLOAT3( 1.0f, 2.0f, 1.0f );
+    m_Vertices[ 9 ].normal = XMFLOAT3( 0.0f, -1.0f, 0.0f );
+    m_Vertices[ 9 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 10 ].position = XMFLOAT3( 1.0f, 2.0f, -1.0f );
+    m_Vertices[ 10 ].normal = XMFLOAT3( 0.0f, -1.0f, 0.0f );
+    m_Vertices[ 10 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 11 ].position = XMFLOAT3( -1.0f, 2.0f, -1.0f );
+    m_Vertices[ 11 ].normal = XMFLOAT3( 0.0f, -1.0f, 0.0f );
+    m_Vertices[ 11 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
 
-    m_Vertices[ 12 ].position = XMFLOAT4( -1.0f, 0.0f, 1.0f, 1.0f );
-    m_Vertices[ 12 ].normal = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
-    m_Vertices[ 12 ].tangent = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 13 ].position = XMFLOAT4( -1.0f, 0.0f, -1.0f, 1.0f );
-    m_Vertices[ 13 ].normal = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
-    m_Vertices[ 13 ].tangent = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 14 ].position = XMFLOAT4( -1.0f, 2.0f, -1.0f, 1.0f );
-    m_Vertices[ 14 ].normal = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
-    m_Vertices[ 14 ].tangent = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 15 ].position = XMFLOAT4( -1.0f, 2.0f, 1.0f, 1.0f );
-    m_Vertices[ 15 ].normal = XMFLOAT4( 1.0f, 0.0f, 0.0f, 0.0f );
-    m_Vertices[ 15 ].tangent = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 12 ].position = XMFLOAT3( -1.0f, 0.0f, 1.0f );
+    m_Vertices[ 12 ].normal = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 12 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
+    m_Vertices[ 13 ].position = XMFLOAT3( -1.0f, 0.0f, -1.0f );
+    m_Vertices[ 13 ].normal = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 13 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
+    m_Vertices[ 14 ].position = XMFLOAT3( -1.0f, 2.0f, -1.0f );
+    m_Vertices[ 14 ].normal = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 14 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
+    m_Vertices[ 15 ].position = XMFLOAT3( -1.0f, 2.0f, 1.0f );
+    m_Vertices[ 15 ].normal = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 15 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
 
-    m_Vertices[ 16 ].position = XMFLOAT4( 1.0f, 0.0f, 1.0f, 1.0f );
-    m_Vertices[ 16 ].normal = XMFLOAT4( -1.0f, 0.0f, 0.0f, 0.0f );
-    m_Vertices[ 16 ].tangent = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 17 ].position = XMFLOAT4( 1.0f, 0.0f, -1.0f, 1.0f );
-    m_Vertices[ 17 ].normal = XMFLOAT4( -1.0f, 0.0f, 0.0f, 0.0f );
-    m_Vertices[ 17 ].tangent = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 18 ].position = XMFLOAT4( 1.0f, 2.0f, -1.0f, 1.0f );
-    m_Vertices[ 18 ].normal = XMFLOAT4( -1.0f, 0.0f, 0.0f, 0.0f );
-    m_Vertices[ 18 ].tangent = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 19 ].position = XMFLOAT4( 1.0f, 2.0f, 1.0f, 1.0f );
-    m_Vertices[ 19 ].normal = XMFLOAT4( -1.0f, 0.0f, 0.0f, 0.0f );
-    m_Vertices[ 19 ].tangent = XMFLOAT4( 0.0f, 1.0f, 0.0f, 0.0f );
+    m_Vertices[ 16 ].position = XMFLOAT3( 1.0f, 0.0f, 1.0f );
+    m_Vertices[ 16 ].normal = XMFLOAT3( -1.0f, 0.0f, 0.0f );
+    m_Vertices[ 16 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
+    m_Vertices[ 17 ].position = XMFLOAT3( 1.0f, 0.0f, -1.0f );
+    m_Vertices[ 17 ].normal = XMFLOAT3( -1.0f, 0.0f, 0.0f );
+    m_Vertices[ 17 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
+    m_Vertices[ 18 ].position = XMFLOAT3( 1.0f, 2.0f, -1.0f );
+    m_Vertices[ 18 ].normal = XMFLOAT3( -1.0f, 0.0f, 0.0f );
+    m_Vertices[ 18 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
+    m_Vertices[ 19 ].position = XMFLOAT3( 1.0f, 2.0f, 1.0f );
+    m_Vertices[ 19 ].normal = XMFLOAT3( -1.0f, 0.0f, 0.0f );
+    m_Vertices[ 19 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
 
     m_Triangles[ 0 ] = 0;
     m_Triangles[ 1 ] = 1;
@@ -382,8 +383,8 @@ void Scene::ResetScene()
     assert( bvhNodes.size() <= kMaxBVHNodeCount );
     PackBVH( bvhNodes.data(), uint32_t( bvhNodes.size() ), m_BVHNodes );
 
-    m_PointLights[ 0 ].position = XMFLOAT4( 2.0f, 9.0f, -5.0f, 1.0f );
-    m_PointLights[ 0 ].color = XMFLOAT4( 200.0f, 200.0f, 200.0f, 1.0f );
+    m_PointLights[ 0 ].position = XMFLOAT3( 4.0f, 9.0f, -5.0f );
+    m_PointLights[ 0 ].color = XMFLOAT3( 200.0f, 200.0f, 200.0f );
 
     m_RayTracingConstants.maxBounceCount = 3;
     m_RayTracingConstants.primitiveCount = 10;
@@ -577,8 +578,8 @@ void Scene::DispatchRayTracing()
     ID3D11Buffer* rawConstantBuffers[] = { m_CookTorranceCompTextureConstantsBuffer.Get() };
     deviceContext->CSSetConstantBuffers( 0, 1, rawConstantBuffers );
 
-    UINT threadGroupCountX = ( UINT ) ceil( m_RayTracingConstants.resolution.x / 16.0f );
-    UINT threadGroupCountY = ( UINT ) ceil( m_RayTracingConstants.resolution.y / 16.0f );
+    UINT threadGroupCountX = ( UINT ) ceil( m_RayTracingConstants.resolutionX / 16.0f );
+    UINT threadGroupCountY = ( UINT ) ceil( m_RayTracingConstants.resolutionY / 16.0f );
     deviceContext->Dispatch( threadGroupCountX, threadGroupCountY, 1 );
 
     rawFilmTextureUAV = nullptr;

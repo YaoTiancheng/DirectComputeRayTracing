@@ -20,16 +20,16 @@ float SpecularCompWeight( float ior, float E, float EAvg )
 // BSDF
 // 
 
-float4 EvaluateBSDF( float4 wi, float4 wo, Intersection intersection )
+float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
 {
-    float4 biNormal = float4( cross( intersection.tangent.xyz, intersection.normal.xyz ), 0.0f );
-    float4x4 tbn2world = float4x4( intersection.tangent, biNormal, intersection.normal, float4( 0.0f, 0.0f, 0.0f, 1.0f ) );
-    float4x4 world2tbn = transpose( tbn2world );
+    float3 biNormal = cross( intersection.tangent, intersection.normal );
+    float3x3 tbn2world = float3x3( intersection.tangent, biNormal, intersection.normal );
+    float3x3 world2tbn = transpose( tbn2world );
 
     wo = mul( wo, world2tbn );
     wi = mul( wi, world2tbn );
 
-    float4 value = EvaluateCookTorranceMircofacetBRDF( wi, wo, intersection.specular, intersection.alpha, 1.0f, intersection.ior );
+    float3 value = EvaluateCookTorranceMircofacetBRDF( wi, wo, intersection.specular, intersection.alpha, 1.0f, intersection.ior );
     value += EvaluateCookTorranceCompBRDF( wi, wo, intersection.specular, intersection.alpha, intersection.ior );
 
     float E = EvaluateCookTorranceCompE( wo.z, intersection.alpha );
@@ -43,17 +43,17 @@ float4 EvaluateBSDF( float4 wi, float4 wo, Intersection intersection )
     return value;
 }
 
-void SampleBSDF( float4 wo
+void SampleBSDF( float3 wo
     , float2 BRDFSample
     , float BRDFSelectionSample
     , Intersection intersection
-    , out float4 wi
-    , out float4 value
+    , out float3 wi
+    , out float3 value
     , out float pdf )
 {
-    float4 biNormal = float4( cross( intersection.tangent.xyz, intersection.normal.xyz ), 0.0f );
-    float4x4 tbn2world = float4x4( intersection.tangent, biNormal, intersection.normal, float4( 0.0f, 0.0f, 0.0f, 1.0f ) );
-    float4x4 world2tbn = transpose( tbn2world );
+    float3 biNormal = cross( intersection.tangent.xyz, intersection.normal.xyz );
+    float3x3 tbn2world = float3x3( intersection.tangent, biNormal, intersection.normal );
+    float3x3 world2tbn = transpose( tbn2world );
 
     wo = mul( wo, world2tbn );
 

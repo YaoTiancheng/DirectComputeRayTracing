@@ -6,8 +6,8 @@
 
 struct PointLight
 {
-    DirectX::XMFLOAT4   position;
-    DirectX::XMFLOAT4   color;
+    DirectX::XMFLOAT3   position;
+    DirectX::XMFLOAT3   color;
 };
 
 
@@ -17,7 +17,8 @@ struct RayTracingConstants
     uint32_t            primitiveCount;
     uint32_t            pointLightCount;
     uint32_t            samplesCount;
-    DirectX::XMFLOAT2   resolution;
+    uint32_t            resolutionX;
+    uint32_t            resolutionY;
     DirectX::XMFLOAT2   filmSize;
     float               filmDistance;
     DirectX::XMFLOAT4X4 cameraTransform;

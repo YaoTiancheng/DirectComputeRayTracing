@@ -3,20 +3,20 @@
 
 struct Vertex
 {
-    float4  position;
-    float4  normal;
-    float4  tangent;
+    float3  position;
+    float3  normal;
+    float3  tangent;
 };
 
 struct Intersection
 {
-    float4  albedo;
-    float4  specular;
-    float4  emission;
+    float3  albedo;
+    float3  specular;
+    float3  emission;
     float   alpha;
     float3  position;
-    float4  normal;
-    float4  tangent;
+    float3  normal;
+    float3  tangent;
     float   rayEpsilon;
     float   ior;
 };
@@ -43,8 +43,8 @@ bool RayTriangleIntersect( float3 origin
     , out float u
     , out float v )
 {
-    float3 v0v1 = v1.position.xyz - v0.position.xyz; 
-    float3 v0v2 = v2.position.xyz - v0.position.xyz;
+    float3 v0v1 = v1.position - v0.position; 
+    float3 v0v2 = v2.position - v0.position;
     float3 pvec = cross( direction, v0v2 );
     float det = dot( v0v1, pvec );
 
@@ -53,7 +53,7 @@ bool RayTriangleIntersect( float3 origin
 
     float invDet = 1 / det; 
  
-    float3 tvec = origin.xyz - v0.position.xyz;
+    float3 tvec = origin - v0.position;
     u = dot( tvec, pvec ) * invDet; 
     if ( u < 0 || u > 1 )
         return false; 
@@ -88,11 +88,11 @@ bool RayTriangleIntersect( float3 origin
     if ( intersect = RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v ) )
     {
         intersection.position   = origin + t * direction;
-        intersection.normal     = float4( normalize( VectorBaryCentric( v0.normal.xyz, v1.normal.xyz, v2.normal.xyz, u, v ) ), 0.0f );
-        intersection.tangent    = float4( normalize( VectorBaryCentric( v0.tangent.xyz, v1.tangent.xyz, v2.tangent.xyz, u, v ) ), 0.0f );
+        intersection.normal     = normalize( VectorBaryCentric( v0.normal, v1.normal, v2.normal, u, v ) );
+        intersection.tangent    = normalize( VectorBaryCentric( v0.tangent, v1.tangent, v2.tangent, u, v ) );
         intersection.rayEpsilon = 1e-5f * t;
 
-        intersection.albedo     = float4( 1.0f, 1.0f, 1.0f, 1.0f );
+        intersection.albedo     = 1.0f;
         intersection.specular   = 1.0f;
         intersection.emission   = 0.0f;
         intersection.alpha      = 1.0f;

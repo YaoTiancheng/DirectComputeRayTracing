@@ -22,70 +22,47 @@ StructuredBuffer<RayTracingConstants>   g_Constants     : register( t3 );
 
 #include "Samples.inc.hlsl"
 #include "BSDFs.inc.hlsl"
-#include "Primitives.inc.hlsl"
 
 StructuredBuffer<Vertex>                g_Vertices      : register( t0 );
 StructuredBuffer<uint>                  g_Triangles     : register( t1 );
 StructuredBuffer<PointLight>            g_PointLights   : register( t2 );
 RWTexture2D<float4>                     g_FilmTexture;
 
+#include "BVHAccel.inc.hlsl"
+
 void GenerateRay( float2 sample
 	, float2 filmSize
 	, float filmDistance
 	, float4x4 cameraTransform
-	, out float4 origin
+	, out float3 origin
 	, out float4 direction )
 {
     float2 filmSample = float2( sample.x - 0.5f, -sample.y + 0.5f ) * filmSize;
-    origin = float4( 0.0f, 0.0f, filmDistance, 1.0f );
-    direction = normalize( origin - float4( filmSample, 0.0f, 1.0f ) );
+    origin = float3( 0.0f, 0.0f, filmDistance );
+    direction = float4( normalize( origin - float3( filmSample, 0.0f ) ), 0.0f );
     direction.xy = -direction.xy;
 
-    origin = mul( origin, cameraTransform );
+    origin = mul( float4( origin, 1.0f ), cameraTransform ).xyz;
     direction = mul( direction, cameraTransform );
 }
 
-bool IntersectScene( float4 origin
-	, float4 direction
+bool IntersectScene( float3 origin
+	, float3 direction
     , float4 epsilon
+    , uint dispatchThreadIndex
 	, out Intersection intersection )
 {
-    float tMax = 1.0f / 0.0f;
-
-    for ( int i = 0; i < g_Constants[ 0 ].primitiveCount; ++i )
-    {
-        Vertex v0 = g_Vertices[ g_Triangles[ i * 3 ] ];
-        Vertex v1 = g_Vertices[ g_Triangles[ i * 3 + 1 ] ];
-        Vertex v2 = g_Vertices[ g_Triangles[ i * 3 + 2 ] ];
-        float t;
-        Intersection testIntersection;
-        if ( RayTriangleIntersect( origin, direction, epsilon, tMax, v0, v1, v2, t, testIntersection ) )
-        {
-            tMax = t;
-            intersection = testIntersection;
-        }
-    }
-
-    return !isinf( tMax );
+    float t;
+    return BVHIntersect( origin, direction, epsilon.x, dispatchThreadIndex, t, intersection );
 }
 
-bool IsOcculuded( float4 origin
-    , float4 direction
+bool IsOcculuded( float3 origin
+    , float3 direction
     , float4 epsilon
-    , float distance )
+    , float distance
+    , uint dispatchThreadIndex )
 {
-    for ( int i = 0; i < g_Constants[ 0 ].primitiveCount; ++i )
-    {
-        Vertex v0 = g_Vertices[ g_Triangles[ i * 3 ] ];
-        Vertex v1 = g_Vertices[ g_Triangles[ i * 3 + 1 ] ];
-        Vertex v2 = g_Vertices[ g_Triangles[ i * 3 + 2 ] ];
-        float t, u, v;
-        if ( RayTriangleIntersect( origin, direction, epsilon, distance, v0, v1, v2, t, u, v ) )
-        {
-            return true;
-        }
-    }
-    return false;
+    return BVHIntersect( origin, direction, epsilon.x, dispatchThreadIndex );
 }
 
 void AddSampleToFilm( float4 l
@@ -97,13 +74,13 @@ void AddSampleToFilm( float4 l
     g_FilmTexture[ pixelPos ] = c;
 }
 
-float4 EstimateDirect( PointLight pointLight, Intersection intersection, float epsilon, float4 wo )
+float4 EstimateDirect( PointLight pointLight, Intersection intersection, float epsilon, float4 wo, uint dispatchThreadIndex )
 {
-    float4 wi = pointLight.position - intersection.position;
+    float4 wi = pointLight.position - float4( intersection.position, 1.0f );
     float len = length( wi );
     wi /= len;
 
-    if ( !IsOcculuded( intersection.position, wi, epsilon, len ) )
+    if ( !IsOcculuded( intersection.position, wi.xyz, epsilon, len, dispatchThreadIndex ) )
     {
         float4 l = pointLight.color / ( len * len );
         float4 brdf = EvaluateBSDF( wi, wo, intersection );
@@ -114,7 +91,7 @@ float4 EstimateDirect( PointLight pointLight, Intersection intersection, float e
     return 0.0f;
 }
 
-float4 UniformSampleOneLight( float sample, Intersection intersection, float4 wo, float epsilon )
+float4 UniformSampleOneLight( float sample, Intersection intersection, float4 wo, float epsilon, uint dispatchThreadIndex )
 {
     if ( g_Constants[ 0 ].pointLightCount == 0 )
     {
@@ -123,11 +100,14 @@ float4 UniformSampleOneLight( float sample, Intersection intersection, float4 wo
     else
     {
         uint lightIndex = floor( GetNextSample() * g_Constants[ 0 ].pointLightCount );
-        return EstimateDirect( g_PointLights[ lightIndex ], intersection, epsilon, wo ) * g_Constants[ 0 ].pointLightCount;
+        return EstimateDirect( g_PointLights[ lightIndex ], intersection, epsilon, wo, dispatchThreadIndex ) * g_Constants[ 0 ].pointLightCount;
     }
 }
 
-[numthreads( 32, 32, 1 )]
+#define GROUP_SIZE_X 16
+#define GROUP_SIZE_Y 16
+
+[numthreads( GROUP_SIZE_X, GROUP_SIZE_Y, 1 )]
 void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 {
     if ( any( pixelPos > g_Constants[ 0 ].resolution ) )
@@ -142,7 +122,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     float2 filmSample = ( pixelSample + pixelPos ) / g_Constants[ 0 ].resolution;
     GenerateRay( filmSample, g_Constants[ 0 ].filmSize, g_Constants[ 0 ].filmDistance, g_Constants[ 0 ].cameraTransform, intersection.position, wo );
 
-    if ( IntersectScene( intersection.position, wo, 0.0f, intersection ) )
+    if ( IntersectScene( intersection.position, wo.xyz, 0.0f, threadId, intersection ) )
     {
         uint iBounce = 0;
         while ( 1 )
@@ -150,7 +130,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
             wo = -wo;
 
             float lightSelectionSample = GetNextSample();
-            l += pathThroughput * ( UniformSampleOneLight( lightSelectionSample, intersection, wo, intersection.rayEpsilon ) + intersection.emission );
+            l += pathThroughput * ( UniformSampleOneLight( lightSelectionSample, intersection, wo, intersection.rayEpsilon, threadId ) + intersection.emission );
 
             if ( iBounce == g_Constants[ 0 ].maxBounceCount )
                 break;
@@ -165,7 +145,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
             float NdotL = abs( dot( wi, intersection.normal ) );
             pathThroughput = pathThroughput * brdf * NdotL / pdf;
 
-            if ( !IntersectScene( intersection.position, wi, intersection.rayEpsilon, intersection ) )
+            if ( !IntersectScene( intersection.position, wi.xyz, intersection.rayEpsilon, threadId, intersection ) )
             {
                 l += pathThroughput * g_Constants[ 0 ].background;
                 break;

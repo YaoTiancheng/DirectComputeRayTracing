@@ -123,6 +123,12 @@ bool Scene::Init( uint32_t resolutionWidth, uint32_t resolutionHeight )
     if ( FAILED( hr ) )
         return false;
 
+    bufferDesc.ByteWidth = sizeof( m_BVHNodes );
+    bufferDesc.StructureByteStride = sizeof( PackedBVHNode );
+    hr = device->CreateBuffer( &bufferDesc, nullptr, &m_BVHNodesBuffer );
+    if ( FAILED( hr ) )
+        return false;
+
     bufferDesc.ByteWidth = sizeof( m_PointLights );
     bufferDesc.StructureByteStride = sizeof( PointLight );
     hr = device->CreateBuffer( &bufferDesc, nullptr, &m_PointLightBuffer );
@@ -173,6 +179,11 @@ bool Scene::Init( uint32_t resolutionWidth, uint32_t resolutionHeight )
 
     SRVDesc.Buffer.NumElements = kMaxVertexIndexCount;
     hr = device->CreateShaderResourceView( m_TrianglesBuffer.Get(), &SRVDesc, &m_TrianglesSRV );
+    if ( FAILED( hr ) )
+        return false;
+
+    SRVDesc.Buffer.NumElements = kMaxBVHNodeCount;
+    hr = device->CreateShaderResourceView( m_BVHNodesBuffer.Get(), &SRVDesc, &m_BVHNodesSRV );
     if ( FAILED( hr ) )
         return false;
 
@@ -362,7 +373,16 @@ void Scene::ResetScene()
     m_Triangles[ 28 ] = 18;
     m_Triangles[ 29 ] = 17;
 
-    m_PointLights[ 0 ].position = XMFLOAT4( 4.0f, 7.0f, -5.0f, 1.0f );
+    uint32_t* reorderTriangles = new uint32_t[ kMaxVertexIndexCount ];
+    std::vector<UnpackedBVHNode> bvhNodes;
+    BuildBVH( m_Vertices, m_Triangles, reorderTriangles, 10, &bvhNodes );
+    memcpy( m_Triangles, reorderTriangles, sizeof( m_Triangles ) );
+    delete[] reorderTriangles;
+
+    assert( bvhNodes.size() <= kMaxBVHNodeCount );
+    PackBVH( bvhNodes.data(), uint32_t( bvhNodes.size() ), m_BVHNodes );
+
+    m_PointLights[ 0 ].position = XMFLOAT4( 2.0f, 9.0f, -5.0f, 1.0f );
     m_PointLights[ 0 ].color = XMFLOAT4( 200.0f, 200.0f, 200.0f, 1.0f );
 
     m_RayTracingConstants.maxBounceCount = 3;
@@ -375,7 +395,7 @@ void Scene::ResetScene()
       0.0f, 1.0f, 0.0f, 0.0f,
       0.0f, 0.0f, 1.0f, 0.0f,
       0.0f, 0.0f, 0.0f, 1.0f };
-    m_RayTracingConstants.background = { 0.8f, 0.8f, 0.8f, 0.f };
+    m_RayTracingConstants.background = { 0.0f, 0.0f, 0.0f, 0.f };
 
     m_IsFilmDirty = true;
 }
@@ -483,6 +503,18 @@ bool Scene::UpdateResources()
     }
 
     ZeroMemory( &mappedSubresource, sizeof( D3D11_MAPPED_SUBRESOURCE ) );
+    hr = deviceContext->Map( m_BVHNodesBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource );
+    if ( SUCCEEDED( hr ) )
+    {
+        memcpy( mappedSubresource.pData, m_BVHNodes, sizeof( PackedBVHNode ) * kMaxBVHNodeCount );
+        deviceContext->Unmap( m_BVHNodesBuffer.Get(), 0 );
+    }
+    else
+    {
+        return false;
+    }
+
+    ZeroMemory( &mappedSubresource, sizeof( D3D11_MAPPED_SUBRESOURCE ) );
     hr = deviceContext->Map( m_PointLightBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource );
     if ( SUCCEEDED( hr ) )
     {
@@ -538,14 +570,15 @@ void Scene::DispatchRayTracing()
         , m_CookTorranceCompInvCDFTextureSRV.Get()
         , m_CookTorranceCompPdfScaleTextureSRV.Get()
         , m_CookTorranceCompEFresnelTextureSRV.Get()
+        , m_BVHNodesSRV.Get()
     };
-    deviceContext->CSSetShaderResources( 0, 10, rawSRVs );
+    deviceContext->CSSetShaderResources( 0, 11, rawSRVs );
 
     ID3D11Buffer* rawConstantBuffers[] = { m_CookTorranceCompTextureConstantsBuffer.Get() };
     deviceContext->CSSetConstantBuffers( 0, 1, rawConstantBuffers );
 
-    UINT threadGroupCountX = ( UINT ) ceil( m_RayTracingConstants.resolution.x / 32.0f );
-    UINT threadGroupCountY = ( UINT ) ceil( m_RayTracingConstants.resolution.y / 32.0f );
+    UINT threadGroupCountX = ( UINT ) ceil( m_RayTracingConstants.resolution.x / 16.0f );
+    UINT threadGroupCountY = ( UINT ) ceil( m_RayTracingConstants.resolution.y / 16.0f );
     deviceContext->Dispatch( threadGroupCountX, threadGroupCountY, 1 );
 
     rawFilmTextureUAV = nullptr;

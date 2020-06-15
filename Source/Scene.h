@@ -1,24 +1,8 @@
 #pragma once
 
+#include "Primitive.h"
 #include "Camera.h"
-
-struct Sphere
-{
-    DirectX::XMFLOAT4   center;
-    float               radius;
-    DirectX::XMFLOAT4   albedo;
-    float               metallic;
-    DirectX::XMFLOAT4   emission;
-};
-
-
-struct Vertex
-{
-    DirectX::XMFLOAT4   position;
-    DirectX::XMFLOAT4   normal;
-    DirectX::XMFLOAT4   tangent;
-};
-
+#include "BVHAccel.h"
 
 struct PointLight
 {
@@ -71,6 +55,7 @@ private:
     static const int kMaxPointLightsCount = 8;
     static const int kMaxVertexCount = 256;
     static const int kMaxTriangleCount = 256;
+    static const int kMaxBVHNodeCount = 256;
     static const int kMaxVertexIndexCount = kMaxTriangleCount * 3;
 
 
@@ -81,6 +66,7 @@ private:
     RayTracingConstants                 m_RayTracingConstants;
     Vertex                              m_Vertices[ kMaxVertexCount ];
     uint32_t                            m_Triangles[ kMaxVertexIndexCount ];
+    PackedBVHNode                       m_BVHNodes[ kMaxBVHNodeCount ];
     PointLight                          m_PointLights[ kMaxPointLightsCount ];
 
     bool                                m_IsFilmDirty;
@@ -99,6 +85,7 @@ private:
     ComPtr<ID3D11ShaderResourceView>    m_SamplesSRV;
     ComPtr<ID3D11ShaderResourceView>    m_VerticesSRV;
     ComPtr<ID3D11ShaderResourceView>    m_TrianglesSRV;
+    ComPtr<ID3D11ShaderResourceView>    m_BVHNodesSRV;
     ComPtr<ID3D11ShaderResourceView>    m_PointLightsSRV;
     ComPtr<ID3D11ShaderResourceView>    m_FilmTextureSRV;
     ComPtr<ID3D11UnorderedAccessView>   m_FilmTextureUAV;
@@ -118,6 +105,7 @@ private:
     ComPtr<ID3D11Buffer>                m_SamplesBuffer;
     ComPtr<ID3D11Buffer>                m_VerticesBuffer;
     ComPtr<ID3D11Buffer>                m_TrianglesBuffer;
+    ComPtr<ID3D11Buffer>                m_BVHNodesBuffer;
     ComPtr<ID3D11Buffer>                m_PointLightBuffer;
     ComPtr<ID3D11Buffer>                m_ScreenQuadVertexBuffer;
     ComPtr<ID3D11InputLayout>           m_ScreenQuadVertexInputLayout;

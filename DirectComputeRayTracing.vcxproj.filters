@@ -42,6 +42,12 @@
     <ClInclude Include="targetver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Primitive.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\BVHAccel.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\Application.cpp">
@@ -60,6 +66,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\stdafx.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\BVHAccel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -87,6 +96,11 @@
     <None Include="Shaders\Samples.inc.hlsl">
       <Filter>Shaders</Filter>
     </None>
+    <None Include="Shaders\RayTracing.hlsl" />
+    <None Include="Shaders\LambertBRDF.inc.hlsl" />
+    <None Include="Shaders\CookTorranceBRDF.inc.hlsl" />
+    <None Include="Shaders\CookTorranceCompensationBRDF.inc.hlsl" />
+    <None Include="Shaders\Math.inc.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resources\DirectComputeRayTracing.rc">
@@ -94,10 +108,6 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="Shaders\RayTracing.hlsl" />
-    <FxCompile Include="Shaders\LambertBRDF.inc.hlsl" />
-    <FxCompile Include="Shaders\CookTorranceBRDF.inc.hlsl" />
-    <FxCompile Include="Shaders\CookTorranceCompensationBRDF.hlsl" />
-    <FxCompile Include="Shaders\Math.inc.hlsl" />
+    <FxCompile Include="Shaders\BVHAccel.inc.hlsl" />
   </ItemGroup>
 </Project>

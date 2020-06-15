@@ -155,16 +155,19 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Source\BVHAccel.h" />
     <ClInclude Include="Source\Camera.h" />
     <ClInclude Include="Source\D3D11RenderSystem.h" />
     <ClInclude Include="Source\Application.h" />
     <ClInclude Include="Source\DDSTextureLoader.h" />
     <ClInclude Include="Resources\Resource.h" />
+    <ClInclude Include="Source\Primitive.h" />
     <ClInclude Include="Source\Scene.h" />
     <ClInclude Include="Source\stdafx.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Source\BVHAccel.cpp" />
     <ClCompile Include="Source\Camera.cpp" />
     <ClCompile Include="Source\D3D11RenderSystem.cpp" />
     <ClCompile Include="Source\Application.cpp" />
@@ -261,6 +264,11 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">4.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4.0</ShaderModel>
+      <FileType>Document</FileType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Shaders\BVHAccel.inc.hlsl">
       <FileType>Document</FileType>
     </None>
   </ItemGroup>

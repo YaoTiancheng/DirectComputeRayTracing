@@ -1,14 +1,6 @@
 #pragma once
 
-enum GPUBufferCreationFlags : uint32_t
-{
-      GPUBufferCreationFlags_None              = 0x0
-    , GPUBufferCreationFlags_IsConstantBuffer  = 0x1
-    , GPUBufferCreationFlags_IsStructureBuffer = 0x2
-    , GPUBufferCreationFlags_IsVertexBuffer    = 0x4
-    , GPUBufferCreationFlags_IsImmutable       = 0x8
-    , GPUBufferCreationFlags_CPUWriteable      = 0x10
-};
+#include "GPUResourceCreationFlag.h"
 
 class GPUBuffer
 {

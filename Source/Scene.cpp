@@ -1,7 +1,6 @@
 #include "stdafx.h"
 #include "Scene.h"
 #include "D3D11RenderSystem.h"
-#include "DDSTextureLoader.h"
 #include "CommandLineArgs.h"
 
 using namespace DirectX;
@@ -46,46 +45,32 @@ bool Scene::Init()
 
     ID3D11Device* device = GetDevice();
 
-    D3D11_TEXTURE2D_DESC textureDesc;
-    ZeroMemory( &textureDesc, sizeof( D3D11_TEXTURE2D_DESC ) );
-    textureDesc.Width = resolutionWidth;
-    textureDesc.Height = resolutionHeight;
-    textureDesc.MipLevels = 1;
-    textureDesc.ArraySize = 1;
-    textureDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-    textureDesc.SampleDesc.Count = 1;
-    textureDesc.Usage = D3D11_USAGE_DEFAULT;
-    textureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_RENDER_TARGET;
-    HRESULT hr = device->CreateTexture2D( &textureDesc, nullptr, &m_FilmTexture );
-    if ( FAILED( hr ) )
+    m_FilmTexture.reset( GPUTexture::Create(
+          resolutionWidth
+        , resolutionHeight
+        , DXGI_FORMAT_R32G32B32A32_FLOAT
+        , GPUResourceCreationFlags_HasUAV | GPUResourceCreationFlags_IsRenderTarget ) );
+    if ( !m_FilmTexture )
         return false;
 
-    hr = device->CreateUnorderedAccessView( m_FilmTexture.Get(), nullptr, &m_FilmTextureUAV );
-    if ( FAILED( hr ) )
+    m_CookTorranceCompETexture.reset( GPUTexture::CreateFromFile( L"BuiltinResources\\CookTorranceComp_E.DDS" ) );
+    if ( !m_CookTorranceCompETexture )
         return false;
 
-    hr = device->CreateShaderResourceView( m_FilmTexture.Get(), nullptr, &m_FilmTextureSRV );
-    if ( FAILED( hr ) )
+    m_CookTorranceCompEAvgTexture.reset( GPUTexture::CreateFromFile( L"BuiltinResources\\CookTorranceComp_E_Avg.DDS" ) );
+    if ( !m_CookTorranceCompEAvgTexture )
         return false;
 
-    hr = CreateDDSTextureFromFile( device, L"BuiltinResources\\CookTorranceComp_E.DDS", ( ID3D11Resource** ) m_CookTorranceCompETexture.ReleaseAndGetAddressOf(), &m_CookTorranceCompETextureSRV );
-    if ( FAILED( hr ) )
+    m_CookTorranceCompInvCDFTexture.reset( GPUTexture::CreateFromFile( L"BuiltinResources\\CookTorranceComp_InvCDF.DDS" ) );
+    if ( !m_CookTorranceCompInvCDFTexture )
         return false;
 
-    hr = CreateDDSTextureFromFile( device, L"BuiltinResources\\CookTorranceComp_E_Avg.DDS", ( ID3D11Resource** ) m_CookTorranceCompEAvgTexture.ReleaseAndGetAddressOf(), &m_CookTorranceCompEAvgTextureSRV );
-    if ( FAILED( hr ) )
+    m_CookTorranceCompPdfScaleTexture.reset( GPUTexture::CreateFromFile( L"BuiltinResources\\CookTorranceComp_PdfScale.DDS" ) );
+    if ( !m_CookTorranceCompPdfScaleTexture )
         return false;
 
-    hr = CreateDDSTextureFromFile( device, L"BuiltinResources\\CookTorranceComp_InvCDF.DDS", ( ID3D11Resource** ) m_CookTorranceCompInvCDFTexture.ReleaseAndGetAddressOf(), &m_CookTorranceCompInvCDFTextureSRV );
-    if ( FAILED( hr ) )
-        return false;
-
-    hr = CreateDDSTextureFromFile( device, L"BuiltinResources\\CookTorranceComp_PdfScale.DDS", ( ID3D11Resource** ) m_CookTorranceCompPdfScaleTexture.ReleaseAndGetAddressOf(), &m_CookTorranceCompPdfScaleTextureSRV );
-    if ( FAILED( hr ) )
-        return false;
-
-    hr = CreateDDSTextureFromFile( device, L"BuiltinResources\\CookTorranceComp_EFresnel.DDS", ( ID3D11Resource** ) m_CookTorranceCompEFresnelTexture .ReleaseAndGetAddressOf(), &m_CookTorranceCompEFresnelTextureSRV );
-    if ( FAILED( hr ) )
+    m_CookTorranceCompEFresnelTexture.reset( GPUTexture::CreateFromFile( L"BuiltinResources\\CookTorranceComp_EFresnel.DDS" ) );
+    if ( !m_CookTorranceCompEFresnelTexture )
         return false;
 
     ID3DBlob* shaderBlob = CompileFromFile( L"Shaders\\RayTracing.hlsl", "main", "cs_5_0" );
@@ -100,42 +85,42 @@ bool Scene::Init()
     m_RayTracingConstantsBuffer.reset( GPUBuffer::Create( 
           sizeof( RayTracingConstants )
         , 0
-        , GPUBufferCreationFlags_CPUWriteable | GPUBufferCreationFlags_IsConstantBuffer ) );
+        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsConstantBuffer ) );
     if ( !m_RayTracingConstantsBuffer )
         return false;
 
     m_SamplesBuffer.reset( GPUBuffer::Create( 
           sizeof( float ) * kMaxSamplesCount
         , sizeof( float )
-        , GPUBufferCreationFlags_CPUWriteable | GPUBufferCreationFlags_IsStructureBuffer ) );
+        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer ) );
     if ( !m_SamplesBuffer )
         return false;
 
     m_VerticesBuffer.reset( GPUBuffer::Create( 
           sizeof( m_Vertices )
         , sizeof( Vertex )
-        , GPUBufferCreationFlags_CPUWriteable | GPUBufferCreationFlags_IsStructureBuffer ) );
+        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer ) );
     if ( !m_VerticesBuffer )
         return false;
 
     m_TrianglesBuffer.reset( GPUBuffer::Create( 
           sizeof( m_Triangles )
         , sizeof( uint32_t )
-        , GPUBufferCreationFlags_CPUWriteable | GPUBufferCreationFlags_IsStructureBuffer ) );
+        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer ) );
     if ( !m_TrianglesBuffer )
         return false;
 
     m_BVHNodesBuffer.reset( GPUBuffer::Create( 
           sizeof( m_BVHNodes )
         , sizeof( PackedBVHNode )
-        , GPUBufferCreationFlags_CPUWriteable | GPUBufferCreationFlags_IsStructureBuffer ) );
+        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer ) );
     if ( !m_BVHNodesBuffer )
         return false;
 
     m_PointLightsBuffer.reset( GPUBuffer::Create( 
           sizeof( m_PointLights )
         , sizeof( PointLight )
-        , GPUBufferCreationFlags_CPUWriteable | GPUBufferCreationFlags_IsStructureBuffer ) );
+        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer ) );
     if ( !m_PointLightsBuffer )
         return false;
 
@@ -150,7 +135,7 @@ bool Scene::Init()
     m_CookTorranceCompTextureConstantsBuffer.reset( GPUBuffer::Create( 
           sizeof( CookTorranceCompTextureConstants )
         , 0
-        , GPUBufferCreationFlags_IsImmutable | GPUBufferCreationFlags_IsConstantBuffer
+        , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsConstantBuffer
         , &cooktorranceCompTextureConstants ) );
     if ( !m_CookTorranceCompTextureConstantsBuffer )
         return false;
@@ -158,7 +143,7 @@ bool Scene::Init()
     m_ScreenQuadVerticesBuffer.reset( GPUBuffer::Create(
           sizeof( kScreenQuadVertices )
         , sizeof( XMFLOAT4 )
-        , GPUBufferCreationFlags_IsImmutable | GPUBufferCreationFlags_IsVertexBuffer
+        , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsVertexBuffer
         , &kScreenQuadVertices ) );
     if ( !m_ScreenQuadVerticesBuffer )
         return false;
@@ -168,7 +153,7 @@ bool Scene::Init()
         return false;
 
     m_ScreenQuadVertexShader.Attach( CreateVertexShader( shaderBlob ) );
-    hr = device->CreateInputLayout( kScreenQuadInputElementDesc, 1, shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), &m_ScreenQuadVertexInputLayout );
+    HRESULT hr = device->CreateInputLayout( kScreenQuadInputElementDesc, 1, shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), &m_ScreenQuadVertexInputLayout );
     shaderBlob->Release();
     if ( !m_ScreenQuadVertexShader || !m_ScreenQuadVertexInputLayout )
         return false;
@@ -182,11 +167,8 @@ bool Scene::Init()
     if ( !m_CopyPixelShader )
         return false;
 
-    ID3D11Texture2D *backBuffer = nullptr;
-    GetSwapChain()->GetBuffer( 0, __uuidof( ID3D11Texture2D ), ( void** ) ( &backBuffer ) );
-    hr = device->CreateRenderTargetView( backBuffer, nullptr, &m_DefaultRenderTargetView );
-    backBuffer->Release();
-    if ( FAILED( hr ) )
+    m_DefaultRenderTarget.reset( GPUTexture::CreateFromSwapChain() );
+    if ( !m_DefaultRenderTarget )
         return false;
 
     D3D11_SAMPLER_DESC samplerDesc;
@@ -210,10 +192,6 @@ bool Scene::Init()
     samplerDesc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
     samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
     hr = device->CreateSamplerState( &samplerDesc, &m_UVClampSamplerState );
-    if ( FAILED( hr ) )
-        return false;
-
-    hr = device->CreateRenderTargetView( m_FilmTexture.Get(), nullptr, &m_FilmTextureRenderTargetView );
     if ( FAILED( hr ) )
         return false;
 
@@ -398,7 +376,7 @@ void Scene::DoPostProcessing()
     deviceContext->IASetInputLayout( m_ScreenQuadVertexInputLayout.Get() );
     deviceContext->IASetPrimitiveTopology( D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
 
-    ID3D11RenderTargetView* rawDefaultRenderTargetView = m_DefaultRenderTargetView.Get();
+    ID3D11RenderTargetView* rawDefaultRenderTargetView = m_DefaultRenderTarget->GetRTV();
     deviceContext->OMSetRenderTargets( 1, &rawDefaultRenderTargetView, nullptr );
 
     deviceContext->RSSetViewports( 1, &m_DefaultViewport );
@@ -408,7 +386,7 @@ void Scene::DoPostProcessing()
 
     ID3D11SamplerState* rawCopySamplerState = m_CopySamplerState.Get();
     deviceContext->PSSetSamplers( 0, 1, &rawCopySamplerState );
-    ID3D11ShaderResourceView* rawFilmTextureSRV = m_FilmTextureSRV.Get();
+    ID3D11ShaderResourceView* rawFilmTextureSRV = m_FilmTexture->GetSRV();
     deviceContext->PSSetShaderResources( 0, 1, &rawFilmTextureSRV );
 
     deviceContext->Draw( 6, 0 );
@@ -494,7 +472,7 @@ void Scene::DispatchRayTracing()
 
     deviceContext->CSSetShader( m_RayTracingComputeShader.Get(), nullptr, 0 );
 
-    ID3D11UnorderedAccessView* rawFilmTextureUAV = m_FilmTextureUAV.Get();
+    ID3D11UnorderedAccessView* rawFilmTextureUAV = m_FilmTexture->GetUAV();
     deviceContext->CSSetUnorderedAccessViews( 0, 1, &rawFilmTextureUAV, nullptr );
 
     ID3D11SamplerState* rawUVClampSamplerState = m_UVClampSamplerState.Get();
@@ -506,11 +484,11 @@ void Scene::DispatchRayTracing()
         , m_TrianglesBuffer->GetSRV()
         , m_PointLightsBuffer->GetSRV()
         , m_SamplesBuffer->GetSRV()
-        , m_CookTorranceCompETextureSRV.Get()
-        , m_CookTorranceCompEAvgTextureSRV.Get()
-        , m_CookTorranceCompInvCDFTextureSRV.Get()
-        , m_CookTorranceCompPdfScaleTextureSRV.Get()
-        , m_CookTorranceCompEFresnelTextureSRV.Get()
+        , m_CookTorranceCompETexture->GetSRV()
+        , m_CookTorranceCompEAvgTexture->GetSRV()
+        , m_CookTorranceCompInvCDFTexture->GetSRV()
+        , m_CookTorranceCompPdfScaleTexture->GetSRV()
+        , m_CookTorranceCompEFresnelTexture->GetSRV()
         , m_BVHNodesBuffer->GetSRV()
     };
     deviceContext->CSSetShaderResources( 0, 10, rawSRVs );
@@ -533,7 +511,7 @@ void Scene::ClearFilmTexture()
 {
     ID3D11DeviceContext* deviceContext = GetDeviceContext();
     const static float kClearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-    deviceContext->ClearRenderTargetView( m_FilmTextureRenderTargetView.Get(), kClearColor );
+    deviceContext->ClearRenderTargetView( m_FilmTexture->GetRTV(), kClearColor );
 }
 
 

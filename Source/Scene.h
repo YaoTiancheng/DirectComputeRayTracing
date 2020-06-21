@@ -4,6 +4,7 @@
 #include "Camera.h"
 #include "BVHAccel.h"
 #include "GPUBuffer.h"
+#include "GPUTexture.h"
 
 struct PointLight
 {
@@ -84,23 +85,16 @@ private:
     ComPtr<ID3D11VertexShader>          m_ScreenQuadVertexShader;
     ComPtr<ID3D11PixelShader>           m_CopyPixelShader;
 
-    ComPtr<ID3D11ShaderResourceView>    m_FilmTextureSRV;
-    ComPtr<ID3D11UnorderedAccessView>   m_FilmTextureUAV;
-    ComPtr<ID3D11Texture2D>             m_FilmTexture;
-    ComPtr<ID3D11Texture2D>             m_CookTorranceCompETexture;
-    ComPtr<ID3D11ShaderResourceView>    m_CookTorranceCompETextureSRV;
-    ComPtr<ID3D11Texture2D>             m_CookTorranceCompEAvgTexture;
-    ComPtr<ID3D11ShaderResourceView>    m_CookTorranceCompEAvgTextureSRV;
-    ComPtr<ID3D11Texture2D>             m_CookTorranceCompInvCDFTexture;
-    ComPtr<ID3D11ShaderResourceView>    m_CookTorranceCompInvCDFTextureSRV;
-    ComPtr<ID3D11Texture2D>             m_CookTorranceCompPdfScaleTexture;
-    ComPtr<ID3D11ShaderResourceView>    m_CookTorranceCompPdfScaleTextureSRV;
-    ComPtr<ID3D11Texture2D>             m_CookTorranceCompEFresnelTexture;
-    ComPtr<ID3D11ShaderResourceView>    m_CookTorranceCompEFresnelTextureSRV;
+    using GPUTexturePtr = std::unique_ptr<GPUTexture>;
+    GPUTexturePtr                       m_FilmTexture;
+    GPUTexturePtr                       m_DefaultRenderTarget;
+    GPUTexturePtr                       m_CookTorranceCompETexture;
+    GPUTexturePtr                       m_CookTorranceCompEAvgTexture;
+    GPUTexturePtr                       m_CookTorranceCompInvCDFTexture;
+    GPUTexturePtr                       m_CookTorranceCompPdfScaleTexture;
+    GPUTexturePtr                       m_CookTorranceCompEFresnelTexture;
     
     ComPtr<ID3D11InputLayout>           m_ScreenQuadVertexInputLayout;
-    ComPtr<ID3D11RenderTargetView>      m_DefaultRenderTargetView;
-    ComPtr<ID3D11RenderTargetView>      m_FilmTextureRenderTargetView;
 
     using GPUBufferPtr = std::unique_ptr<GPUBuffer>;
     GPUBufferPtr                        m_RayTracingConstantsBuffer;

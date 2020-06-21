@@ -163,6 +163,8 @@
     <ClInclude Include="Source\DDSTextureLoader.h" />
     <ClInclude Include="Resources\Resource.h" />
     <ClInclude Include="Source\GPUBuffer.h" />
+    <ClInclude Include="Source\GPUResourceCreationFlag.h" />
+    <ClInclude Include="Source\GPUTexture.h" />
     <ClInclude Include="Source\Primitive.h" />
     <ClInclude Include="Source\Scene.h" />
     <ClInclude Include="Source\stdafx.h" />
@@ -176,6 +178,7 @@
     <ClCompile Include="Source\Application.cpp" />
     <ClCompile Include="Source\DDSTextureLoader.cpp" />
     <ClCompile Include="Source\GPUBuffer.cpp" />
+    <ClCompile Include="Source\GPUTexture.cpp" />
     <ClCompile Include="Source\Scene.cpp" />
     <ClCompile Include="Source\stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>

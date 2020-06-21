@@ -39,11 +39,11 @@ GPUBuffer::~GPUBuffer()
 
 GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, uint32_t flags, const void* initialData )
 {
-    bool isCBuffer          = ( flags & GPUBufferCreationFlags::GPUBufferCreationFlags_IsConstantBuffer ) != 0;
-    bool isImmutable        = ( flags & GPUBufferCreationFlags::GPUBufferCreationFlags_IsImmutable ) != 0;
-    bool CPUWriteable       = ( flags & GPUBufferCreationFlags::GPUBufferCreationFlags_CPUWriteable ) != 0;
-    bool isStructureBuffer  = ( flags & GPUBufferCreationFlags::GPUBufferCreationFlags_IsStructureBuffer ) != 0;
-    bool isVertexBuffer     = ( flags & GPUBufferCreationFlags::GPUBufferCreationFlags_IsVertexBuffer ) != 0;
+    bool isCBuffer          = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_IsConstantBuffer ) != 0;
+    bool isImmutable        = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_IsImmutable ) != 0;
+    bool CPUWriteable       = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_CPUWriteable ) != 0;
+    bool isStructureBuffer  = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_IsStructureBuffer ) != 0;
+    bool isVertexBuffer     = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_IsVertexBuffer ) != 0;
 
     D3D11_BUFFER_DESC bufferDesc;
     ZeroMemory( &bufferDesc, sizeof( bufferDesc ) );

@@ -162,6 +162,7 @@
     <ClInclude Include="Source\Application.h" />
     <ClInclude Include="Source\DDSTextureLoader.h" />
     <ClInclude Include="Resources\Resource.h" />
+    <ClInclude Include="Source\Shader.h" />
     <ClInclude Include="Source\GPUBuffer.h" />
     <ClInclude Include="Source\GPUResourceCreationFlag.h" />
     <ClInclude Include="Source\GPUTexture.h" />
@@ -177,6 +178,7 @@
     <ClCompile Include="Source\D3D11RenderSystem.cpp" />
     <ClCompile Include="Source\Application.cpp" />
     <ClCompile Include="Source\DDSTextureLoader.cpp" />
+    <ClCompile Include="Source\Shader.cpp" />
     <ClCompile Include="Source\GPUBuffer.cpp" />
     <ClCompile Include="Source\GPUTexture.cpp" />
     <ClCompile Include="Source\Scene.cpp" />

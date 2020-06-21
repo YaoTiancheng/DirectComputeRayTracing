@@ -5,6 +5,7 @@
 #include "BVHAccel.h"
 #include "GPUBuffer.h"
 #include "GPUTexture.h"
+#include "Shader.h"
 
 struct PointLight
 {
@@ -81,9 +82,12 @@ private:
     using ComPtr = Microsoft::WRL::ComPtr<T>;
     ComPtr<ID3D11SamplerState>          m_CopySamplerState;
     ComPtr<ID3D11SamplerState>          m_UVClampSamplerState;
-    ComPtr<ID3D11ComputeShader>         m_RayTracingComputeShader;
-    ComPtr<ID3D11VertexShader>          m_ScreenQuadVertexShader;
-    ComPtr<ID3D11PixelShader>           m_CopyPixelShader;
+    ComPtr<ID3D11InputLayout>           m_ScreenQuadVertexInputLayout;
+
+    using GfxShaderPtr = std::unique_ptr<GfxShader>;
+    GfxShaderPtr                        m_PostFXShader;
+    using ComputeShaderPtr = std::unique_ptr<ComputeShader>;
+    ComputeShaderPtr                    m_RayTracingShader;
 
     using GPUTexturePtr = std::unique_ptr<GPUTexture>;
     GPUTexturePtr                       m_FilmTexture;
@@ -93,8 +97,6 @@ private:
     GPUTexturePtr                       m_CookTorranceCompInvCDFTexture;
     GPUTexturePtr                       m_CookTorranceCompPdfScaleTexture;
     GPUTexturePtr                       m_CookTorranceCompEFresnelTexture;
-    
-    ComPtr<ID3D11InputLayout>           m_ScreenQuadVertexInputLayout;
 
     using GPUBufferPtr = std::unique_ptr<GPUBuffer>;
     GPUBufferPtr                        m_RayTracingConstantsBuffer;

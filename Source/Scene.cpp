@@ -73,13 +73,8 @@ bool Scene::Init()
     if ( !m_CookTorranceCompEFresnelTexture )
         return false;
 
-    ID3DBlob* shaderBlob = CompileFromFile( L"Shaders\\RayTracing.hlsl", "main", "cs_5_0" );
-    if ( !shaderBlob )
-        return false;
-
-    m_RayTracingComputeShader.Attach( CreateComputeShader( shaderBlob ) );
-    shaderBlob->Release();
-    if ( !m_RayTracingComputeShader )
+    m_RayTracingShader.reset( ComputeShader::CreateFromFile( L"Shaders\\RayTracing.hlsl" ) );
+    if ( !m_RayTracingShader )
         return false;
 
     m_RayTracingConstantsBuffer.reset( GPUBuffer::Create( 
@@ -148,23 +143,12 @@ bool Scene::Init()
     if ( !m_ScreenQuadVerticesBuffer )
         return false;
 
-    shaderBlob = CompileFromFile( L"Shaders\\PostProcessings.hlsl", "ScreenQuadMainVS", "vs_5_0" );
-    if ( !shaderBlob )
+    m_PostFXShader.reset( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl" ) );
+    if ( !m_PostFXShader )
         return false;
 
-    m_ScreenQuadVertexShader.Attach( CreateVertexShader( shaderBlob ) );
-    HRESULT hr = device->CreateInputLayout( kScreenQuadInputElementDesc, 1, shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), &m_ScreenQuadVertexInputLayout );
-    shaderBlob->Release();
-    if ( !m_ScreenQuadVertexShader || !m_ScreenQuadVertexInputLayout )
-        return false;
-
-    shaderBlob = CompileFromFile( L"Shaders\\PostProcessings.hlsl", "CopyMainPS", "ps_5_0" );
-    if ( !shaderBlob )
-        return false;
-
-    m_CopyPixelShader.Attach( CreatePixelShader( shaderBlob ) );
-    shaderBlob->Release();
-    if ( !m_CopyPixelShader )
+    m_ScreenQuadVertexInputLayout.Attach( m_PostFXShader->CreateInputLayout( kScreenQuadInputElementDesc, 1 ) );
+    if ( !m_ScreenQuadVertexInputLayout )
         return false;
 
     m_DefaultRenderTarget.reset( GPUTexture::CreateFromSwapChain() );
@@ -180,7 +164,7 @@ bool Scene::Init()
     samplerDesc.MaxAnisotropy = 1;
     samplerDesc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
     samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
-    hr = device->CreateSamplerState( &samplerDesc, &m_CopySamplerState );
+    HRESULT hr = device->CreateSamplerState( &samplerDesc, &m_CopySamplerState );
     if ( FAILED( hr ) )
         return false;
 
@@ -381,8 +365,8 @@ void Scene::DoPostProcessing()
 
     deviceContext->RSSetViewports( 1, &m_DefaultViewport );
 
-    deviceContext->VSSetShader( m_ScreenQuadVertexShader.Get(), nullptr, 0 );
-    deviceContext->PSSetShader( m_CopyPixelShader.Get(), nullptr, 0 );
+    deviceContext->VSSetShader( m_PostFXShader->GetVertexShader(), nullptr, 0 );
+    deviceContext->PSSetShader( m_PostFXShader->GetPixelShader(), nullptr, 0 );
 
     ID3D11SamplerState* rawCopySamplerState = m_CopySamplerState.Get();
     deviceContext->PSSetSamplers( 0, 1, &rawCopySamplerState );
@@ -470,7 +454,7 @@ void Scene::DispatchRayTracing()
 {
     ID3D11DeviceContext* deviceContext = GetDeviceContext();
 
-    deviceContext->CSSetShader( m_RayTracingComputeShader.Get(), nullptr, 0 );
+    deviceContext->CSSetShader( m_RayTracingShader->GetNative(), nullptr, 0 );
 
     ID3D11UnorderedAccessView* rawFilmTextureUAV = m_FilmTexture->GetUAV();
     deviceContext->CSSetUnorderedAccessViews( 0, 1, &rawFilmTextureUAV, nullptr );

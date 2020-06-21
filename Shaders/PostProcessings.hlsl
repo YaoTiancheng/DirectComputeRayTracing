@@ -9,7 +9,7 @@ Texture2D g_FilmTexture;
 
 SamplerState CopySampler;
 
-VertexOut ScreenQuadMainVS( float4 pos : POSITION )
+VertexOut MainVS( float4 pos : POSITION )
 {
     VertexOut o = ( VertexOut ) 0.0f;
     o.position = pos;
@@ -17,7 +17,7 @@ VertexOut ScreenQuadMainVS( float4 pos : POSITION )
     return o;
 }
 
-float4 CopyMainPS( VertexOut i ) : SV_TARGET
+float4 MainPS( VertexOut i ) : SV_TARGET
 {
     float4 c = g_FilmTexture.Sample( CopySampler, i.texcoord );
     c.xyz /= c.w;

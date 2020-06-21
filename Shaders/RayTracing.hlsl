@@ -5,20 +5,18 @@ struct PointLight
     float3              color;
 };
 
-struct RayTracingConstants
+cbuffer RayTracingConstants : register( b0 )
 {
-    uint                maxBounceCount;
-    uint                primitiveCount;
-    uint                pointLightCount;
-    uint                samplesCount;
-    uint2               resolution;
-    float2              filmSize;
-    float               filmDistance;
-    row_major float4x4  cameraTransform;
-    float4              background;
-};
-
-StructuredBuffer<RayTracingConstants>   g_Constants     : register( t3 );
+    uint                g_MaxBounceCount;
+    uint                g_PrimitiveCount;
+    uint                g_PointLightCount;
+    uint                g_SamplesCount;
+    uint2               g_Resolution;
+    float2              g_FilmSize;
+    float               g_FilmDistance;
+    row_major float4x4  g_CameraTransform;
+    float4              g_Background;
+}
 
 #include "Samples.inc.hlsl"
 #include "BSDFs.inc.hlsl"
@@ -93,14 +91,14 @@ float3 EstimateDirect( PointLight pointLight, Intersection intersection, float e
 
 float3 UniformSampleOneLight( float sample, Intersection intersection, float3 wo, float epsilon, uint dispatchThreadIndex )
 {
-    if ( g_Constants[ 0 ].pointLightCount == 0 )
+    if ( g_PointLightCount == 0 )
     {
         return 0.0f;
     }
     else
     {
-        uint lightIndex = floor( GetNextSample() * g_Constants[ 0 ].pointLightCount );
-        return EstimateDirect( g_PointLights[ lightIndex ], intersection, epsilon, wo, dispatchThreadIndex ) * g_Constants[ 0 ].pointLightCount;
+        uint lightIndex = floor( GetNextSample() * g_PointLightCount );
+        return EstimateDirect( g_PointLights[ lightIndex ], intersection, epsilon, wo, dispatchThreadIndex ) * g_PointLightCount;
     }
 }
 
@@ -110,7 +108,7 @@ float3 UniformSampleOneLight( float sample, Intersection intersection, float3 wo
 [numthreads( GROUP_SIZE_X, GROUP_SIZE_Y, 1 )]
 void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 {
-    if ( any( pixelPos > g_Constants[ 0 ].resolution ) )
+    if ( any( pixelPos > g_Resolution ) )
         return;
 
     float3 pathThroughput = 1.0f;
@@ -119,8 +117,8 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     Intersection intersection;
 
     float2 pixelSample = GetNextSample2();
-    float2 filmSample = ( pixelSample + pixelPos ) / g_Constants[ 0 ].resolution;
-    GenerateRay( filmSample, g_Constants[ 0 ].filmSize, g_Constants[ 0 ].filmDistance, g_Constants[ 0 ].cameraTransform, intersection.position, wo );
+    float2 filmSample = ( pixelSample + pixelPos ) / g_Resolution;
+    GenerateRay( filmSample, g_FilmSize, g_FilmDistance, g_CameraTransform, intersection.position, wo );
 
     if ( IntersectScene( intersection.position, wo, 0.0f, threadId, intersection ) )
     {
@@ -132,7 +130,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
             float lightSelectionSample = GetNextSample();
             l += pathThroughput * ( UniformSampleOneLight( lightSelectionSample, intersection, wo, intersection.rayEpsilon, threadId ) + intersection.emission );
 
-            if ( iBounce == g_Constants[ 0 ].maxBounceCount )
+            if ( iBounce == g_MaxBounceCount )
                 break;
 
             float3 brdf;
@@ -147,7 +145,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 
             if ( !IntersectScene( intersection.position, wi, intersection.rayEpsilon, threadId, intersection ) )
             {
-                l += pathThroughput * g_Constants[ 0 ].background;
+                l += pathThroughput * g_Background;
                 break;
             }
             else
@@ -160,7 +158,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     }
     else
     {
-        l = g_Constants[ 0 ].background;
+        l = g_Background;
     }
 
     AddSampleToFilm( l, pixelSample, pixelPos );

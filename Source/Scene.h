@@ -3,13 +3,13 @@
 #include "Primitive.h"
 #include "Camera.h"
 #include "BVHAccel.h"
+#include "GPUBuffer.h"
 
 struct PointLight
 {
     DirectX::XMFLOAT3   position;
     DirectX::XMFLOAT3   color;
 };
-
 
 struct RayTracingConstants
 {
@@ -21,6 +21,7 @@ struct RayTracingConstants
     uint32_t            resolutionY;
     DirectX::XMFLOAT2   filmSize;
     float               filmDistance;
+    uint32_t            padding[ 3 ];
     DirectX::XMFLOAT4X4 cameraTransform;
     DirectX::XMFLOAT4   background;
 };
@@ -82,12 +83,7 @@ private:
     ComPtr<ID3D11ComputeShader>         m_RayTracingComputeShader;
     ComPtr<ID3D11VertexShader>          m_ScreenQuadVertexShader;
     ComPtr<ID3D11PixelShader>           m_CopyPixelShader;
-    ComPtr<ID3D11ShaderResourceView>    m_RayTracingConstantsSRV;
-    ComPtr<ID3D11ShaderResourceView>    m_SamplesSRV;
-    ComPtr<ID3D11ShaderResourceView>    m_VerticesSRV;
-    ComPtr<ID3D11ShaderResourceView>    m_TrianglesSRV;
-    ComPtr<ID3D11ShaderResourceView>    m_BVHNodesSRV;
-    ComPtr<ID3D11ShaderResourceView>    m_PointLightsSRV;
+
     ComPtr<ID3D11ShaderResourceView>    m_FilmTextureSRV;
     ComPtr<ID3D11UnorderedAccessView>   m_FilmTextureUAV;
     ComPtr<ID3D11Texture2D>             m_FilmTexture;
@@ -101,15 +97,18 @@ private:
     ComPtr<ID3D11ShaderResourceView>    m_CookTorranceCompPdfScaleTextureSRV;
     ComPtr<ID3D11Texture2D>             m_CookTorranceCompEFresnelTexture;
     ComPtr<ID3D11ShaderResourceView>    m_CookTorranceCompEFresnelTextureSRV;
-    ComPtr<ID3D11Buffer>                m_RayTracingConstantsBuffer;
-    ComPtr<ID3D11Buffer>                m_CookTorranceCompTextureConstantsBuffer;
-    ComPtr<ID3D11Buffer>                m_SamplesBuffer;
-    ComPtr<ID3D11Buffer>                m_VerticesBuffer;
-    ComPtr<ID3D11Buffer>                m_TrianglesBuffer;
-    ComPtr<ID3D11Buffer>                m_BVHNodesBuffer;
-    ComPtr<ID3D11Buffer>                m_PointLightBuffer;
-    ComPtr<ID3D11Buffer>                m_ScreenQuadVertexBuffer;
+    
     ComPtr<ID3D11InputLayout>           m_ScreenQuadVertexInputLayout;
     ComPtr<ID3D11RenderTargetView>      m_DefaultRenderTargetView;
     ComPtr<ID3D11RenderTargetView>      m_FilmTextureRenderTargetView;
+
+    using GPUBufferPtr = std::unique_ptr<GPUBuffer>;
+    GPUBufferPtr                        m_RayTracingConstantsBuffer;
+    GPUBufferPtr                        m_CookTorranceCompTextureConstantsBuffer;
+    GPUBufferPtr                        m_SamplesBuffer;
+    GPUBufferPtr                        m_VerticesBuffer;
+    GPUBufferPtr                        m_TrianglesBuffer;
+    GPUBufferPtr                        m_BVHNodesBuffer;
+    GPUBufferPtr                        m_PointLightsBuffer;
+    GPUBufferPtr                        m_ScreenQuadVerticesBuffer;
 };

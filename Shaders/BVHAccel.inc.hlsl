@@ -42,7 +42,7 @@ void BVHTraversalStackReset( uint dispatchThreadIndex )
 }
 
 
-StructuredBuffer<BVHNode> g_BVHNodes : register( t10 );
+StructuredBuffer<BVHNode> g_BVHNodes : register( t9 );
 
 bool BVHIntersect( float3 origin
     , float3 direction

@@ -97,54 +97,47 @@ bool Scene::Init()
     if ( !m_RayTracingComputeShader )
         return false;
 
-    D3D11_BUFFER_DESC bufferDesc;
-    ZeroMemory( &bufferDesc, sizeof( D3D11_BUFFER_DESC ) );
-    bufferDesc.ByteWidth = sizeof( RayTracingConstants );
-    bufferDesc.Usage = D3D11_USAGE_DYNAMIC;
-    bufferDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-    bufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-    bufferDesc.StructureByteStride = sizeof( RayTracingConstants );
-    bufferDesc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-    hr = device->CreateBuffer( &bufferDesc, nullptr, &m_RayTracingConstantsBuffer );
-    if ( FAILED( hr ) )
+    m_RayTracingConstantsBuffer.reset( GPUBuffer::Create( 
+          sizeof( RayTracingConstants )
+        , 0
+        , GPUBufferCreationFlags_CPUWriteable | GPUBufferCreationFlags_IsConstantBuffer ) );
+    if ( !m_RayTracingConstantsBuffer )
         return false;
 
-    bufferDesc.ByteWidth = kMaxSamplesCount * sizeof( float );
-    bufferDesc.StructureByteStride = sizeof( float );
-    hr = device->CreateBuffer( &bufferDesc, nullptr, &m_SamplesBuffer );
-    if ( FAILED( hr ) )
+    m_SamplesBuffer.reset( GPUBuffer::Create( 
+          sizeof( float ) * kMaxSamplesCount
+        , sizeof( float )
+        , GPUBufferCreationFlags_CPUWriteable | GPUBufferCreationFlags_IsStructureBuffer ) );
+    if ( !m_SamplesBuffer )
         return false;
 
-    bufferDesc.ByteWidth = sizeof( m_Vertices );
-    bufferDesc.StructureByteStride = sizeof( Vertex );
-    hr = device->CreateBuffer( &bufferDesc, nullptr, &m_VerticesBuffer );
-    if ( FAILED( hr ) )
+    m_VerticesBuffer.reset( GPUBuffer::Create( 
+          sizeof( m_Vertices )
+        , sizeof( Vertex )
+        , GPUBufferCreationFlags_CPUWriteable | GPUBufferCreationFlags_IsStructureBuffer ) );
+    if ( !m_VerticesBuffer )
         return false;
 
-    bufferDesc.ByteWidth = sizeof( m_Triangles );
-    bufferDesc.StructureByteStride = sizeof( uint32_t );
-    hr = device->CreateBuffer( &bufferDesc, nullptr, &m_TrianglesBuffer );
-    if ( FAILED( hr ) )
+    m_TrianglesBuffer.reset( GPUBuffer::Create( 
+          sizeof( m_Triangles )
+        , sizeof( uint32_t )
+        , GPUBufferCreationFlags_CPUWriteable | GPUBufferCreationFlags_IsStructureBuffer ) );
+    if ( !m_TrianglesBuffer )
         return false;
 
-    bufferDesc.ByteWidth = sizeof( m_BVHNodes );
-    bufferDesc.StructureByteStride = sizeof( PackedBVHNode );
-    hr = device->CreateBuffer( &bufferDesc, nullptr, &m_BVHNodesBuffer );
-    if ( FAILED( hr ) )
+    m_BVHNodesBuffer.reset( GPUBuffer::Create( 
+          sizeof( m_BVHNodes )
+        , sizeof( PackedBVHNode )
+        , GPUBufferCreationFlags_CPUWriteable | GPUBufferCreationFlags_IsStructureBuffer ) );
+    if ( !m_BVHNodesBuffer )
         return false;
 
-    bufferDesc.ByteWidth = sizeof( m_PointLights );
-    bufferDesc.StructureByteStride = sizeof( PointLight );
-    hr = device->CreateBuffer( &bufferDesc, nullptr, &m_PointLightBuffer );
-    if ( FAILED( hr ) )
+    m_PointLightsBuffer.reset( GPUBuffer::Create( 
+          sizeof( m_PointLights )
+        , sizeof( PointLight )
+        , GPUBufferCreationFlags_CPUWriteable | GPUBufferCreationFlags_IsStructureBuffer ) );
+    if ( !m_PointLightsBuffer )
         return false;
-
-    bufferDesc.ByteWidth = sizeof( CookTorranceCompTextureConstants );
-    bufferDesc.Usage = D3D11_USAGE_IMMUTABLE;
-    bufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-    bufferDesc.CPUAccessFlags = 0;
-    bufferDesc.MiscFlags = 0;
-    bufferDesc.StructureByteStride = 0;
 
     // Fill in the subresource data.
     CookTorranceCompTextureConstants cooktorranceCompTextureConstants;
@@ -154,46 +147,20 @@ bool Scene::Init()
     cooktorranceCompTextureConstants.compPdfScaleTextureSize    = XMFLOAT4( 32.0f, 1.0f, 1.0f / 32.0f, 1.0f );
     cooktorranceCompTextureConstants.compEFresnelTextureSize    = XMFLOAT4( 32.0f, 16.0f, 16.0f, 0.0f );
     cooktorranceCompTextureConstants.compEFresnelTextureSizeRcp = XMFLOAT4( 1.0f / 32.0f, 1.0f / 16.0f, 1.0f / 16.0f, 0.0f );
-    D3D11_SUBRESOURCE_DATA subresourceData;
-    subresourceData.pSysMem = &cooktorranceCompTextureConstants;
-    subresourceData.SysMemPitch = 0;
-    subresourceData.SysMemSlicePitch = 0;
-    hr = device->CreateBuffer( &bufferDesc, &subresourceData, &m_CookTorranceCompTextureConstantsBuffer );
-    if ( FAILED( hr ) )
+    m_CookTorranceCompTextureConstantsBuffer.reset( GPUBuffer::Create( 
+          sizeof( CookTorranceCompTextureConstants )
+        , 0
+        , GPUBufferCreationFlags_IsImmutable | GPUBufferCreationFlags_IsConstantBuffer
+        , &cooktorranceCompTextureConstants ) );
+    if ( !m_CookTorranceCompTextureConstantsBuffer )
         return false;
 
-    D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc;
-    SRVDesc.Format = DXGI_FORMAT_UNKNOWN;
-    SRVDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
-    SRVDesc.Buffer.ElementOffset = 0;
-    SRVDesc.Buffer.NumElements = 1;
-    hr = device->CreateShaderResourceView( m_RayTracingConstantsBuffer.Get(), &SRVDesc, &m_RayTracingConstantsSRV );
-    if ( FAILED( hr ) )
-        return false;
-
-    SRVDesc.Buffer.NumElements = kMaxSamplesCount;
-    hr = device->CreateShaderResourceView( m_SamplesBuffer.Get(), &SRVDesc, &m_SamplesSRV );
-    if ( FAILED( hr ) )
-        return false;
-
-    SRVDesc.Buffer.NumElements = kMaxVertexCount;
-    hr = device->CreateShaderResourceView( m_VerticesBuffer.Get(), &SRVDesc, &m_VerticesSRV );
-    if ( FAILED( hr ) )
-        return false;
-
-    SRVDesc.Buffer.NumElements = kMaxVertexIndexCount;
-    hr = device->CreateShaderResourceView( m_TrianglesBuffer.Get(), &SRVDesc, &m_TrianglesSRV );
-    if ( FAILED( hr ) )
-        return false;
-
-    SRVDesc.Buffer.NumElements = kMaxBVHNodeCount;
-    hr = device->CreateShaderResourceView( m_BVHNodesBuffer.Get(), &SRVDesc, &m_BVHNodesSRV );
-    if ( FAILED( hr ) )
-        return false;
-
-    SRVDesc.Buffer.NumElements = kMaxPointLightsCount;
-    hr = device->CreateShaderResourceView( m_PointLightBuffer.Get(), &SRVDesc, &m_PointLightsSRV );
-    if ( FAILED( hr ) )
+    m_ScreenQuadVerticesBuffer.reset( GPUBuffer::Create(
+          sizeof( kScreenQuadVertices )
+        , sizeof( XMFLOAT4 )
+        , GPUBufferCreationFlags_IsImmutable | GPUBufferCreationFlags_IsVertexBuffer
+        , &kScreenQuadVertices ) );
+    if ( !m_ScreenQuadVerticesBuffer )
         return false;
 
     shaderBlob = CompileFromFile( L"Shaders\\PostProcessings.hlsl", "ScreenQuadMainVS", "vs_5_0" );
@@ -213,19 +180,6 @@ bool Scene::Init()
     m_CopyPixelShader.Attach( CreatePixelShader( shaderBlob ) );
     shaderBlob->Release();
     if ( !m_CopyPixelShader )
-        return false;
-
-    bufferDesc.ByteWidth = sizeof( kScreenQuadVertices );
-    bufferDesc.Usage = D3D11_USAGE_IMMUTABLE;
-    bufferDesc.CPUAccessFlags = 0;
-    bufferDesc.StructureByteStride = sizeof( XMFLOAT4 );
-    bufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-    bufferDesc.MiscFlags = 0;
-    subresourceData.SysMemPitch = 0;
-    subresourceData.SysMemSlicePitch = 0;
-    subresourceData.pSysMem = kScreenQuadVertices;
-    hr = device->CreateBuffer( &bufferDesc, &subresourceData, &m_ScreenQuadVertexBuffer );
-    if ( FAILED( hr ) )
         return false;
 
     ID3D11Texture2D *backBuffer = nullptr;
@@ -439,7 +393,7 @@ void Scene::DoPostProcessing()
 
     UINT vertexStride = sizeof( XMFLOAT4 );
     UINT vertexOffset = 0;
-    ID3D11Buffer* rawScreenQuadVertexBuffer = m_ScreenQuadVertexBuffer.Get();
+    ID3D11Buffer* rawScreenQuadVertexBuffer = m_ScreenQuadVerticesBuffer->GetBuffer();
     deviceContext->IASetVertexBuffers( 0, 1, &rawScreenQuadVertexBuffer, &vertexStride, &vertexOffset );
     deviceContext->IASetInputLayout( m_ScreenQuadVertexInputLayout.Get() );
     deviceContext->IASetPrimitiveTopology( D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
@@ -467,81 +421,64 @@ void Scene::DoPostProcessing()
 
 bool Scene::UpdateResources()
 {
-    ID3D11DeviceContext* deviceContext = GetDeviceContext();
-
-    D3D11_MAPPED_SUBRESOURCE mappedSubresource;
-
-    ZeroMemory( &mappedSubresource, sizeof( D3D11_MAPPED_SUBRESOURCE ) );
-    HRESULT hr = deviceContext->Map( m_RayTracingConstantsBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource );
-    if ( SUCCEEDED( hr ) )
+    if ( void* address = m_RayTracingConstantsBuffer->Map() )
     {
-        memcpy( mappedSubresource.pData, &m_RayTracingConstants, sizeof( m_RayTracingConstants ) );
-        deviceContext->Unmap( m_RayTracingConstantsBuffer.Get(), 0 );
+        memcpy( address, &m_RayTracingConstants, sizeof( m_RayTracingConstants ) );
+        m_RayTracingConstantsBuffer->Unmap();
     }
     else
     {
         return false;
     }
 
-    ZeroMemory( &mappedSubresource, sizeof( D3D11_MAPPED_SUBRESOURCE ) );
-    hr = deviceContext->Map( m_VerticesBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource );
-    if ( SUCCEEDED( hr ) )
+    if ( void* address = m_VerticesBuffer->Map() )
     {
-        memcpy( mappedSubresource.pData, m_Vertices, sizeof( Vertex ) * kMaxVertexCount );
-        deviceContext->Unmap( m_VerticesBuffer.Get(), 0 );
+        memcpy( address, m_Vertices, sizeof( m_Vertices ) );
+        m_VerticesBuffer->Unmap();
     }
     else
     {
         return false;
     }
 
-    ZeroMemory( &mappedSubresource, sizeof( D3D11_MAPPED_SUBRESOURCE ) );
-    hr = deviceContext->Map( m_TrianglesBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource );
-    if ( SUCCEEDED( hr ) )
+    if ( void* address = m_TrianglesBuffer->Map() )
     {
-        memcpy( mappedSubresource.pData, m_Triangles, sizeof( uint32_t ) * kMaxVertexIndexCount );
-        deviceContext->Unmap( m_TrianglesBuffer.Get(), 0 );
+        memcpy( address, m_Triangles, sizeof( m_Triangles ) );
+        m_TrianglesBuffer->Unmap();
     }
     else
     {
         return false;
     }
 
-    ZeroMemory( &mappedSubresource, sizeof( D3D11_MAPPED_SUBRESOURCE ) );
-    hr = deviceContext->Map( m_BVHNodesBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource );
-    if ( SUCCEEDED( hr ) )
+    if ( void* address = m_BVHNodesBuffer->Map() )
     {
-        memcpy( mappedSubresource.pData, m_BVHNodes, sizeof( PackedBVHNode ) * kMaxBVHNodeCount );
-        deviceContext->Unmap( m_BVHNodesBuffer.Get(), 0 );
+        memcpy( address, m_BVHNodes, sizeof( m_BVHNodes ) );
+        m_BVHNodesBuffer->Unmap();
     }
     else
     {
         return false;
     }
 
-    ZeroMemory( &mappedSubresource, sizeof( D3D11_MAPPED_SUBRESOURCE ) );
-    hr = deviceContext->Map( m_PointLightBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource );
-    if ( SUCCEEDED( hr ) )
+    if ( void* address = m_PointLightsBuffer->Map() )
     {
-        memcpy( mappedSubresource.pData, m_PointLights, sizeof( PointLight ) * m_RayTracingConstants.pointLightCount );
-        deviceContext->Unmap( m_PointLightBuffer.Get(), 0 );
+        memcpy( address, m_PointLights, sizeof( m_PointLights ) );
+        m_PointLightsBuffer->Unmap();
     }
     else
     {
         return false;
     }
 
-    ZeroMemory( &mappedSubresource, sizeof( D3D11_MAPPED_SUBRESOURCE ) );
-    hr = deviceContext->Map( m_SamplesBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource );
-    if ( SUCCEEDED( hr ) )
+    if ( void* address = m_SamplesBuffer->Map() )
     {
-        float* samples = reinterpret_cast< float* >( mappedSubresource.pData );
+        float* samples = reinterpret_cast< float* >( address );
         for ( int i = 0; i < kMaxSamplesCount; ++i )
         {
             samples[ i ] = m_UniformRealDistribution( m_MersenneURBG );
         }
-
-        deviceContext->Unmap( m_SamplesBuffer.Get(), 0 );
+        m_SamplesBuffer->Unmap();
     }
     else
     {
@@ -565,22 +502,21 @@ void Scene::DispatchRayTracing()
 
     ID3D11ShaderResourceView* rawSRVs[] =
     {
-          m_VerticesSRV.Get()
-        , m_TrianglesSRV.Get()
-        , m_PointLightsSRV.Get()
-        , m_RayTracingConstantsSRV.Get()
-        , m_SamplesSRV.Get()
+          m_VerticesBuffer->GetSRV()
+        , m_TrianglesBuffer->GetSRV()
+        , m_PointLightsBuffer->GetSRV()
+        , m_SamplesBuffer->GetSRV()
         , m_CookTorranceCompETextureSRV.Get()
         , m_CookTorranceCompEAvgTextureSRV.Get()
         , m_CookTorranceCompInvCDFTextureSRV.Get()
         , m_CookTorranceCompPdfScaleTextureSRV.Get()
         , m_CookTorranceCompEFresnelTextureSRV.Get()
-        , m_BVHNodesSRV.Get()
+        , m_BVHNodesBuffer->GetSRV()
     };
-    deviceContext->CSSetShaderResources( 0, 11, rawSRVs );
+    deviceContext->CSSetShaderResources( 0, 10, rawSRVs );
 
-    ID3D11Buffer* rawConstantBuffers[] = { m_CookTorranceCompTextureConstantsBuffer.Get() };
-    deviceContext->CSSetConstantBuffers( 0, 1, rawConstantBuffers );
+    ID3D11Buffer* rawConstantBuffers[] = { m_RayTracingConstantsBuffer->GetBuffer(), m_CookTorranceCompTextureConstantsBuffer->GetBuffer() };
+    deviceContext->CSSetConstantBuffers( 0, 2, rawConstantBuffers );
 
     UINT threadGroupCountX = ( UINT ) ceil( m_RayTracingConstants.resolutionX / 16.0f );
     UINT threadGroupCountY = ( UINT ) ceil( m_RayTracingConstants.resolutionY / 16.0f );

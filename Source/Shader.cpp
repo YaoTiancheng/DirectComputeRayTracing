@@ -54,6 +54,8 @@ GfxShader* GfxShader::CreateFromFile( const wchar_t* filename )
         return nullptr;
     }
 
+    pixelShaderBlob->Release();
+
     GfxShader* gfxShader = new GfxShader();
     gfxShader->m_VertexShader       = vertexShader;
     gfxShader->m_PixelShader        = pixelShader;

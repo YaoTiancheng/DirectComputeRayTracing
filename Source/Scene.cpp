@@ -91,34 +91,6 @@ bool Scene::Init()
     if ( !m_SamplesBuffer )
         return false;
 
-    m_VerticesBuffer.reset( GPUBuffer::Create( 
-          sizeof( m_Vertices )
-        , sizeof( Vertex )
-        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer ) );
-    if ( !m_VerticesBuffer )
-        return false;
-
-    m_TrianglesBuffer.reset( GPUBuffer::Create( 
-          sizeof( m_Triangles )
-        , sizeof( uint32_t )
-        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer ) );
-    if ( !m_TrianglesBuffer )
-        return false;
-
-    m_BVHNodesBuffer.reset( GPUBuffer::Create( 
-          sizeof( m_BVHNodes )
-        , sizeof( PackedBVHNode )
-        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer ) );
-    if ( !m_BVHNodesBuffer )
-        return false;
-
-    m_PointLightsBuffer.reset( GPUBuffer::Create( 
-          sizeof( m_PointLights )
-        , sizeof( PointLight )
-        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer ) );
-    if ( !m_PointLightsBuffer )
-        return false;
-
     // Fill in the subresource data.
     CookTorranceCompTextureConstants cooktorranceCompTextureConstants;
     cooktorranceCompTextureConstants.compETextureSize           = XMFLOAT4( 32.0f, 32.0f, 1.0f / 32.0f, 1.0f / 32.0f );
@@ -187,128 +159,165 @@ bool Scene::Init()
     return true;
 }
 
-void Scene::ResetScene()
+bool Scene::ResetScene()
 {
-    m_Vertices[ 0 ].position = XMFLOAT3( -1.0f, 0.0f, 1.0f );
-    m_Vertices[ 0 ].normal = XMFLOAT3( 0.0f, 1.0f, 0.0f );
-    m_Vertices[ 0 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 1 ].position = XMFLOAT3( 1.0f, 0.0f, 1.0f );
-    m_Vertices[ 1 ].normal = XMFLOAT3( 0.0f, 1.0f, 0.0f );
-    m_Vertices[ 1 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 2 ].position = XMFLOAT3( 1.0f, 0.0f, -1.0f );
-    m_Vertices[ 2 ].normal = XMFLOAT3( 0.0f, 1.0f, 0.0f );
-    m_Vertices[ 2 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 3 ].position = XMFLOAT3( -1.0f, 0.0f, -1.0f );
-    m_Vertices[ 3 ].normal = XMFLOAT3( 0.0f, 1.0f, 0.0f );
-    m_Vertices[ 3 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    uint32_t vertexCount = 20;
+    std::vector<Vertex> vertices( vertexCount );
+    vertices[ 0 ].position = XMFLOAT3( -1.0f, 0.0f, 1.0f );
+    vertices[ 0 ].normal = XMFLOAT3( 0.0f, 1.0f, 0.0f );
+    vertices[ 0 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    vertices[ 1 ].position = XMFLOAT3( 1.0f, 0.0f, 1.0f );
+    vertices[ 1 ].normal = XMFLOAT3( 0.0f, 1.0f, 0.0f );
+    vertices[ 1 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    vertices[ 2 ].position = XMFLOAT3( 1.0f, 0.0f, -1.0f );
+    vertices[ 2 ].normal = XMFLOAT3( 0.0f, 1.0f, 0.0f );
+    vertices[ 2 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    vertices[ 3 ].position = XMFLOAT3( -1.0f, 0.0f, -1.0f );
+    vertices[ 3 ].normal = XMFLOAT3( 0.0f, 1.0f, 0.0f );
+    vertices[ 3 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
 
-    m_Vertices[ 4 ].position = XMFLOAT3( -1.0f, 0.0f, 1.0f );
-    m_Vertices[ 4 ].normal = XMFLOAT3( 0.0f, 0.0f, -1.0f );
-    m_Vertices[ 4 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 5 ].position = XMFLOAT3( 1.0f, 0.0f, 1.0f );
-    m_Vertices[ 5 ].normal = XMFLOAT3( 0.0f, 0.0f, -1.0f );
-    m_Vertices[ 5 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 6 ].position = XMFLOAT3( -1.0f, 2.0f, 1.0f );
-    m_Vertices[ 6 ].normal = XMFLOAT3( 0.0f, 0.0f, -1.0f );
-    m_Vertices[ 6 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 7 ].position = XMFLOAT3( 1.0f, 2.0f, 1.0f );
-    m_Vertices[ 7 ].normal = XMFLOAT3( 0.0f, 0.0f, -1.0f );
-    m_Vertices[ 7 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    vertices[ 4 ].position = XMFLOAT3( -1.0f, 0.0f, 1.0f );
+    vertices[ 4 ].normal = XMFLOAT3( 0.0f, 0.0f, -1.0f );
+    vertices[ 4 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    vertices[ 5 ].position = XMFLOAT3( 1.0f, 0.0f, 1.0f );
+    vertices[ 5 ].normal = XMFLOAT3( 0.0f, 0.0f, -1.0f );
+    vertices[ 5 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    vertices[ 6 ].position = XMFLOAT3( -1.0f, 2.0f, 1.0f );
+    vertices[ 6 ].normal = XMFLOAT3( 0.0f, 0.0f, -1.0f );
+    vertices[ 6 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    vertices[ 7 ].position = XMFLOAT3( 1.0f, 2.0f, 1.0f );
+    vertices[ 7 ].normal = XMFLOAT3( 0.0f, 0.0f, -1.0f );
+    vertices[ 7 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
 
-    m_Vertices[ 8 ].position = XMFLOAT3( -1.0f, 2.0f, 1.0f );
-    m_Vertices[ 8 ].normal = XMFLOAT3( 0.0f, -1.0f, 0.0f );
-    m_Vertices[ 8 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 9 ].position = XMFLOAT3( 1.0f, 2.0f, 1.0f );
-    m_Vertices[ 9 ].normal = XMFLOAT3( 0.0f, -1.0f, 0.0f );
-    m_Vertices[ 9 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 10 ].position = XMFLOAT3( 1.0f, 2.0f, -1.0f );
-    m_Vertices[ 10 ].normal = XMFLOAT3( 0.0f, -1.0f, 0.0f );
-    m_Vertices[ 10 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 11 ].position = XMFLOAT3( -1.0f, 2.0f, -1.0f );
-    m_Vertices[ 11 ].normal = XMFLOAT3( 0.0f, -1.0f, 0.0f );
-    m_Vertices[ 11 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    vertices[ 8 ].position = XMFLOAT3( -1.0f, 2.0f, 1.0f );
+    vertices[ 8 ].normal = XMFLOAT3( 0.0f, -1.0f, 0.0f );
+    vertices[ 8 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    vertices[ 9 ].position = XMFLOAT3( 1.0f, 2.0f, 1.0f );
+    vertices[ 9 ].normal = XMFLOAT3( 0.0f, -1.0f, 0.0f );
+    vertices[ 9 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    vertices[ 10 ].position = XMFLOAT3( 1.0f, 2.0f, -1.0f );
+    vertices[ 10 ].normal = XMFLOAT3( 0.0f, -1.0f, 0.0f );
+    vertices[ 10 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    vertices[ 11 ].position = XMFLOAT3( -1.0f, 2.0f, -1.0f );
+    vertices[ 11 ].normal = XMFLOAT3( 0.0f, -1.0f, 0.0f );
+    vertices[ 11 ].tangent = XMFLOAT3( 1.0f, 0.0f, 0.0f );
 
-    m_Vertices[ 12 ].position = XMFLOAT3( -1.0f, 0.0f, 1.0f );
-    m_Vertices[ 12 ].normal = XMFLOAT3( 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 12 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
-    m_Vertices[ 13 ].position = XMFLOAT3( -1.0f, 0.0f, -1.0f );
-    m_Vertices[ 13 ].normal = XMFLOAT3( 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 13 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
-    m_Vertices[ 14 ].position = XMFLOAT3( -1.0f, 2.0f, -1.0f );
-    m_Vertices[ 14 ].normal = XMFLOAT3( 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 14 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
-    m_Vertices[ 15 ].position = XMFLOAT3( -1.0f, 2.0f, 1.0f );
-    m_Vertices[ 15 ].normal = XMFLOAT3( 1.0f, 0.0f, 0.0f );
-    m_Vertices[ 15 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
+    vertices[ 12 ].position = XMFLOAT3( -1.0f, 0.0f, 1.0f );
+    vertices[ 12 ].normal = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    vertices[ 12 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
+    vertices[ 13 ].position = XMFLOAT3( -1.0f, 0.0f, -1.0f );
+    vertices[ 13 ].normal = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    vertices[ 13 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
+    vertices[ 14 ].position = XMFLOAT3( -1.0f, 2.0f, -1.0f );
+    vertices[ 14 ].normal = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    vertices[ 14 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
+    vertices[ 15 ].position = XMFLOAT3( -1.0f, 2.0f, 1.0f );
+    vertices[ 15 ].normal = XMFLOAT3( 1.0f, 0.0f, 0.0f );
+    vertices[ 15 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
 
-    m_Vertices[ 16 ].position = XMFLOAT3( 1.0f, 0.0f, 1.0f );
-    m_Vertices[ 16 ].normal = XMFLOAT3( -1.0f, 0.0f, 0.0f );
-    m_Vertices[ 16 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
-    m_Vertices[ 17 ].position = XMFLOAT3( 1.0f, 0.0f, -1.0f );
-    m_Vertices[ 17 ].normal = XMFLOAT3( -1.0f, 0.0f, 0.0f );
-    m_Vertices[ 17 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
-    m_Vertices[ 18 ].position = XMFLOAT3( 1.0f, 2.0f, -1.0f );
-    m_Vertices[ 18 ].normal = XMFLOAT3( -1.0f, 0.0f, 0.0f );
-    m_Vertices[ 18 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
-    m_Vertices[ 19 ].position = XMFLOAT3( 1.0f, 2.0f, 1.0f );
-    m_Vertices[ 19 ].normal = XMFLOAT3( -1.0f, 0.0f, 0.0f );
-    m_Vertices[ 19 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
+    vertices[ 16 ].position = XMFLOAT3( 1.0f, 0.0f, 1.0f );
+    vertices[ 16 ].normal = XMFLOAT3( -1.0f, 0.0f, 0.0f );
+    vertices[ 16 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
+    vertices[ 17 ].position = XMFLOAT3( 1.0f, 0.0f, -1.0f );
+    vertices[ 17 ].normal = XMFLOAT3( -1.0f, 0.0f, 0.0f );
+    vertices[ 17 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
+    vertices[ 18 ].position = XMFLOAT3( 1.0f, 2.0f, -1.0f );
+    vertices[ 18 ].normal = XMFLOAT3( -1.0f, 0.0f, 0.0f );
+    vertices[ 18 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
+    vertices[ 19 ].position = XMFLOAT3( 1.0f, 2.0f, 1.0f );
+    vertices[ 19 ].normal = XMFLOAT3( -1.0f, 0.0f, 0.0f );
+    vertices[ 19 ].tangent = XMFLOAT3( 0.0f, 1.0f, 0.0f );
 
-    m_Triangles[ 0 ] = 0;
-    m_Triangles[ 1 ] = 1;
-    m_Triangles[ 2 ] = 2;
+    m_VerticesBuffer.reset( GPUBuffer::Create(
+          sizeof( Vertex ) * vertexCount
+        , sizeof( Vertex )
+        , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsStructureBuffer
+        , vertices.data() ) );
+    if ( !m_VerticesBuffer )
+        return false;
 
-    m_Triangles[ 3 ] = 0;
-    m_Triangles[ 4 ] = 2;
-    m_Triangles[ 5 ] = 3;
+    uint32_t triangleCount = 10;
+    uint32_t vertexIndexCount = triangleCount * 3;
+    std::vector<uint32_t> triangles( vertexIndexCount );
+    triangles[ 0 ] = 0;
+    triangles[ 1 ] = 1;
+    triangles[ 2 ] = 2;
 
-    m_Triangles[ 6 ] = 5;
-    m_Triangles[ 7 ] = 4;
-    m_Triangles[ 8 ] = 6;
+    triangles[ 3 ] = 0;
+    triangles[ 4 ] = 2;
+    triangles[ 5 ] = 3;
 
-    m_Triangles[ 9 ] = 5;
-    m_Triangles[ 10 ] = 6;
-    m_Triangles[ 11 ] = 7;
+    triangles[ 6 ] = 5;
+    triangles[ 7 ] = 4;
+    triangles[ 8 ] = 6;
 
-    m_Triangles[ 12 ] = 9;
-    m_Triangles[ 13 ] = 8;
-    m_Triangles[ 14 ] = 10;
+    triangles[ 9 ] = 5;
+    triangles[ 10 ] = 6;
+    triangles[ 11 ] = 7;
 
-    m_Triangles[ 15 ] = 10;
-    m_Triangles[ 16 ] = 8;
-    m_Triangles[ 17 ] = 11;
+    triangles[ 12 ] = 9;
+    triangles[ 13 ] = 8;
+    triangles[ 14 ] = 10;
 
-    m_Triangles[ 18 ] = 12;
-    m_Triangles[ 19 ] = 13;
-    m_Triangles[ 20 ] = 15;
+    triangles[ 15 ] = 10;
+    triangles[ 16 ] = 8;
+    triangles[ 17 ] = 11;
 
-    m_Triangles[ 21 ] = 13;
-    m_Triangles[ 22 ] = 14;
-    m_Triangles[ 23 ] = 15;
+    triangles[ 18 ] = 12;
+    triangles[ 19 ] = 13;
+    triangles[ 20 ] = 15;
 
-    m_Triangles[ 24 ] = 17;
-    m_Triangles[ 25 ] = 16;
-    m_Triangles[ 26 ] = 19;
+    triangles[ 21 ] = 13;
+    triangles[ 22 ] = 14;
+    triangles[ 23 ] = 15;
 
-    m_Triangles[ 27 ] = 19;
-    m_Triangles[ 28 ] = 18;
-    m_Triangles[ 29 ] = 17;
+    triangles[ 24 ] = 17;
+    triangles[ 25 ] = 16;
+    triangles[ 26 ] = 19;
 
-    uint32_t* reorderTriangles = new uint32_t[ kMaxVertexIndexCount ];
+    triangles[ 27 ] = 19;
+    triangles[ 28 ] = 18;
+    triangles[ 29 ] = 17;
+
+    std::vector<uint32_t> reorderTriangles( vertexIndexCount );
     std::vector<UnpackedBVHNode> bvhNodes;
-    BuildBVH( m_Vertices, m_Triangles, reorderTriangles, 10, &bvhNodes );
-    memcpy( m_Triangles, reorderTriangles, sizeof( m_Triangles ) );
-    delete[] reorderTriangles;
+    BuildBVH( vertices.data(), triangles.data(), reorderTriangles.data(), triangleCount, &bvhNodes );
 
-    assert( bvhNodes.size() <= kMaxBVHNodeCount );
-    PackBVH( bvhNodes.data(), uint32_t( bvhNodes.size() ), m_BVHNodes );
+    m_TrianglesBuffer.reset( GPUBuffer::Create( 
+          sizeof( uint32_t ) * vertexIndexCount
+        , sizeof( uint32_t )
+        , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsStructureBuffer
+        , reorderTriangles.data() ) );
+    if ( !m_TrianglesBuffer )
+        return false;
 
-    m_PointLights[ 0 ].position = XMFLOAT3( 4.0f, 9.0f, -5.0f );
-    m_PointLights[ 0 ].color = XMFLOAT3( 200.0f, 200.0f, 200.0f );
+    std::vector<PackedBVHNode> packedBvhNodes( bvhNodes.size() );
+    PackBVH( bvhNodes.data(), uint32_t( bvhNodes.size() ), packedBvhNodes.data() );
+
+    m_BVHNodesBuffer.reset( GPUBuffer::Create( 
+          sizeof( PackedBVHNode ) * bvhNodes.size()
+        , sizeof( PackedBVHNode )
+        , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsStructureBuffer
+        , packedBvhNodes.data() ) );
+    if ( !m_BVHNodesBuffer )
+        return false;
+
+    uint32_t pointLightCount = 1;
+    std::vector<PointLight> pointLights( pointLightCount );
+    pointLights[ 0 ].position = XMFLOAT3( 4.0f, 9.0f, -5.0f );
+    pointLights[ 0 ].color = XMFLOAT3( 200.0f, 200.0f, 200.0f );
+
+    m_PointLightsBuffer.reset( GPUBuffer::Create( 
+          sizeof( PointLight ) * pointLightCount
+        , sizeof( PointLight )
+        , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsStructureBuffer
+        , pointLights.data() ) );
+    if ( !m_PointLightsBuffer )
+        return false;
 
     m_RayTracingConstants.maxBounceCount = 3;
-    m_RayTracingConstants.primitiveCount = 10;
-    m_RayTracingConstants.pointLightCount = 1;
+    m_RayTracingConstants.primitiveCount = triangleCount;
+    m_RayTracingConstants.pointLightCount = pointLightCount;
     m_RayTracingConstants.filmSize = XMFLOAT2( 0.05333f, 0.03f );
     m_RayTracingConstants.filmDistance = 0.04f;
     m_RayTracingConstants.cameraTransform =
@@ -319,6 +328,8 @@ void Scene::ResetScene()
     m_RayTracingConstants.background = { 0.0f, 0.0f, 0.0f, 0.f };
 
     m_IsFilmDirty = true;
+
+    return true;
 }
 
 void Scene::AddOneSampleAndRender()
@@ -387,46 +398,6 @@ bool Scene::UpdateResources()
     {
         memcpy( address, &m_RayTracingConstants, sizeof( m_RayTracingConstants ) );
         m_RayTracingConstantsBuffer->Unmap();
-    }
-    else
-    {
-        return false;
-    }
-
-    if ( void* address = m_VerticesBuffer->Map() )
-    {
-        memcpy( address, m_Vertices, sizeof( m_Vertices ) );
-        m_VerticesBuffer->Unmap();
-    }
-    else
-    {
-        return false;
-    }
-
-    if ( void* address = m_TrianglesBuffer->Map() )
-    {
-        memcpy( address, m_Triangles, sizeof( m_Triangles ) );
-        m_TrianglesBuffer->Unmap();
-    }
-    else
-    {
-        return false;
-    }
-
-    if ( void* address = m_BVHNodesBuffer->Map() )
-    {
-        memcpy( address, m_BVHNodes, sizeof( m_BVHNodes ) );
-        m_BVHNodesBuffer->Unmap();
-    }
-    else
-    {
-        return false;
-    }
-
-    if ( void* address = m_PointLightsBuffer->Map() )
-    {
-        memcpy( address, m_PointLights, sizeof( m_PointLights ) );
-        m_PointLightsBuffer->Unmap();
     }
     else
     {

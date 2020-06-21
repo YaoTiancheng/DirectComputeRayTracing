@@ -36,7 +36,7 @@ public:
 
     bool Init();
 
-    void ResetScene();
+    bool ResetScene();
 
     void AddOneSampleAndRender();
 
@@ -56,11 +56,6 @@ private:
 
 private:
     static const int kMaxSamplesCount = 65536;
-    static const int kMaxPointLightsCount = 8;
-    static const int kMaxVertexCount = 256;
-    static const int kMaxTriangleCount = 256;
-    static const int kMaxBVHNodeCount = 256;
-    static const int kMaxVertexIndexCount = kMaxTriangleCount * 3;
 
 
     Camera                              m_Camera;
@@ -68,10 +63,6 @@ private:
     D3D11_VIEWPORT                      m_DefaultViewport;
 
     RayTracingConstants                 m_RayTracingConstants;
-    Vertex                              m_Vertices[ kMaxVertexCount ];
-    uint32_t                            m_Triangles[ kMaxVertexIndexCount ];
-    PackedBVHNode                       m_BVHNodes[ kMaxBVHNodeCount ];
-    PointLight                          m_PointLights[ kMaxPointLightsCount ];
 
     bool                                m_IsFilmDirty;
 

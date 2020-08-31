@@ -13,6 +13,8 @@ public:
     bool ShaderDebugEnabled() const { return m_ShaderDebugEnabled; }
     bool UseDebugDevice() const { return m_UseDebugDevice; }
 
+    const std::string& GetFilename() const { return m_Filename; }
+
     static const CommandLineArgs* Singleton() { return s_Singleton; }
 
 private:
@@ -20,6 +22,7 @@ private:
     uint32_t    m_ResolutionY;
     bool        m_ShaderDebugEnabled;
     bool        m_UseDebugDevice;
+    std::string m_Filename;
 
     static CommandLineArgs* s_Singleton;
 };

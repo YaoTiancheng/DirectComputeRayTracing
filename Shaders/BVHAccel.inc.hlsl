@@ -55,13 +55,15 @@ bool BVHIntersect( float3 origin
 
 #if !defined( NO_BVH_ACCEL )
     float3 invDir = 1.0f / direction;
+    // Always set tMax to infinity when testing AABBs, unless near AABBs are tested before far ones
+    float tMaxAABB = 1.0f / 0.0f; 
 
     BVHTraversalStackReset( dispatchThreadIndex );
 
     uint nodeIndex = 0;
     while ( true )
     {
-        if ( RayAABBIntersect( origin, invDir, tMin, tMax, g_BVHNodes[ nodeIndex ].bboxMin, g_BVHNodes[ nodeIndex ].bboxMax ) )
+        if ( RayAABBIntersect( origin, invDir, tMin, tMaxAABB, g_BVHNodes[ nodeIndex ].bboxMin, g_BVHNodes[ nodeIndex ].bboxMax ) )
         {
             uint primCount = BVHNodeGetPrimitiveCount( g_BVHNodes[ nodeIndex ] );
             if ( primCount == 0 )

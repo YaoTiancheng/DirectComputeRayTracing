@@ -3,7 +3,7 @@
 class GfxShader
 {
 public:
-    static GfxShader* CreateFromFile( const wchar_t* filename );
+    static GfxShader* CreateFromFile( const wchar_t* filename, const std::vector<D3D_SHADER_MACRO>& defines );
 
     ~GfxShader();
 
@@ -25,7 +25,7 @@ private:
 class ComputeShader
 {
 public:
-    static ComputeShader* CreateFromFile( const wchar_t* filename );
+    static ComputeShader* CreateFromFile( const wchar_t* filename, const std::vector<D3D_SHADER_MACRO>& defines );
 
     ~ComputeShader();
 

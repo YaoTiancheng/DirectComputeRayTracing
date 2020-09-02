@@ -15,6 +15,8 @@ public:
 
     const std::string& GetFilename() const { return m_Filename; }
 
+    bool GetNoBVHAccel() const { return m_NoBVHAccel; }
+
     static const CommandLineArgs* Singleton() { return s_Singleton; }
 
 private:
@@ -22,6 +24,7 @@ private:
     uint32_t    m_ResolutionY;
     bool        m_ShaderDebugEnabled;
     bool        m_UseDebugDevice;
+    bool        m_NoBVHAccel;
     std::string m_Filename;
 
     static CommandLineArgs* s_Singleton;

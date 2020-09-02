@@ -47,7 +47,7 @@ bool Scene::Init()
     ID3D11Device* device = GetDevice();
 
     m_FilmTexture.reset( GPUTexture::Create(
-          resolutionWidth
+        resolutionWidth
         , resolutionHeight
         , DXGI_FORMAT_R32G32B32A32_FLOAT
         , GPUResourceCreationFlags_HasUAV | GPUResourceCreationFlags_IsRenderTarget ) );
@@ -74,19 +74,25 @@ bool Scene::Init()
     if ( !m_CookTorranceCompEFresnelTexture )
         return false;
 
-    m_RayTracingShader.reset( ComputeShader::CreateFromFile( L"Shaders\\RayTracing.hlsl" ) );
+    std::vector<D3D_SHADER_MACRO> rayTracingShaderDefines;
+    if ( CommandLineArgs::Singleton()->GetNoBVHAccel() )
+    {
+        rayTracingShaderDefines.push_back( { "NO_BVH_ACCEL", "0" } );
+    }
+    rayTracingShaderDefines.push_back( { NULL, NULL } );
+    m_RayTracingShader.reset( ComputeShader::CreateFromFile( L"Shaders\\RayTracing.hlsl", rayTracingShaderDefines ) );
     if ( !m_RayTracingShader )
         return false;
 
-    m_RayTracingConstantsBuffer.reset( GPUBuffer::Create( 
-          sizeof( RayTracingConstants )
+    m_RayTracingConstantsBuffer.reset( GPUBuffer::Create(
+        sizeof( RayTracingConstants )
         , 0
         , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsConstantBuffer ) );
     if ( !m_RayTracingConstantsBuffer )
         return false;
 
-    m_SamplesBuffer.reset( GPUBuffer::Create( 
-          sizeof( float ) * kMaxSamplesCount
+    m_SamplesBuffer.reset( GPUBuffer::Create(
+        sizeof( float ) * kMaxSamplesCount
         , sizeof( float )
         , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer ) );
     if ( !m_SamplesBuffer )
@@ -100,8 +106,8 @@ bool Scene::Init()
     cooktorranceCompTextureConstants.compPdfScaleTextureSize    = XMFLOAT4( 32.0f, 1.0f, 1.0f / 32.0f, 1.0f );
     cooktorranceCompTextureConstants.compEFresnelTextureSize    = XMFLOAT4( 32.0f, 16.0f, 16.0f, 0.0f );
     cooktorranceCompTextureConstants.compEFresnelTextureSizeRcp = XMFLOAT4( 1.0f / 32.0f, 1.0f / 16.0f, 1.0f / 16.0f, 0.0f );
-    m_CookTorranceCompTextureConstantsBuffer.reset( GPUBuffer::Create( 
-          sizeof( CookTorranceCompTextureConstants )
+    m_CookTorranceCompTextureConstantsBuffer.reset( GPUBuffer::Create(
+        sizeof( CookTorranceCompTextureConstants )
         , 0
         , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsConstantBuffer
         , &cooktorranceCompTextureConstants ) );
@@ -109,14 +115,16 @@ bool Scene::Init()
         return false;
 
     m_ScreenQuadVerticesBuffer.reset( GPUBuffer::Create(
-          sizeof( kScreenQuadVertices )
+        sizeof( kScreenQuadVertices )
         , sizeof( XMFLOAT4 )
         , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsVertexBuffer
         , &kScreenQuadVertices ) );
     if ( !m_ScreenQuadVerticesBuffer )
         return false;
 
-    m_PostFXShader.reset( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl" ) );
+    std::vector<D3D_SHADER_MACRO> postProcessingShaderDefines;
+    postProcessingShaderDefines.push_back( { NULL, NULL } );
+    m_PostFXShader.reset( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", postProcessingShaderDefines ) );
     if ( !m_PostFXShader )
         return false;
 
@@ -162,8 +170,10 @@ bool Scene::Init()
 
 bool Scene::ResetScene()
 {
+    const CommandLineArgs* commandLineArgs = CommandLineArgs::Singleton();
+
     Mesh mesh;
-    if ( !mesh.LoadFromOBJFile( CommandLineArgs::Singleton()->GetFilename().c_str() ) )
+    if ( !mesh.LoadFromOBJFile( commandLineArgs->GetFilename().c_str(), !commandLineArgs->GetNoBVHAccel() ) )
         return false;
 
     m_VerticesBuffer.reset( GPUBuffer::Create(
@@ -182,13 +192,16 @@ bool Scene::ResetScene()
     if ( !m_TrianglesBuffer )
         return false;
 
-    m_BVHNodesBuffer.reset( GPUBuffer::Create(
-          sizeof( PackedBVHNode ) * mesh.GetBVHNodeCount()
-        , sizeof( PackedBVHNode )
-        , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsStructureBuffer
-        , mesh.GetBVHNodes() ) );
-    if ( !m_BVHNodesBuffer )
-        return false;
+    if ( !commandLineArgs->GetNoBVHAccel() )
+    {
+        m_BVHNodesBuffer.reset( GPUBuffer::Create(
+              sizeof( PackedBVHNode ) * mesh.GetBVHNodeCount()
+            , sizeof( PackedBVHNode )
+            , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsStructureBuffer
+            , mesh.GetBVHNodes() ) );
+        if ( !m_BVHNodesBuffer )
+            return false;
+    }
 
     uint32_t pointLightCount = 1;
     std::vector<PointLight> pointLights( pointLightCount );
@@ -203,7 +216,7 @@ bool Scene::ResetScene()
     if ( !m_PointLightsBuffer )
         return false;
 
-    m_RayTracingConstants.maxBounceCount = 4;
+    m_RayTracingConstants.maxBounceCount = 2;
     m_RayTracingConstants.primitiveCount = mesh.GetTriangleCount();
     m_RayTracingConstants.pointLightCount = pointLightCount;
     m_RayTracingConstants.filmSize = XMFLOAT2( 0.05333f, 0.03f );
@@ -332,7 +345,7 @@ void Scene::DispatchRayTracing()
         , m_CookTorranceCompInvCDFTexture->GetSRV()
         , m_CookTorranceCompPdfScaleTexture->GetSRV()
         , m_CookTorranceCompEFresnelTexture->GetSRV()
-        , m_BVHNodesBuffer->GetSRV()
+        , m_BVHNodesBuffer ? m_BVHNodesBuffer->GetSRV() : nullptr
     };
     deviceContext->CSSetShaderResources( 0, 10, rawSRVs );
 

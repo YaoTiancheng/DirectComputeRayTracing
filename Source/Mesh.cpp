@@ -41,14 +41,14 @@ namespace std
 
 using namespace DirectX;
 
-bool Mesh::LoadFromOBJFile( const char* filename, bool buildBVH )
+bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool buildBVH )
 {
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
     std::string warn;
     std::string err;
-    bool loadSuccessful = tinyobj::LoadObj( &attrib, &shapes, &materials, &warn, &err, filename );
+    bool loadSuccessful = tinyobj::LoadObj( &attrib, &shapes, &materials, &warn, &err, filename, mtlFileDir );
     if ( !loadSuccessful )
     {
         return false;
@@ -85,15 +85,23 @@ bool Mesh::LoadFromOBJFile( const char* filename, bool buildBVH )
     }
 
     std::vector<uint32_t> indices;
+    std::vector<uint32_t> materialIds;
 
     for ( size_t iShapes = 0; iShapes < shapes.size(); ++iShapes )
     {
-        for ( size_t iFace = 0; iFace < shapes[ iShapes ].mesh.num_face_vertices.size(); ++iFace )
+        tinyobj::mesh_t& mesh = shapes[ iShapes ].mesh;
+
+        assert( mesh.num_face_vertices.size() == mesh.material_ids.size() );
+
+        for ( size_t iFace = 0; iFace < mesh.num_face_vertices.size(); ++iFace )
         {
-            assert( shapes[ iShapes ].mesh.num_face_vertices[ iFace ] == 3 );
+            assert( mesh.num_face_vertices[ iFace ] == 3 );
+
+            materialIds.push_back( mesh.material_ids[ iFace ] );
+
             for ( int iVertex = 0; iVertex < 3; ++iVertex )
             {
-                tinyobj::index_t idx = shapes[ iShapes ].mesh.indices[ iFace * 3 + iVertex ];
+                tinyobj::index_t idx = mesh.indices[ iFace * 3 + iVertex ];
 
                 if ( idx.vertex_index == -1 || idx.normal_index == -1 )
                     return false;
@@ -123,17 +131,27 @@ bool Mesh::LoadFromOBJFile( const char* filename, bool buildBVH )
         }
     }
 
+    m_Materials.reserve( materials.size() );
+    for ( auto& iterSrcMat : materials )
+    {
+        Material dstMat;
+        dstMat.albedo = DirectX::XMFLOAT3( iterSrcMat.diffuse[ 0 ], iterSrcMat.diffuse[ 1 ], iterSrcMat.diffuse[ 2 ] );
+        m_Materials.emplace_back( dstMat );
+    }
+
     if ( buildBVH )
     {
         m_Indices.resize( indices.size() );
+        m_MaterialIds.resize( materialIds.size() );
         std::vector<UnpackedBVHNode> BVHNodes;
-        BuildBVH( m_Vertices.data(), indices.data(), m_Indices.data(), GetTriangleCount(), &BVHNodes );
+        BuildBVH( m_Vertices.data(), indices.data(), m_Indices.data(), materialIds.data(), m_MaterialIds.data(), GetTriangleCount(), &BVHNodes );
         m_BVHNodes.resize( BVHNodes.size() );
         PackBVH( BVHNodes.data(), uint32_t( BVHNodes.size() ), m_BVHNodes.data() );
     }
     else
     {
         m_Indices = indices;
+        m_MaterialIds = materialIds;
     }
 
     return true;

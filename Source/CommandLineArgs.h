@@ -15,6 +15,8 @@ public:
 
     const std::string& GetFilename() const { return m_Filename; }
 
+    const std::string& GetMtlFileSearchPath() const { return m_MtlFileSearchPath; }
+
     bool GetNoBVHAccel() const { return m_NoBVHAccel; }
 
     static const CommandLineArgs* Singleton() { return s_Singleton; }
@@ -26,6 +28,7 @@ private:
     bool        m_UseDebugDevice;
     bool        m_NoBVHAccel;
     std::string m_Filename;
+    std::string m_MtlFileSearchPath;
 
     static CommandLineArgs* s_Singleton;
 };

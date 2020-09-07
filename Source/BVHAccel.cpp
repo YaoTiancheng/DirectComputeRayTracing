@@ -65,6 +65,8 @@ static void BuildNodeRecursively(
     , uint32_t primBegin
     , uint32_t primEnd
     , TriangleIndices* reorderedTriangles
+    , const uint32_t* triangleIds
+    , uint32_t* reorderedTriangleIds
     , uint32_t& reorderedTrianglesCount
     , std::vector<UnpackedBVHNode>* bvhNodes
 )
@@ -89,6 +91,7 @@ static void BuildNodeRecursively(
     {
         uint32_t primIndex = primitiveInfos[ primBegin ].primIndex;
         reorderedTriangles[ reorderedTrianglesCount ] = triangles[ primIndex ];
+        reorderedTriangleIds[ reorderedTrianglesCount ] = triangleIds[ primIndex ];
         bvhNode->primIndex = reorderedTrianglesCount;
         bvhNode->primCount = 1;
         reorderedTrianglesCount += 1;
@@ -136,6 +139,7 @@ static void BuildNodeRecursively(
                 {
                     size_t primIndex = primitiveInfos[ primBegin + iPrim ].primIndex;
                     reorderedTriangles[ reorderedTrianglesCount + iPrim ] = triangles[ primIndex ];
+                    reorderedTriangleIds[ reorderedTrianglesCount + iPrim ] = triangleIds[ primIndex ];
                 }
                 bvhNode->primIndex = reorderedTrianglesCount;
                 bvhNode->primCount = uint8_t( primCount );
@@ -145,10 +149,10 @@ static void BuildNodeRecursively(
             {
                 {
                     bvhNode->splitAxis = axis;
-                    BuildNodeRecursively( primitiveInfos, vertices, triangles, primBegin, primMiddle, reorderedTriangles, reorderedTrianglesCount, bvhNodes );
+                    BuildNodeRecursively( primitiveInfos, vertices, triangles, primBegin, primMiddle, reorderedTriangles, triangleIds, reorderedTriangleIds, reorderedTrianglesCount, bvhNodes );
                     bvhNode = &( *bvhNodes )[ bvhNodeIndex ];
                     bvhNode->childIndex = uint32_t( bvhNodes->size() );
-                    BuildNodeRecursively( primitiveInfos, vertices, triangles, primMiddle, primEnd, reorderedTriangles, reorderedTrianglesCount, bvhNodes );
+                    BuildNodeRecursively( primitiveInfos, vertices, triangles, primMiddle, primEnd, reorderedTriangles, triangleIds, reorderedTriangleIds, reorderedTrianglesCount, bvhNodes );
                 }
             }
             return;
@@ -227,6 +231,7 @@ static void BuildNodeRecursively(
                 {
                     size_t primIndex = primitiveInfos[ primBegin + i ].primIndex;
                     reorderedTriangles[ reorderedTrianglesCount + i ] = triangles[ primIndex ];
+                    reorderedTriangleIds[ reorderedTrianglesCount + i ] = triangleIds[ primIndex ];
                 }
                 bvhNode->primIndex = reorderedTrianglesCount;
                 bvhNode->primCount = uint8_t( primCount );
@@ -237,15 +242,15 @@ static void BuildNodeRecursively(
 
         {
             bvhNode->splitAxis = axis;
-            BuildNodeRecursively( primitiveInfos, vertices, triangles, primBegin, primMiddle, reorderedTriangles, reorderedTrianglesCount, bvhNodes );
+            BuildNodeRecursively( primitiveInfos, vertices, triangles, primBegin, primMiddle, reorderedTriangles, triangleIds, reorderedTriangleIds, reorderedTrianglesCount, bvhNodes );
             bvhNode = &( *bvhNodes )[ bvhNodeIndex ];
             bvhNode->childIndex = uint32_t( bvhNodes->size() );
-            BuildNodeRecursively( primitiveInfos, vertices, triangles, primMiddle, primEnd, reorderedTriangles, reorderedTrianglesCount, bvhNodes );
+            BuildNodeRecursively( primitiveInfos, vertices, triangles, primMiddle, primEnd, reorderedTriangles, triangleIds, reorderedTriangleIds, reorderedTrianglesCount, bvhNodes );
         }
     }
 }
 
-void BuildBVH( const Vertex* vertices, const uint32_t* indices, uint32_t* reorderedIndices, uint32_t triangleCount, std::vector<UnpackedBVHNode>* bvhNodes )
+void BuildBVH( const Vertex* vertices, const uint32_t* indices, uint32_t* reorderedIndices, const uint32_t* triangleIds, uint32_t* reorderedTriangleIds, uint32_t triangleCount, std::vector<UnpackedBVHNode>* bvhNodes )
 {
     std::vector<PrimitiveInfo> primitiveInfos;
     primitiveInfos.reserve( triangleCount );
@@ -261,7 +266,7 @@ void BuildBVH( const Vertex* vertices, const uint32_t* indices, uint32_t* reorde
     }
 
     uint32_t reorderedTrianglesCount = 0;
-    BuildNodeRecursively( primitiveInfos, vertices, (TriangleIndices*) indices, 0, triangleCount, (TriangleIndices*) reorderedIndices, reorderedTrianglesCount, bvhNodes );
+    BuildNodeRecursively( primitiveInfos, vertices, (TriangleIndices*) indices, 0, triangleCount, (TriangleIndices*) reorderedIndices, triangleIds, reorderedTriangleIds, reorderedTrianglesCount, bvhNodes );
     assert( reorderedTrianglesCount == triangleCount );
 }
 

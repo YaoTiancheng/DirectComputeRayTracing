@@ -1,24 +1,13 @@
 #ifndef _PRIMITIVES_H_
 #define _PRIMITIVES_H_
 
+#include "Intersection.inc.hlsl"
+
 struct Vertex
 {
     float3  position;
     float3  normal;
     float3  tangent;
-};
-
-struct Intersection
-{
-    float3  albedo;
-    float3  specular;
-    float3  emission;
-    float   alpha;
-    float3  position;
-    float3  normal;
-    float3  tangent;
-    float   rayEpsilon;
-    float   ior;
 };
 
 float3 VectorBaryCentric( float3 p0, float3 p1, float3 p2, float u, float v )
@@ -73,6 +62,17 @@ bool RayTriangleIntersect( float3 origin
     return true; 
 }
 
+void HitShader( float3 rayOrigin
+    , float3 rayDirection
+    , Vertex v0
+    , Vertex v1
+    , Vertex v2
+    , float t
+    , float u
+    , float v
+    , uint triangleId
+    , out Intersection intersection );
+
 bool RayTriangleIntersect( float3 origin
     , float3 direction
     , float tMin
@@ -80,6 +80,7 @@ bool RayTriangleIntersect( float3 origin
     , Vertex v0
     , Vertex v1
     , Vertex v2
+    , uint triangleId
     , out float t
     , out Intersection intersection )
 {
@@ -87,16 +88,7 @@ bool RayTriangleIntersect( float3 origin
     float u, v;
     if ( intersect = RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v ) )
     {
-        intersection.position   = origin + t * direction;
-        intersection.normal     = normalize( VectorBaryCentric( v0.normal, v1.normal, v2.normal, u, v ) );
-        intersection.tangent    = normalize( VectorBaryCentric( v0.tangent, v1.tangent, v2.tangent, u, v ) );
-        intersection.rayEpsilon = 1e-5f * t;
-
-        intersection.albedo     = 1.0f;
-        intersection.specular   = 1.0f;
-        intersection.emission   = 0.0f;
-        intersection.alpha      = 1.0f;
-        intersection.ior        = 1.5f;
+        HitShader( origin, direction, v0, v1, v2, t, u, v, triangleId, intersection );
     }
     return intersect;
 }

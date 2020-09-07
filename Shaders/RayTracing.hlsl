@@ -5,6 +5,11 @@ struct PointLight
     float3              color;
 };
 
+struct Material
+{
+    float3              albedo;
+};
+
 cbuffer RayTracingConstants : register( b0 )
 {
     uint                g_MaxBounceCount;
@@ -20,13 +25,17 @@ cbuffer RayTracingConstants : register( b0 )
 
 #include "Samples.inc.hlsl"
 #include "BSDFs.inc.hlsl"
+#include "Primitives.inc.hlsl"
 
 StructuredBuffer<Vertex>                g_Vertices      : register( t0 );
 StructuredBuffer<uint>                  g_Triangles     : register( t1 );
 StructuredBuffer<PointLight>            g_PointLights   : register( t2 );
+StructuredBuffer<uint>                  g_MaterialIds   : register( t10 );
+StructuredBuffer<Material>              g_Materials     : register( t11 );
 RWTexture2D<float4>                     g_FilmTexture;
 
 #include "BVHAccel.inc.hlsl"
+#include "HitShader.inc.hlsl"
 
 void GenerateRay( float2 sample
 	, float2 filmSize
@@ -50,8 +59,7 @@ bool IntersectScene( float3 origin
     , uint dispatchThreadIndex
 	, out Intersection intersection )
 {
-    float t;
-    return BVHIntersect( origin, direction, epsilon.x, dispatchThreadIndex, t, intersection );
+    return BVHIntersect( origin, direction, epsilon.x, dispatchThreadIndex, intersection );
 }
 
 bool IsOcculuded( float3 origin

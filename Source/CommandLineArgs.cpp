@@ -9,6 +9,7 @@ CommandLineArgs::CommandLineArgs()
     , m_ShaderDebugEnabled( false )
     , m_UseDebugDevice( false )
     , m_NoBVHAccel( false )
+    , m_MtlFileSearchPath( "./" )
 {
     assert( s_Singleton == nullptr );
     s_Singleton = this;
@@ -36,6 +37,13 @@ void CommandLineArgs::Parse( const wchar_t* cmdLine )
             wchar_t* argStr1 = argv[ ++iArg ];
             wchar_t* end;
             m_ResolutionY = (uint32_t) wcstol( argStr1, &end, 10 );
+        }
+        else if ( wcscmp( argStr, L"-Mtl" ) == 0 && iArg + 1 < numArgs )
+        {
+            wchar_t* argStr1 = argv[ ++iArg ];
+            char mbFilepath[ MAX_PATH ];
+            wcstombs( mbFilepath, argStr1, MAX_PATH );
+            m_MtlFileSearchPath = mbFilepath;
         }
         else if ( wcscmp( argStr, L"-ShaderDebug" ) == 0 )
         {

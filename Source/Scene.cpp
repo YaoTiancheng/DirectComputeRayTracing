@@ -173,7 +173,7 @@ bool Scene::ResetScene()
     const CommandLineArgs* commandLineArgs = CommandLineArgs::Singleton();
 
     Mesh mesh;
-    if ( !mesh.LoadFromOBJFile( commandLineArgs->GetFilename().c_str(), !commandLineArgs->GetNoBVHAccel() ) )
+    if ( !mesh.LoadFromOBJFile( commandLineArgs->GetFilename().c_str(), commandLineArgs->GetMtlFileSearchPath().c_str(), !commandLineArgs->GetNoBVHAccel() ) )
         return false;
 
     m_VerticesBuffer.reset( GPUBuffer::Create(
@@ -190,6 +190,22 @@ bool Scene::ResetScene()
         , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsStructureBuffer
         , mesh.GetIndices() ) );
     if ( !m_TrianglesBuffer )
+        return false;
+
+    m_MaterialIdsBuffer.reset( GPUBuffer::Create(
+          sizeof( uint32_t ) * mesh.GetTriangleCount()
+        , sizeof( uint32_t )
+        , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsStructureBuffer
+        , mesh.GetMaterialIds() ) );
+    if ( !m_MaterialIdsBuffer )
+        return false;
+
+    m_MaterialsBuffer.reset( GPUBuffer::Create(
+          sizeof( Material ) * mesh.GetMaterialCount()
+        , sizeof( Material )
+        , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsStructureBuffer
+        , mesh.GetMaterials() ) );
+    if ( !m_MaterialsBuffer )
         return false;
 
     if ( !commandLineArgs->GetNoBVHAccel() )
@@ -346,8 +362,10 @@ void Scene::DispatchRayTracing()
         , m_CookTorranceCompPdfScaleTexture->GetSRV()
         , m_CookTorranceCompEFresnelTexture->GetSRV()
         , m_BVHNodesBuffer ? m_BVHNodesBuffer->GetSRV() : nullptr
+        , m_MaterialIdsBuffer->GetSRV()
+        , m_MaterialsBuffer->GetSRV()
     };
-    deviceContext->CSSetShaderResources( 0, 10, rawSRVs );
+    deviceContext->CSSetShaderResources( 0, 12, rawSRVs );
 
     ID3D11Buffer* rawConstantBuffers[] = { m_RayTracingConstantsBuffer->GetBuffer(), m_CookTorranceCompTextureConstantsBuffer->GetBuffer() };
     deviceContext->CSSetConstantBuffers( 0, 2, rawConstantBuffers );

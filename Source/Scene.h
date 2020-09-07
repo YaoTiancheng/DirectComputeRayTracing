@@ -97,5 +97,7 @@ private:
     GPUBufferPtr                        m_TrianglesBuffer;
     GPUBufferPtr                        m_BVHNodesBuffer;
     GPUBufferPtr                        m_PointLightsBuffer;
+    GPUBufferPtr                        m_MaterialIdsBuffer;
+    GPUBufferPtr                        m_MaterialsBuffer;
     GPUBufferPtr                        m_ScreenQuadVerticesBuffer;
 };

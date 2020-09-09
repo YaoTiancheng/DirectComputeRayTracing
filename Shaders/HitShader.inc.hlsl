@@ -22,9 +22,9 @@ void HitShader( float3 rayOrigin
 
     intersection.albedo     = g_Materials[ g_MaterialIds[ triangleId ] ].albedo;
     intersection.specular   = 1.0f;
-    intersection.emission   = 0.0f;
-    intersection.alpha      = 1.0f;
-    intersection.ior        = 1.5f;
+    intersection.emission   = g_Materials[ g_MaterialIds[ triangleId ] ].emission;
+    intersection.alpha      = g_Materials[ g_MaterialIds[ triangleId ] ].roughness;
+    intersection.ior        = g_Materials[ g_MaterialIds[ triangleId ] ].ior;
 }
 
 #endif

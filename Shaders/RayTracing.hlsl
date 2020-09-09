@@ -8,6 +8,9 @@ struct PointLight
 struct Material
 {
     float3              albedo;
+    float3              emission;
+    float               roughness;
+    float               ior;
 };
 
 cbuffer RayTracingConstants : register( b0 )

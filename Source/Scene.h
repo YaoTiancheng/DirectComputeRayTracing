@@ -7,11 +7,6 @@
 #include "GPUTexture.h"
 #include "Shader.h"
 
-struct PointLight
-{
-    DirectX::XMFLOAT3   position;
-    DirectX::XMFLOAT3   color;
-};
 
 struct RayTracingConstants
 {

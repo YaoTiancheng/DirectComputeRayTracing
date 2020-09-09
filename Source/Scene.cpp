@@ -6,6 +6,12 @@
 
 using namespace DirectX;
 
+struct PointLight
+{
+    XMFLOAT3   position;
+    XMFLOAT3   color;
+};
+
 struct CookTorranceCompTextureConstants
 {
     XMFLOAT4 compETextureSize;

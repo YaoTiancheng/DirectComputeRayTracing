@@ -6,6 +6,9 @@
 struct Material
 {
     DirectX::XMFLOAT3 albedo;
+    DirectX::XMFLOAT3 emission;
+    float             roughness;
+    float             ior;
 };
 
 class Mesh

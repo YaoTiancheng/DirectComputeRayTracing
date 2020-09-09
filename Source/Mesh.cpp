@@ -86,6 +86,7 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
 
     std::vector<uint32_t> indices;
     std::vector<uint32_t> materialIds;
+    bool needDefaultMaterial = false;
 
     for ( size_t iShapes = 0; iShapes < shapes.size(); ++iShapes )
     {
@@ -97,7 +98,17 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
         {
             assert( mesh.num_face_vertices[ iFace ] == 3 );
 
-            materialIds.push_back( mesh.material_ids[ iFace ] );
+            int materialId = mesh.material_ids[ iFace ];
+            // If the triangle doesn't have a material then use the default material at the end.
+            if ( materialId == -1 )
+            {
+                materialId = (int)materials.size();
+                if ( !needDefaultMaterial )
+                {
+                    needDefaultMaterial = true;
+                }
+            }
+            materialIds.push_back( materialId );
 
             for ( int iVertex = 0; iVertex < 3; ++iVertex )
             {
@@ -137,9 +148,19 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
         Material dstMat;
         dstMat.albedo    = DirectX::XMFLOAT3( iterSrcMat.diffuse[ 0 ], iterSrcMat.diffuse[ 1 ], iterSrcMat.diffuse[ 2 ] );
         dstMat.emission  = DirectX::XMFLOAT3( iterSrcMat.emission[ 0 ], iterSrcMat.emission[ 1 ], iterSrcMat.emission[ 2 ] );
-        dstMat.roughness = iterSrcMat.roughness;
+        dstMat.roughness = std::fmax( iterSrcMat.roughness, 0.00018f );
         dstMat.ior       = iterSrcMat.ior;
         m_Materials.emplace_back( dstMat );
+    }
+
+    if ( needDefaultMaterial )
+    {
+        Material defaultMat;
+        defaultMat.albedo    = DirectX::XMFLOAT3( 1.0f, 0.0f, 1.0f );
+        defaultMat.emission  = DirectX::XMFLOAT3( 0.0f, 0.0f, 0.0f );
+        defaultMat.roughness = 1.0f;
+        defaultMat.ior       = 1.5f;
+        m_Materials.emplace_back( defaultMat );
     }
 
     if ( buildBVH )

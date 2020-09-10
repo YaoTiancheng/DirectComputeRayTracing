@@ -3,14 +3,9 @@
 #include "D3D11RenderSystem.h"
 #include "CommandLineArgs.h"
 #include "Mesh.h"
+#include "../Shaders/PointLight.inc.hlsl"
 
 using namespace DirectX;
-
-struct PointLight
-{
-    XMFLOAT3   position;
-    XMFLOAT3   color;
-};
 
 struct CookTorranceCompTextureConstants
 {
@@ -217,8 +212,8 @@ bool Scene::ResetScene()
     if ( !commandLineArgs->GetNoBVHAccel() )
     {
         m_BVHNodesBuffer.reset( GPUBuffer::Create(
-              sizeof( PackedBVHNode ) * mesh.GetBVHNodeCount()
-            , sizeof( PackedBVHNode )
+              sizeof( BVHNode ) * mesh.GetBVHNodeCount()
+            , sizeof( BVHNode )
             , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsStructureBuffer
             , mesh.GetBVHNodes() ) );
         if ( !m_BVHNodesBuffer )

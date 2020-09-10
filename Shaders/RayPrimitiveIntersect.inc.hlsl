@@ -2,24 +2,7 @@
 #define _PRIMITIVES_H_
 
 #include "Intersection.inc.hlsl"
-
-struct Vertex
-{
-    float3  position;
-    float3  normal;
-    float3  tangent;
-};
-
-float3 VectorBaryCentric( float3 p0, float3 p1, float3 p2, float u, float v )
-{
-    float3 r1 = p1 - p0;
-    float3 r2 = p2 - p0;
-    r1 = r1 * u;
-    r2 = r2 * v;
-    r1 = r1 + p0;
-    r1 = r1 + r2;
-    return r1;
-}
+#include "Vertex.inc.hlsl"
 
 bool RayTriangleIntersect( float3 origin
     , float3 direction

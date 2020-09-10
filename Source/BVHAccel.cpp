@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "BVHAccel.h"
-#include "Primitive.h"
+#include "../Shaders/Vertex.inc.hlsl"
+#include "../Shaders/BVHNode.inc.hlsl"
 
 static const uint8_t k_MaxPrimCountInNode = 2;
 
@@ -270,22 +271,21 @@ void BuildBVH( const Vertex* vertices, const uint32_t* indices, uint32_t* reorde
     assert( reorderedTrianglesCount == triangleCount );
 }
 
-void PackBVH( const UnpackedBVHNode* bvhNodes, uint32_t nodeCount, PackedBVHNode* packedBvhNodes )
+void PackBVH( const UnpackedBVHNode* bvhNodes, uint32_t nodeCount, BVHNode* packedBvhNodes )
 {
     for ( uint32_t iNode = 0; iNode < nodeCount; ++iNode )
     {
-        packedBvhNodes[ iNode ] = PackedBVHNode( bvhNodes[ iNode ] );
-    }
-}
+        const UnpackedBVHNode& unpacked = bvhNodes[ iNode ];
+        BVHNode& packed = packedBvhNodes[ iNode ];
 
-PackedBVHNode::PackedBVHNode( const UnpackedBVHNode& unpacked )
-    : childOrPrimIndex( unpacked.childIndex )
-    , misc( unpacked.primCount )
-{
-    DirectX::XMVECTOR vCenter = DirectX::XMLoadFloat3( &unpacked.bbox.Center );
-    DirectX::XMVECTOR vExtends = DirectX::XMLoadFloat3( &unpacked.bbox.Extents );
-    DirectX::XMVECTOR vBBoxMin = DirectX::XMVectorSubtract( vCenter, vExtends );
-    DirectX::XMVECTOR vBBoxMax = DirectX::XMVectorAdd( vCenter, vExtends );
-    DirectX::XMStoreFloat3( &bboxMin, vBBoxMin );
-    DirectX::XMStoreFloat3( &bboxMax, vBBoxMax );
+        DirectX::XMVECTOR vCenter = DirectX::XMLoadFloat3( &unpacked.bbox.Center );
+        DirectX::XMVECTOR vExtends = DirectX::XMLoadFloat3( &unpacked.bbox.Extents );
+        DirectX::XMVECTOR vBBoxMin = DirectX::XMVectorSubtract( vCenter, vExtends );
+        DirectX::XMVECTOR vBBoxMax = DirectX::XMVectorAdd( vCenter, vExtends );
+        DirectX::XMStoreFloat3( &packed.bboxMin, vBBoxMin );
+        DirectX::XMStoreFloat3( &packed.bboxMax, vBBoxMax );
+
+        packed.childOrPrimIndex = unpacked.childIndex;
+        packed.misc = unpacked.primCount;
+    }
 }

@@ -42,9 +42,6 @@
     <ClInclude Include="targetver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Primitive.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Source\BVHAccel.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -67,6 +64,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Source\Mesh.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Shaders\CppTypes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Shaders\Vertex.inc.hlsl">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -123,9 +126,6 @@
     <None Include="Shaders\PostProcessings.hlsl">
       <Filter>Shaders</Filter>
     </None>
-    <None Include="Shaders\Primitives.inc.hlsl">
-      <Filter>Shaders</Filter>
-    </None>
     <None Include="Shaders\BSDFs.inc.hlsl">
       <Filter>Shaders</Filter>
     </None>
@@ -138,6 +138,11 @@
     <None Include="Shaders\CookTorranceCompensationBRDF.inc.hlsl" />
     <None Include="Shaders\Math.inc.hlsl" />
     <None Include="Shaders\BVHAccel.inc.hlsl" />
+    <None Include="Shaders\Intersection.inc.hlsl" />
+    <None Include="Shaders\HitShader.inc.hlsl" />
+    <None Include="Shaders\RayPrimitiveIntersect.inc.hlsl">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resources\DirectComputeRayTracing.rc">
@@ -145,7 +150,8 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="Shaders\Intersection.inc.hlsl" />
-    <FxCompile Include="Shaders\HitShader.inc.hlsl" />
+    <FxCompile Include="Shaders\Material.inc.hlsl" />
+    <FxCompile Include="Shaders\PointLight.inc.hlsl" />
+    <FxCompile Include="Shaders\BVHNode.inc.hlsl" />
   </ItemGroup>
 </Project>

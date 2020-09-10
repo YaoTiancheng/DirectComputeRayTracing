@@ -155,6 +155,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Shaders\CppTypes.h" />
+    <None Include="Shaders\Vertex.inc.hlsl">
+      <FileType>Document</FileType>
+    </None>
     <ClInclude Include="Source\BVHAccel.h" />
     <ClInclude Include="Source\Camera.h" />
     <ClInclude Include="Source\CommandLineArgs.h" />
@@ -166,7 +170,6 @@
     <ClInclude Include="Source\GPUBuffer.h" />
     <ClInclude Include="Source\GPUResourceCreationFlag.h" />
     <ClInclude Include="Source\GPUTexture.h" />
-    <ClInclude Include="Source\Primitive.h" />
     <ClInclude Include="Source\Scene.h" />
     <ClInclude Include="Source\stdafx.h" />
     <ClInclude Include="Source\OBJLoader\tiny_obj_loader.h" />
@@ -209,7 +212,7 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <FileType>Document</FileType>
     </None>
-    <None Include="Shaders\Primitives.inc.hlsl">
+    <None Include="Shaders\RayPrimitiveIntersect.inc.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
       </ExcludedFromBuild>
       <FileType>Document</FileType>
@@ -291,6 +294,21 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Shaders\HitShader.inc.hlsl">
+      <FileType>Document</FileType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Shaders\Material.inc.hlsl">
+      <FileType>Document</FileType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Shaders\PointLight.inc.hlsl">
+      <FileType>Document</FileType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Shaders\BVHNode.inc.hlsl">
       <FileType>Document</FileType>
     </None>
   </ItemGroup>

@@ -1,8 +1,6 @@
 #pragma once
 
-#include "Primitive.h"
 #include "Camera.h"
-#include "BVHAccel.h"
 #include "GPUBuffer.h"
 #include "GPUTexture.h"
 #include "Shader.h"

@@ -1,18 +1,4 @@
 
-struct PointLight
-{
-    float3              position;
-    float3              color;
-};
-
-struct Material
-{
-    float3              albedo;
-    float3              emission;
-    float               roughness;
-    float               ior;
-};
-
 cbuffer RayTracingConstants : register( b0 )
 {
     uint                g_MaxBounceCount;
@@ -26,9 +12,9 @@ cbuffer RayTracingConstants : register( b0 )
     float4              g_Background;
 }
 
-#include "Samples.inc.hlsl"
-#include "BSDFs.inc.hlsl"
-#include "Primitives.inc.hlsl"
+#include "Vertex.inc.hlsl"
+#include "PointLight.inc.hlsl"
+#include "Material.inc.hlsl"
 
 StructuredBuffer<Vertex>                g_Vertices      : register( t0 );
 StructuredBuffer<uint>                  g_Triangles     : register( t1 );
@@ -37,6 +23,8 @@ StructuredBuffer<uint>                  g_MaterialIds   : register( t10 );
 StructuredBuffer<Material>              g_Materials     : register( t11 );
 RWTexture2D<float4>                     g_FilmTexture;
 
+#include "Samples.inc.hlsl"
+#include "BSDFs.inc.hlsl"
 #include "BVHAccel.inc.hlsl"
 #include "HitShader.inc.hlsl"
 

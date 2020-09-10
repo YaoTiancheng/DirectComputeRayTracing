@@ -1,15 +1,8 @@
 #ifndef _BVHACCEL_H_
 #define _BVHACCEL_H_
 
-#include "Primitives.inc.hlsl"
-
-struct BVHNode
-{
-    float3 bboxMin;
-    float3 bboxMax;
-    uint   childOrPrimIndex;
-    uint   misc;
-};
+#include "RayPrimitiveIntersect.inc.hlsl"
+#include "BVHNode.inc.hlsl"
 
 uint BVHNodeGetPrimitiveCount( BVHNode node )
 {

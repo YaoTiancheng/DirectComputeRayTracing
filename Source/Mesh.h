@@ -1,15 +1,9 @@
 #pragma once
 
-#include "Primitive.h"
 #include "BVHAccel.h"
-
-struct Material
-{
-    DirectX::XMFLOAT3 albedo;
-    DirectX::XMFLOAT3 emission;
-    float             roughness;
-    float             ior;
-};
+#include "../Shaders/Vertex.inc.hlsl"
+#include "../Shaders/Material.inc.hlsl"
+#include "../Shaders/BVHNode.inc.hlsl"
 
 class Mesh
 {
@@ -30,7 +24,7 @@ public:
 
     const uint32_t*         GetIndices() const { return m_Indices.data(); }
 
-    const PackedBVHNode*    GetBVHNodes() const { return m_BVHNodes.data(); }
+    const BVHNode*          GetBVHNodes() const { return m_BVHNodes.data(); }
 
     const uint32_t*         GetMaterialIds() const { return m_MaterialIds.data(); }
 
@@ -39,7 +33,7 @@ public:
 private:
     std::vector<Vertex>         m_Vertices;
     std::vector<uint32_t>       m_Indices;
-    std::vector<PackedBVHNode>  m_BVHNodes;
+    std::vector<BVHNode>        m_BVHNodes;
     std::vector<uint32_t>       m_MaterialIds;
     std::vector<Material>       m_Materials;
 };

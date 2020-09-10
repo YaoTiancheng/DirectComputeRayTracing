@@ -99,8 +99,8 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
             assert( mesh.num_face_vertices[ iFace ] == 3 );
 
             int materialId = mesh.material_ids[ iFace ];
-            // If the triangle doesn't have a material then use the default material at the end.
-            if ( materialId == -1 )
+            // If the triangle has a material id out of range then assign a default material for it.
+            if ( materialId < 0 || materialId >= materials.size() )
             {
                 materialId = (int)materials.size();
                 if ( !needDefaultMaterial )

@@ -144,4 +144,8 @@
       <Filter>Resource Files</Filter>
     </ResourceCompile>
   </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="Shaders\Intersection.inc.hlsl" />
+    <FxCompile Include="Shaders\HitShader.inc.hlsl" />
+  </ItemGroup>
 </Project>

@@ -4,7 +4,7 @@
 #include "LambertBRDF.inc.hlsl"
 #include "CookTorranceBRDF.inc.hlsl"
 #include "CookTorranceCompensationBRDF.inc.hlsl"
-#include "Primitives.inc.hlsl"
+#include "Intersection.inc.hlsl"
 
 float SpecularWeight( float cosTheta, float alpha, float ior )
 {

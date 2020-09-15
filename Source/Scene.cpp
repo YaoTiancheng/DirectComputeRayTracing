@@ -75,6 +75,10 @@ bool Scene::Init()
     if ( !m_CookTorranceCompEFresnelTexture )
         return false;
 
+    m_EnvironmentTexture.reset( GPUTexture::CreateFromFile( CommandLineArgs::Singleton()->GetEnvironmentTextureFilename().c_str() ) );
+    if ( !m_EnvironmentTexture )
+        return false;
+
     std::vector<D3D_SHADER_MACRO> rayTracingShaderDefines;
     if ( CommandLineArgs::Singleton()->GetNoBVHAccel() )
     {
@@ -243,7 +247,7 @@ bool Scene::ResetScene()
       0.0f, 1.0f, 0.0f, 0.0f,
       0.0f, 0.0f, 1.0f, 0.0f,
       0.0f, 0.0f, 0.0f, 1.0f };
-    m_RayTracingConstants.background = { 0.3f, 0.3f, 0.3f, 0.f };
+    m_RayTracingConstants.background = { 1.0f, 1.0f, 1.0f, 0.f };
 
     m_IsFilmDirty = true;
 
@@ -365,8 +369,9 @@ void Scene::DispatchRayTracing()
         , m_BVHNodesBuffer ? m_BVHNodesBuffer->GetSRV() : nullptr
         , m_MaterialIdsBuffer->GetSRV()
         , m_MaterialsBuffer->GetSRV()
+        , m_EnvironmentTexture->GetSRV()
     };
-    deviceContext->CSSetShaderResources( 0, 12, rawSRVs );
+    deviceContext->CSSetShaderResources( 0, 13, rawSRVs );
 
     ID3D11Buffer* rawConstantBuffers[] = { m_RayTracingConstantsBuffer->GetBuffer(), m_CookTorranceCompTextureConstantsBuffer->GetBuffer() };
     deviceContext->CSSetConstantBuffers( 0, 2, rawConstantBuffers );

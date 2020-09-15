@@ -21,12 +21,16 @@ StructuredBuffer<uint>                  g_Triangles     : register( t1 );
 StructuredBuffer<PointLight>            g_PointLights   : register( t2 );
 StructuredBuffer<uint>                  g_MaterialIds   : register( t10 );
 StructuredBuffer<Material>              g_Materials     : register( t11 );
+TextureCube<float3>                     g_EnvTexture    : register( t12 );
 RWTexture2D<float4>                     g_FilmTexture;
+
+SamplerState UVClampSampler;
 
 #include "Samples.inc.hlsl"
 #include "BSDFs.inc.hlsl"
 #include "BVHAccel.inc.hlsl"
 #include "HitShader.inc.hlsl"
+#include "EnvironmentShader.inc.hlsl"
 
 void GenerateRay( float2 sample
 	, float2 filmSize
@@ -144,7 +148,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 
             if ( !IntersectScene( intersection.position, wi, intersection.rayEpsilon, threadId, intersection ) )
             {
-                l += pathThroughput * g_Background;
+                l += pathThroughput * EnvironmentShader( wi ) * g_Background;
                 break;
             }
             else
@@ -157,7 +161,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     }
     else
     {
-        l = g_Background;
+        l = EnvironmentShader( wo ) * g_Background;
     }
 
     AddSampleToFilm( l, pixelSample, pixelPos );

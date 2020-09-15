@@ -19,6 +19,8 @@ public:
 
     bool GetNoBVHAccel() const { return m_NoBVHAccel; }
 
+    const std::wstring& GetEnvironmentTextureFilename() const { return m_EnvironmentTextureFilename; }
+
     static const CommandLineArgs* Singleton() { return s_Singleton; }
 
 private:
@@ -29,6 +31,7 @@ private:
     bool        m_NoBVHAccel;
     std::string m_Filename;
     std::string m_MtlFileSearchPath;
+    std::wstring m_EnvironmentTextureFilename;
 
     static CommandLineArgs* s_Singleton;
 };

@@ -45,6 +45,11 @@ void CommandLineArgs::Parse( const wchar_t* cmdLine )
             wcstombs( mbFilepath, argStr1, MAX_PATH );
             m_MtlFileSearchPath = mbFilepath;
         }
+        else if ( wcscmp( argStr, L"-EnvMap" ) == 0 && iArg + 1 < numArgs )
+        {
+            wchar_t* argStr1 = argv[ ++iArg ];
+            m_EnvironmentTextureFilename = argStr1;
+        }
         else if ( wcscmp( argStr, L"-ShaderDebug" ) == 0 )
         {
             m_ShaderDebugEnabled = true;

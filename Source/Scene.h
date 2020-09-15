@@ -81,6 +81,7 @@ private:
     GPUTexturePtr                       m_CookTorranceCompInvCDFTexture;
     GPUTexturePtr                       m_CookTorranceCompPdfScaleTexture;
     GPUTexturePtr                       m_CookTorranceCompEFresnelTexture;
+    GPUTexturePtr                       m_EnvironmentTexture;
 
     using GPUBufferPtr = std::unique_ptr<GPUBuffer>;
     GPUBufferPtr                        m_RayTracingConstantsBuffer;

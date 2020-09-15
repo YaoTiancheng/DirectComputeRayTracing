@@ -19,8 +19,6 @@ Texture2D g_CookTorranceCompInvCDFTexture   : register( t6 );
 Texture2D g_CookTorranceCompPdfScaleTexture : register( t7 );
 Texture2DArray g_CookTorranceCompEFresnelTexture : register( t8 );
 
-SamplerState UVClampSampler;
-
 float EvaluateCookTorranceCompE( float cosTheta, float alpha )
 {
     float2 texelPos = float2( cosTheta, alpha ) * ( g_CompETextureSize.xy - 1.0f );

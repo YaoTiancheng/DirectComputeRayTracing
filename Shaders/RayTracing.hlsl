@@ -22,7 +22,8 @@ StructuredBuffer<PointLight>            g_PointLights   : register( t2 );
 StructuredBuffer<uint>                  g_MaterialIds   : register( t10 );
 StructuredBuffer<Material>              g_Materials     : register( t11 );
 TextureCube<float3>                     g_EnvTexture    : register( t12 );
-RWTexture2D<float4>                     g_FilmTexture;
+RWTexture2D<float4>                     g_FilmTexture   : register( u0 );
+RWStructuredBuffer<uint>                g_SampleCounter : register( u1 );
 
 SamplerState UVClampSampler;
 

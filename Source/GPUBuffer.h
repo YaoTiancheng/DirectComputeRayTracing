@@ -13,6 +13,8 @@ public:
 
     ID3D11ShaderResourceView*   GetSRV() const { return m_SRV; }
 
+    ID3D11UnorderedAccessView*  GetUAV() const { return m_UAV; }
+
     void*                       Map();
 
     void                        Unmap();
@@ -21,5 +23,6 @@ private:
     GPUBuffer();
 
     ID3D11Buffer* m_Buffer;
-    ID3D11ShaderResourceView* m_SRV;
+    ID3D11ShaderResourceView*   m_SRV;
+    ID3D11UnorderedAccessView * m_UAV;
 };

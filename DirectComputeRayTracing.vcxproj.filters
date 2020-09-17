@@ -69,9 +69,6 @@
     <ClInclude Include="Shaders\CppTypes.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Shaders\EnvironmentShader.inc.hlsl">
-      <Filter>Header Files</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\Application.cpp">
@@ -147,6 +144,7 @@
     <None Include="Shaders\Material.inc.hlsl" />
     <None Include="Shaders\PointLight.inc.hlsl" />
     <None Include="Shaders\BVHNode.inc.hlsl" />
+    <None Include="Shaders\EnvironmentShader.inc.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resources\DirectComputeRayTracing.rc">

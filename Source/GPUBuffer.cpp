@@ -20,6 +20,7 @@ void GPUBuffer::Unmap()
 GPUBuffer::GPUBuffer()
     : m_Buffer( nullptr )
     , m_SRV( nullptr )
+    , m_UAV( nullptr )
 {
 }
 
@@ -29,6 +30,11 @@ GPUBuffer::~GPUBuffer()
     {
         m_SRV->Release();
         m_SRV = nullptr;
+    }
+    if ( m_UAV )
+    {
+        m_UAV->Release();
+        m_UAV = nullptr;
     }
     if ( m_Buffer )
     {
@@ -44,11 +50,17 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, uint32_t 
     bool CPUWriteable       = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_CPUWriteable ) != 0;
     bool isStructureBuffer  = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_IsStructureBuffer ) != 0;
     bool isVertexBuffer     = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_IsVertexBuffer ) != 0;
+    bool hasUAV             = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_HasUAV ) != 0;
 
     D3D11_BUFFER_DESC bufferDesc;
     ZeroMemory( &bufferDesc, sizeof( bufferDesc ) );
     bufferDesc.ByteWidth            = byteWidth;
-    bufferDesc.Usage                = isImmutable ? D3D11_USAGE_IMMUTABLE : D3D11_USAGE_DYNAMIC;
+    if ( isImmutable )
+        bufferDesc.Usage            = D3D11_USAGE_IMMUTABLE;
+    else if ( CPUWriteable )
+        bufferDesc.Usage            = D3D11_USAGE_DYNAMIC;
+    else 
+        bufferDesc.Usage            = D3D11_USAGE_DEFAULT;
     uint32_t bindFlags              = 0;
     if ( isCBuffer )
         bindFlags = D3D11_BIND_CONSTANT_BUFFER;
@@ -56,6 +68,8 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, uint32_t 
         bindFlags = D3D11_BIND_VERTEX_BUFFER;
     else 
         bindFlags = D3D11_BIND_SHADER_RESOURCE;
+    if ( hasUAV )
+        bindFlags |= D3D11_BIND_UNORDERED_ACCESS;
     bufferDesc.BindFlags            = bindFlags;
     bufferDesc.CPUAccessFlags       = CPUWriteable ? D3D11_CPU_ACCESS_WRITE : 0;
     bufferDesc.StructureByteStride  = byteStride;
@@ -90,9 +104,22 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, uint32_t 
         }
     }
 
+    ID3D11UnorderedAccessView* UAV = nullptr;
+    if ( hasUAV )
+    {
+        hr = GetDevice()->CreateUnorderedAccessView( buffer, nullptr, &UAV );
+        if ( FAILED( hr ) )
+        {
+            SRV->Release();
+            buffer->Release();
+            return nullptr;
+        }
+    }
+
     GPUBuffer* gpuBuffer = new GPUBuffer();
     gpuBuffer->m_Buffer = buffer;
     gpuBuffer->m_SRV = SRV;
+    gpuBuffer->m_UAV = UAV;
 
     return gpuBuffer;
 }

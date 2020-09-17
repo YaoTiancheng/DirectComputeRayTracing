@@ -103,6 +103,13 @@ bool Scene::Init()
     if ( !m_SamplesBuffer )
         return false;
 
+    m_SampleCounterBuffer.reset( GPUBuffer::Create(
+          4
+        , 4
+        , GPUResourceCreationFlags_IsStructureBuffer | GPUResourceCreationFlags_HasUAV ) );
+    if ( !m_SampleCounterBuffer )
+        return false;
+
     // Fill in the subresource data.
     CookTorranceCompTextureConstants cooktorranceCompTextureConstants;
     cooktorranceCompTextureConstants.compETextureSize           = XMFLOAT4( 32.0f, 32.0f, 1.0f / 32.0f, 1.0f / 32.0f );
@@ -347,13 +354,20 @@ void Scene::DispatchRayTracing()
 {
     ID3D11DeviceContext* deviceContext = GetDeviceContext();
 
-    deviceContext->CSSetShader( m_RayTracingShader->GetNative(), nullptr, 0 );
+    static const uint32_t s_SamplerCountBufferClearValue[ 4 ] = { 0 };
+    deviceContext->ClearUnorderedAccessViewUint( m_SampleCounterBuffer->GetUAV(), s_SamplerCountBufferClearValue );
 
-    ID3D11UnorderedAccessView* rawFilmTextureUAV = m_FilmTexture->GetUAV();
-    deviceContext->CSSetUnorderedAccessViews( 0, 1, &rawFilmTextureUAV, nullptr );
+    deviceContext->CSSetShader( m_RayTracingShader->GetNative(), nullptr, 0 );
 
     ID3D11SamplerState* rawUVClampSamplerState = m_UVClampSamplerState.Get();
     deviceContext->CSSetSamplers( 0, 1, &rawUVClampSamplerState );
+
+    ID3D11UnorderedAccessView* rawUAVs[] = 
+    {
+          m_FilmTexture->GetUAV()
+        , m_SampleCounterBuffer->GetUAV()
+    };
+    deviceContext->CSSetUnorderedAccessViews( 0, 2, rawUAVs, nullptr );
 
     ID3D11ShaderResourceView* rawSRVs[] =
     {
@@ -380,8 +394,8 @@ void Scene::DispatchRayTracing()
     UINT threadGroupCountY = ( UINT ) ceil( m_RayTracingConstants.resolutionY / 16.0f );
     deviceContext->Dispatch( threadGroupCountX, threadGroupCountY, 1 );
 
-    rawFilmTextureUAV = nullptr;
-    deviceContext->CSSetUnorderedAccessViews( 0, 1, &rawFilmTextureUAV, nullptr );
+    rawUAVs[ 0 ] = nullptr;
+    deviceContext->CSSetUnorderedAccessViews( 0, 2, rawUAVs, nullptr );
 
     rawUVClampSamplerState = nullptr;
     deviceContext->PSSetSamplers( 0, 1, &rawUVClampSamplerState );

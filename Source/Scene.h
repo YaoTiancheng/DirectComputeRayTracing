@@ -94,4 +94,5 @@ private:
     GPUBufferPtr                        m_MaterialIdsBuffer;
     GPUBufferPtr                        m_MaterialsBuffer;
     GPUBufferPtr                        m_ScreenQuadVerticesBuffer;
+    GPUBufferPtr                        m_SampleCounterBuffer;
 };

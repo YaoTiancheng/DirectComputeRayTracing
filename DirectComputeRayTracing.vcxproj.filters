@@ -151,4 +151,8 @@
       <Filter>Resource Files</Filter>
     </ResourceCompile>
   </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="Shaders\SumLuminance.hlsl" />
+    <FxCompile Include="Shaders\SumLuminanceDef.inc.hlsl" />
+  </ItemGroup>
 </Project>

@@ -147,6 +147,17 @@ bool Scene::Init()
     if ( !m_RayTracingConstantsBuffer )
         return false;
 
+    {
+        XMFLOAT4 params = XMFLOAT4( 1.0f / ( resolutionWidth * resolutionHeight ), 0.0f, 0.0f, 0.0f );
+        m_PostProcessingConstantsBuffer.reset( GPUBuffer::Create(
+              sizeof( XMFLOAT4 )
+            , 0
+            , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsConstantBuffer
+            , &params ) );
+        if ( !m_PostProcessingConstantsBuffer )
+            return false;
+    }
+
     m_SamplesBuffer.reset( GPUBuffer::Create(
           sizeof( float ) * kMaxSamplesCount
         , sizeof( float )
@@ -362,13 +373,17 @@ void Scene::DoPostProcessing()
 
     ID3D11SamplerState* rawCopySamplerState = m_CopySamplerState.Get();
     deviceContext->PSSetSamplers( 0, 1, &rawCopySamplerState );
-    ID3D11ShaderResourceView* rawFilmTextureSRV = m_FilmTexture->GetSRV();
-    deviceContext->PSSetShaderResources( 0, 1, &rawFilmTextureSRV );
+    ID3D11ShaderResourceView* rawSRVs[] = { m_FilmTexture->GetSRV(), m_SumLuminanceBuffer1->GetSRV() };
+    deviceContext->PSSetShaderResources( 0, 2, rawSRVs );
+
+    ID3D11Buffer* rawConstantBuffer = m_PostProcessingConstantsBuffer->GetBuffer();
+    deviceContext->PSSetConstantBuffers( 0, 1, &rawConstantBuffer );
 
     deviceContext->Draw( 6, 0 );
 
-    rawFilmTextureSRV = nullptr;
-    deviceContext->PSSetShaderResources( 0, 1, &rawFilmTextureSRV );
+    rawSRVs[ 0 ] = nullptr;
+    rawSRVs[ 1 ] = nullptr;
+    deviceContext->PSSetShaderResources( 0, 2, rawSRVs );
     rawCopySamplerState = nullptr;
     deviceContext->PSSetSamplers( 0, 1, &rawCopySamplerState );
 }

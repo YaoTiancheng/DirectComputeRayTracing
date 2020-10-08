@@ -15,15 +15,18 @@ StructuredBuffer<float> g_LuminanceBuffer : register( t1 );
 
 SamplerState CopySampler;
 
-static const float  MIDDLE_GRAY = 0.03f;
-static const float  LUM_WHITE = 0.7f;
+static const float  LUM_WHITE_2 = 2.f;
 
-float3 ReinhardTonemap( float avgLum, float3 color )
+// See Automatic Exposure Using a Luminance Histogram, https://bruop.github.io/exposure/
+// Also see Lagard and de Rousiers, 2014 (pg. 85), https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/course-notes-moving-frostbite-to-pbr-v2.pdf
+float3 ApplyExposure( float avgLum, float3 color )
 {
-    float3 outColor = color * MIDDLE_GRAY / ( avgLum + 0.001f );
-    outColor *= ( 1.0f + outColor / LUM_WHITE );
-    outColor /= ( 1.0f + outColor );
-    return outColor;
+    return color / ( avgLum * 9.6f );
+}
+
+float3 ReinhardTonemap( float3 color )
+{
+    return color * ( 1.0f + color / LUM_WHITE_2 ) / ( 1.0f + color );
 }
 
 VertexOut MainVS( float4 pos : POSITION )
@@ -40,7 +43,8 @@ float4 MainPS( VertexOut i ) : SV_TARGET
     c.xyz /= c.w;
 
     float avgLum = g_LuminanceBuffer[ 0 ] * g_Params.x;
-    c.xyz = ReinhardTonemap( avgLum, c.xyz );
+    c.xyz = ApplyExposure( avgLum, c.xyz );
+    c.xyz = ReinhardTonemap( c.xyz );
 
     c.xyz = pow( c.xyz, 0.45f );
 

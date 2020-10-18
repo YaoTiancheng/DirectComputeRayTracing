@@ -4,6 +4,7 @@
 #include "CommandLineArgs.h"
 #include "Mesh.h"
 #include "../Shaders/PointLight.inc.hlsl"
+#include "../Shaders/SumLuminanceDef.inc.hlsl"
 
 using namespace DirectX;
 
@@ -89,15 +90,76 @@ bool Scene::Init()
     if ( !m_RayTracingShader )
         return false;
 
+    {
+        std::vector<D3D_SHADER_MACRO> sumLuminanceShaderDefines;
+        sumLuminanceShaderDefines.push_back( { NULL, NULL } );
+        m_SumLuminanceToSingleShader.reset( ComputeShader::CreateFromFile( L"Shaders\\SumLuminance.hlsl", sumLuminanceShaderDefines ) );
+        if ( !m_SumLuminanceToSingleShader )
+            return false;
+
+        sumLuminanceShaderDefines.insert( sumLuminanceShaderDefines.begin(), { "REDUCE_TO_1D", "0" } );
+        m_SumLuminanceTo1DShader.reset( ComputeShader::CreateFromFile( L"Shaders\\SumLuminance.hlsl", sumLuminanceShaderDefines ) );
+        if ( !m_SumLuminanceTo1DShader )
+            return false;
+    }
+
+    {
+        m_SumLuminanceBlockCountX = uint32_t( std::ceilf( resolutionWidth / float( SL_BLOCKSIZE ) ) );
+        m_SumLuminanceBlockCountX = uint32_t( std::ceilf( m_SumLuminanceBlockCountX / 2.0f ) );
+        m_SumLuminanceBlockCountY = uint32_t( std::ceilf( resolutionHeight / float( SL_BLOCKSIZEY ) ) );
+        m_SumLuminanceBlockCountY = uint32_t( std::ceilf( m_SumLuminanceBlockCountY / 2.0f ) );
+        m_SumLuminanceBuffer0.reset( GPUBuffer::Create(
+              sizeof( float ) * m_SumLuminanceBlockCountX * m_SumLuminanceBlockCountY
+            , sizeof( float )
+            , GPUResourceCreationFlags_IsStructureBuffer | GPUResourceCreationFlags_HasUAV ) );
+        if ( !m_SumLuminanceBuffer0 )
+            return false;
+        m_SumLuminanceBuffer1.reset( GPUBuffer::Create(
+              sizeof( float ) * m_SumLuminanceBlockCountX * m_SumLuminanceBlockCountY
+            , sizeof( float )
+            , GPUResourceCreationFlags_IsStructureBuffer | GPUResourceCreationFlags_HasUAV ) );
+        if ( !m_SumLuminanceBuffer1 )
+            return false;
+    }
+
+    {
+        uint32_t params[ 4 ] = { m_SumLuminanceBlockCountX, m_SumLuminanceBlockCountY, resolutionWidth, resolutionHeight };
+        m_SumLuminanceConstantsBuffer0.reset( GPUBuffer::Create(
+              sizeof( uint32_t ) * 4
+            , 0
+            , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsConstantBuffer
+            , params ) );
+        if ( !m_SumLuminanceConstantsBuffer0 )
+            return false;
+
+        m_SumLuminanceConstantsBuffer1.reset( GPUBuffer::Create(
+              sizeof( uint32_t ) * 4
+            , 0
+            , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsConstantBuffer ) );
+        if ( !m_SumLuminanceConstantsBuffer1 )
+            return false;
+    }
+
     m_RayTracingConstantsBuffer.reset( GPUBuffer::Create(
-        sizeof( RayTracingConstants )
+          sizeof( RayTracingConstants )
         , 0
         , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsConstantBuffer ) );
     if ( !m_RayTracingConstantsBuffer )
         return false;
 
+    {
+        XMFLOAT4 params = XMFLOAT4( 1.0f / ( resolutionWidth * resolutionHeight ), 0.0f, 0.0f, 0.0f );
+        m_PostProcessingConstantsBuffer.reset( GPUBuffer::Create(
+              sizeof( XMFLOAT4 )
+            , 0
+            , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsConstantBuffer
+            , &params ) );
+        if ( !m_PostProcessingConstantsBuffer )
+            return false;
+    }
+
     m_SamplesBuffer.reset( GPUBuffer::Create(
-        sizeof( float ) * kMaxSamplesCount
+          sizeof( float ) * kMaxSamplesCount
         , sizeof( float )
         , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer ) );
     if ( !m_SamplesBuffer )
@@ -246,7 +308,7 @@ bool Scene::ResetScene()
 
     m_RayTracingConstants.maxBounceCount = 2;
     m_RayTracingConstants.primitiveCount = mesh.GetTriangleCount();
-    m_RayTracingConstants.pointLightCount = pointLightCount;
+    m_RayTracingConstants.pointLightCount = 0;
     m_RayTracingConstants.filmSize = XMFLOAT2( 0.05333f, 0.03f );
     m_RayTracingConstants.filmDistance = 0.04f;
     m_RayTracingConstants.cameraTransform =
@@ -264,6 +326,7 @@ bool Scene::ResetScene()
 void Scene::AddOneSampleAndRender()
 {
     AddOneSample();
+    DispatchSumLuminance();
     DoPostProcessing();
 }
 
@@ -310,13 +373,17 @@ void Scene::DoPostProcessing()
 
     ID3D11SamplerState* rawCopySamplerState = m_CopySamplerState.Get();
     deviceContext->PSSetSamplers( 0, 1, &rawCopySamplerState );
-    ID3D11ShaderResourceView* rawFilmTextureSRV = m_FilmTexture->GetSRV();
-    deviceContext->PSSetShaderResources( 0, 1, &rawFilmTextureSRV );
+    ID3D11ShaderResourceView* rawSRVs[] = { m_FilmTexture->GetSRV(), m_SumLuminanceBuffer1->GetSRV() };
+    deviceContext->PSSetShaderResources( 0, 2, rawSRVs );
+
+    ID3D11Buffer* rawConstantBuffer = m_PostProcessingConstantsBuffer->GetBuffer();
+    deviceContext->PSSetConstantBuffers( 0, 1, &rawConstantBuffer );
 
     deviceContext->Draw( 6, 0 );
 
-    rawFilmTextureSRV = nullptr;
-    deviceContext->PSSetShaderResources( 0, 1, &rawFilmTextureSRV );
+    rawSRVs[ 0 ] = nullptr;
+    rawSRVs[ 1 ] = nullptr;
+    deviceContext->PSSetShaderResources( 0, 2, rawSRVs );
     rawCopySamplerState = nullptr;
     deviceContext->PSSetSamplers( 0, 1, &rawCopySamplerState );
 }
@@ -348,6 +415,71 @@ bool Scene::UpdateResources()
     }
 
     return true;
+}
+
+void Scene::DispatchSumLuminance()
+{
+    ID3D11DeviceContext* deviceContext = GetDeviceContext();
+
+    deviceContext->CSSetShader( m_SumLuminanceTo1DShader->GetNative(), nullptr, 0 );
+
+    ID3D11UnorderedAccessView* rawUAVs[] =
+    {
+        m_SumLuminanceBuffer1->GetUAV()
+    };
+    deviceContext->CSSetUnorderedAccessViews( 0, 1, rawUAVs, nullptr );
+
+    ID3D11ShaderResourceView* rawSRVs[] =
+    {
+        m_FilmTexture->GetSRV()
+    };
+    deviceContext->CSSetShaderResources( 0, 1, rawSRVs );
+
+    ID3D11Buffer* rawConstantBuffers[] = { m_SumLuminanceConstantsBuffer0->GetBuffer() };
+    deviceContext->CSSetConstantBuffers( 0, 1, rawConstantBuffers );
+
+    deviceContext->Dispatch( m_SumLuminanceBlockCountX, m_SumLuminanceBlockCountY, 1 );
+
+    rawUAVs[ 0 ] = nullptr;
+    deviceContext->CSSetUnorderedAccessViews( 0, 1, rawUAVs, nullptr );
+    rawSRVs[ 0 ] = nullptr;
+    deviceContext->CSSetShaderResources( 0, 1, rawSRVs );
+
+    rawConstantBuffers[ 0 ] = m_SumLuminanceConstantsBuffer1->GetBuffer();
+    deviceContext->CSSetConstantBuffers( 0, 1, rawConstantBuffers );
+
+    uint32_t blockCount = m_SumLuminanceBlockCountX * m_SumLuminanceBlockCountY;
+    while ( blockCount != 1 )
+    {
+        deviceContext->CSSetShader( m_SumLuminanceToSingleShader->GetNative(), nullptr, 0 );
+
+        rawUAVs[ 0 ] = m_SumLuminanceBuffer0->GetUAV();
+        deviceContext->CSSetUnorderedAccessViews( 0, 1, rawUAVs, nullptr );
+
+        rawSRVs[ 0 ] = m_SumLuminanceBuffer1->GetSRV();
+        deviceContext->CSSetShaderResources( 0, 1, rawSRVs );
+
+        uint32_t threadGroupCount = uint32_t( std::ceilf( blockCount / float( SL_REDUCE_TO_SINGLE_GROUPTHREADS ) ) );
+
+        if ( void* address = m_SumLuminanceConstantsBuffer1->Map() )
+        {
+            uint32_t* params = (uint32_t*)address;
+            params[ 0 ] = blockCount;
+            params[ 1 ] = threadGroupCount;
+            m_SumLuminanceConstantsBuffer1->Unmap();
+        }
+
+        deviceContext->Dispatch( threadGroupCount, 1, 1 );
+
+        rawUAVs[ 0 ] = nullptr;
+        deviceContext->CSSetUnorderedAccessViews( 0, 1, rawUAVs, nullptr );
+        rawSRVs[ 0 ] = nullptr;
+        deviceContext->CSSetShaderResources( 0, 1, rawSRVs );
+
+        blockCount = threadGroupCount;
+
+        std::swap( m_SumLuminanceBuffer0, m_SumLuminanceBuffer1 );
+    }
 }
 
 void Scene::DispatchRayTracing()

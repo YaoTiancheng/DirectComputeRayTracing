@@ -42,6 +42,8 @@ private:
 
     bool UpdateResources();
 
+    void DispatchSumLuminance();
+
     void DispatchRayTracing();
 
     void ClearFilmTexture();
@@ -56,6 +58,8 @@ private:
     D3D11_VIEWPORT                      m_DefaultViewport;
 
     RayTracingConstants                 m_RayTracingConstants;
+    uint32_t                            m_SumLuminanceBlockCountX;
+    uint32_t                            m_SumLuminanceBlockCountY;
 
     bool                                m_IsFilmDirty;
 
@@ -72,6 +76,8 @@ private:
     GfxShaderPtr                        m_PostFXShader;
     using ComputeShaderPtr = std::unique_ptr<ComputeShader>;
     ComputeShaderPtr                    m_RayTracingShader;
+    ComputeShaderPtr                    m_SumLuminanceTo1DShader;
+    ComputeShaderPtr                    m_SumLuminanceToSingleShader;
 
     using GPUTexturePtr = std::unique_ptr<GPUTexture>;
     GPUTexturePtr                       m_FilmTexture;
@@ -85,6 +91,7 @@ private:
 
     using GPUBufferPtr = std::unique_ptr<GPUBuffer>;
     GPUBufferPtr                        m_RayTracingConstantsBuffer;
+    GPUBufferPtr                        m_PostProcessingConstantsBuffer;
     GPUBufferPtr                        m_CookTorranceCompTextureConstantsBuffer;
     GPUBufferPtr                        m_SamplesBuffer;
     GPUBufferPtr                        m_VerticesBuffer;
@@ -95,4 +102,8 @@ private:
     GPUBufferPtr                        m_MaterialsBuffer;
     GPUBufferPtr                        m_ScreenQuadVerticesBuffer;
     GPUBufferPtr                        m_SampleCounterBuffer;
+    GPUBufferPtr                        m_SumLuminanceBuffer0;
+    GPUBufferPtr                        m_SumLuminanceBuffer1;
+    GPUBufferPtr                        m_SumLuminanceConstantsBuffer0;
+    GPUBufferPtr                        m_SumLuminanceConstantsBuffer1;
 };

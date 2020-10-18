@@ -22,18 +22,32 @@ groupshared float gs_accum[ groupthreads ];
 
 #if defined( REDUCE_TO_1D )
 
-static const float4 LUM_VECTOR = float4( .299, .587, .114, 0 );
+static const float3 LUM_VECTOR = float3( .299, .587, .114 );
+static const float  BLACK_BIAS = 0.0001f;
+
+float ComputeLuminance( float3 color )
+{
+    return dot( color, LUM_VECTOR );
+}
+
+float ComputeLogLuminance( float lum )
+{
+    return log( BLACK_BIAS + lum );
+}
 
 [numthreads( BLOCKSIZE, BLOCKSIZEY, 1 )]
 void main( uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex )
 {
-    float4 s = g_Input.Load( uint3( DTid.xy, 0 ) ) +
-               g_Input.Load( uint3( DTid.xy + uint2( BLOCKSIZE * g_Param.x, 0 ), 0 ) ) +
-               g_Input.Load( uint3( DTid.xy + uint2( 0, BLOCKSIZEY * g_Param.y ), 0 ) ) +
-               g_Input.Load( uint3( DTid.xy + uint2( BLOCKSIZE * g_Param.x, BLOCKSIZEY * g_Param.y ), 0 ) );
-    s.xyz /= s.w;
+    float4 s0 = g_Input.Load( uint3( DTid.xy, 0 ) );
+    float4 s1 = g_Input.Load( uint3( DTid.xy + uint2( BLOCKSIZE * g_Param.x, 0 ), 0 ) );
+    float4 s2 = g_Input.Load( uint3( DTid.xy + uint2( 0, BLOCKSIZEY * g_Param.y ), 0 ) );
+    float4 s3 = g_Input.Load( uint3( DTid.xy + uint2( BLOCKSIZE * g_Param.x, BLOCKSIZEY * g_Param.y ), 0 ) );
 
-    gs_accum[ GI ] = dot( s, LUM_VECTOR );
+    float lum0 = ComputeLuminance( s0.xyz / s0.w );
+    float lum1 = ComputeLuminance( s1.xyz / s1.w );
+    float lum2 = ComputeLuminance( s2.xyz / s2.w );
+    float lum3 = ComputeLuminance( s3.xyz / s3.w );
+    gs_accum[ GI ] = ComputeLogLuminance( lum0 ) + ComputeLogLuminance( lum1 ) + ComputeLogLuminance( lum2 ) + ComputeLogLuminance( lum3 );
 
     // Parallel reduction algorithm follows 
     GroupMemoryBarrierWithGroupSync();

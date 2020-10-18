@@ -15,14 +15,26 @@ StructuredBuffer<float> g_LuminanceBuffer : register( t1 );
 
 SamplerState CopySampler;
 
-static const float  LUM_WHITE_2 = 2.f;
+float ComputeEV100FromAverageLuminance( float avgLum )
+{
+    return log2( avgLum * 100.0f / 12.5f );
+}
+
+float ConvertEV100ToExposure( float EV100 )
+{
+    float maxLuminance = 1.2f * pow( 2.0f, EV100 );
+    return 1.0f / maxLuminance;
+}
 
 // See Automatic Exposure Using a Luminance Histogram, https://bruop.github.io/exposure/
 // Also see Lagard and de Rousiers, 2014 (pg. 85), https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/course-notes-moving-frostbite-to-pbr-v2.pdf
-float3 ApplyExposure( float avgLum, float3 color )
+float ComputeExposure( float avgLum )
 {
-    return color / ( avgLum * 9.6f );
+    float EV100 = ComputeEV100FromAverageLuminance( avgLum );
+    return ConvertEV100ToExposure( EV100 );
 }
+
+static const float  LUM_WHITE_2 = 0.7f;
 
 float3 ReinhardTonemap( float3 color )
 {
@@ -42,8 +54,9 @@ float4 MainPS( VertexOut i ) : SV_TARGET
     float4 c = g_FilmTexture.Sample( CopySampler, i.texcoord );
     c.xyz /= c.w;
 
-    float avgLum = g_LuminanceBuffer[ 0 ] * g_Params.x;
-    c.xyz = ApplyExposure( avgLum, c.xyz );
+    float avgLum = exp( g_LuminanceBuffer[ 0 ] * g_Params.x );
+    float exposure = ComputeExposure( avgLum );
+    c.xyz *= exposure;
     c.xyz = ReinhardTonemap( c.xyz );
 
     c.xyz = pow( c.xyz, 0.45f );

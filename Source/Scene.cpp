@@ -308,7 +308,7 @@ bool Scene::ResetScene()
 
     m_RayTracingConstants.maxBounceCount = 2;
     m_RayTracingConstants.primitiveCount = mesh.GetTriangleCount();
-    m_RayTracingConstants.pointLightCount = 0;
+    m_RayTracingConstants.pointLightCount = pointLightCount;
     m_RayTracingConstants.filmSize = XMFLOAT2( 0.05333f, 0.03f );
     m_RayTracingConstants.filmDistance = 0.04f;
     m_RayTracingConstants.cameraTransform =
@@ -319,6 +319,10 @@ bool Scene::ResetScene()
     m_RayTracingConstants.background = { 1.0f, 1.0f, 1.0f, 0.f };
 
     m_IsFilmDirty = true;
+
+    UpdatePostProcessingJob();
+    UpdateRayTracingJob();
+    UpdateSumLuminanceJobs();
 
     return true;
 }
@@ -356,36 +360,12 @@ void Scene::DoPostProcessing()
 {
     ID3D11DeviceContext* deviceContext = GetDeviceContext();
 
-    UINT vertexStride = sizeof( XMFLOAT4 );
-    UINT vertexOffset = 0;
-    ID3D11Buffer* rawScreenQuadVertexBuffer = m_ScreenQuadVerticesBuffer->GetBuffer();
-    deviceContext->IASetVertexBuffers( 0, 1, &rawScreenQuadVertexBuffer, &vertexStride, &vertexOffset );
-    deviceContext->IASetInputLayout( m_ScreenQuadVertexInputLayout.Get() );
-    deviceContext->IASetPrimitiveTopology( D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
-
     ID3D11RenderTargetView* rawDefaultRenderTargetView = m_DefaultRenderTarget->GetRTV();
     deviceContext->OMSetRenderTargets( 1, &rawDefaultRenderTargetView, nullptr );
 
     deviceContext->RSSetViewports( 1, &m_DefaultViewport );
 
-    deviceContext->VSSetShader( m_PostFXShader->GetVertexShader(), nullptr, 0 );
-    deviceContext->PSSetShader( m_PostFXShader->GetPixelShader(), nullptr, 0 );
-
-    ID3D11SamplerState* rawCopySamplerState = m_CopySamplerState.Get();
-    deviceContext->PSSetSamplers( 0, 1, &rawCopySamplerState );
-    ID3D11ShaderResourceView* rawSRVs[] = { m_FilmTexture->GetSRV(), m_SumLuminanceBuffer1->GetSRV() };
-    deviceContext->PSSetShaderResources( 0, 2, rawSRVs );
-
-    ID3D11Buffer* rawConstantBuffer = m_PostProcessingConstantsBuffer->GetBuffer();
-    deviceContext->PSSetConstantBuffers( 0, 1, &rawConstantBuffer );
-
-    deviceContext->Draw( 6, 0 );
-
-    rawSRVs[ 0 ] = nullptr;
-    rawSRVs[ 1 ] = nullptr;
-    deviceContext->PSSetShaderResources( 0, 2, rawSRVs );
-    rawCopySamplerState = nullptr;
-    deviceContext->PSSetSamplers( 0, 1, &rawCopySamplerState );
+    m_PostProcessingJob.Dispatch();
 }
 
 bool Scene::UpdateResources()
@@ -419,45 +399,13 @@ bool Scene::UpdateResources()
 
 void Scene::DispatchSumLuminance()
 {
-    ID3D11DeviceContext* deviceContext = GetDeviceContext();
-
-    deviceContext->CSSetShader( m_SumLuminanceTo1DShader->GetNative(), nullptr, 0 );
-
-    ID3D11UnorderedAccessView* rawUAVs[] =
-    {
-        m_SumLuminanceBuffer1->GetUAV()
-    };
-    deviceContext->CSSetUnorderedAccessViews( 0, 1, rawUAVs, nullptr );
-
-    ID3D11ShaderResourceView* rawSRVs[] =
-    {
-        m_FilmTexture->GetSRV()
-    };
-    deviceContext->CSSetShaderResources( 0, 1, rawSRVs );
-
-    ID3D11Buffer* rawConstantBuffers[] = { m_SumLuminanceConstantsBuffer0->GetBuffer() };
-    deviceContext->CSSetConstantBuffers( 0, 1, rawConstantBuffers );
-
-    deviceContext->Dispatch( m_SumLuminanceBlockCountX, m_SumLuminanceBlockCountY, 1 );
-
-    rawUAVs[ 0 ] = nullptr;
-    deviceContext->CSSetUnorderedAccessViews( 0, 1, rawUAVs, nullptr );
-    rawSRVs[ 0 ] = nullptr;
-    deviceContext->CSSetShaderResources( 0, 1, rawSRVs );
-
-    rawConstantBuffers[ 0 ] = m_SumLuminanceConstantsBuffer1->GetBuffer();
-    deviceContext->CSSetConstantBuffers( 0, 1, rawConstantBuffers );
+    m_SumLuminanceTo1DJob.Dispatch();
 
     uint32_t blockCount = m_SumLuminanceBlockCountX * m_SumLuminanceBlockCountY;
     while ( blockCount != 1 )
     {
-        deviceContext->CSSetShader( m_SumLuminanceToSingleShader->GetNative(), nullptr, 0 );
-
-        rawUAVs[ 0 ] = m_SumLuminanceBuffer0->GetUAV();
-        deviceContext->CSSetUnorderedAccessViews( 0, 1, rawUAVs, nullptr );
-
-        rawSRVs[ 0 ] = m_SumLuminanceBuffer1->GetSRV();
-        deviceContext->CSSetShaderResources( 0, 1, rawSRVs );
+        m_SumLuminanceToSingleJob.m_UAVs[ 0 ] = m_SumLuminanceBuffer0->GetUAV();
+        m_SumLuminanceToSingleJob.m_SRVs[ 0 ] = m_SumLuminanceBuffer1->GetSRV();
 
         uint32_t threadGroupCount = uint32_t( std::ceilf( blockCount / float( SL_REDUCE_TO_SINGLE_GROUPTHREADS ) ) );
 
@@ -469,12 +417,9 @@ void Scene::DispatchSumLuminance()
             m_SumLuminanceConstantsBuffer1->Unmap();
         }
 
-        deviceContext->Dispatch( threadGroupCount, 1, 1 );
+        m_SumLuminanceToSingleJob.m_DispatchSizeX = threadGroupCount;
 
-        rawUAVs[ 0 ] = nullptr;
-        deviceContext->CSSetUnorderedAccessViews( 0, 1, rawUAVs, nullptr );
-        rawSRVs[ 0 ] = nullptr;
-        deviceContext->CSSetShaderResources( 0, 1, rawSRVs );
+        m_SumLuminanceToSingleJob.Dispatch();
 
         blockCount = threadGroupCount;
 
@@ -484,25 +429,26 @@ void Scene::DispatchSumLuminance()
 
 void Scene::DispatchRayTracing()
 {
-    ID3D11DeviceContext* deviceContext = GetDeviceContext();
-
     static const uint32_t s_SamplerCountBufferClearValue[ 4 ] = { 0 };
-    deviceContext->ClearUnorderedAccessViewUint( m_SampleCounterBuffer->GetUAV(), s_SamplerCountBufferClearValue );
+    GetDeviceContext()->ClearUnorderedAccessViewUint( m_SampleCounterBuffer->GetUAV(), s_SamplerCountBufferClearValue );
 
-    deviceContext->CSSetShader( m_RayTracingShader->GetNative(), nullptr, 0 );
+    m_RayTracingJob.Dispatch();
+}
 
-    ID3D11SamplerState* rawUVClampSamplerState = m_UVClampSamplerState.Get();
-    deviceContext->CSSetSamplers( 0, 1, &rawUVClampSamplerState );
+void Scene::ClearFilmTexture()
+{
+    ID3D11DeviceContext* deviceContext = GetDeviceContext();
+    const static float kClearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    deviceContext->ClearRenderTargetView( m_FilmTexture->GetRTV(), kClearColor );
+}
 
-    ID3D11UnorderedAccessView* rawUAVs[] = 
-    {
-          m_FilmTexture->GetUAV()
-        , m_SampleCounterBuffer->GetUAV()
-    };
-    deviceContext->CSSetUnorderedAccessViews( 0, 2, rawUAVs, nullptr );
+void Scene::UpdateRayTracingJob()
+{
+    m_RayTracingJob.m_SamplerStates = { m_UVClampSamplerState.Get() };
 
-    ID3D11ShaderResourceView* rawSRVs[] =
-    {
+    m_RayTracingJob.m_UAVs = { m_FilmTexture->GetUAV(), m_SampleCounterBuffer->GetUAV() };
+
+    m_RayTracingJob.m_SRVs = {
           m_VerticesBuffer->GetSRV()
         , m_TrianglesBuffer->GetSRV()
         , m_PointLightsBuffer->GetSRV()
@@ -517,27 +463,45 @@ void Scene::DispatchRayTracing()
         , m_MaterialsBuffer->GetSRV()
         , m_EnvironmentTexture->GetSRV()
     };
-    deviceContext->CSSetShaderResources( 0, 13, rawSRVs );
 
-    ID3D11Buffer* rawConstantBuffers[] = { m_RayTracingConstantsBuffer->GetBuffer(), m_CookTorranceCompTextureConstantsBuffer->GetBuffer() };
-    deviceContext->CSSetConstantBuffers( 0, 2, rawConstantBuffers );
+    m_RayTracingJob.m_ConstantBuffers = { m_RayTracingConstantsBuffer->GetBuffer(), m_CookTorranceCompTextureConstantsBuffer->GetBuffer() };
 
-    UINT threadGroupCountX = ( UINT ) ceil( m_RayTracingConstants.resolutionX / 16.0f );
-    UINT threadGroupCountY = ( UINT ) ceil( m_RayTracingConstants.resolutionY / 16.0f );
-    deviceContext->Dispatch( threadGroupCountX, threadGroupCountY, 1 );
+    m_RayTracingJob.m_Shader = m_RayTracingShader.get();
 
-    rawUAVs[ 0 ] = nullptr;
-    deviceContext->CSSetUnorderedAccessViews( 0, 2, rawUAVs, nullptr );
-
-    rawUVClampSamplerState = nullptr;
-    deviceContext->PSSetSamplers( 0, 1, &rawUVClampSamplerState );
+    m_RayTracingJob.m_DispatchSizeX = (uint32_t)ceil( m_RayTracingConstants.resolutionX / 16.0f );
+    m_RayTracingJob.m_DispatchSizeY = (uint32_t)ceil( m_RayTracingConstants.resolutionY / 16.0f );
+    m_RayTracingJob.m_DispatchSizeZ = 1;
 }
 
-void Scene::ClearFilmTexture()
+void Scene::UpdateSumLuminanceJobs()
 {
-    ID3D11DeviceContext* deviceContext = GetDeviceContext();
-    const static float kClearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-    deviceContext->ClearRenderTargetView( m_FilmTexture->GetRTV(), kClearColor );
+    m_SumLuminanceTo1DJob.m_UAVs.push_back( m_SumLuminanceBuffer1->GetUAV() );
+    m_SumLuminanceTo1DJob.m_SRVs.push_back( m_FilmTexture->GetSRV() );
+    m_SumLuminanceTo1DJob.m_ConstantBuffers.push_back( m_SumLuminanceConstantsBuffer0->GetBuffer() );
+    m_SumLuminanceTo1DJob.m_Shader = m_SumLuminanceTo1DShader.get();
+    m_SumLuminanceTo1DJob.m_DispatchSizeX = m_SumLuminanceBlockCountX;
+    m_SumLuminanceTo1DJob.m_DispatchSizeY = m_SumLuminanceBlockCountY;
+    m_SumLuminanceTo1DJob.m_DispatchSizeZ = 1;
+
+    m_SumLuminanceToSingleJob.m_UAVs.push_back( nullptr );
+    m_SumLuminanceToSingleJob.m_SRVs.push_back( nullptr );
+    m_SumLuminanceToSingleJob.m_ConstantBuffers.push_back( m_SumLuminanceConstantsBuffer1->GetBuffer() );
+    m_SumLuminanceToSingleJob.m_Shader = m_SumLuminanceToSingleShader.get();
+    m_SumLuminanceToSingleJob.m_DispatchSizeY = 1;
+    m_SumLuminanceToSingleJob.m_DispatchSizeZ = 1;
+}
+
+void Scene::UpdatePostProcessingJob()
+{
+    m_PostProcessingJob.m_SamplerStates.push_back( m_CopySamplerState.Get() );
+    m_PostProcessingJob.m_SRVs.push_back( m_FilmTexture->GetSRV() );
+    m_PostProcessingJob.m_SRVs.push_back( m_SumLuminanceBuffer1->GetSRV() );
+    m_PostProcessingJob.m_ConstantBuffers.push_back( m_PostProcessingConstantsBuffer->GetBuffer() );
+    m_PostProcessingJob.m_Shader = m_PostFXShader.get();
+    m_PostProcessingJob.m_VertexBuffer = m_ScreenQuadVerticesBuffer.get();
+    m_PostProcessingJob.m_InputLayout = m_ScreenQuadVertexInputLayout.Get();
+    m_PostProcessingJob.m_VertexCount = 6;
+    m_PostProcessingJob.m_VertexStride = sizeof( XMFLOAT4 );
 }
 
 

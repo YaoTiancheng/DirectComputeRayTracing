@@ -4,6 +4,8 @@
 #include "GPUBuffer.h"
 #include "GPUTexture.h"
 #include "Shader.h"
+#include "ComputeJob.h"
+#include "GraphicsJob.h"
 
 
 struct RayTracingConstants
@@ -48,6 +50,11 @@ private:
 
     void ClearFilmTexture();
 
+    void UpdateRayTracingJob();
+
+    void UpdateSumLuminanceJobs();
+
+    void UpdatePostProcessingJob();
 
 private:
     static const int kMaxSamplesCount = 65536;
@@ -106,4 +113,9 @@ private:
     GPUBufferPtr                        m_SumLuminanceBuffer1;
     GPUBufferPtr                        m_SumLuminanceConstantsBuffer0;
     GPUBufferPtr                        m_SumLuminanceConstantsBuffer1;
+
+    ComputeJob                          m_RayTracingJob;
+    ComputeJob                          m_SumLuminanceTo1DJob;
+    ComputeJob                          m_SumLuminanceToSingleJob;
+    GraphicsJob                         m_PostProcessingJob;
 };

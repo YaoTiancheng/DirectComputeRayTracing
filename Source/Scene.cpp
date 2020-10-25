@@ -8,16 +8,6 @@
 
 using namespace DirectX;
 
-struct CookTorranceCompTextureConstants
-{
-    XMFLOAT4 compETextureSize;
-    XMFLOAT4 compEAvgTextureSize;
-    XMFLOAT4 compInvCDFTextureSize;
-    XMFLOAT4 compPdfScaleTextureSize;
-    XMFLOAT4 compEFresnelTextureSize;
-    XMFLOAT4 compEFresnelTextureSizeRcp;
-};
-
 XMFLOAT4 kScreenQuadVertices[ 6 ] =
 {
     { -1.0f,  1.0f,  0.0f,  1.0f },
@@ -170,22 +160,6 @@ bool Scene::Init()
         , 4
         , GPUResourceCreationFlags_IsStructureBuffer | GPUResourceCreationFlags_HasUAV ) );
     if ( !m_SampleCounterBuffer )
-        return false;
-
-    // Fill in the subresource data.
-    CookTorranceCompTextureConstants cooktorranceCompTextureConstants;
-    cooktorranceCompTextureConstants.compETextureSize           = XMFLOAT4( 32.0f, 32.0f, 1.0f / 32.0f, 1.0f / 32.0f );
-    cooktorranceCompTextureConstants.compEAvgTextureSize        = XMFLOAT4( 32.0f, 1.0f, 1.0f / 32.0f, 1.0f );
-    cooktorranceCompTextureConstants.compInvCDFTextureSize      = XMFLOAT4( 32.0f, 32.0f, 1.0f / 32.0f, 1.0f / 32.0f );
-    cooktorranceCompTextureConstants.compPdfScaleTextureSize    = XMFLOAT4( 32.0f, 1.0f, 1.0f / 32.0f, 1.0f );
-    cooktorranceCompTextureConstants.compEFresnelTextureSize    = XMFLOAT4( 32.0f, 16.0f, 16.0f, 0.0f );
-    cooktorranceCompTextureConstants.compEFresnelTextureSizeRcp = XMFLOAT4( 1.0f / 32.0f, 1.0f / 16.0f, 1.0f / 16.0f, 0.0f );
-    m_CookTorranceCompTextureConstantsBuffer.reset( GPUBuffer::Create(
-        sizeof( CookTorranceCompTextureConstants )
-        , 0
-        , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsConstantBuffer
-        , &cooktorranceCompTextureConstants ) );
-    if ( !m_CookTorranceCompTextureConstantsBuffer )
         return false;
 
     m_ScreenQuadVerticesBuffer.reset( GPUBuffer::Create(
@@ -464,7 +438,7 @@ void Scene::UpdateRayTracingJob()
         , m_EnvironmentTexture->GetSRV()
     };
 
-    m_RayTracingJob.m_ConstantBuffers = { m_RayTracingConstantsBuffer->GetBuffer(), m_CookTorranceCompTextureConstantsBuffer->GetBuffer() };
+    m_RayTracingJob.m_ConstantBuffers = { m_RayTracingConstantsBuffer->GetBuffer() };
 
     m_RayTracingJob.m_Shader = m_RayTracingShader.get();
 

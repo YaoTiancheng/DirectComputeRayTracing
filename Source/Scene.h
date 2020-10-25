@@ -99,7 +99,6 @@ private:
     using GPUBufferPtr = std::unique_ptr<GPUBuffer>;
     GPUBufferPtr                        m_RayTracingConstantsBuffer;
     GPUBufferPtr                        m_PostProcessingConstantsBuffer;
-    GPUBufferPtr                        m_CookTorranceCompTextureConstantsBuffer;
     GPUBufferPtr                        m_SamplesBuffer;
     GPUBufferPtr                        m_VerticesBuffer;
     GPUBufferPtr                        m_TrianglesBuffer;

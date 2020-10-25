@@ -3,15 +3,11 @@
 
 #include "Math.inc.hlsl"
 
-cbuffer CookTorranceCompTextureConstants : register( b1 )
-{
-    float4 g_CompETextureSize;
-    float4 g_CompEAvgTextureSize;
-    float4 g_CompInvCDFTextureSize;
-    float4 g_CompPdfScaleTextureSize;
-    float4 g_CompEFresnelTextureSize;
-    float4 g_CompEFresnelTextureSizeRcp;
-}
+#define TEXTURE_SIZE_COMP_E             float2( 32.0f, 32.0f )
+#define TEXTURE_SIZE_COMP_E_AVG         float2( 32.0f,  1.0f )
+#define TEXTURE_SIZE_INV_CDF            float2( 32.0f, 32.0f )
+#define TEXTURE_SIZE_PDF_SCALE          float2( 32.0f,  1.0f )
+#define TEXTURE_SIZE_COMP_E_FRESNEL     float3( 32.0f, 16.0f, 16.0f )
 
 Texture2D g_CookTorranceCompETexture        : register( t4 );
 Texture2D g_CookTorranceCompEAvgTexture     : register( t5 );
@@ -21,8 +17,8 @@ Texture2DArray g_CookTorranceCompEFresnelTexture : register( t8 );
 
 float EvaluateCookTorranceCompE( float cosTheta, float alpha )
 {
-    float2 texelPos = float2( cosTheta, alpha ) * ( g_CompETextureSize.xy - 1.0f );
-    float2 uv = ( texelPos + 0.5f ) * g_CompETextureSize.zw;
+    float2 texelPos = float2( cosTheta, alpha ) * ( TEXTURE_SIZE_COMP_E - 1.0f );
+    float2 uv = ( texelPos + 0.5f ) / TEXTURE_SIZE_COMP_E;
     float2 fraction = frac( texelPos );
     float4 values = g_CookTorranceCompETexture.Gather( UVClampSampler, uv );
     float2 value = lerp( values.wx, values.zy, fraction.x );
@@ -31,8 +27,8 @@ float EvaluateCookTorranceCompE( float cosTheta, float alpha )
 
 float EvaluateCookTorranceCompEAvg( float alpha )
 {
-    float2 texelPos = float2( alpha, 0.0f ) * ( g_CompEAvgTextureSize.xy - 1.0f );
-    float2 uv = ( texelPos + 0.5f ) * g_CompEAvgTextureSize.zw;
+    float2 texelPos = float2( alpha, 0.0f ) * ( TEXTURE_SIZE_COMP_E_AVG - 1.0f );
+    float2 uv = ( texelPos + 0.5f ) / TEXTURE_SIZE_COMP_E_AVG;
     float4 values = g_CookTorranceCompEAvgTexture.Gather( UVClampSampler, uv );
     float fraction = frac( texelPos.x );
     return lerp( values.w, values.z, fraction );
@@ -46,8 +42,8 @@ float EvaluateCookTorranceCompEAvg( float alpha )
 
 float EvaluateCookTorranceCompInvCDF( float sample, float alpha )
 {
-    float2 texelPos = float2( sample, alpha ) * ( g_CompInvCDFTextureSize.xy - 1.0f );
-    float2 uv = ( texelPos + 0.5f ) * g_CompInvCDFTextureSize.zw;
+    float2 texelPos = float2( sample, alpha ) * ( TEXTURE_SIZE_INV_CDF - 1.0f );
+    float2 uv = ( texelPos + 0.5f ) / TEXTURE_SIZE_INV_CDF;
     float2 fraction = frac( texelPos );
     float4 values = g_CookTorranceCompInvCDFTexture.Gather( UVClampSampler, uv );
     float2 value = lerp( values.wx, values.zy, fraction.x );
@@ -56,8 +52,8 @@ float EvaluateCookTorranceCompInvCDF( float sample, float alpha )
 
 float EvaluateCookTorranceCompPdfScale( float alpha )
 {
-    float2 texelPos = float2( alpha, 0.0f ) * ( g_CompPdfScaleTextureSize.xy - 1.0f );
-    float2 uv = ( texelPos + 0.5f ) * g_CompPdfScaleTextureSize.zw;
+    float2 texelPos = float2( alpha, 0.0f ) * ( TEXTURE_SIZE_PDF_SCALE - 1.0f );
+    float2 uv = ( texelPos + 0.5f ) / TEXTURE_SIZE_PDF_SCALE;
     float4 values = g_CookTorranceCompPdfScaleTexture.Gather( UVClampSampler, uv );
     float fraction = frac( texelPos.x );
     return lerp( values.w, values.z, fraction ) * 2.0f;
@@ -71,8 +67,8 @@ float EvaluateCookTorranceCompPdfScale( float alpha )
 
 float EvaluateCookTorranceCompEFresnel( float cosTheta, float alpha, float ior )
 {
-    float3 texelPos = float3( cosTheta, alpha, ( ior - 1.0f ) / 2.0f ) * ( g_CompEFresnelTextureSize.xyz - 1.0f );
-    float3 uvw = ( texelPos + 0.5f ) * g_CompEFresnelTextureSizeRcp.xyz;
+    float3 texelPos = float3( cosTheta, alpha, ( ior - 1.0f ) / 2.0f ) * ( TEXTURE_SIZE_COMP_E_FRESNEL - 1.0f );
+    float3 uvw = ( texelPos + 0.5f ) / TEXTURE_SIZE_COMP_E_FRESNEL;
     float3 fraction = frac( texelPos );
     float4 values0 = g_CookTorranceCompEFresnelTexture.Gather( UVClampSampler, float3( uvw.xy, ( float ) ( int ) texelPos.z ) );
     float4 values1 = g_CookTorranceCompEFresnelTexture.Gather( UVClampSampler, float3( uvw.xy, ( float ) ( int ) texelPos.z + 1 ) );

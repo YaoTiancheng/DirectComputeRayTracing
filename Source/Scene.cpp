@@ -3,6 +3,9 @@
 #include "D3D11RenderSystem.h"
 #include "CommandLineArgs.h"
 #include "Mesh.h"
+#include "GPUTexture.h"
+#include "GPUBuffer.h"
+#include "Shader.h"
 #include "../Shaders/PointLight.inc.hlsl"
 #include "../Shaders/SumLuminanceDef.inc.hlsl"
 
@@ -14,6 +17,10 @@ Scene::Scene()
 {
     std::random_device randomDevice;
     m_MersenneURBG = std::mt19937( randomDevice() );
+}
+
+Scene::~Scene()
+{
 }
 
 bool Scene::Init()

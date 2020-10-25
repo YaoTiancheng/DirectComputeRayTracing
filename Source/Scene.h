@@ -1,9 +1,6 @@
 #pragma once
 
 #include "Camera.h"
-#include "GPUBuffer.h"
-#include "GPUTexture.h"
-#include "Shader.h"
 #include "ComputeJob.h"
 #include "PostProcessingRenderer.h"
 
@@ -28,6 +25,8 @@ class Scene
 {
 public:
     Scene();
+
+    ~Scene();
 
     bool Init();
 
@@ -71,12 +70,10 @@ private:
     using ComPtr = Microsoft::WRL::ComPtr<T>;
     ComPtr<ID3D11SamplerState>          m_UVClampSamplerState;
 
-    using ComputeShaderPtr = std::unique_ptr<ComputeShader>;
     ComputeShaderPtr                    m_RayTracingShader;
     ComputeShaderPtr                    m_SumLuminanceTo1DShader;
     ComputeShaderPtr                    m_SumLuminanceToSingleShader;
 
-    using GPUTexturePtr = std::unique_ptr<GPUTexture>;
     GPUTexturePtr                       m_FilmTexture;
     GPUTexturePtr                       m_DefaultRenderTarget;
     GPUTexturePtr                       m_CookTorranceCompETexture;
@@ -86,7 +83,6 @@ private:
     GPUTexturePtr                       m_CookTorranceCompEFresnelTexture;
     GPUTexturePtr                       m_EnvironmentTexture;
 
-    using GPUBufferPtr = std::unique_ptr<GPUBuffer>;
     GPUBufferPtr                        m_RayTracingConstantsBuffer;
     GPUBufferPtr                        m_SamplesBuffer;
     GPUBufferPtr                        m_VerticesBuffer;

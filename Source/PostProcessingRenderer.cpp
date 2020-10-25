@@ -2,6 +2,8 @@
 #include "PostProcessingRenderer.h"
 #include "D3D11RenderSystem.h"
 #include "GPUTexture.h"
+#include "GPUBuffer.h"
+#include "Shader.h"
 
 using namespace DirectX;
 
@@ -20,7 +22,7 @@ D3D11_INPUT_ELEMENT_DESC s_ScreenQuadInputElementDesc[ 1 ]
     { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 };
 
-bool PostProcessingRenderer::Init( uint32_t resolutionWidth, uint32_t resolutionHeight, const std::unique_ptr<GPUTexture>& filmTexture, const std::unique_ptr<GPUBuffer>& luminanceBuffer )
+bool PostProcessingRenderer::Init( uint32_t resolutionWidth, uint32_t resolutionHeight, const GPUTexturePtr& filmTexture, const GPUBufferPtr& luminanceBuffer )
 {
     std::vector<D3D_SHADER_MACRO> shaderDefines;
     shaderDefines.push_back( { NULL, NULL } );

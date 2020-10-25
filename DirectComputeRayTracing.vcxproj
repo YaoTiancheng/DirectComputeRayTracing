@@ -171,6 +171,7 @@
     <ClInclude Include="Source\DDSTextureLoader.h" />
     <ClInclude Include="Resources\Resource.h" />
     <ClInclude Include="Source\GraphicsJob.h" />
+    <ClInclude Include="Source\PostProcessingRenderer.h" />
     <ClInclude Include="Source\RenderJobHelper.h" />
     <ClInclude Include="Source\Shader.h" />
     <ClInclude Include="Source\GPUBuffer.h" />
@@ -191,6 +192,7 @@
     <ClCompile Include="Source\Application.cpp" />
     <ClCompile Include="Source\DDSTextureLoader.cpp" />
     <ClCompile Include="Source\GraphicsJob.cpp" />
+    <ClCompile Include="Source\PostProcessingRenderer.cpp" />
     <ClCompile Include="Source\RenderJobHelper.cpp" />
     <ClCompile Include="Source\Shader.cpp" />
     <ClCompile Include="Source\GPUBuffer.cpp" />

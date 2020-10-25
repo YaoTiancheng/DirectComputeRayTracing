@@ -8,21 +8,6 @@
 
 using namespace DirectX;
 
-XMFLOAT4 kScreenQuadVertices[ 6 ] =
-{
-    { -1.0f,  1.0f,  0.0f,  1.0f },
-    {  1.0f,  1.0f,  0.0f,  1.0f },
-    { -1.0f, -1.0f,  0.0f,  1.0f },
-    { -1.0f, -1.0f,  0.0f,  1.0f },
-    {  1.0f,  1.0f,  0.0f,  1.0f },
-    {  1.0f, -1.0f,  0.0f,  1.0f },
-};
-
-D3D11_INPUT_ELEMENT_DESC kScreenQuadInputElementDesc[ 1 ]
-{
-    { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-};
-
 Scene::Scene()
     : m_IsFilmDirty( true )
     , m_UniformRealDistribution( 0.0f, std::nexttoward( 1.0f, 0.0f ) )
@@ -137,17 +122,6 @@ bool Scene::Init()
     if ( !m_RayTracingConstantsBuffer )
         return false;
 
-    {
-        XMFLOAT4 params = XMFLOAT4( 1.0f / ( resolutionWidth * resolutionHeight ), 0.0f, 0.0f, 0.0f );
-        m_PostProcessingConstantsBuffer.reset( GPUBuffer::Create(
-              sizeof( XMFLOAT4 )
-            , 0
-            , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsConstantBuffer
-            , &params ) );
-        if ( !m_PostProcessingConstantsBuffer )
-            return false;
-    }
-
     m_SamplesBuffer.reset( GPUBuffer::Create(
           sizeof( float ) * kMaxSamplesCount
         , sizeof( float )
@@ -160,24 +134,6 @@ bool Scene::Init()
         , 4
         , GPUResourceCreationFlags_IsStructureBuffer | GPUResourceCreationFlags_HasUAV ) );
     if ( !m_SampleCounterBuffer )
-        return false;
-
-    m_ScreenQuadVerticesBuffer.reset( GPUBuffer::Create(
-        sizeof( kScreenQuadVertices )
-        , sizeof( XMFLOAT4 )
-        , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsVertexBuffer
-        , &kScreenQuadVertices ) );
-    if ( !m_ScreenQuadVerticesBuffer )
-        return false;
-
-    std::vector<D3D_SHADER_MACRO> postProcessingShaderDefines;
-    postProcessingShaderDefines.push_back( { NULL, NULL } );
-    m_PostFXShader.reset( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", postProcessingShaderDefines ) );
-    if ( !m_PostFXShader )
-        return false;
-
-    m_ScreenQuadVertexInputLayout.Attach( m_PostFXShader->CreateInputLayout( kScreenQuadInputElementDesc, 1 ) );
-    if ( !m_ScreenQuadVertexInputLayout )
         return false;
 
     m_DefaultRenderTarget.reset( GPUTexture::CreateFromSwapChain() );
@@ -193,25 +149,16 @@ bool Scene::Init()
     samplerDesc.MaxAnisotropy = 1;
     samplerDesc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
     samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
-    HRESULT hr = device->CreateSamplerState( &samplerDesc, &m_CopySamplerState );
+    HRESULT hr = device->CreateSamplerState( &samplerDesc, &m_UVClampSamplerState );
     if ( FAILED( hr ) )
         return false;
 
-    samplerDesc.Filter = D3D11_FILTER_MAXIMUM_MIN_MAG_MIP_POINT;
-    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
-    samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
-    samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-    samplerDesc.MaxAnisotropy = 1;
-    samplerDesc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
-    samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
-    hr = device->CreateSamplerState( &samplerDesc, &m_UVClampSamplerState );
-    if ( FAILED( hr ) )
-        return false;
-
-    m_DefaultViewport = { 0.0f, 0.0f, ( float ) resolutionWidth, ( float ) resolutionHeight, 0.0f, 1.0f };
     m_RayTracingConstants.samplesCount = kMaxSamplesCount;
     m_RayTracingConstants.resolutionX = resolutionWidth;
     m_RayTracingConstants.resolutionY = resolutionHeight;
+
+    if ( !m_PostProcessing.Init( resolutionWidth, resolutionHeight, m_FilmTexture, m_SumLuminanceBuffer1 ) )
+        return false;
 
     return true;
 }
@@ -294,7 +241,6 @@ bool Scene::ResetScene()
 
     m_IsFilmDirty = true;
 
-    UpdatePostProcessingJob();
     UpdateRayTracingJob();
     UpdateSumLuminanceJobs();
 
@@ -305,7 +251,7 @@ void Scene::AddOneSampleAndRender()
 {
     AddOneSample();
     DispatchSumLuminance();
-    DoPostProcessing();
+    m_PostProcessing.Execute( m_DefaultRenderTarget );
 }
 
 bool Scene::OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam )
@@ -328,18 +274,6 @@ void Scene::AddOneSample()
 
     if ( UpdateResources() )
         DispatchRayTracing();
-}
-
-void Scene::DoPostProcessing()
-{
-    ID3D11DeviceContext* deviceContext = GetDeviceContext();
-
-    ID3D11RenderTargetView* rawDefaultRenderTargetView = m_DefaultRenderTarget->GetRTV();
-    deviceContext->OMSetRenderTargets( 1, &rawDefaultRenderTargetView, nullptr );
-
-    deviceContext->RSSetViewports( 1, &m_DefaultViewport );
-
-    m_PostProcessingJob.Dispatch();
 }
 
 bool Scene::UpdateResources()
@@ -463,19 +397,6 @@ void Scene::UpdateSumLuminanceJobs()
     m_SumLuminanceToSingleJob.m_Shader = m_SumLuminanceToSingleShader.get();
     m_SumLuminanceToSingleJob.m_DispatchSizeY = 1;
     m_SumLuminanceToSingleJob.m_DispatchSizeZ = 1;
-}
-
-void Scene::UpdatePostProcessingJob()
-{
-    m_PostProcessingJob.m_SamplerStates.push_back( m_CopySamplerState.Get() );
-    m_PostProcessingJob.m_SRVs.push_back( m_FilmTexture->GetSRV() );
-    m_PostProcessingJob.m_SRVs.push_back( m_SumLuminanceBuffer1->GetSRV() );
-    m_PostProcessingJob.m_ConstantBuffers.push_back( m_PostProcessingConstantsBuffer->GetBuffer() );
-    m_PostProcessingJob.m_Shader = m_PostFXShader.get();
-    m_PostProcessingJob.m_VertexBuffer = m_ScreenQuadVerticesBuffer.get();
-    m_PostProcessingJob.m_InputLayout = m_ScreenQuadVertexInputLayout.Get();
-    m_PostProcessingJob.m_VertexCount = 6;
-    m_PostProcessingJob.m_VertexStride = sizeof( XMFLOAT4 );
 }
 
 

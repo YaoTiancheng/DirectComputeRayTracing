@@ -5,7 +5,7 @@
 #include "GPUTexture.h"
 #include "Shader.h"
 #include "ComputeJob.h"
-#include "GraphicsJob.h"
+#include "PostProcessingRenderer.h"
 
 
 struct RayTracingConstants
@@ -40,8 +40,6 @@ public:
 private:
     void AddOneSample();
 
-    void DoPostProcessing();
-
     bool UpdateResources();
 
     void DispatchSumLuminance();
@@ -54,15 +52,11 @@ private:
 
     void UpdateSumLuminanceJobs();
 
-    void UpdatePostProcessingJob();
-
 private:
     static const int kMaxSamplesCount = 65536;
 
 
     Camera                              m_Camera;
-
-    D3D11_VIEWPORT                      m_DefaultViewport;
 
     RayTracingConstants                 m_RayTracingConstants;
     uint32_t                            m_SumLuminanceBlockCountX;
@@ -75,12 +69,8 @@ private:
 
     template <typename T>
     using ComPtr = Microsoft::WRL::ComPtr<T>;
-    ComPtr<ID3D11SamplerState>          m_CopySamplerState;
     ComPtr<ID3D11SamplerState>          m_UVClampSamplerState;
-    ComPtr<ID3D11InputLayout>           m_ScreenQuadVertexInputLayout;
 
-    using GfxShaderPtr = std::unique_ptr<GfxShader>;
-    GfxShaderPtr                        m_PostFXShader;
     using ComputeShaderPtr = std::unique_ptr<ComputeShader>;
     ComputeShaderPtr                    m_RayTracingShader;
     ComputeShaderPtr                    m_SumLuminanceTo1DShader;
@@ -98,7 +88,6 @@ private:
 
     using GPUBufferPtr = std::unique_ptr<GPUBuffer>;
     GPUBufferPtr                        m_RayTracingConstantsBuffer;
-    GPUBufferPtr                        m_PostProcessingConstantsBuffer;
     GPUBufferPtr                        m_SamplesBuffer;
     GPUBufferPtr                        m_VerticesBuffer;
     GPUBufferPtr                        m_TrianglesBuffer;
@@ -106,7 +95,6 @@ private:
     GPUBufferPtr                        m_PointLightsBuffer;
     GPUBufferPtr                        m_MaterialIdsBuffer;
     GPUBufferPtr                        m_MaterialsBuffer;
-    GPUBufferPtr                        m_ScreenQuadVerticesBuffer;
     GPUBufferPtr                        m_SampleCounterBuffer;
     GPUBufferPtr                        m_SumLuminanceBuffer0;
     GPUBufferPtr                        m_SumLuminanceBuffer1;
@@ -116,5 +104,6 @@ private:
     ComputeJob                          m_RayTracingJob;
     ComputeJob                          m_SumLuminanceTo1DJob;
     ComputeJob                          m_SumLuminanceToSingleJob;
-    GraphicsJob                         m_PostProcessingJob;
+
+    PostProcessingRenderer              m_PostProcessing;
 };

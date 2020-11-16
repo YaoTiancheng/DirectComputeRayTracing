@@ -3,6 +3,7 @@
 #include "Camera.h"
 #include "ComputeJob.h"
 #include "PostProcessingRenderer.h"
+#include "SceneLuminanceRenderer.h"
 
 
 struct RayTracingConstants
@@ -41,15 +42,11 @@ private:
 
     bool UpdateResources();
 
-    void DispatchSumLuminance();
-
     void DispatchRayTracing();
 
     void ClearFilmTexture();
 
     void UpdateRayTracingJob();
-
-    void UpdateSumLuminanceJobs();
 
 private:
     static const int kMaxSamplesCount = 65536;
@@ -58,8 +55,6 @@ private:
     Camera                              m_Camera;
 
     RayTracingConstants                 m_RayTracingConstants;
-    uint32_t                            m_SumLuminanceBlockCountX;
-    uint32_t                            m_SumLuminanceBlockCountY;
 
     bool                                m_IsFilmDirty;
 
@@ -71,8 +66,6 @@ private:
     ComPtr<ID3D11SamplerState>          m_UVClampSamplerState;
 
     ComputeShaderPtr                    m_RayTracingShader;
-    ComputeShaderPtr                    m_SumLuminanceTo1DShader;
-    ComputeShaderPtr                    m_SumLuminanceToSingleShader;
 
     GPUTexturePtr                       m_FilmTexture;
     GPUTexturePtr                       m_DefaultRenderTarget;
@@ -92,14 +85,9 @@ private:
     GPUBufferPtr                        m_MaterialIdsBuffer;
     GPUBufferPtr                        m_MaterialsBuffer;
     GPUBufferPtr                        m_SampleCounterBuffer;
-    GPUBufferPtr                        m_SumLuminanceBuffer0;
-    GPUBufferPtr                        m_SumLuminanceBuffer1;
-    GPUBufferPtr                        m_SumLuminanceConstantsBuffer0;
-    GPUBufferPtr                        m_SumLuminanceConstantsBuffer1;
 
     ComputeJob                          m_RayTracingJob;
-    ComputeJob                          m_SumLuminanceTo1DJob;
-    ComputeJob                          m_SumLuminanceToSingleJob;
 
     PostProcessingRenderer              m_PostProcessing;
+    SceneLuminanceRenderer              m_SceneLuminance;
 };

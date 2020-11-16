@@ -72,56 +72,6 @@ bool Scene::Init()
     if ( !m_RayTracingShader )
         return false;
 
-    {
-        std::vector<D3D_SHADER_MACRO> sumLuminanceShaderDefines;
-        sumLuminanceShaderDefines.push_back( { NULL, NULL } );
-        m_SumLuminanceToSingleShader.reset( ComputeShader::CreateFromFile( L"Shaders\\SumLuminance.hlsl", sumLuminanceShaderDefines ) );
-        if ( !m_SumLuminanceToSingleShader )
-            return false;
-
-        sumLuminanceShaderDefines.insert( sumLuminanceShaderDefines.begin(), { "REDUCE_TO_1D", "0" } );
-        m_SumLuminanceTo1DShader.reset( ComputeShader::CreateFromFile( L"Shaders\\SumLuminance.hlsl", sumLuminanceShaderDefines ) );
-        if ( !m_SumLuminanceTo1DShader )
-            return false;
-    }
-
-    {
-        m_SumLuminanceBlockCountX = uint32_t( std::ceilf( resolutionWidth / float( SL_BLOCKSIZE ) ) );
-        m_SumLuminanceBlockCountX = uint32_t( std::ceilf( m_SumLuminanceBlockCountX / 2.0f ) );
-        m_SumLuminanceBlockCountY = uint32_t( std::ceilf( resolutionHeight / float( SL_BLOCKSIZEY ) ) );
-        m_SumLuminanceBlockCountY = uint32_t( std::ceilf( m_SumLuminanceBlockCountY / 2.0f ) );
-        m_SumLuminanceBuffer0.reset( GPUBuffer::Create(
-              sizeof( float ) * m_SumLuminanceBlockCountX * m_SumLuminanceBlockCountY
-            , sizeof( float )
-            , GPUResourceCreationFlags_IsStructureBuffer | GPUResourceCreationFlags_HasUAV ) );
-        if ( !m_SumLuminanceBuffer0 )
-            return false;
-        m_SumLuminanceBuffer1.reset( GPUBuffer::Create(
-              sizeof( float ) * m_SumLuminanceBlockCountX * m_SumLuminanceBlockCountY
-            , sizeof( float )
-            , GPUResourceCreationFlags_IsStructureBuffer | GPUResourceCreationFlags_HasUAV ) );
-        if ( !m_SumLuminanceBuffer1 )
-            return false;
-    }
-
-    {
-        uint32_t params[ 4 ] = { m_SumLuminanceBlockCountX, m_SumLuminanceBlockCountY, resolutionWidth, resolutionHeight };
-        m_SumLuminanceConstantsBuffer0.reset( GPUBuffer::Create(
-              sizeof( uint32_t ) * 4
-            , 0
-            , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsConstantBuffer
-            , params ) );
-        if ( !m_SumLuminanceConstantsBuffer0 )
-            return false;
-
-        m_SumLuminanceConstantsBuffer1.reset( GPUBuffer::Create(
-              sizeof( uint32_t ) * 4
-            , 0
-            , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsConstantBuffer ) );
-        if ( !m_SumLuminanceConstantsBuffer1 )
-            return false;
-    }
-
     m_RayTracingConstantsBuffer.reset( GPUBuffer::Create(
           sizeof( RayTracingConstants )
         , 0
@@ -164,7 +114,10 @@ bool Scene::Init()
     m_RayTracingConstants.resolutionX = resolutionWidth;
     m_RayTracingConstants.resolutionY = resolutionHeight;
 
-    if ( !m_PostProcessing.Init( resolutionWidth, resolutionHeight, m_FilmTexture, m_SumLuminanceBuffer1 ) )
+    if ( !m_SceneLuminance.Init( resolutionWidth, resolutionHeight, m_FilmTexture ) )
+        return false;
+
+    if ( !m_PostProcessing.Init( resolutionWidth, resolutionHeight, m_FilmTexture, m_SceneLuminance.GetLuminanceResultBuffer() ) )
         return false;
 
     return true;
@@ -249,7 +202,6 @@ bool Scene::ResetScene()
     m_IsFilmDirty = true;
 
     UpdateRayTracingJob();
-    UpdateSumLuminanceJobs();
 
     return true;
 }
@@ -257,7 +209,7 @@ bool Scene::ResetScene()
 void Scene::AddOneSampleAndRender()
 {
     AddOneSample();
-    DispatchSumLuminance();
+    m_SceneLuminance.Dispatch();
     m_PostProcessing.Execute( m_DefaultRenderTarget );
 }
 
@@ -312,36 +264,6 @@ bool Scene::UpdateResources()
     return true;
 }
 
-void Scene::DispatchSumLuminance()
-{
-    m_SumLuminanceTo1DJob.Dispatch();
-
-    uint32_t blockCount = m_SumLuminanceBlockCountX * m_SumLuminanceBlockCountY;
-    while ( blockCount != 1 )
-    {
-        m_SumLuminanceToSingleJob.m_UAVs[ 0 ] = m_SumLuminanceBuffer0->GetUAV();
-        m_SumLuminanceToSingleJob.m_SRVs[ 0 ] = m_SumLuminanceBuffer1->GetSRV();
-
-        uint32_t threadGroupCount = uint32_t( std::ceilf( blockCount / float( SL_REDUCE_TO_SINGLE_GROUPTHREADS ) ) );
-
-        if ( void* address = m_SumLuminanceConstantsBuffer1->Map() )
-        {
-            uint32_t* params = (uint32_t*)address;
-            params[ 0 ] = blockCount;
-            params[ 1 ] = threadGroupCount;
-            m_SumLuminanceConstantsBuffer1->Unmap();
-        }
-
-        m_SumLuminanceToSingleJob.m_DispatchSizeX = threadGroupCount;
-
-        m_SumLuminanceToSingleJob.Dispatch();
-
-        blockCount = threadGroupCount;
-
-        std::swap( m_SumLuminanceBuffer0, m_SumLuminanceBuffer1 );
-    }
-}
-
 void Scene::DispatchRayTracing()
 {
     static const uint32_t s_SamplerCountBufferClearValue[ 4 ] = { 0 };
@@ -386,24 +308,6 @@ void Scene::UpdateRayTracingJob()
     m_RayTracingJob.m_DispatchSizeX = (uint32_t)ceil( m_RayTracingConstants.resolutionX / 16.0f );
     m_RayTracingJob.m_DispatchSizeY = (uint32_t)ceil( m_RayTracingConstants.resolutionY / 16.0f );
     m_RayTracingJob.m_DispatchSizeZ = 1;
-}
-
-void Scene::UpdateSumLuminanceJobs()
-{
-    m_SumLuminanceTo1DJob.m_UAVs.push_back( m_SumLuminanceBuffer1->GetUAV() );
-    m_SumLuminanceTo1DJob.m_SRVs.push_back( m_FilmTexture->GetSRV() );
-    m_SumLuminanceTo1DJob.m_ConstantBuffers.push_back( m_SumLuminanceConstantsBuffer0->GetBuffer() );
-    m_SumLuminanceTo1DJob.m_Shader = m_SumLuminanceTo1DShader.get();
-    m_SumLuminanceTo1DJob.m_DispatchSizeX = m_SumLuminanceBlockCountX;
-    m_SumLuminanceTo1DJob.m_DispatchSizeY = m_SumLuminanceBlockCountY;
-    m_SumLuminanceTo1DJob.m_DispatchSizeZ = 1;
-
-    m_SumLuminanceToSingleJob.m_UAVs.push_back( nullptr );
-    m_SumLuminanceToSingleJob.m_SRVs.push_back( nullptr );
-    m_SumLuminanceToSingleJob.m_ConstantBuffers.push_back( m_SumLuminanceConstantsBuffer1->GetBuffer() );
-    m_SumLuminanceToSingleJob.m_Shader = m_SumLuminanceToSingleShader.get();
-    m_SumLuminanceToSingleJob.m_DispatchSizeY = 1;
-    m_SumLuminanceToSingleJob.m_DispatchSizeZ = 1;
 }
 
 

@@ -6,6 +6,7 @@
 #include "GPUTexture.h"
 #include "GPUBuffer.h"
 #include "Shader.h"
+#include "imgui/imgui.h"
 #include "../Shaders/PointLight.inc.hlsl"
 #include "../Shaders/SumLuminanceDef.inc.hlsl"
 
@@ -308,6 +309,43 @@ void Scene::UpdateRayTracingJob()
     m_RayTracingJob.m_DispatchSizeX = (uint32_t)ceil( m_RayTracingConstants.resolutionX / 16.0f );
     m_RayTracingJob.m_DispatchSizeY = (uint32_t)ceil( m_RayTracingConstants.resolutionY / 16.0f );
     m_RayTracingJob.m_DispatchSizeZ = 1;
+}
+
+void Scene::OnImGUI()
+{
+    ImGui::Begin( "Film" );
+
+    if ( ImGui::InputFloat2( "Film Size", (float*)&m_RayTracingConstants.filmSize ) )
+        m_IsFilmDirty = true;
+
+    if ( ImGui::DragFloat( "Film Distance", (float*)&m_RayTracingConstants.filmDistance, 0.005f, 0.001f, 1000.0f ) )
+        m_IsFilmDirty = true;
+
+    ImGui::End();
+
+    ImGui::Begin( "Kernel" );
+
+    if ( ImGui::DragInt( "Max Bounce Count", (int*)&m_RayTracingConstants.maxBounceCount, 0.5f, 0, 10 ) )
+        m_IsFilmDirty = true;
+
+    ImGui::End();
+
+    ImGui::Begin( "Environment" );
+
+    ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
+    if ( ImGui::ColorEdit3( "Background Color", (float*)&m_RayTracingConstants.background ) )
+        m_IsFilmDirty = true;
+
+    ImGui::End();
+
+    ImGui::Begin( "Render Stats." );
+
+    ImGui::Text( "Average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate );
+
+    ImGui::End();
+
+    m_SceneLuminance.OnImGUI();
+    m_PostProcessing.OnImGUI();
 }
 
 

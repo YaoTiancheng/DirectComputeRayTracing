@@ -11,6 +11,8 @@ public:
 
     const GPUBufferPtr& GetLuminanceResultBuffer() const { return m_SumLuminanceBuffer1; }
 
+    void OnImGUI();
+
 private:
     uint32_t            m_SumLuminanceBlockCountX;
     uint32_t            m_SumLuminanceBlockCountY;

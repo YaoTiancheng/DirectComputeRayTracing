@@ -4,6 +4,7 @@
 #include "GPUTexture.h"
 #include "GPUBuffer.h"
 #include "Shader.h"
+#include "imgui/imgui.h"
 
 using namespace DirectX;
 
@@ -89,4 +90,9 @@ void PostProcessingRenderer::Execute( const std::unique_ptr<GPUTexture>& renderT
     deviceContext->RSSetViewports( 1, &m_DefaultViewport );
 
     m_PostProcessingJob.Dispatch();
+}
+
+void PostProcessingRenderer::OnImGUI()
+{
+
 }

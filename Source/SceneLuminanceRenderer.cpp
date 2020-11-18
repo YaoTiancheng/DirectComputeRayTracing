@@ -3,6 +3,7 @@
 #include "Shader.h"
 #include "GPUBuffer.h"
 #include "GPUTexture.h"
+#include "imgui/imgui.h"
 #include "../Shaders/SumLuminanceDef.inc.hlsl"
 
 bool SceneLuminanceRenderer::Init( uint32_t resolutionWidth, uint32_t resolutionHeight, const GPUTexturePtr& filmTexture )
@@ -105,4 +106,8 @@ void SceneLuminanceRenderer::Dispatch()
 
         std::swap( m_SumLuminanceBuffer0, m_SumLuminanceBuffer1 );
     }
+}
+
+void SceneLuminanceRenderer::OnImGUI()
+{
 }

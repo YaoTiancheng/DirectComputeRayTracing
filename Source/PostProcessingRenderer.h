@@ -9,6 +9,8 @@ public:
 
     void Execute( const GPUTexturePtr& renderTargetTexture );
 
+    void OnImGUI();
+
 private:
     D3D11_VIEWPORT                      m_DefaultViewport;
 

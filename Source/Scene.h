@@ -37,6 +37,8 @@ public:
 
     bool OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam );
 
+    void OnImGUI();
+
 private:
     void AddOneSample();
 

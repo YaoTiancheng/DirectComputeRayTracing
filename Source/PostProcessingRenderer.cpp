@@ -23,6 +23,11 @@ D3D11_INPUT_ELEMENT_DESC s_ScreenQuadInputElementDesc[ 1 ]
     { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 };
 
+PostProcessingRenderer::PostProcessingRenderer()
+    : m_IsConstantBufferDirty( false )
+{
+}
+
 bool PostProcessingRenderer::Init( uint32_t resolutionWidth, uint32_t resolutionHeight, const GPUTexturePtr& filmTexture, const GPUBufferPtr& luminanceBuffer )
 {
     std::vector<D3D_SHADER_MACRO> shaderDefines;
@@ -31,12 +36,12 @@ bool PostProcessingRenderer::Init( uint32_t resolutionWidth, uint32_t resolution
     if ( !m_Shader )
         return false;
 
-    XMFLOAT4 params = XMFLOAT4( 1.0f / ( resolutionWidth * resolutionHeight ), 0.0f, 0.0f, 0.0f );
+    m_ConstantParams = XMFLOAT4( 1.0f / ( resolutionWidth * resolutionHeight ), 0.7f, 0.0f, 0.0f );
     m_ConstantsBuffer.reset( GPUBuffer::Create(
           sizeof( XMFLOAT4 )
         , 0
-        , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsConstantBuffer
-        , &params ) );
+        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsConstantBuffer
+        , &m_ConstantParams ) );
     if ( !m_ConstantsBuffer )
         return false;
 
@@ -82,6 +87,16 @@ bool PostProcessingRenderer::Init( uint32_t resolutionWidth, uint32_t resolution
 
 void PostProcessingRenderer::Execute( const std::unique_ptr<GPUTexture>& renderTargetTexture )
 {
+    if ( m_IsConstantBufferDirty )
+    {
+        if ( void* address = m_ConstantsBuffer->Map() )
+        {
+            memcpy( address, &m_ConstantParams, sizeof( m_ConstantParams ) );
+            m_ConstantsBuffer->Unmap();
+            m_IsConstantBufferDirty = false;
+        }
+    }
+
     ID3D11DeviceContext* deviceContext = GetDeviceContext();
 
     ID3D11RenderTargetView* rawDefaultRenderTargetView = renderTargetTexture->GetRTV();
@@ -92,7 +107,16 @@ void PostProcessingRenderer::Execute( const std::unique_ptr<GPUTexture>& renderT
     m_PostProcessingJob.Dispatch();
 }
 
-void PostProcessingRenderer::OnImGUI()
+bool PostProcessingRenderer::OnImGUI()
 {
+    bool hasPropertyChanged = false;
 
+    if ( ImGui::CollapsingHeader( "Post Processing" ) )
+    {
+        hasPropertyChanged = hasPropertyChanged || ImGui::DragFloat( "Luminance White(^2)", (float*)&m_ConstantParams.y, 0.01f, 0.001f, 1000.0f );
+    }
+
+    m_IsConstantBufferDirty = hasPropertyChanged;
+
+    return hasPropertyChanged;
 }

@@ -34,11 +34,9 @@ float ComputeExposure( float avgLum )
     return ConvertEV100ToExposure( EV100 );
 }
 
-static const float  LUM_WHITE_2 = 0.7f;
-
 float3 ReinhardTonemap( float3 color )
 {
-    return color * ( 1.0f + color / LUM_WHITE_2 ) / ( 1.0f + color );
+    return color * ( 1.0f + color / g_Params.y ) / ( 1.0f + color );
 }
 
 VertexOut MainVS( float4 pos : POSITION )

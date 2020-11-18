@@ -5,11 +5,13 @@
 class PostProcessingRenderer
 {
 public:
+    PostProcessingRenderer();
+
     bool Init( uint32_t resolutionWidth, uint32_t resolutionHeight, const GPUTexturePtr& filmTexture, const GPUBufferPtr& luminanceBuffer );
 
     void Execute( const GPUTexturePtr& renderTargetTexture );
 
-    void OnImGUI();
+    bool OnImGUI();
 
 private:
     D3D11_VIEWPORT                      m_DefaultViewport;
@@ -26,4 +28,7 @@ private:
     GPUBufferPtr                        m_ScreenQuadVerticesBuffer;
 
     GraphicsJob                         m_PostProcessingJob;
+
+    DirectX::XMFLOAT4                   m_ConstantParams;
+    bool                                m_IsConstantBufferDirty;
 };

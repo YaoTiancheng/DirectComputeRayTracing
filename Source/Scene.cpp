@@ -313,28 +313,32 @@ void Scene::UpdateRayTracingJob()
 
 void Scene::OnImGUI()
 {
-    ImGui::Begin( "Film" );
+    ImGui::Begin( "Settings" );
 
-    if ( ImGui::InputFloat2( "Film Size", (float*)&m_RayTracingConstants.filmSize ) )
-        m_IsFilmDirty = true;
+    if ( ImGui::CollapsingHeader( "Film" ) )
+    {
+        if ( ImGui::InputFloat2( "Film Size", (float*)&m_RayTracingConstants.filmSize ) )
+            m_IsFilmDirty = true;
 
-    if ( ImGui::DragFloat( "Film Distance", (float*)&m_RayTracingConstants.filmDistance, 0.005f, 0.001f, 1000.0f ) )
-        m_IsFilmDirty = true;
+        if ( ImGui::DragFloat( "Film Distance", (float*)&m_RayTracingConstants.filmDistance, 0.005f, 0.001f, 1000.0f ) )
+            m_IsFilmDirty = true;
+    }
 
-    ImGui::End();
+    if ( ImGui::CollapsingHeader( "Kernel" ) )
+    {
+        if ( ImGui::DragInt( "Max Bounce Count", (int*)&m_RayTracingConstants.maxBounceCount, 0.5f, 0, 10 ) )
+            m_IsFilmDirty = true;
+    }
 
-    ImGui::Begin( "Kernel" );
+    if ( ImGui::CollapsingHeader( "Environment" ) )
+    {
+        ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
+        if ( ImGui::ColorEdit3( "Background Color", (float*)&m_RayTracingConstants.background ) )
+            m_IsFilmDirty = true;
+    }
 
-    if ( ImGui::DragInt( "Max Bounce Count", (int*)&m_RayTracingConstants.maxBounceCount, 0.5f, 0, 10 ) )
-        m_IsFilmDirty = true;
-
-    ImGui::End();
-
-    ImGui::Begin( "Environment" );
-
-    ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
-    if ( ImGui::ColorEdit3( "Background Color", (float*)&m_RayTracingConstants.background ) )
-        m_IsFilmDirty = true;
+    m_SceneLuminance.OnImGUI();
+    m_PostProcessing.OnImGUI();
 
     ImGui::End();
 
@@ -343,9 +347,6 @@ void Scene::OnImGUI()
     ImGui::Text( "Average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate );
 
     ImGui::End();
-
-    m_SceneLuminance.OnImGUI();
-    m_PostProcessing.OnImGUI();
 }
 
 

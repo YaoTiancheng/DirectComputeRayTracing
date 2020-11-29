@@ -4,6 +4,7 @@
 #include "ComputeJob.h"
 #include "PostProcessingRenderer.h"
 #include "SceneLuminanceRenderer.h"
+#include "../Shaders/PointLight.inc.hlsl"
 
 
 struct RayTracingConstants
@@ -52,13 +53,16 @@ private:
 
 private:
     static const int kMaxSamplesCount = 65536;
-
+    static const int kMaxPointLightsCount = 64;
 
     Camera                              m_Camera;
+    std::vector<PointLight>             m_PointLights;
 
     RayTracingConstants                 m_RayTracingConstants;
 
     bool                                m_IsFilmDirty;
+    bool                                m_IsConstantBufferDirty;
+    bool                                m_IsPointLightBufferDirty;
 
     std::mt19937                        m_MersenneURBG;
     std::uniform_real_distribution<float>   m_UniformRealDistribution;
@@ -92,4 +96,6 @@ private:
 
     PostProcessingRenderer              m_PostProcessing;
     SceneLuminanceRenderer              m_SceneLuminance;
+
+    int                                 m_PointLightSelectionIndex;
 };

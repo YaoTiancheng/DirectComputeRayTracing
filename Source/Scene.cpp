@@ -7,7 +7,6 @@
 #include "GPUBuffer.h"
 #include "Shader.h"
 #include "imgui/imgui.h"
-#include "../Shaders/PointLight.inc.hlsl"
 #include "../Shaders/SumLuminanceDef.inc.hlsl"
 
 using namespace DirectX;
@@ -15,6 +14,9 @@ using namespace DirectX;
 Scene::Scene()
     : m_IsFilmDirty( true )
     , m_UniformRealDistribution( 0.0f, std::nexttoward( 1.0f, 0.0f ) )
+    , m_PointLightSelectionIndex( -1 )
+    , m_IsConstantBufferDirty( true )
+    , m_IsPointLightBufferDirty( false )
 {
     std::random_device randomDevice;
     m_MersenneURBG = std::mt19937( randomDevice() );
@@ -175,22 +177,19 @@ bool Scene::ResetScene()
             return false;
     }
 
-    uint32_t pointLightCount = 1;
-    std::vector<PointLight> pointLights( pointLightCount );
-    pointLights[ 0 ].position = XMFLOAT3( 4.0f, 9.0f, -5.0f );
-    pointLights[ 0 ].color = XMFLOAT3( 200.0f, 200.0f, 200.0f );
+    m_PointLights.reserve( kMaxPointLightsCount );
 
     m_PointLightsBuffer.reset( GPUBuffer::Create(
-        sizeof( PointLight ) * pointLightCount
+          sizeof( PointLight ) * kMaxPointLightsCount
         , sizeof( PointLight )
-        , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsStructureBuffer
-        , pointLights.data() ) );
+        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer
+        , m_PointLights.data() ) );
     if ( !m_PointLightsBuffer )
         return false;
 
     m_RayTracingConstants.maxBounceCount = 2;
     m_RayTracingConstants.primitiveCount = mesh.GetTriangleCount();
-    m_RayTracingConstants.pointLightCount = pointLightCount;
+    m_RayTracingConstants.pointLightCount = m_PointLights.size();
     m_RayTracingConstants.filmSize = XMFLOAT2( 0.05333f, 0.03f );
     m_RayTracingConstants.filmDistance = 0.04f;
     m_RayTracingConstants.cameraTransform =
@@ -223,13 +222,18 @@ void Scene::AddOneSample()
 {
     m_Camera.Update();
 
-    if ( m_Camera.IsDirty() || m_IsFilmDirty )
+    if ( m_Camera.IsDirty() )
+    {
+        m_Camera.GetTransformMatrixAndClearDirty( &m_RayTracingConstants.cameraTransform );
+        m_IsConstantBufferDirty = true;
+    }
+
+    m_IsFilmDirty = m_IsFilmDirty || m_IsConstantBufferDirty || m_IsPointLightBufferDirty;
+
+    if ( m_IsFilmDirty )
     {
         ClearFilmTexture();
         m_IsFilmDirty = false;
-
-        if ( m_Camera.IsDirty() )
-            m_Camera.GetTransformMatrixAndClearDirty( &m_RayTracingConstants.cameraTransform );
     }
 
     if ( UpdateResources() )
@@ -238,16 +242,6 @@ void Scene::AddOneSample()
 
 bool Scene::UpdateResources()
 {
-    if ( void* address = m_RayTracingConstantsBuffer->Map() )
-    {
-        memcpy( address, &m_RayTracingConstants, sizeof( m_RayTracingConstants ) );
-        m_RayTracingConstantsBuffer->Unmap();
-    }
-    else
-    {
-        return false;
-    }
-
     if ( void* address = m_SamplesBuffer->Map() )
     {
         float* samples = reinterpret_cast< float* >( address );
@@ -260,6 +254,34 @@ bool Scene::UpdateResources()
     else
     {
         return false;
+    }
+
+    if ( m_IsConstantBufferDirty )
+    {
+        if ( void* address = m_RayTracingConstantsBuffer->Map() )
+        {
+            memcpy( address, &m_RayTracingConstants, sizeof( m_RayTracingConstants ) );
+            m_RayTracingConstantsBuffer->Unmap();
+            m_IsConstantBufferDirty = false;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    if ( m_IsPointLightBufferDirty )
+    {
+        if ( void* address = m_PointLightsBuffer->Map() )
+        {
+            memcpy( address, m_PointLights.data(), sizeof( PointLight ) * m_PointLights.size() );
+            m_PointLightsBuffer->Unmap();
+            m_IsPointLightBufferDirty = false;
+        }
+        else
+        {
+            return false;
+        }
     }
 
     return true;
@@ -313,40 +335,116 @@ void Scene::UpdateRayTracingJob()
 
 void Scene::OnImGUI()
 {
-    ImGui::Begin( "Settings" );
-
-    if ( ImGui::CollapsingHeader( "Film" ) )
     {
-        if ( ImGui::InputFloat2( "Film Size", (float*)&m_RayTracingConstants.filmSize ) )
-            m_IsFilmDirty = true;
+        ImGui::Begin( "Settings" );
+        ImGui::PushItemWidth( ImGui::GetFontSize() * -12 );
 
-        if ( ImGui::DragFloat( "Film Distance", (float*)&m_RayTracingConstants.filmDistance, 0.005f, 0.001f, 1000.0f ) )
-            m_IsFilmDirty = true;
+        if ( ImGui::CollapsingHeader( "Film" ) )
+        {
+            if ( ImGui::InputFloat2( "Film Size", (float*)&m_RayTracingConstants.filmSize ) )
+                m_IsConstantBufferDirty = true;
+
+            if ( ImGui::DragFloat( "Film Distance", (float*)&m_RayTracingConstants.filmDistance, 0.005f, 0.001f, 1000.0f ) )
+                m_IsConstantBufferDirty = true;
+        }
+
+        if ( ImGui::CollapsingHeader( "Kernel" ) )
+        {
+            if ( ImGui::DragInt( "Max Bounce Count", (int*)&m_RayTracingConstants.maxBounceCount, 0.5f, 0, 10 ) )
+                m_IsConstantBufferDirty = true;
+        }
+
+        if ( ImGui::CollapsingHeader( "Environment" ) )
+        {
+            ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
+            if ( ImGui::ColorEdit3( "Background Color", (float*)&m_RayTracingConstants.background ) )
+                m_IsConstantBufferDirty = true;
+        }
+
+        m_SceneLuminance.OnImGUI();
+        m_PostProcessing.OnImGUI();
+
+        ImGui::PopItemWidth();
+        ImGui::End();
     }
 
-    if ( ImGui::CollapsingHeader( "Kernel" ) )
     {
-        if ( ImGui::DragInt( "Max Bounce Count", (int*)&m_RayTracingConstants.maxBounceCount, 0.5f, 0, 10 ) )
-            m_IsFilmDirty = true;
-    }
+        ImGui::Begin( "Scene", (bool*)0, ImGuiWindowFlags_MenuBar );
 
-    if ( ImGui::CollapsingHeader( "Environment" ) )
-    {
+        if ( ImGui::BeginMenuBar() )
+        {
+            if ( ImGui::BeginMenu( "Edit" ) )
+            {
+                if ( ImGui::BeginMenu( "Create" ) )
+                {
+                    if ( ImGui::MenuItem( "Point Light", "", false, m_PointLights.size() < kMaxPointLightsCount ) )
+                    {
+                        m_PointLights.emplace_back();
+                        m_PointLights.back().color = XMFLOAT3( 1.0f, 1.0f, 1.0f );
+                        m_PointLights.back().position = XMFLOAT3( 0.0f, 0.0f, 0.0f );
+                        m_RayTracingConstants.pointLightCount++;
+                        m_IsConstantBufferDirty = true;
+                        m_IsPointLightBufferDirty = true;
+                    }
+                    ImGui::EndMenu();
+                }
+                if ( ImGui::MenuItem( "Delete", "", false, m_PointLightSelectionIndex != -1 ) )
+                {
+                    m_PointLights.erase( m_PointLights.begin() + m_PointLightSelectionIndex );
+                    m_PointLightSelectionIndex = -1;
+                    m_RayTracingConstants.pointLightCount--;
+                    m_IsConstantBufferDirty = true;
+                }
+                ImGui::EndMenu();
+            }
+            ImGui::EndMenuBar();
+        }
+
+        ImGui::BeginChild( "Left Pane", ImVec2( 150, 0 ), true );
+
+        char label[ 32 ];
+        for ( size_t iLight = 0; iLight < m_PointLights.size(); ++iLight )
+        {
+            bool isSelected = ( iLight == m_PointLightSelectionIndex );
+            sprintf( label, "Point Lights %d", iLight );
+            if ( ImGui::Selectable( label, isSelected ) )
+                m_PointLightSelectionIndex = (int)iLight;
+        }
+
+        ImGui::EndChild();
+
+        ImGui::SameLine();
+
+        ImGui::BeginGroup();
+
+        ImGui::BeginChild( "Inspector", ImVec2( 0, -ImGui::GetFrameHeightWithSpacing() ) );
+
         ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
-        if ( ImGui::ColorEdit3( "Background Color", (float*)&m_RayTracingConstants.background ) )
-            m_IsFilmDirty = true;
+        ImGui::PushItemWidth( ImGui::GetFontSize() * -9 );
+        if ( m_PointLightSelectionIndex >= 0 && m_PointLightSelectionIndex < m_PointLights.size() )
+        {
+            PointLight* selection = m_PointLights.data() + m_PointLightSelectionIndex;
+            if ( ImGui::DragFloat3( "Position", (float*)&selection->position, 1.0f ) )
+                m_IsPointLightBufferDirty = true;
+            if ( ImGui::ColorEdit3( "Color", (float*)&selection->color ) )
+                m_IsPointLightBufferDirty = true;
+        }
+        ImGui::PopItemWidth();
+
+        ImGui::EndChild();
+
+        ImGui::EndGroup();
+
+        ImGui::End();
     }
 
-    m_SceneLuminance.OnImGUI();
-    m_PostProcessing.OnImGUI();
+    {
+        ImGui::Begin( "Render Stats." );
 
-    ImGui::End();
+        ImGui::Text( "Average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate );
 
-    ImGui::Begin( "Render Stats." );
-
-    ImGui::Text( "Average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate );
-
-    ImGui::End();
+        ImGui::End();
+    }
 }
 
 

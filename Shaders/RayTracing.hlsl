@@ -64,7 +64,7 @@ bool IsOcculuded( float3 origin
     , float distance
     , uint dispatchThreadIndex )
 {
-    return BVHIntersect( origin, direction, epsilon.x, dispatchThreadIndex );
+    return BVHIntersect( origin, direction, epsilon.x, distance - epsilon.x, dispatchThreadIndex );
 }
 
 void AddSampleToFilm( float3 l

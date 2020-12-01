@@ -107,10 +107,9 @@ bool BVHIntersect( float3 origin
 bool BVHIntersect( float3 origin
     , float3 direction
     , float tMin
+    , float tMax
     , uint dispatchThreadIndex )
 {
-    float tMax = 1.0f / 0.0f;
-
 #if !defined( NO_BVH_ACCEL )
     float3 invDir = 1.0f / direction;
 
@@ -119,7 +118,7 @@ bool BVHIntersect( float3 origin
     uint nodeIndex = 0;
     while ( true )
     {
-        if ( RayAABBIntersect( origin, invDir, tMin, tMax, g_BVHNodes[ nodeIndex ].bboxMin, g_BVHNodes[ nodeIndex ].bboxMax ) )
+        if ( RayAABBIntersect( origin, invDir, tMin, 1.0f / 0.0f, g_BVHNodes[ nodeIndex ].bboxMin, g_BVHNodes[ nodeIndex ].bboxMax ) )
         {
             uint primCount = BVHNodeGetPrimitiveCount( g_BVHNodes[ nodeIndex ] );
             if ( primCount == 0 )

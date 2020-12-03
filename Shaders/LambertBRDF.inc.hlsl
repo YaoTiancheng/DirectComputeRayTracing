@@ -10,9 +10,9 @@ float3 ConsineSampleHemisphere( float2 sample )
     return float3( sample.xy, sqrt( max( 0.0f, 1.0f - dot( sample.xy, sample.xy ) ) ) );
 }
 
-float3 EvaluateLambertBRDF( float3 wi, float3 albedo )
+float3 EvaluateLambertBRDF( float3 wi, float3 wo, float3 albedo )
 {
-    return wi.z > 0.0f ? albedo * INV_PI : 0.0f;
+    return wi.z > 0.0f && wo.z > 0.0f ? albedo * INV_PI : 0.0f;
 }
 
 float EvaluateLambertBRDFPdf( float3 wi )
@@ -28,7 +28,7 @@ void SampleLambertBRDF( float3 wo
     , out float pdf )
 {
     wi = ConsineSampleHemisphere( sample );
-    value = EvaluateLambertBRDF( wi, albedo );
+    value = EvaluateLambertBRDF( wi, wo, albedo );
     pdf = EvaluateLambertBRDFPdf( wi );
 }
 

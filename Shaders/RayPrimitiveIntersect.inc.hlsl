@@ -102,7 +102,7 @@ bool RayAABBIntersect( float3 origin
     t0 = max( t0, min( tz0, tz1 ) );
     t1 = min( t1, max( tz0, tz1 ) );
 
-    return t1 >= t0 && ( tMin <= t0 || tMax > t1 );
+    return t1 >= t0 && ( t0 < tMax && t1 >= tMin );
 }
 
 #endif

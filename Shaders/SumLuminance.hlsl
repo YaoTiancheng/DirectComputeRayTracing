@@ -35,6 +35,11 @@ float ComputeLogLuminance( float lum )
     return log( BLACK_BIAS + lum );
 }
 
+float3 ResolveFilmColor( float4 sample )
+{
+    return sample.w > 0 ? sample.xyz / sample.w : 0.0f;
+}
+
 [numthreads( BLOCKSIZE, BLOCKSIZEY, 1 )]
 void main( uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex )
 {
@@ -43,10 +48,10 @@ void main( uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid 
     float4 s2 = g_Input.Load( uint3( DTid.xy + uint2( 0, BLOCKSIZEY * g_Param.y ), 0 ) );
     float4 s3 = g_Input.Load( uint3( DTid.xy + uint2( BLOCKSIZE * g_Param.x, BLOCKSIZEY * g_Param.y ), 0 ) );
 
-    float lum0 = ComputeLuminance( s0.xyz / s0.w );
-    float lum1 = ComputeLuminance( s1.xyz / s1.w );
-    float lum2 = ComputeLuminance( s2.xyz / s2.w );
-    float lum3 = ComputeLuminance( s3.xyz / s3.w );
+    float lum0 = ComputeLuminance( ResolveFilmColor( s0 ) );
+    float lum1 = ComputeLuminance( ResolveFilmColor( s1 ) );
+    float lum2 = ComputeLuminance( ResolveFilmColor( s2 ) );
+    float lum3 = ComputeLuminance( ResolveFilmColor( s3 ) );
     gs_accum[ GI ] = ComputeLogLuminance( lum0 ) + ComputeLogLuminance( lum1 ) + ComputeLogLuminance( lum2 ) + ComputeLogLuminance( lum3 );
 
     // Parallel reduction algorithm follows 

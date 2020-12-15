@@ -59,194 +59,236 @@ struct TriangleIndices
     uint32_t        indices[ 3 ];
 };
 
-static void BuildNodeRecursively( 
+struct BVHNodeInfo
+{
+    int             parentIndex;
+    uint32_t        primBegin;
+    uint32_t        primEnd;
+};
+
+static void BuildNodes( 
       std::vector<PrimitiveInfo>& primitiveInfos
     , const Vertex* vertices
     , const TriangleIndices* triangles
-    , uint32_t primBegin
-    , uint32_t primEnd
+    , const BVHNodeInfo& rootNodeInfo
     , TriangleIndices* reorderedTriangles
     , const uint32_t* triangleIds
     , uint32_t* reorderedTriangleIds
     , uint32_t& reorderedTrianglesCount
-    , std::vector<UnpackedBVHNode>* bvhNodes
-)
+    , std::vector<UnpackedBVHNode>* bvhNodes )
 {
-    assert( primEnd != primBegin );
+    std::stack<BVHNodeInfo> stack;
 
-    uint32_t bvhNodeIndex = bvhNodes->size();
-    bvhNodes->emplace_back();
-    UnpackedBVHNode* bvhNode = &bvhNodes->back();
-
-    bvhNode->primCount = 0;
-
-    // Calculate bounding box for this node
-    bvhNode->bbox = primitiveInfos[ primBegin ].bbox;
-    for ( uint32_t iPrim = primBegin + 1; iPrim < primEnd; ++iPrim )
+    BVHNodeInfo currentNodeInfo = rootNodeInfo;
+    while ( true )
     {
-        DirectX::BoundingBox::CreateMerged( bvhNode->bbox, bvhNode->bbox, primitiveInfos[ iPrim ].bbox );
-    }
+        assert( currentNodeInfo.primEnd != currentNodeInfo.primBegin );
 
-    uint32_t primCount = primEnd - primBegin;
-    if ( primCount == 1 )
-    {
-        uint32_t primIndex = primitiveInfos[ primBegin ].primIndex;
-        reorderedTriangles[ reorderedTrianglesCount ] = triangles[ primIndex ];
-        reorderedTriangleIds[ reorderedTrianglesCount ] = triangleIds[ primIndex ];
-        bvhNode->primIndex = reorderedTrianglesCount;
-        bvhNode->primCount = 1;
-        reorderedTrianglesCount += 1;
-        return;
-    }
-    else
-    {
-        // Compute centroid bounding box
-        DirectX::BoundingBox centroidBox;
+        uint32_t bvhNodeIndex = bvhNodes->size();
+
+        if ( currentNodeInfo.parentIndex != -1 )
         {
-            DirectX::XMVECTOR vCentroidMin, vCentroidMax, vCentroid;
-            vCentroidMin = DirectX::XMLoadFloat3( &primitiveInfos[ primBegin ].bbox.Center );
-            vCentroidMax = vCentroidMin;
-            for ( size_t i = primBegin + 1; i < primEnd; ++i )
-            {
-                vCentroid = DirectX::XMLoadFloat3( &primitiveInfos[ i ].bbox.Center );
-                vCentroidMax = DirectX::XMVectorMax( vCentroidMax, vCentroid );
-                vCentroidMin = DirectX::XMVectorMin( vCentroidMin, vCentroid );
-            }
-            DirectX::BoundingBox::CreateFromPoints( centroidBox, vCentroidMin, vCentroidMax );
+            ( *bvhNodes )[ currentNodeInfo.parentIndex ].childIndex = bvhNodeIndex;
+        }
+        
+        bvhNodes->emplace_back();
+        UnpackedBVHNode* bvhNode = &bvhNodes->back();
+
+        bvhNode->primCount = 0;
+
+        // Calculate bounding box for this node
+        bvhNode->bbox = primitiveInfos[ currentNodeInfo.primBegin ].bbox;
+        for ( uint32_t iPrim = currentNodeInfo.primBegin + 1; iPrim < currentNodeInfo.primEnd; ++iPrim )
+        {
+            DirectX::BoundingBox::CreateMerged( bvhNode->bbox, bvhNode->bbox, primitiveInfos[ iPrim ].bbox );
         }
 
-        // Find the axis with the max extend
-        int axis = 0;
+        uint32_t primCount = currentNodeInfo.primEnd - currentNodeInfo.primBegin;
+        if ( primCount == 1 )
         {
-            float max = centroidBox.Extents.x;
-            if ( centroidBox.Extents.y > max )
+            uint32_t primIndex = primitiveInfos[ currentNodeInfo.primBegin ].primIndex;
+            reorderedTriangles[ reorderedTrianglesCount ] = triangles[ primIndex ];
+            reorderedTriangleIds[ reorderedTrianglesCount ] = triangleIds[ primIndex ];
+            bvhNode->primIndex = reorderedTrianglesCount;
+            bvhNode->primCount = 1;
+            reorderedTrianglesCount += 1;
+            
+            if ( !stack.empty() )
             {
-                max = centroidBox.Extents.y;
-                axis = 1;
-            }
-            if ( centroidBox.Extents.z > max )
-                axis = 2;
-        }
-
-        // Partition
-        uint32_t primMiddle = ( primBegin + primEnd ) / 2;
-
-        // Handle special occasion
-        if ( ( (float*) ( &centroidBox.Extents ) )[ axis ] == 0.f )
-        {
-            if ( primCount < k_MaxPrimCountInNode )
-            {
-                for ( size_t iPrim = 0; iPrim < primCount; ++iPrim )
-                {
-                    size_t primIndex = primitiveInfos[ primBegin + iPrim ].primIndex;
-                    reorderedTriangles[ reorderedTrianglesCount + iPrim ] = triangles[ primIndex ];
-                    reorderedTriangleIds[ reorderedTrianglesCount + iPrim ] = triangleIds[ primIndex ];
-                }
-                bvhNode->primIndex = reorderedTrianglesCount;
-                bvhNode->primCount = uint8_t( primCount );
-                reorderedTrianglesCount += primCount;
+                currentNodeInfo = stack.top();
+                stack.pop();
+                continue;
             }
             else
             {
-                {
-                    bvhNode->splitAxis = axis;
-                    BuildNodeRecursively( primitiveInfos, vertices, triangles, primBegin, primMiddle, reorderedTriangles, triangleIds, reorderedTriangleIds, reorderedTrianglesCount, bvhNodes );
-                    bvhNode = &( *bvhNodes )[ bvhNodeIndex ];
-                    bvhNode->childIndex = uint32_t( bvhNodes->size() );
-                    BuildNodeRecursively( primitiveInfos, vertices, triangles, primMiddle, primEnd, reorderedTriangles, triangleIds, reorderedTriangleIds, reorderedTrianglesCount, bvhNodes );
-                }
+                break;
             }
-            return;
-        }
-
-        if ( primCount <= 4 )
-        {
-            // If primitives number is smaller than 4, devide equally
-            std::nth_element( &primitiveInfos[ primBegin ], &primitiveInfos[ primMiddle ], &primitiveInfos[ primEnd - 1 ] + 1, PrimitiveInfo::BBoxCenterPerAxisLessPred( axis ) );
         }
         else
         {
-            const size_t k_BucketsCount = 12;
-            struct Bucket
+            // Compute centroid bounding box
+            DirectX::BoundingBox centroidBox;
             {
-                uint32_t                primCount;
-                DirectX::BoundingBox    bbox;
-                Bucket() : primCount( 0 ) { }
-            };
-            Bucket buckets[ k_BucketsCount ];
-            for ( size_t i = primBegin; i < primEnd; ++i )
-            {
-                float min = ( (float*) &centroidBox.Center )[ axis ] - ( (float*) &centroidBox.Extents )[ axis ];
-                float size = ( (float*) &centroidBox.Extents )[ axis ] * 2.0f;
-                uint32_t n = uint32_t( k_BucketsCount * ( ( ( (float*) &primitiveInfos[ i ].bbox.Center )[ axis ] ) - min ) / size );
-                if ( n == k_BucketsCount ) --n;
-                if ( buckets[ n ].primCount == 0 )
+                DirectX::XMVECTOR vCentroidMin, vCentroidMax, vCentroid;
+                vCentroidMin = DirectX::XMLoadFloat3( &primitiveInfos[ currentNodeInfo.primBegin ].bbox.Center );
+                vCentroidMax = vCentroidMin;
+                for ( size_t i = currentNodeInfo.primBegin + 1; i < currentNodeInfo.primEnd; ++i )
                 {
-                    buckets[ n ].bbox = primitiveInfos[ i ].bbox;
+                    vCentroid = DirectX::XMLoadFloat3( &primitiveInfos[ i ].bbox.Center );
+                    vCentroidMax = DirectX::XMVectorMax( vCentroidMax, vCentroid );
+                    vCentroidMin = DirectX::XMVectorMin( vCentroidMin, vCentroid );
+                }
+                DirectX::BoundingBox::CreateFromPoints( centroidBox, vCentroidMin, vCentroidMax );
+            }
+
+            // Find the axis with the max extend
+            int axis = 0;
+            {
+                float max = centroidBox.Extents.x;
+                if ( centroidBox.Extents.y > max )
+                {
+                    max = centroidBox.Extents.y;
+                    axis = 1;
+                }
+                if ( centroidBox.Extents.z > max )
+                    axis = 2;
+            }
+
+            bvhNode->splitAxis = axis;
+
+            // Partition
+            uint32_t primMiddle = ( currentNodeInfo.primBegin + currentNodeInfo.primEnd ) / 2;
+
+            // Handle special occasion
+            if ( ( (float*)( &centroidBox.Extents ) )[ axis ] == 0.f )
+            {
+                if ( primCount < k_MaxPrimCountInNode )
+                {
+                    for ( size_t iPrim = 0; iPrim < primCount; ++iPrim )
+                    {
+                        size_t primIndex = primitiveInfos[ currentNodeInfo.primBegin + iPrim ].primIndex;
+                        reorderedTriangles[ reorderedTrianglesCount + iPrim ] = triangles[ primIndex ];
+                        reorderedTriangleIds[ reorderedTrianglesCount + iPrim ] = triangleIds[ primIndex ];
+                    }
+                    bvhNode->primIndex = reorderedTrianglesCount;
+                    bvhNode->primCount = uint8_t( primCount );
+                    reorderedTrianglesCount += primCount;
+
+                    if ( !stack.empty() )
+                    {
+                        currentNodeInfo = stack.top();
+                        stack.pop();
+                        continue;
+                    }
+                    else
+                    {
+                        break;
+                    }
                 }
                 else
-                {
-                    DirectX::BoundingBox::CreateMerged( buckets[ n ].bbox, buckets[ n ].bbox, primitiveInfos[ i ].bbox );
+                { 
+                    stack.push( { (int)bvhNodeIndex, primMiddle, currentNodeInfo.primEnd } );
+                    currentNodeInfo.parentIndex = -1;
+                    currentNodeInfo.primEnd = primMiddle;
+                    continue;
                 }
-                assert( buckets[ n ].primCount < std::numeric_limits<decltype( Bucket::primCount )>::max() );
-                buckets[ n ].primCount++;
             }
 
-            // Compute cost for each splitting
-            float cost[ k_BucketsCount - 1 ];
-            for ( size_t i = 0; i < k_BucketsCount - 1; ++i )
+            if ( primCount <= 4 )
             {
-                uint32_t count0 = 0, count1 = 0;
-                DirectX::BoundingBox b0 = buckets[ 0 ].bbox;
-                for ( size_t j = 1; j <= i; ++j )
-                {
-                    DirectX::BoundingBox::CreateMerged( b0, b0, buckets[ j ].bbox );
-                    count0 += buckets[ j ].primCount;
-                }
-
-                DirectX::BoundingBox b1 = buckets[ i + 1 ].bbox;
-                for ( size_t j = i + 2; j < k_BucketsCount; ++j )
-                {
-                    DirectX::BoundingBox::CreateMerged( b1, b1, buckets[ j ].bbox );
-                    count1 += buckets[ j ].primCount;
-                }
-
-                cost[ i ] = .125f + ( count0 * BoundingBoxSurfaceArea( b0 ) + count1 * BoundingBoxSurfaceArea( b1 ) )
-                    / BoundingBoxSurfaceArea( bvhNode->bbox );
-            }
-
-            // Find smallest cost
-            size_t minCostIndex = std::distance( std::begin( cost ), std::min_element( std::begin( cost ), std::end( cost ) ) );
-            float minCost = cost[ minCostIndex ];
-
-            if ( primCount > k_MaxPrimCountInNode || minCost < primCount )
-            {
-                PrimitiveInfo* prim = std::partition( &primitiveInfos[ primBegin ], &primitiveInfos[ primEnd - 1 ] + 1,
-                                                      BucketLessEqualPred( minCostIndex, k_BucketsCount, axis, centroidBox ) );
-                primMiddle = (uint32_t) std::distance( primitiveInfos.data(), prim );
+                // If primitives number is smaller than 4, devide equally
+                std::nth_element( &primitiveInfos[ currentNodeInfo.primBegin ], &primitiveInfos[ primMiddle ], &primitiveInfos[ currentNodeInfo.primEnd - 1 ] + 1, PrimitiveInfo::BBoxCenterPerAxisLessPred( axis ) );
             }
             else
             {
-                // Create leaf node
-                for ( size_t i = 0; i < primCount; ++i )
+                const size_t k_BucketsCount = 12;
+                struct Bucket
                 {
-                    size_t primIndex = primitiveInfos[ primBegin + i ].primIndex;
-                    reorderedTriangles[ reorderedTrianglesCount + i ] = triangles[ primIndex ];
-                    reorderedTriangleIds[ reorderedTrianglesCount + i ] = triangleIds[ primIndex ];
+                    uint32_t                primCount;
+                    DirectX::BoundingBox    bbox;
+                    Bucket() : primCount( 0 ) { }
+                };
+                Bucket buckets[ k_BucketsCount ];
+                for ( size_t i = currentNodeInfo.primBegin; i < currentNodeInfo.primEnd; ++i )
+                {
+                    float min = ( (float*)&centroidBox.Center )[ axis ] - ( (float*)&centroidBox.Extents )[ axis ];
+                    float size = ( (float*)&centroidBox.Extents )[ axis ] * 2.0f;
+                    uint32_t n = uint32_t( k_BucketsCount * ( ( ( (float*)&primitiveInfos[ i ].bbox.Center )[ axis ] ) - min ) / size );
+                    if ( n == k_BucketsCount ) --n;
+                    if ( buckets[ n ].primCount == 0 )
+                    {
+                        buckets[ n ].bbox = primitiveInfos[ i ].bbox;
+                    }
+                    else
+                    {
+                        DirectX::BoundingBox::CreateMerged( buckets[ n ].bbox, buckets[ n ].bbox, primitiveInfos[ i ].bbox );
+                    }
+                    assert( buckets[ n ].primCount < std::numeric_limits<decltype( Bucket::primCount )>::max() );
+                    buckets[ n ].primCount++;
                 }
-                bvhNode->primIndex = reorderedTrianglesCount;
-                bvhNode->primCount = uint8_t( primCount );
-                reorderedTrianglesCount += primCount;
-                return;
-            }
-        }
 
-        {
-            bvhNode->splitAxis = axis;
-            BuildNodeRecursively( primitiveInfos, vertices, triangles, primBegin, primMiddle, reorderedTriangles, triangleIds, reorderedTriangleIds, reorderedTrianglesCount, bvhNodes );
-            bvhNode = &( *bvhNodes )[ bvhNodeIndex ];
-            bvhNode->childIndex = uint32_t( bvhNodes->size() );
-            BuildNodeRecursively( primitiveInfos, vertices, triangles, primMiddle, primEnd, reorderedTriangles, triangleIds, reorderedTriangleIds, reorderedTrianglesCount, bvhNodes );
+                // Compute cost for each splitting
+                float cost[ k_BucketsCount - 1 ];
+                for ( size_t i = 0; i < k_BucketsCount - 1; ++i )
+                {
+                    uint32_t count0 = 0, count1 = 0;
+                    DirectX::BoundingBox b0 = buckets[ 0 ].bbox;
+                    for ( size_t j = 1; j <= i; ++j )
+                    {
+                        DirectX::BoundingBox::CreateMerged( b0, b0, buckets[ j ].bbox );
+                        count0 += buckets[ j ].primCount;
+                    }
+
+                    DirectX::BoundingBox b1 = buckets[ i + 1 ].bbox;
+                    for ( size_t j = i + 2; j < k_BucketsCount; ++j )
+                    {
+                        DirectX::BoundingBox::CreateMerged( b1, b1, buckets[ j ].bbox );
+                        count1 += buckets[ j ].primCount;
+                    }
+
+                    cost[ i ] = .125f + ( count0 * BoundingBoxSurfaceArea( b0 ) + count1 * BoundingBoxSurfaceArea( b1 ) )
+                        / BoundingBoxSurfaceArea( bvhNode->bbox );
+                }
+
+                // Find smallest cost
+                size_t minCostIndex = std::distance( std::begin( cost ), std::min_element( std::begin( cost ), std::end( cost ) ) );
+                float minCost = cost[ minCostIndex ];
+
+                if ( primCount > k_MaxPrimCountInNode || minCost < primCount )
+                {
+                    PrimitiveInfo* prim = std::partition( &primitiveInfos[ currentNodeInfo.primBegin ], &primitiveInfos[ currentNodeInfo.primEnd - 1 ] + 1,
+                        BucketLessEqualPred( minCostIndex, k_BucketsCount, axis, centroidBox ) );
+                    primMiddle = (uint32_t)std::distance( primitiveInfos.data(), prim );
+                }
+                else
+                {
+                    // Create leaf node
+                    for ( size_t i = 0; i < primCount; ++i )
+                    {
+                        size_t primIndex = primitiveInfos[ currentNodeInfo.primBegin + i ].primIndex;
+                        reorderedTriangles[ reorderedTrianglesCount + i ] = triangles[ primIndex ];
+                        reorderedTriangleIds[ reorderedTrianglesCount + i ] = triangleIds[ primIndex ];
+                    }
+                    bvhNode->primIndex = reorderedTrianglesCount;
+                    bvhNode->primCount = uint8_t( primCount );
+                    reorderedTrianglesCount += primCount;
+
+                    if ( !stack.empty() )
+                    {
+                        currentNodeInfo = stack.top();
+                        stack.pop();
+                        continue;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+            }
+            
+            stack.push( { (int)bvhNodeIndex, primMiddle, currentNodeInfo.primEnd } );
+            currentNodeInfo.parentIndex = -1;
+            currentNodeInfo.primEnd = primMiddle;
         }
     }
 }
@@ -267,7 +309,7 @@ void BuildBVH( const Vertex* vertices, const uint32_t* indices, uint32_t* reorde
     }
 
     uint32_t reorderedTrianglesCount = 0;
-    BuildNodeRecursively( primitiveInfos, vertices, (TriangleIndices*) indices, 0, triangleCount, (TriangleIndices*) reorderedIndices, triangleIds, reorderedTriangleIds, reorderedTrianglesCount, bvhNodes );
+    BuildNodes( primitiveInfos, vertices, (TriangleIndices*)indices, { -1, 0, triangleCount }, (TriangleIndices*)reorderedIndices, triangleIds, reorderedTriangleIds, reorderedTrianglesCount, bvhNodes );
     assert( reorderedTrianglesCount == triangleCount );
 }
 

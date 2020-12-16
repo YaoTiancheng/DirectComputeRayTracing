@@ -1,0 +1,6 @@
+#ifndef _RAY_TRACING_DEF_H_
+#define _RAY_TRACING_DEF_H_
+
+#define RT_BVH_TRAVERSAL_STACK_SIZE 16
+
+#endif

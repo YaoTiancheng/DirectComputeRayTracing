@@ -11,7 +11,7 @@ uint BVHNodeGetPrimitiveCount( BVHNode node )
 
 struct BVHTraversalStack
 {
-    uint nodeIndex[ 16 ];
+    uint nodeIndex[ RT_BVH_TRAVERSAL_STACK_SIZE ];
     int count;
 };
 

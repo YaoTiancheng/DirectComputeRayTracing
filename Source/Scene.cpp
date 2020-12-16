@@ -6,7 +6,9 @@
 #include "GPUTexture.h"
 #include "GPUBuffer.h"
 #include "Shader.h"
+#include "Logging.h"
 #include "imgui/imgui.h"
+#include "../Shaders/RayTracingDef.inc.hlsl"
 #include "../Shaders/SumLuminanceDef.inc.hlsl"
 
 using namespace DirectX;
@@ -133,6 +135,17 @@ bool Scene::ResetScene()
     Mesh mesh;
     if ( !mesh.LoadFromOBJFile( commandLineArgs->GetFilename().c_str(), commandLineArgs->GetMtlFileSearchPath().c_str(), !commandLineArgs->GetNoBVHAccel() ) )
         return false;
+
+    if ( !commandLineArgs->GetNoBVHAccel() )
+    {
+        uint32_t BVHMaxDepth = mesh.GetBVHMaxDepth();
+        LOG_STRING_FORMAT( "BVH created from mesh. Node count:%d, max depth:%d\n", mesh.GetBVHNodeCount(), mesh.GetBVHMaxDepth() );
+        if ( BVHMaxDepth > RT_BVH_TRAVERSAL_STACK_SIZE )
+        {
+            LOG_STRING_FORMAT( "Error: Abort because BVH max depth %d exceeding shader BVH traversal stack size %d.\n", BVHMaxDepth, RT_BVH_TRAVERSAL_STACK_SIZE );
+            return false;
+        }
+    }
 
     m_VerticesBuffer.reset( GPUBuffer::Create(
           sizeof( Vertex ) * mesh.GetVertexCount()

@@ -111,6 +111,9 @@
     <ClInclude Include="Source\imgui\imstb_truetype.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Logging.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\Application.cpp">
@@ -182,6 +185,9 @@
     <ClCompile Include="Source\imgui\imgui_impl_win32.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Logging.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Image Include="Resources\small.ico">
@@ -222,6 +228,7 @@
     <None Include="Shaders\EnvironmentShader.inc.hlsl" />
     <None Include="Shaders\SumLuminance.hlsl" />
     <None Include="Shaders\SumLuminanceDef.inc.hlsl" />
+    <None Include="Shaders\RayTracingDef.inc.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resources\DirectComputeRayTracing.rc">

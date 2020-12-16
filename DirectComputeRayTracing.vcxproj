@@ -179,6 +179,7 @@
     <ClInclude Include="Source\imgui\imstb_rectpack.h" />
     <ClInclude Include="Source\imgui\imstb_textedit.h" />
     <ClInclude Include="Source\imgui\imstb_truetype.h" />
+    <ClInclude Include="Source\Logging.h" />
     <ClInclude Include="Source\PointerTypes.h" />
     <ClInclude Include="Source\PostProcessingRenderer.h" />
     <ClInclude Include="Source\RenderJobHelper.h" />
@@ -201,6 +202,7 @@
     <ClCompile Include="Source\D3D11RenderSystem.cpp" />
     <ClCompile Include="Source\Application.cpp" />
     <ClCompile Include="Source\DDSTextureLoader.cpp" />
+    <ClCompile Include="Source\Logging.cpp" />
     <ClCompile Include="Source\GraphicsJob.cpp" />
     <ClCompile Include="Source\imgui\imgui.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
@@ -393,6 +395,11 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">4.0</ShaderModel>
+      <FileType>Document</FileType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Shaders\RayTracingDef.inc.hlsl">
       <FileType>Document</FileType>
     </None>
   </ItemGroup>

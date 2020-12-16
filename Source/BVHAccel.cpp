@@ -64,6 +64,7 @@ struct BVHNodeInfo
     int             parentIndex;
     uint32_t        primBegin;
     uint32_t        primEnd;
+    uint32_t        depth;
 };
 
 static void BuildNodes( 
@@ -75,7 +76,8 @@ static void BuildNodes(
     , const uint32_t* triangleIds
     , uint32_t* reorderedTriangleIds
     , uint32_t& reorderedTrianglesCount
-    , std::vector<UnpackedBVHNode>* bvhNodes )
+    , std::vector<UnpackedBVHNode>* bvhNodes
+    , uint32_t* maxDepth )
 {
     std::stack<BVHNodeInfo> stack;
 
@@ -187,9 +189,11 @@ static void BuildNodes(
                 }
                 else
                 { 
-                    stack.push( { (int)bvhNodeIndex, primMiddle, currentNodeInfo.primEnd } );
+                    currentNodeInfo.depth++;
+                    stack.push( { (int)bvhNodeIndex, primMiddle, currentNodeInfo.primEnd, currentNodeInfo.depth } );
                     currentNodeInfo.parentIndex = -1;
                     currentNodeInfo.primEnd = primMiddle;
+                    *maxDepth = std::max( *maxDepth, currentNodeInfo.depth );
                     continue;
                 }
             }
@@ -286,14 +290,16 @@ static void BuildNodes(
                 }
             }
             
-            stack.push( { (int)bvhNodeIndex, primMiddle, currentNodeInfo.primEnd } );
+            currentNodeInfo.depth++;
+            stack.push( { (int)bvhNodeIndex, primMiddle, currentNodeInfo.primEnd, currentNodeInfo.depth } );
             currentNodeInfo.parentIndex = -1;
             currentNodeInfo.primEnd = primMiddle;
+            *maxDepth = std::max( *maxDepth, currentNodeInfo.depth );
         }
     }
 }
 
-void BuildBVH( const Vertex* vertices, const uint32_t* indices, uint32_t* reorderedIndices, const uint32_t* triangleIds, uint32_t* reorderedTriangleIds, uint32_t triangleCount, std::vector<UnpackedBVHNode>* bvhNodes )
+void BuildBVH( const Vertex* vertices, const uint32_t* indices, uint32_t* reorderedIndices, const uint32_t* triangleIds, uint32_t* reorderedTriangleIds, uint32_t triangleCount, std::vector<UnpackedBVHNode>* bvhNodes, uint32_t* maxDepth )
 {
     std::vector<PrimitiveInfo> primitiveInfos;
     primitiveInfos.reserve( triangleCount );
@@ -309,7 +315,7 @@ void BuildBVH( const Vertex* vertices, const uint32_t* indices, uint32_t* reorde
     }
 
     uint32_t reorderedTrianglesCount = 0;
-    BuildNodes( primitiveInfos, vertices, (TriangleIndices*)indices, { -1, 0, triangleCount }, (TriangleIndices*)reorderedIndices, triangleIds, reorderedTriangleIds, reorderedTrianglesCount, bvhNodes );
+    BuildNodes( primitiveInfos, vertices, (TriangleIndices*)indices, { -1, 0, triangleCount, 0 }, (TriangleIndices*)reorderedIndices, triangleIds, reorderedTriangleIds, reorderedTrianglesCount, bvhNodes, maxDepth );
     assert( reorderedTrianglesCount == triangleCount );
 }
 

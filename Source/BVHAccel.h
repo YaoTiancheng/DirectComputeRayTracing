@@ -15,6 +15,6 @@ struct UnpackedBVHNode
 struct Vertex;
 struct BVHNode;
 
-void BuildBVH( const Vertex* vertices, const uint32_t* indicies, uint32_t* reorderedIndices, const uint32_t* triangleIds, uint32_t* reorderedTriangleIds, uint32_t triangleCount, std::vector<UnpackedBVHNode>* bvhNodes );
+void BuildBVH( const Vertex* vertices, const uint32_t* indicies, uint32_t* reorderedIndices, const uint32_t* triangleIds, uint32_t* reorderedTriangleIds, uint32_t triangleCount, std::vector<UnpackedBVHNode>* bvhNodes, uint32_t* maxDepth );
 
 void PackBVH( const UnpackedBVHNode* bvhNodes, uint32_t nodeCount, BVHNode* packedBvhNodes );

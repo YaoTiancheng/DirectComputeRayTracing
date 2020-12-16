@@ -1,4 +1,6 @@
 
+#include "RayTracingDef.inc.hlsl"
+
 cbuffer RayTracingConstants : register( b0 )
 {
     uint                g_MaxBounceCount;

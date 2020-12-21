@@ -134,15 +134,27 @@ bool Scene::ResetScene()
 
     Mesh mesh;
     {
-        const char* filename = commandLineArgs->GetFilename().c_str();
-        const char* mtlSearchPath = commandLineArgs->GetMtlFileSearchPath().c_str();
-        bool buildBVH = !commandLineArgs->GetNoBVHAccel();
-        const char* BVHFile = commandLineArgs->GetBVHFilename().length() ? commandLineArgs->GetBVHFilename().c_str() : nullptr;
-        if ( !mesh.LoadFromOBJFile( filename, mtlSearchPath, buildBVH, BVHFile ) )
-            return false;
-    }
+        const char* filePath = commandLineArgs->GetFilename().c_str();
+        char filePathNoExtension[ MAX_PATH ];
+        char fileDir[ MAX_PATH ];
+        strcpy( filePathNoExtension, filePath );
+        PathRemoveExtensionA( filePathNoExtension );
+        const char* fileName = PathFindFileNameA( filePathNoExtension );
+        strcpy( fileDir, filePath );
+        PathRemoveFileSpecA( fileDir );
 
-    LOG_STRING_FORMAT( "Mesh loaded. Triangle count: %d, vertex count: %d, material count: %d\n", mesh.GetTriangleCount(), mesh.GetVertexCount(), mesh.GetMaterialCount() );
+        char BVHFilePath[ MAX_PATH ];
+        const char* MTLSearchPath = fileDir;
+        sprintf_s( BVHFilePath, MAX_PATH, "%s\\%s.xml", fileDir, fileName );
+        bool buildBVH = !commandLineArgs->GetNoBVHAccel();
+
+        LOG_STRING_FORMAT( "Loading mesh from: %s, MTL search path at: %s, BVH file path at: %s\n", filePath, MTLSearchPath, BVHFilePath );
+
+        if ( !mesh.LoadFromOBJFile( filePath, MTLSearchPath, buildBVH, BVHFilePath ) )
+            return false;
+
+        LOG_STRING_FORMAT( "Mesh loaded. Triangle count: %d, vertex count: %d, material count: %d\n", mesh.GetTriangleCount(), mesh.GetVertexCount(), mesh.GetMaterialCount() );
+    }
 
     if ( !commandLineArgs->GetNoBVHAccel() )
     {

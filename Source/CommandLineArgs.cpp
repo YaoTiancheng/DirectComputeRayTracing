@@ -9,7 +9,6 @@ CommandLineArgs::CommandLineArgs()
     , m_ShaderDebugEnabled( false )
     , m_UseDebugDevice( false )
     , m_NoBVHAccel( false )
-    , m_MtlFileSearchPath( "./" )
 {
     assert( s_Singleton == nullptr );
     s_Singleton = this;
@@ -38,13 +37,6 @@ void CommandLineArgs::Parse( const wchar_t* cmdLine )
             wchar_t* end;
             m_ResolutionY = (uint32_t) wcstol( argStr1, &end, 10 );
         }
-        else if ( wcscmp( argStr, L"-Mtl" ) == 0 && iArg + 1 < numArgs )
-        {
-            wchar_t* argStr1 = argv[ ++iArg ];
-            char mbFilepath[ MAX_PATH ];
-            wcstombs( mbFilepath, argStr1, MAX_PATH );
-            m_MtlFileSearchPath = mbFilepath;
-        }
         else if ( wcscmp( argStr, L"-EnvMap" ) == 0 && iArg + 1 < numArgs )
         {
             wchar_t* argStr1 = argv[ ++iArg ];
@@ -61,13 +53,6 @@ void CommandLineArgs::Parse( const wchar_t* cmdLine )
         else if ( wcscmp( argStr, L"-NoBVH" ) == 0 )
         {
             m_NoBVHAccel = true;
-        }
-        else if ( wcscmp( argStr, L"-BVHFile" ) == 0 && iArg + 1 < numArgs )
-        {
-            wchar_t* argStr1 = argv[ ++iArg ];
-            char mbFilepath[ MAX_PATH ];
-            wcstombs( mbFilepath, argStr1, MAX_PATH );
-            m_BVHFilename = mbFilepath;
         }
         else if ( iArg == numArgs - 1 )
         {

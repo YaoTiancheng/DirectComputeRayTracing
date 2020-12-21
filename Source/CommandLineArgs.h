@@ -15,13 +15,9 @@ public:
 
     const std::string& GetFilename() const { return m_Filename; }
 
-    const std::string& GetMtlFileSearchPath() const { return m_MtlFileSearchPath; }
-
     bool GetNoBVHAccel() const { return m_NoBVHAccel; }
 
     const std::wstring& GetEnvironmentTextureFilename() const { return m_EnvironmentTextureFilename; }
-
-    const std::string& GetBVHFilename() const { return m_BVHFilename; }
 
     static const CommandLineArgs* Singleton() { return s_Singleton; }
 
@@ -32,9 +28,7 @@ private:
     bool        m_UseDebugDevice;
     bool        m_NoBVHAccel;
     std::string m_Filename;
-    std::string m_MtlFileSearchPath;
     std::wstring m_EnvironmentTextureFilename;
-    std::string m_BVHFilename;
 
     static CommandLineArgs* s_Singleton;
 };

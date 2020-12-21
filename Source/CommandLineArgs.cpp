@@ -62,6 +62,13 @@ void CommandLineArgs::Parse( const wchar_t* cmdLine )
         {
             m_NoBVHAccel = true;
         }
+        else if ( wcscmp( argStr, L"-BVHFile" ) == 0 && iArg + 1 < numArgs )
+        {
+            wchar_t* argStr1 = argv[ ++iArg ];
+            char mbFilepath[ MAX_PATH ];
+            wcstombs( mbFilepath, argStr1, MAX_PATH );
+            m_BVHFilename = mbFilepath;
+        }
         else if ( iArg == numArgs - 1 )
         {
             char mbFinename[ MAX_PATH ];

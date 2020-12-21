@@ -41,7 +41,7 @@ namespace std
 
 using namespace DirectX;
 
-bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool buildBVH )
+bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool buildBVH, const char* BVHFilename )
 {
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
@@ -169,6 +169,17 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
         m_MaterialIds.resize( materialIds.size() );
         std::vector<UnpackedBVHNode> BVHNodes;
         BuildBVH( m_Vertices.data(), indices.data(), m_Indices.data(), materialIds.data(), m_MaterialIds.data(), GetTriangleCount(), &BVHNodes, &m_BVHMaxDepth );
+
+        if ( BVHFilename )
+        {
+            FILE* file = fopen( BVHFilename, "w" );
+            if ( file )
+            {
+                SerializeBVHToXML( BVHNodes.data(), file );
+                fclose( file );
+            }
+        }
+
         m_BVHNodes.resize( BVHNodes.size() );
         PackBVH( BVHNodes.data(), uint32_t( BVHNodes.size() ), m_BVHNodes.data() );
     }

@@ -21,6 +21,8 @@ public:
 
     const std::wstring& GetEnvironmentTextureFilename() const { return m_EnvironmentTextureFilename; }
 
+    const std::string& GetBVHFilename() const { return m_BVHFilename; }
+
     static const CommandLineArgs* Singleton() { return s_Singleton; }
 
 private:
@@ -32,6 +34,7 @@ private:
     std::string m_Filename;
     std::string m_MtlFileSearchPath;
     std::wstring m_EnvironmentTextureFilename;
+    std::string m_BVHFilename;
 
     static CommandLineArgs* s_Singleton;
 };

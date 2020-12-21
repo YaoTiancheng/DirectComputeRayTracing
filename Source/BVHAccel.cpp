@@ -337,3 +337,75 @@ void PackBVH( const UnpackedBVHNode* bvhNodes, uint32_t nodeCount, BVHNode* pack
         packed.misc = unpacked.primCount;
     }
 }
+
+void SerializeBVHToXML( const UnpackedBVHNode* rootNode, FILE* file )
+{
+    struct TraversalNode
+    {
+        const UnpackedBVHNode* node;
+        bool isLeftChild;
+    };
+
+    std::stack<TraversalNode> stack;
+
+    fprintf( file, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" );
+
+    TraversalNode currentNode = { rootNode, false };
+    while ( true )
+    {
+        if ( currentNode.node->primCount != 0 )
+        {
+            fprintf( file, "<Node Center=\"%.2f,%.2f,%.2f\" Extents=\"%.2f,%.2f,%.2f\" PrimIndex=\"%d\" PrimCount=\"%d\"/>\n",
+                currentNode.node->bbox.Center.x,
+                currentNode.node->bbox.Center.y,
+                currentNode.node->bbox.Center.z,
+                currentNode.node->bbox.Extents.x,
+                currentNode.node->bbox.Extents.y,
+                currentNode.node->bbox.Extents.z,
+                currentNode.node->primIndex,
+                currentNode.node->primCount );
+
+            if ( currentNode.isLeftChild )
+            {
+                currentNode = { &rootNode[ stack.top().node->childIndex ], false };
+                continue;
+            }
+            else
+            {
+                if ( stack.empty() )
+                    break;
+
+                do
+                {
+                    currentNode = stack.top();
+                    stack.pop();
+                    fprintf( file, "</Node>\n" );
+                } while ( !currentNode.isLeftChild && !stack.empty() );
+
+                if ( !stack.empty() )
+                {
+                    currentNode = { &rootNode[ stack.top().node->childIndex ], false };
+                    continue;
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+        else
+        {
+            fprintf( file, "<Node Center=\"%.2f,%.2f,%.2f\" Extents=\"%.2f,%.2f,%.2f\" ChildIndex=\"%d\">\n",
+                currentNode.node->bbox.Center.x,
+                currentNode.node->bbox.Center.y,
+                currentNode.node->bbox.Center.z,
+                currentNode.node->bbox.Extents.x,
+                currentNode.node->bbox.Extents.y,
+                currentNode.node->bbox.Extents.z,
+                currentNode.node->childIndex );
+
+            stack.push( currentNode );
+            currentNode = { currentNode.node + 1, true };
+        }
+    }
+}

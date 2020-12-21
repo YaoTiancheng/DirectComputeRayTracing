@@ -133,8 +133,16 @@ bool Scene::ResetScene()
     const CommandLineArgs* commandLineArgs = CommandLineArgs::Singleton();
 
     Mesh mesh;
-    if ( !mesh.LoadFromOBJFile( commandLineArgs->GetFilename().c_str(), commandLineArgs->GetMtlFileSearchPath().c_str(), !commandLineArgs->GetNoBVHAccel() ) )
-        return false;
+    {
+        const char* filename = commandLineArgs->GetFilename().c_str();
+        const char* mtlSearchPath = commandLineArgs->GetMtlFileSearchPath().c_str();
+        bool buildBVH = !commandLineArgs->GetNoBVHAccel();
+        const char* BVHFile = commandLineArgs->GetBVHFilename().length() ? commandLineArgs->GetBVHFilename().c_str() : nullptr;
+        if ( !mesh.LoadFromOBJFile( filename, mtlSearchPath, buildBVH, BVHFile ) )
+            return false;
+    }
+
+    LOG_STRING_FORMAT( "Mesh loaded. Triangle count: %d, vertex count: %d, material count: %d\n", mesh.GetTriangleCount(), mesh.GetVertexCount(), mesh.GetMaterialCount() );
 
     if ( !commandLineArgs->GetNoBVHAccel() )
     {

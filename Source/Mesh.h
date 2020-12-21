@@ -8,7 +8,7 @@
 class Mesh
 {
 public:
-    bool                    LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool buildBVH = true );
+    bool                    LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool buildBVH = true, const char* BVHFilename = nullptr );
 
     uint32_t                GetVertexCount() const { return (uint32_t)m_Vertices.size(); }
 

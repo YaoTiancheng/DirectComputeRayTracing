@@ -168,7 +168,7 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
         m_Indices.resize( indices.size() );
         m_MaterialIds.resize( materialIds.size() );
         std::vector<UnpackedBVHNode> BVHNodes;
-        BuildBVH( m_Vertices.data(), indices.data(), m_Indices.data(), materialIds.data(), m_MaterialIds.data(), GetTriangleCount(), &BVHNodes, &m_BVHMaxDepth );
+        BuildBVH( m_Vertices.data(), indices.data(), m_Indices.data(), materialIds.data(), m_MaterialIds.data(), GetTriangleCount(), &BVHNodes, &m_BVHMaxDepth, &m_BVHMaxStackSize );
 
         if ( BVHFilename )
         {

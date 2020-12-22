@@ -28,6 +28,8 @@ public:
 
     uint32_t                GetBVHMaxDepth() const { return m_BVHMaxDepth; }
 
+    uint32_t                GetBVHMaxStackSize() const { return m_BVHMaxStackSize; }
+
     const uint32_t*         GetMaterialIds() const { return m_MaterialIds.data(); }
 
     const Material*         GetMaterials() const { return m_Materials.data(); }
@@ -37,6 +39,7 @@ private:
     std::vector<uint32_t>       m_Indices;
     std::vector<BVHNode>        m_BVHNodes;
     uint32_t                    m_BVHMaxDepth = 0;
+    uint32_t                    m_BVHMaxStackSize = 0;
     std::vector<uint32_t>       m_MaterialIds;
     std::vector<Material>       m_Materials;
 };

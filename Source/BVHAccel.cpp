@@ -77,7 +77,8 @@ static void BuildNodes(
     , uint32_t* reorderedTriangleIds
     , uint32_t& reorderedTrianglesCount
     , std::vector<UnpackedBVHNode>* bvhNodes
-    , uint32_t* maxDepth )
+    , uint32_t* maxDepth
+    , uint32_t* maxStackSize )
 {
     std::stack<BVHNodeInfo> stack;
 
@@ -194,6 +195,7 @@ static void BuildNodes(
                     currentNodeInfo.parentIndex = -1;
                     currentNodeInfo.primEnd = primMiddle;
                     *maxDepth = std::max( *maxDepth, currentNodeInfo.depth );
+                    *maxStackSize = std::max( *maxStackSize, (uint32_t)stack.size() );
                     continue;
                 }
             }
@@ -295,11 +297,12 @@ static void BuildNodes(
             currentNodeInfo.parentIndex = -1;
             currentNodeInfo.primEnd = primMiddle;
             *maxDepth = std::max( *maxDepth, currentNodeInfo.depth );
+            *maxStackSize = std::max(*maxStackSize, (uint32_t)stack.size());
         }
     }
 }
 
-void BuildBVH( const Vertex* vertices, const uint32_t* indices, uint32_t* reorderedIndices, const uint32_t* triangleIds, uint32_t* reorderedTriangleIds, uint32_t triangleCount, std::vector<UnpackedBVHNode>* bvhNodes, uint32_t* maxDepth )
+void BuildBVH( const Vertex* vertices, const uint32_t* indices, uint32_t* reorderedIndices, const uint32_t* triangleIds, uint32_t* reorderedTriangleIds, uint32_t triangleCount, std::vector<UnpackedBVHNode>* bvhNodes, uint32_t* maxDepth, uint32_t* maxStackSize )
 {
     std::vector<PrimitiveInfo> primitiveInfos;
     primitiveInfos.reserve( triangleCount );
@@ -315,7 +318,7 @@ void BuildBVH( const Vertex* vertices, const uint32_t* indices, uint32_t* reorde
     }
 
     uint32_t reorderedTrianglesCount = 0;
-    BuildNodes( primitiveInfos, vertices, (TriangleIndices*)indices, { -1, 0, triangleCount, 0 }, (TriangleIndices*)reorderedIndices, triangleIds, reorderedTriangleIds, reorderedTrianglesCount, bvhNodes, maxDepth );
+    BuildNodes( primitiveInfos, vertices, (TriangleIndices*)indices, { -1, 0, triangleCount, 0 }, (TriangleIndices*)reorderedIndices, triangleIds, reorderedTriangleIds, reorderedTrianglesCount, bvhNodes, maxDepth, maxStackSize );
     assert( reorderedTrianglesCount == triangleCount );
 }
 

@@ -159,10 +159,11 @@ bool Scene::ResetScene()
     if ( !commandLineArgs->GetNoBVHAccel() )
     {
         uint32_t BVHMaxDepth = mesh.GetBVHMaxDepth();
-        LOG_STRING_FORMAT( "BVH created from mesh. Node count:%d, max depth:%d\n", mesh.GetBVHNodeCount(), mesh.GetBVHMaxDepth() );
-        if ( BVHMaxDepth > RT_BVH_TRAVERSAL_STACK_SIZE )
+        uint32_t BVHMaxStackSize = mesh.GetBVHMaxStackSize();
+        LOG_STRING_FORMAT( "BVH created from mesh. Node count:%d, max depth:%d, max stack size:%d\n", mesh.GetBVHNodeCount(), BVHMaxDepth, BVHMaxStackSize );
+        if ( BVHMaxStackSize > RT_BVH_TRAVERSAL_STACK_SIZE )
         {
-            LOG_STRING_FORMAT( "Error: Abort because BVH max depth %d exceeding shader BVH traversal stack size %d.\n", BVHMaxDepth, RT_BVH_TRAVERSAL_STACK_SIZE );
+            LOG_STRING_FORMAT( "Error: Abort because BVH max stack size %d exceeding shader BVH traversal stack size %d.\n", BVHMaxStackSize, RT_BVH_TRAVERSAL_STACK_SIZE );
             return false;
         }
     }

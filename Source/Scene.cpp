@@ -17,8 +17,10 @@ Scene::Scene()
     : m_IsFilmDirty( true )
     , m_UniformRealDistribution( 0.0f, std::nexttoward( 1.0f, 0.0f ) )
     , m_PointLightSelectionIndex( -1 )
+    , m_MaterialSelectionIndex( -1 )
     , m_IsConstantBufferDirty( true )
     , m_IsPointLightBufferDirty( false )
+    , m_IsMaterialBufferDirty( false )
 {
     std::random_device randomDevice;
     m_MersenneURBG = std::mt19937( randomDevice() );
@@ -153,7 +155,7 @@ bool Scene::ResetScene()
         if ( !mesh.LoadFromOBJFile( filePath, MTLSearchPath, buildBVH, BVHFilePath ) )
             return false;
 
-        LOG_STRING_FORMAT( "Mesh loaded. Triangle count: %d, vertex count: %d, material count: %d\n", mesh.GetTriangleCount(), mesh.GetVertexCount(), mesh.GetMaterialCount() );
+        LOG_STRING_FORMAT( "Mesh loaded. Triangle count: %d, vertex count: %d, material count: %d\n", mesh.GetTriangleCount(), mesh.GetVertexCount(), mesh.GetMaterials().size() );
     }
 
     if ( !commandLineArgs->GetNoBVHAccel() )
@@ -167,6 +169,9 @@ bool Scene::ResetScene()
             return false;
         }
     }
+
+    m_Materials = mesh.GetMaterials();
+    m_MaterialNames = mesh.GetMaterialNames();
 
     m_VerticesBuffer.reset( GPUBuffer::Create(
           sizeof( Vertex ) * mesh.GetVertexCount()
@@ -193,10 +198,10 @@ bool Scene::ResetScene()
         return false;
 
     m_MaterialsBuffer.reset( GPUBuffer::Create(
-          sizeof( Material ) * mesh.GetMaterialCount()
+          sizeof( Material ) * m_Materials.size()
         , sizeof( Material )
-        , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsStructureBuffer
-        , mesh.GetMaterials() ) );
+        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer
+        , m_Materials.data() ) );
     if ( !m_MaterialsBuffer )
         return false;
 
@@ -262,7 +267,7 @@ void Scene::AddOneSample()
         m_IsConstantBufferDirty = true;
     }
 
-    m_IsFilmDirty = m_IsFilmDirty || m_IsConstantBufferDirty || m_IsPointLightBufferDirty;
+    m_IsFilmDirty = m_IsFilmDirty || m_IsConstantBufferDirty || m_IsPointLightBufferDirty || m_IsMaterialBufferDirty;
 
     if ( m_IsFilmDirty )
     {
@@ -311,6 +316,20 @@ bool Scene::UpdateResources()
             memcpy( address, m_PointLights.data(), sizeof( PointLight ) * m_PointLights.size() );
             m_PointLightsBuffer->Unmap();
             m_IsPointLightBufferDirty = false;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    if ( m_IsMaterialBufferDirty )
+    {
+        if ( void* address = m_MaterialsBuffer->Map() )
+        {
+            memcpy( address, m_Materials.data(), sizeof( Material ) * m_Materials.size() );
+            m_MaterialsBuffer->Unmap();
+            m_IsMaterialBufferDirty = false;
         }
         else
         {
@@ -434,40 +453,71 @@ void Scene::OnImGUI()
             ImGui::EndMenuBar();
         }
 
-        ImGui::BeginChild( "Left Pane", ImVec2( 150, 0 ), true );
-
         char label[ 32 ];
         for ( size_t iLight = 0; iLight < m_PointLights.size(); ++iLight )
         {
             bool isSelected = ( iLight == m_PointLightSelectionIndex );
             sprintf( label, "Point Lights %d", iLight );
             if ( ImGui::Selectable( label, isSelected ) )
+            {
                 m_PointLightSelectionIndex = (int)iLight;
+                m_MaterialSelectionIndex = -1;
+            }
         }
 
-        ImGui::EndChild();
+        ImGui::End();
+    }
 
-        ImGui::SameLine();
+    {
+        ImGui::Begin( "Materials" );
 
-        ImGui::BeginGroup();
-
-        ImGui::BeginChild( "Inspector", ImVec2( 0, -ImGui::GetFrameHeightWithSpacing() ) );
-
-        ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
-        ImGui::PushItemWidth( ImGui::GetFontSize() * -9 );
-        if ( m_PointLightSelectionIndex >= 0 && m_PointLightSelectionIndex < m_PointLights.size() )
+        for ( size_t iMaterial = 0; iMaterial < m_Materials.size(); ++iMaterial )
         {
-            PointLight* selection = m_PointLights.data() + m_PointLightSelectionIndex;
-            if ( ImGui::DragFloat3( "Position", (float*)&selection->position, 1.0f ) )
-                m_IsPointLightBufferDirty = true;
-            if ( ImGui::ColorEdit3( "Color", (float*)&selection->color ) )
-                m_IsPointLightBufferDirty = true;
+            bool isSelected = ( iMaterial == m_MaterialSelectionIndex );
+            if ( ImGui::Selectable( m_MaterialNames[ iMaterial ].c_str(), isSelected ) )
+            {
+                m_MaterialSelectionIndex = (int)iMaterial;
+                m_PointLightSelectionIndex = -1;
+            }
         }
-        ImGui::PopItemWidth();
 
-        ImGui::EndChild();
+        ImGui::End();
+    }
 
-        ImGui::EndGroup();
+    {
+        ImGui::Begin( "Inspector" );
+
+        ImGui::PushItemWidth( ImGui::GetFontSize() * -9 );
+
+        if ( m_PointLightSelectionIndex >= 0 )
+        {
+            ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
+            if ( m_PointLightSelectionIndex < m_PointLights.size() )
+            {
+                PointLight* selection = m_PointLights.data() + m_PointLightSelectionIndex;
+                if ( ImGui::DragFloat3( "Position", (float*)&selection->position, 1.0f ) )
+                    m_IsPointLightBufferDirty = true;
+                if ( ImGui::ColorEdit3( "Color", (float*)&selection->color ) )
+                    m_IsPointLightBufferDirty = true;
+            }
+        }
+        else if ( m_MaterialSelectionIndex >= 0 )
+        {
+            if ( m_MaterialSelectionIndex < m_Materials.size() )
+            {
+                Material* selection = m_Materials.data() + m_MaterialSelectionIndex;
+                ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float );
+                if ( ImGui::ColorEdit3( "Albedo", (float*)&selection->albedo ) )
+                    m_IsMaterialBufferDirty = true;
+                ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
+                if ( ImGui::ColorEdit3( "Emission", (float*)&selection->emission ) )
+                    m_IsMaterialBufferDirty = true;
+                if ( ImGui::DragFloat( "Roughness", &selection->roughness, 0.01f, 0.001f, 1.0f ) )
+                    m_IsMaterialBufferDirty = true;
+                if ( ImGui::DragFloat( "IOR", &selection->ior, 0.01f, 1.0f, 3.0f ) )
+                    m_IsMaterialBufferDirty = true;
+            }
+        }
 
         ImGui::End();
     }

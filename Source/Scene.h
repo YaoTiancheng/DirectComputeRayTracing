@@ -5,6 +5,7 @@
 #include "PostProcessingRenderer.h"
 #include "SceneLuminanceRenderer.h"
 #include "../Shaders/PointLight.inc.hlsl"
+#include "../Shaders/Material.inc.hlsl"
 
 
 struct RayTracingConstants
@@ -57,12 +58,15 @@ private:
 
     Camera                              m_Camera;
     std::vector<PointLight>             m_PointLights;
+    std::vector<Material>               m_Materials;
+    std::vector<std::string>            m_MaterialNames;
 
     RayTracingConstants                 m_RayTracingConstants;
 
     bool                                m_IsFilmDirty;
     bool                                m_IsConstantBufferDirty;
     bool                                m_IsPointLightBufferDirty;
+    bool                                m_IsMaterialBufferDirty;
 
     std::mt19937                        m_MersenneURBG;
     std::uniform_real_distribution<float>   m_UniformRealDistribution;
@@ -98,4 +102,5 @@ private:
     SceneLuminanceRenderer              m_SceneLuminance;
 
     int                                 m_PointLightSelectionIndex;
+    int                                 m_MaterialSelectionIndex;
 };

@@ -18,8 +18,6 @@ public:
 
     uint32_t                GetBVHNodeCount() const { return (uint32_t)m_BVHNodes.size(); }
 
-    uint32_t                GetMaterialCount() const { return (uint32_t)m_Materials.size(); }
-
     const Vertex*           GetVertices() const { return m_Vertices.data(); }
 
     const uint32_t*         GetIndices() const { return m_Indices.data(); }
@@ -32,7 +30,9 @@ public:
 
     const uint32_t*         GetMaterialIds() const { return m_MaterialIds.data(); }
 
-    const Material*         GetMaterials() const { return m_Materials.data(); }
+    const std::vector<Material>&    GetMaterials() const { return m_Materials; }
+
+    const std::vector<std::string>& GetMaterialNames() const { return m_MaterialNames; }
 
 private:
     std::vector<Vertex>         m_Vertices;
@@ -42,4 +42,5 @@ private:
     uint32_t                    m_BVHMaxStackSize = 0;
     std::vector<uint32_t>       m_MaterialIds;
     std::vector<Material>       m_Materials;
+    std::vector<std::string>    m_MaterialNames;
 };

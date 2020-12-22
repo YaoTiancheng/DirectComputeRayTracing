@@ -143,6 +143,7 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
     }
 
     m_Materials.reserve( materials.size() );
+    m_MaterialNames.reserve( materials.size() );
     for ( auto& iterSrcMat : materials )
     {
         Material dstMat;
@@ -151,6 +152,7 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
         dstMat.roughness = std::fmax( iterSrcMat.roughness, 0.00018f );
         dstMat.ior       = iterSrcMat.ior;
         m_Materials.emplace_back( dstMat );
+        m_MaterialNames.emplace_back( iterSrcMat.name );
     }
 
     if ( needDefaultMaterial )
@@ -161,6 +163,7 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
         defaultMat.roughness = 1.0f;
         defaultMat.ior       = 1.5f;
         m_Materials.emplace_back( defaultMat );
+        m_MaterialNames.emplace_back( "Default Material" );
     }
 
     if ( buildBVH )

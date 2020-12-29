@@ -20,8 +20,8 @@ bool RayTriangleIntersect( float3 origin
     float3 pvec = cross( direction, v0v2 );
     float det = dot( v0v1, pvec );
 
-    if ( abs( det ) < 0.00001f )
-        return false; 
+    if ( abs( det ) < 1e-10 )
+        return false;
 
     float invDet = 1 / det; 
  

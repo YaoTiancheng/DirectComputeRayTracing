@@ -20,29 +20,17 @@ bool RayTriangleIntersect( float3 origin
     float3 pvec = cross( direction, v0v2 );
     float det = dot( v0v1, pvec );
 
-    if ( abs( det ) < 1e-10 )
-        return false;
-
     float invDet = 1 / det; 
  
     float3 tvec = origin - v0.position;
     u = dot( tvec, pvec ) * invDet; 
-    if ( u < 0 || u > 1 )
-        return false; 
- 
+
     float3 qvec = cross( tvec, v0v1 );
     v = dot( direction, qvec ) * invDet; 
-    if ( v < 0 || u + v > 1 )
-        return false; 
- 
+
     t = dot( v0v2, qvec ) * invDet; 
 
-    if ( t < tMin )
-        return false;
-    if ( t >= tMax )
-        return false;
- 
-    return true; 
+    return abs( det ) >= 1e-10 && u >= 0 && u <= 1 && v >= 0 && u + v <= 1 && t >= tMin && t < tMax;
 }
 
 void HitShader( float3 rayOrigin

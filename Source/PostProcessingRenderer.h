@@ -13,6 +13,11 @@ public:
 
     bool OnImGUI();
 
+    void SetPostFXDisable( bool value ) { m_IsPostFXDisabled = value; m_IsJobDirty = true; }
+
+private:
+    void UpdateJob();
+
 private:
     D3D11_VIEWPORT                      m_DefaultViewport;
 
@@ -23,6 +28,7 @@ private:
     ComPtr<ID3D11InputLayout>           m_ScreenQuadVertexInputLayout;
 
     GfxShaderPtr                        m_Shader;
+    GfxShaderPtr                        m_ShaderDisablePostFX;
 
     GPUBufferPtr                        m_ConstantsBuffer;
     GPUBufferPtr                        m_ScreenQuadVerticesBuffer;
@@ -31,4 +37,6 @@ private:
 
     DirectX::XMFLOAT4                   m_ConstantParams;
     bool                                m_IsConstantBufferDirty;
+    bool                                m_IsJobDirty;
+    bool                                m_IsPostFXDisabled;
 };

@@ -18,9 +18,11 @@ Scene::Scene()
     , m_UniformRealDistribution( 0.0f, std::nexttoward( 1.0f, 0.0f ) )
     , m_PointLightSelectionIndex( -1 )
     , m_MaterialSelectionIndex( -1 )
+    , m_RayTracingKernelIndex( 0 )
     , m_IsConstantBufferDirty( true )
     , m_IsPointLightBufferDirty( false )
     , m_IsMaterialBufferDirty( false )
+    , m_IsRayTracingJobDirty( true )
 {
     std::random_device randomDevice;
     m_MersenneURBG = std::mt19937( randomDevice() );
@@ -70,14 +72,26 @@ bool Scene::Init()
         return false;
 
     std::vector<D3D_SHADER_MACRO> rayTracingShaderDefines;
-    if ( CommandLineArgs::Singleton()->GetNoBVHAccel() )
+    
+    static const char* s_RayTracingKernelDefines[ kRayTracingKernelCount ] = { NULL, "OUTPUT_NORMAL", "OUTPUT_TANGENT", "OUTPUT_ALBEDO" };
+    for ( int i = 0; i < kRayTracingKernelCount; ++i )
     {
-        rayTracingShaderDefines.push_back( { "NO_BVH_ACCEL", "0" } );
+        if ( CommandLineArgs::Singleton()->GetNoBVHAccel() )
+        {
+            rayTracingShaderDefines.push_back( { "NO_BVH_ACCEL", "0" } );
+        }
+        if ( s_RayTracingKernelDefines[ i ] )
+        {
+            rayTracingShaderDefines.push_back( { s_RayTracingKernelDefines[ i ], "0" } );
+        }
+        rayTracingShaderDefines.push_back( { NULL, NULL } );
+
+        m_RayTracingShader[ i ].reset( ComputeShader::CreateFromFile( L"Shaders\\RayTracing.hlsl", rayTracingShaderDefines ) );
+        if ( !m_RayTracingShader )
+            return false;
+
+        rayTracingShaderDefines.clear();
     }
-    rayTracingShaderDefines.push_back( { NULL, NULL } );
-    m_RayTracingShader.reset( ComputeShader::CreateFromFile( L"Shaders\\RayTracing.hlsl", rayTracingShaderDefines ) );
-    if ( !m_RayTracingShader )
-        return false;
 
     m_RayTracingConstantsBuffer.reset( GPUBuffer::Create(
           sizeof( RayTracingConstants )
@@ -240,8 +254,6 @@ bool Scene::ResetScene()
 
     m_IsFilmDirty = true;
 
-    UpdateRayTracingJob();
-
     return true;
 }
 
@@ -267,12 +279,18 @@ void Scene::AddOneSample()
         m_IsConstantBufferDirty = true;
     }
 
-    m_IsFilmDirty = m_IsFilmDirty || m_IsConstantBufferDirty || m_IsPointLightBufferDirty || m_IsMaterialBufferDirty;
+    m_IsFilmDirty = m_IsFilmDirty || m_IsConstantBufferDirty || m_IsPointLightBufferDirty || m_IsMaterialBufferDirty || m_IsRayTracingJobDirty;
 
     if ( m_IsFilmDirty )
     {
         ClearFilmTexture();
         m_IsFilmDirty = false;
+    }
+
+    if ( m_IsRayTracingJobDirty )
+    {
+        UpdateRayTracingJob();
+        m_IsRayTracingJobDirty = false;
     }
 
     if ( UpdateResources() )
@@ -379,7 +397,7 @@ void Scene::UpdateRayTracingJob()
 
     m_RayTracingJob.m_ConstantBuffers = { m_RayTracingConstantsBuffer->GetBuffer() };
 
-    m_RayTracingJob.m_Shader = m_RayTracingShader.get();
+    m_RayTracingJob.m_Shader = m_RayTracingShader[ m_RayTracingKernelIndex ].get();
 
     m_RayTracingJob.m_DispatchSizeX = (uint32_t)ceil( m_RayTracingConstants.resolutionX / 16.0f );
     m_RayTracingJob.m_DispatchSizeY = (uint32_t)ceil( m_RayTracingConstants.resolutionY / 16.0f );
@@ -403,19 +421,32 @@ void Scene::OnImGUI()
 
         if ( ImGui::CollapsingHeader( "Kernel" ) )
         {
-            if ( ImGui::DragInt( "Max Bounce Count", (int*)&m_RayTracingConstants.maxBounceCount, 0.5f, 0, 10 ) )
-                m_IsConstantBufferDirty = true;
+            static const char* s_KernelTypeNames[ kRayTracingKernelCount ] = { "Path Tracing", "Output Normal", "Output Tangent", "Output Albedo" };
+            if ( ImGui::Combo( "Type", &m_RayTracingKernelIndex, s_KernelTypeNames, IM_ARRAYSIZE( s_KernelTypeNames ) ) )
+            {
+                m_IsRayTracingJobDirty = true;
+
+                m_PostProcessing.SetPostFXDisable( m_RayTracingKernelIndex != 0 );
+            }
+            if ( m_RayTracingKernelIndex == 0 )
+            {
+                if ( ImGui::DragInt( "Max Bounce Count", (int*)&m_RayTracingConstants.maxBounceCount, 0.5f, 0, 10 ) )
+                    m_IsConstantBufferDirty = true;
+            }
         }
 
-        if ( ImGui::CollapsingHeader( "Environment" ) )
+        if ( m_RayTracingKernelIndex == 0 )
         {
-            ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
-            if ( ImGui::ColorEdit3( "Background Color", (float*)&m_RayTracingConstants.background ) )
-                m_IsConstantBufferDirty = true;
-        }
+            if ( ImGui::CollapsingHeader( "Environment" ) )
+            {
+                ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
+                if ( ImGui::ColorEdit3( "Background Color", (float*)&m_RayTracingConstants.background ) )
+                    m_IsConstantBufferDirty = true;
+            }
 
-        m_SceneLuminance.OnImGUI();
-        m_PostProcessing.OnImGUI();
+            m_SceneLuminance.OnImGUI();
+            m_PostProcessing.OnImGUI();
+        }
 
         ImGui::PopItemWidth();
         ImGui::End();

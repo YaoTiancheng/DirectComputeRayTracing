@@ -111,6 +111,8 @@ float3 UniformSampleOneLight( float sample, Intersection intersection, float3 wo
 #define GROUP_SIZE_X 16
 #define GROUP_SIZE_Y 16
 
+#if !defined( OUTPUT_NORMAL ) && !defined( OUTPUT_TANGENT ) && !defined( OUTPUT_ALBEDO )
+
 [numthreads( GROUP_SIZE_X, GROUP_SIZE_Y, 1 )]
 void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 {
@@ -169,3 +171,35 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 
     AddSampleToFilm( l, pixelSample, pixelPos );
 }
+
+#else
+
+[ numthreads( GROUP_SIZE_X, GROUP_SIZE_Y, 1 ) ]
+void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
+{
+    if ( any( pixelPos > g_Resolution ) )
+        return;
+
+    float3 l = 0.0f;
+    float3 wo;
+    Intersection intersection;
+
+    float2 pixelSample = GetNextSample2();
+    float2 filmSample = ( pixelSample + pixelPos ) / g_Resolution;
+    GenerateRay( filmSample, g_FilmSize, g_FilmDistance, g_CameraTransform, intersection.position, wo );
+
+    if ( IntersectScene( intersection.position, wo, 0.0f, threadId, intersection ) )
+    {
+#if defined( OUTPUT_NORMAL )
+        l = intersection.normal * 0.5f + 0.5f;
+#elif defined( OUTPUT_TANGENT )
+        l = intersection.tangent * 0.5f + 0.5f;
+#elif defined( OUTPUT_ALBEDO )
+        l = intersection.albedo;
+#endif
+    }
+
+    AddSampleToFilm( l, pixelSample, pixelPos );
+}
+
+#endif

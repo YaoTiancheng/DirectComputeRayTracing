@@ -55,6 +55,7 @@ private:
 private:
     static const int kMaxSamplesCount = 65536;
     static const int kMaxPointLightsCount = 64;
+    static const int kRayTracingKernelCount = 4;
 
     Camera                              m_Camera;
     std::vector<PointLight>             m_PointLights;
@@ -67,6 +68,7 @@ private:
     bool                                m_IsConstantBufferDirty;
     bool                                m_IsPointLightBufferDirty;
     bool                                m_IsMaterialBufferDirty;
+    bool                                m_IsRayTracingJobDirty;
 
     std::mt19937                        m_MersenneURBG;
     std::uniform_real_distribution<float>   m_UniformRealDistribution;
@@ -75,7 +77,7 @@ private:
     using ComPtr = Microsoft::WRL::ComPtr<T>;
     ComPtr<ID3D11SamplerState>          m_UVClampSamplerState;
 
-    ComputeShaderPtr                    m_RayTracingShader;
+    ComputeShaderPtr                    m_RayTracingShader[ kRayTracingKernelCount ];
 
     GPUTexturePtr                       m_FilmTexture;
     GPUTexturePtr                       m_DefaultRenderTarget;
@@ -103,4 +105,5 @@ private:
 
     int                                 m_PointLightSelectionIndex;
     int                                 m_MaterialSelectionIndex;
+    int                                 m_RayTracingKernelIndex;
 };

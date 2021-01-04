@@ -25,6 +25,8 @@ D3D11_INPUT_ELEMENT_DESC s_ScreenQuadInputElementDesc[ 1 ]
 
 PostProcessingRenderer::PostProcessingRenderer()
     : m_IsConstantBufferDirty( false )
+    , m_IsPostFXDisabled( false )
+    , m_IsJobDirty( true )
 {
 }
 
@@ -34,6 +36,13 @@ bool PostProcessingRenderer::Init( uint32_t resolutionWidth, uint32_t resolution
     shaderDefines.push_back( { NULL, NULL } );
     m_Shader.reset( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
     if ( !m_Shader )
+        return false;
+
+    shaderDefines.clear();
+    shaderDefines.push_back( { "DISABLE_POST_FX", "0" } );
+    shaderDefines.push_back( { NULL, NULL } );
+    m_ShaderDisablePostFX.reset( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
+    if ( !m_ShaderDisablePostFX )
         return false;
 
     m_ConstantParams = XMFLOAT4( 1.0f / ( resolutionWidth * resolutionHeight ), 0.7f, 0.0f, 0.0f );
@@ -73,14 +82,15 @@ bool PostProcessingRenderer::Init( uint32_t resolutionWidth, uint32_t resolution
     m_DefaultViewport = { 0.0f, 0.0f, (float)resolutionWidth, (float)resolutionHeight, 0.0f, 1.0f };
 
     m_PostProcessingJob.m_SamplerStates.push_back( m_CopySamplerState.Get() );
+    m_PostProcessingJob.m_ConstantBuffers.push_back( m_ConstantsBuffer->GetBuffer() );
     m_PostProcessingJob.m_SRVs.push_back( filmTexture->GetSRV() );
     m_PostProcessingJob.m_SRVs.push_back( luminanceBuffer->GetSRV() );
-    m_PostProcessingJob.m_ConstantBuffers.push_back( m_ConstantsBuffer->GetBuffer() );
-    m_PostProcessingJob.m_Shader = m_Shader.get();
     m_PostProcessingJob.m_VertexBuffer = m_ScreenQuadVerticesBuffer.get();
     m_PostProcessingJob.m_InputLayout = m_ScreenQuadVertexInputLayout.Get();
     m_PostProcessingJob.m_VertexCount = 6;
     m_PostProcessingJob.m_VertexStride = sizeof( XMFLOAT4 );
+
+    m_IsJobDirty = true;
 
     return true;
 }
@@ -95,6 +105,12 @@ void PostProcessingRenderer::Execute( const std::unique_ptr<GPUTexture>& renderT
             m_ConstantsBuffer->Unmap();
             m_IsConstantBufferDirty = false;
         }
+    }
+
+    if ( m_IsJobDirty )
+    {
+        UpdateJob();
+        m_IsJobDirty = false;
     }
 
     ID3D11DeviceContext* deviceContext = GetDeviceContext();
@@ -119,4 +135,9 @@ bool PostProcessingRenderer::OnImGUI()
     m_IsConstantBufferDirty = hasPropertyChanged;
 
     return hasPropertyChanged;
+}
+
+void PostProcessingRenderer::UpdateJob()
+{
+    m_PostProcessingJob.m_Shader = m_IsPostFXDisabled ? m_ShaderDisablePostFX.get() : m_Shader.get();
 }

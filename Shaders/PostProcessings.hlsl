@@ -52,10 +52,12 @@ float4 MainPS( VertexOut i ) : SV_TARGET
     float4 c = g_FilmTexture.Sample( CopySampler, i.texcoord );
     c.xyz /= c.w;
 
+#if !defined( DISABLE_POST_FX )
     float avgLum = exp( g_LuminanceBuffer[ 0 ] * g_Params.x );
     float exposure = ComputeExposure( avgLum );
     c.xyz *= exposure;
     c.xyz = ReinhardTonemap( c.xyz );
+#endif
 
     c.xyz = pow( c.xyz, 0.45f );
 

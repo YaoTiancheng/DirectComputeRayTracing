@@ -55,7 +55,7 @@ private:
 private:
     static const int kMaxSamplesCount = 65536;
     static const int kMaxPointLightsCount = 64;
-    static const int kRayTracingKernelCount = 4;
+    static const int kRayTracingKernelCount = 6;
 
     Camera                              m_Camera;
     std::vector<PointLight>             m_PointLights;

@@ -111,7 +111,7 @@ float3 UniformSampleOneLight( float sample, Intersection intersection, float3 wo
 #define GROUP_SIZE_X 16
 #define GROUP_SIZE_Y 16
 
-#if !defined( OUTPUT_NORMAL ) && !defined( OUTPUT_TANGENT ) && !defined( OUTPUT_ALBEDO )
+#if !defined( OUTPUT_NORMAL ) && !defined( OUTPUT_TANGENT ) && !defined( OUTPUT_ALBEDO ) && !defined( OUTPUT_NEGATIVE_NDOTV ) && !defined( OUTPUT_BACKFACE )
 
 [numthreads( GROUP_SIZE_X, GROUP_SIZE_Y, 1 )]
 void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
@@ -196,6 +196,10 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
         l = intersection.tangent * 0.5f + 0.5f;
 #elif defined( OUTPUT_ALBEDO )
         l = intersection.albedo;
+#elif defined( OUTPUT_NEGATIVE_NDOTV )
+        l = dot( -wo, intersection.normal ) < 0.0f ? float3( 0.0f, 1.0f, 0.0f ) : float3( 1.0f, 0.0f, 0.0f );
+#elif defined( OUTPUT_BACKFACE )
+        l = intersection.backface ? float3( 0.0f, 1.0f, 0.0f ) : float3( 1.0f, 0.0f, 0.0f );
 #endif
     }
 

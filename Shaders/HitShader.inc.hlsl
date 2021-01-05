@@ -23,6 +23,7 @@ void HitShader( float3 rayOrigin
     , float u
     , float v
     , uint triangleId
+    , bool backface
     , out Intersection intersection )
 {
     intersection.position   = rayOrigin + t * rayDirection;
@@ -35,6 +36,8 @@ void HitShader( float3 rayOrigin
     intersection.emission   = g_Materials[ g_MaterialIds[ triangleId ] ].emission;
     intersection.alpha      = g_Materials[ g_MaterialIds[ triangleId ] ].roughness;
     intersection.ior        = g_Materials[ g_MaterialIds[ triangleId ] ].ior;
+
+    intersection.backface   = backface;
 }
 
 #endif

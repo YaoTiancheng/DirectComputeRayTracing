@@ -73,7 +73,7 @@ bool Scene::Init()
 
     std::vector<D3D_SHADER_MACRO> rayTracingShaderDefines;
     
-    static const char* s_RayTracingKernelDefines[ kRayTracingKernelCount ] = { NULL, "OUTPUT_NORMAL", "OUTPUT_TANGENT", "OUTPUT_ALBEDO" };
+    static const char* s_RayTracingKernelDefines[ kRayTracingKernelCount ] = { NULL, "OUTPUT_NORMAL", "OUTPUT_TANGENT", "OUTPUT_ALBEDO", "OUTPUT_NEGATIVE_NDOTV", "OUTPUT_BACKFACE" };
     for ( int i = 0; i < kRayTracingKernelCount; ++i )
     {
         if ( CommandLineArgs::Singleton()->GetNoBVHAccel() )
@@ -421,7 +421,7 @@ void Scene::OnImGUI()
 
         if ( ImGui::CollapsingHeader( "Kernel" ) )
         {
-            static const char* s_KernelTypeNames[ kRayTracingKernelCount ] = { "Path Tracing", "Output Normal", "Output Tangent", "Output Albedo" };
+            static const char* s_KernelTypeNames[ kRayTracingKernelCount ] = { "Path Tracing", "Output Normal", "Output Tangent", "Output Albedo", "Output Negative NdotV", "Output Backface" };
             if ( ImGui::Combo( "Type", &m_RayTracingKernelIndex, s_KernelTypeNames, IM_ARRAYSIZE( s_KernelTypeNames ) ) )
             {
                 m_IsRayTracingJobDirty = true;

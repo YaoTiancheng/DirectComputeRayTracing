@@ -12,6 +12,7 @@ struct Intersection
     float3  tangent;
     float   rayEpsilon;
     float   ior;
+    bool    backface;
 };
 
 #endif

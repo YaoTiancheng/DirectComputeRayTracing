@@ -5,6 +5,7 @@
 #include "CookTorranceBRDF.inc.hlsl"
 #include "CookTorranceCompensationBRDF.inc.hlsl"
 #include "Intersection.inc.hlsl"
+#include "LightingContext.inc.hlsl"
 
 float SpecularWeight( float cosTheta, float alpha, float ior )
 {
@@ -14,6 +15,23 @@ float SpecularWeight( float cosTheta, float alpha, float ior )
 float SpecularCompWeight( float ior, float E, float EAvg )
 {
     return EvaluateCookTorranceCompFresnel( ior, EAvg ) * ( 1.0f - E );
+}
+
+LightingContext InitLightingContext( float3 wo, float3 wi )
+{
+    LightingContext context;
+    context.WOdotN = wo.z;
+    context.WIdotN = wi.z;
+    context.m      = wo + wi;
+    context.m      = all( context.m == 0.0f ) ? 0.0f : normalize( context.m );
+    return context;
+}
+
+LightingContext InitLightingContext( float3 wo )
+{
+    LightingContext context = (LightingContext)0;
+    context.WOdotN = wo.z;
+    return context;
 }
 
 //
@@ -29,8 +47,10 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
     wo = mul( wo, world2tbn );
     wi = mul( wi, world2tbn );
 
-    float3 value = EvaluateCookTorranceMircofacetBRDF( wi, wo, intersection.specular, intersection.alpha, 1.0f, intersection.ior );
-    value += EvaluateCookTorranceCompBRDF( wi, wo, intersection.specular, intersection.alpha, intersection.ior );
+    LightingContext lightingContext = InitLightingContext( wo, wi );
+
+    float3 value = EvaluateCookTorranceMircofacetBRDF( wi, wo, intersection.specular, intersection.alpha, 1.0f, intersection.ior, lightingContext );
+    value += EvaluateCookTorranceCompBRDF( wi, wo, intersection.specular, intersection.alpha, intersection.ior, lightingContext );
 
     float E = EvaluateCookTorranceCompE( wo.z, intersection.alpha );
     float EAvg = EvaluateCookTorranceCompEAvg( intersection.alpha );
@@ -38,7 +58,7 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
     float specularWeight        = SpecularWeight( cosThetaO, intersection.alpha, intersection.ior );
     float specularCompWeight    = SpecularCompWeight( intersection.ior, E, EAvg );
     float diffuseWeight = 1.0f - specularWeight - specularCompWeight;
-    value += EvaluateLambertBRDF( wi, wo, intersection.albedo ) * diffuseWeight;
+    value += EvaluateLambertBRDF( wi, wo, intersection.albedo, lightingContext ) * diffuseWeight;
 
     return value;
 }
@@ -57,6 +77,8 @@ void SampleBSDF( float3 wo
 
     wo = mul( wo, world2tbn );
 
+    LightingContext lightingContext = InitLightingContext( wo );
+
     bool invert = wo.z < 0.0f;
     float etaI = invert ? intersection.ior : 1.0f;
     float etaT = invert ? 1.0f : intersection.ior;
@@ -69,37 +91,37 @@ void SampleBSDF( float3 wo
     float diffuseWeight = 1.0f - specularWeight - specularCompWeight;
     if ( BRDFSelectionSample < specularWeight )
     {
-        SampleCookTorranceMicrofacetBRDF( wo, BRDFSample, intersection.specular, intersection.alpha, etaI, etaT, wi, value, pdf );
+        SampleCookTorranceMicrofacetBRDF( wo, BRDFSample, intersection.specular, intersection.alpha, etaI, etaT, wi, value, pdf, lightingContext );
         pdf *= specularWeight;
 
-        value += EvaluateCookTorranceCompBRDF( wi, wo, intersection.specular, intersection.alpha, intersection.ior );
-        pdf += EvaluateCookTorranceCompPdf( wi, intersection.alpha ) * specularCompWeight;
+        value += EvaluateCookTorranceCompBRDF( wi, wo, intersection.specular, intersection.alpha, intersection.ior, lightingContext );
+        pdf += EvaluateCookTorranceCompPdf( wi, intersection.alpha, lightingContext ) * specularCompWeight;
 
-        value += EvaluateLambertBRDF( wi, wo, intersection.albedo ) * diffuseWeight;
-        pdf += EvaluateLambertBRDFPdf( wi ) * diffuseWeight;
+        value += EvaluateLambertBRDF( wi, wo, intersection.albedo, lightingContext ) * diffuseWeight;
+        pdf += EvaluateLambertBRDFPdf( wi, lightingContext ) * diffuseWeight;
     }
     else if ( BRDFSelectionSample < specularWeight + specularCompWeight )
     {
-        SampleCookTorranceCompBRDF( wo, BRDFSample, intersection.specular, intersection.alpha, intersection.ior, wi, value, pdf );
+        SampleCookTorranceCompBRDF( wo, BRDFSample, intersection.specular, intersection.alpha, intersection.ior, wi, value, pdf, lightingContext );
         pdf *= specularCompWeight;
 
-        value += EvaluateCookTorranceMircofacetBRDF( wi, wo, intersection.specular, intersection.alpha, etaI, etaT );
-        pdf += EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, intersection.alpha ) * specularWeight;
+        value += EvaluateCookTorranceMircofacetBRDF( wi, wo, intersection.specular, intersection.alpha, etaI, etaT, lightingContext );
+        pdf += EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * specularWeight;
 
-        value += EvaluateLambertBRDF( wi, wo, intersection.albedo ) * diffuseWeight;
-        pdf += EvaluateLambertBRDFPdf( wi ) * diffuseWeight;
+        value += EvaluateLambertBRDF( wi, wo, intersection.albedo, lightingContext ) * diffuseWeight;
+        pdf += EvaluateLambertBRDFPdf( wi, lightingContext ) * diffuseWeight;
     }
     else
     {
-        SampleLambertBRDF( wo, BRDFSample, intersection.albedo, wi, value, pdf );
+        SampleLambertBRDF( wo, BRDFSample, intersection.albedo, wi, value, pdf, lightingContext );
         value *= diffuseWeight;
         pdf *= diffuseWeight;
 
-        value += EvaluateCookTorranceMircofacetBRDF( wi, wo, intersection.specular, intersection.alpha, etaI, etaT );
-        pdf += EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, intersection.alpha ) * specularWeight;
+        value += EvaluateCookTorranceMircofacetBRDF( wi, wo, intersection.specular, intersection.alpha, etaI, etaT, lightingContext );
+        pdf += EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * specularWeight;
 
-        value += EvaluateCookTorranceCompBRDF( wi, wo, intersection.specular, intersection.alpha, intersection.ior );
-        pdf += EvaluateCookTorranceCompPdf( wi, intersection.alpha ) * specularCompWeight;
+        value += EvaluateCookTorranceCompBRDF( wi, wo, intersection.specular, intersection.alpha, intersection.ior, lightingContext );
+        pdf += EvaluateCookTorranceCompPdf( wi, intersection.alpha, lightingContext ) * specularCompWeight;
     }
 
     wi = mul( wi, tbn2world );

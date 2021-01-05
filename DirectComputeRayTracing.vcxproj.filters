@@ -235,4 +235,7 @@
       <Filter>Resource Files</Filter>
     </ResourceCompile>
   </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="Shaders\LightingContext.inc.hlsl" />
+  </ItemGroup>
 </Project>

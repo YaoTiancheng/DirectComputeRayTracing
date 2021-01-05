@@ -2,6 +2,7 @@
 #define _COOKTORRANCECOMPENSATIONBRDF_H_
 
 #include "Math.inc.hlsl"
+#include "LightingContext.inc.hlsl"
 
 #define TEXTURE_SIZE_COMP_E             float2( 32.0f, 32.0f )
 #define TEXTURE_SIZE_COMP_E_AVG         float2( 32.0f,  1.0f )
@@ -102,10 +103,10 @@ float EvaluateCookTorranceCompFresnel( float ior, float EAvg )
     return FAvg * FAvg * EAvg / ( 1.0f - FAvg * ( 1.0f - EAvg ) );
 }
 
-float3 EvaluateCookTorranceCompBRDF( float3 wi, float3 wo, float3 reflectance, float alpha, float ior )
+float3 EvaluateCookTorranceCompBRDF( float3 wi, float3 wo, float3 reflectance, float alpha, float ior, LightingContext lightingContext )
 {
-    float WIdotN = wi.z;
-    float WOdotN = wo.z;
+    float WIdotN = lightingContext.WIdotN;
+    float WOdotN = lightingContext.WOdotN;
     if ( WIdotN <= 0.0f || WOdotN <= 0.0f )
         return 0.0f;
 
@@ -116,10 +117,10 @@ float3 EvaluateCookTorranceCompBRDF( float3 wi, float3 wo, float3 reflectance, f
     return reflectance * ( 1.0f - eI ) * ( 1.0f - eO ) * fresnel / ( PI * ( 1.0f - eAvg ) );
 }
 
-float EvaluateCookTorranceCompPdf( float3 wi, float alpha )
+float EvaluateCookTorranceCompPdf( float3 wi, float alpha, LightingContext lightingContext )
 {
     //return EvaluateLambertBRDFPdf(wi);
-    float cosTheta = wi.z;
+    float cosTheta = lightingContext.WIdotN;
     if ( cosTheta < 0.0f )
         return 0.0f;
 
@@ -127,11 +128,16 @@ float EvaluateCookTorranceCompPdf( float3 wi, float alpha )
     return ( 1.0f - EvaluateCookTorranceCompE( cosTheta, alpha ) ) * cosTheta / pdfScale;
 }
 
-void SampleCookTorranceCompBRDF( float3 wo, float2 sample, float3 reflectance, float alpha, float ior, out float3 wi, out float3 value, out float pdf )
+void SampleCookTorranceCompBRDF( float3 wo, float2 sample, float3 reflectance, float alpha, float ior, out float3 wi, out float3 value, out float pdf, inout LightingContext lightingContext )
 {
     wi = CookTorranceCompSampleHemisphere( sample, alpha );
-    value = EvaluateCookTorranceCompBRDF( wi, wo, reflectance, alpha, ior );
-    pdf = EvaluateCookTorranceCompPdf( wi, alpha );
+
+    lightingContext.WIdotN = wi.z;
+    lightingContext.m = wi + wo;
+    lightingContext.m = all( lightingContext.m == 0.0f ) ? 0.0f : normalize( lightingContext.m );
+
+    value = EvaluateCookTorranceCompBRDF( wi, wo, reflectance, alpha, ior, lightingContext );
+    pdf = EvaluateCookTorranceCompPdf( wi, alpha, lightingContext );
 }
 
 #endif

@@ -3,6 +3,7 @@
 
 #include "MonteCarlo.inc.hlsl"
 #include "Math.inc.hlsl"
+#include "LightingContext.inc.hlsl"
 
 float3 ConsineSampleHemisphere( float2 sample )
 {
@@ -10,14 +11,14 @@ float3 ConsineSampleHemisphere( float2 sample )
     return float3( sample.xy, sqrt( max( 0.0f, 1.0f - dot( sample.xy, sample.xy ) ) ) );
 }
 
-float3 EvaluateLambertBRDF( float3 wi, float3 wo, float3 albedo )
+float3 EvaluateLambertBRDF( float3 wi, float3 wo, float3 albedo, LightingContext lightingContext )
 {
-    return wi.z > 0.0f && wo.z > 0.0f ? albedo * INV_PI : 0.0f;
+    return lightingContext.WIdotN > 0.0f && lightingContext.WOdotN > 0.0f ? albedo * INV_PI : 0.0f;
 }
 
-float EvaluateLambertBRDFPdf( float3 wi )
+float EvaluateLambertBRDFPdf( float3 wi, LightingContext lightingContext )
 {
-    return max( 0.0f, wi.z * INV_PI );
+    return max( 0.0f, lightingContext.WIdotN * INV_PI );
 }
 
 void SampleLambertBRDF( float3 wo
@@ -25,11 +26,17 @@ void SampleLambertBRDF( float3 wo
     , float3 albedo
     , out float3 wi
     , out float3 value
-    , out float pdf )
+    , out float pdf
+    , inout LightingContext lightingContext )
 {
     wi = ConsineSampleHemisphere( sample );
-    value = EvaluateLambertBRDF( wi, wo, albedo );
-    pdf = EvaluateLambertBRDFPdf( wi );
+
+    lightingContext.WIdotN = wi.z;
+    lightingContext.m = wi + wo;
+    lightingContext.m = all( lightingContext.m == 0.0f ) ? 0.0f : normalize( lightingContext.m );
+
+    value = EvaluateLambertBRDF( wi, wo, albedo, lightingContext );
+    pdf = EvaluateLambertBRDFPdf( wi, lightingContext );
 }
 
 #endif

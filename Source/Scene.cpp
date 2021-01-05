@@ -87,7 +87,7 @@ bool Scene::Init()
         rayTracingShaderDefines.push_back( { NULL, NULL } );
 
         m_RayTracingShader[ i ].reset( ComputeShader::CreateFromFile( L"Shaders\\RayTracing.hlsl", rayTracingShaderDefines ) );
-        if ( !m_RayTracingShader )
+        if ( !m_RayTracingShader[ i ] )
             return false;
 
         rayTracingShaderDefines.clear();

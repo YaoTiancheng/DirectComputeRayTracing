@@ -37,7 +37,7 @@ float ComputeLogLuminance( float lum )
 
 float3 ResolveFilmColor( float4 sample )
 {
-    return sample.w > 0 ? sample.xyz / sample.w : 0.0f;
+    return clamp(sample.w > 0 ? sample.xyz / sample.w : 0.0f, 0.0f, 65000.0f );
 }
 
 [numthreads( BLOCKSIZE, BLOCKSIZEY, 1 )]

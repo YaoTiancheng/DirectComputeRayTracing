@@ -58,7 +58,7 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
     float specularWeight        = SpecularWeight( cosThetaO, intersection.alpha, intersection.ior );
     float specularCompWeight    = SpecularCompWeight( intersection.ior, E, EAvg );
     float diffuseWeight = 1.0f - specularWeight - specularCompWeight;
-    value += EvaluateLambertBRDF( wi, wo, intersection.albedo, lightingContext ) * diffuseWeight;
+    value += EvaluateLambertBRDF( wi, wo, intersection.albedo, intersection.backface ) * diffuseWeight;
 
     return value;
 }
@@ -97,7 +97,7 @@ void SampleBSDF( float3 wo
         value += EvaluateCookTorranceCompBRDF( wi, wo, intersection.specular, intersection.alpha, intersection.ior, lightingContext );
         pdf += EvaluateCookTorranceCompPdf( wi, intersection.alpha, lightingContext ) * specularCompWeight;
 
-        value += EvaluateLambertBRDF( wi, wo, intersection.albedo, lightingContext ) * diffuseWeight;
+        value += EvaluateLambertBRDF( wi, wo, intersection.albedo, intersection.backface ) * diffuseWeight;
         pdf += EvaluateLambertBRDFPdf( wi, lightingContext ) * diffuseWeight;
     }
     else if ( BRDFSelectionSample < specularWeight + specularCompWeight )
@@ -108,12 +108,12 @@ void SampleBSDF( float3 wo
         value += EvaluateCookTorranceMircofacetBRDF( wi, wo, intersection.specular, intersection.alpha, etaI, etaT, lightingContext );
         pdf += EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * specularWeight;
 
-        value += EvaluateLambertBRDF( wi, wo, intersection.albedo, lightingContext ) * diffuseWeight;
+        value += EvaluateLambertBRDF( wi, wo, intersection.albedo, intersection.backface ) * diffuseWeight;
         pdf += EvaluateLambertBRDFPdf( wi, lightingContext ) * diffuseWeight;
     }
     else
     {
-        SampleLambertBRDF( wo, BRDFSample, intersection.albedo, wi, value, pdf, lightingContext );
+        SampleLambertBRDF( wo, BRDFSample, intersection.albedo, intersection.backface, wi, value, pdf, lightingContext );
         value *= diffuseWeight;
         pdf *= diffuseWeight;
 

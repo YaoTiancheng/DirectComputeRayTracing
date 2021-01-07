@@ -17,23 +17,6 @@ float SpecularCompWeight( float ior, float E, float EAvg )
     return EvaluateCookTorranceCompFresnel( ior, EAvg ) * ( 1.0f - E );
 }
 
-LightingContext InitLightingContext( float3 wo, float3 wi )
-{
-    LightingContext context;
-    context.WOdotN = wo.z;
-    context.WIdotN = wi.z;
-    context.m      = wo + wi;
-    context.m      = all( context.m == 0.0f ) ? 0.0f : normalize( context.m );
-    return context;
-}
-
-LightingContext InitLightingContext( float3 wo )
-{
-    LightingContext context = (LightingContext)0;
-    context.WOdotN = wo.z;
-    return context;
-}
-
 //
 // BSDF
 // 
@@ -47,7 +30,7 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
     wo = mul( wo, world2tbn );
     wi = mul( wi, world2tbn );
 
-    LightingContext lightingContext = InitLightingContext( wo, wi );
+    LightingContext lightingContext = LightingContextInit( wo, wi );
 
     float3 value = EvaluateCookTorranceMircofacetBRDF( wi, wo, intersection.specular, intersection.alpha, 1.0f, intersection.ior, lightingContext );
     value += EvaluateCookTorranceCompBRDF( wi, wo, intersection.specular, intersection.alpha, intersection.ior, lightingContext );
@@ -77,7 +60,7 @@ void SampleBSDF( float3 wo
 
     wo = mul( wo, world2tbn );
 
-    LightingContext lightingContext = InitLightingContext( wo );
+    LightingContext lightingContext = LightingContextInit( wo );
 
     bool invert = lightingContext.WOdotN < 0.0f;
     float etaI = invert ? intersection.ior : 1.0f;

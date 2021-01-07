@@ -133,8 +133,7 @@ void SampleCookTorranceCompBRDF( float3 wo, float2 sample, float3 reflectance, f
     wi = CookTorranceCompSampleHemisphere( sample, alpha );
 
     lightingContext.WIdotN = wi.z;
-    lightingContext.m = wi + wo;
-    lightingContext.m = all( lightingContext.m == 0.0f ) ? 0.0f : normalize( lightingContext.m );
+    LightingContextAssignH( wo, wi, lightingContext );
 
     value = EvaluateCookTorranceCompBRDF( wi, wo, reflectance, alpha, ior, lightingContext );
     pdf = EvaluateCookTorranceCompPdf( wi, alpha, lightingContext );

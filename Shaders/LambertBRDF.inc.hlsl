@@ -33,8 +33,7 @@ void SampleLambertBRDF( float3 wo
     wi = ConsineSampleHemisphere( sample );
 
     lightingContext.WIdotN = wi.z;
-    lightingContext.m = wi + wo;
-    lightingContext.m = all( lightingContext.m == 0.0f ) ? 0.0f : normalize( lightingContext.m );
+    LightingContextAssignH( wo, wi, lightingContext );
 
     value = EvaluateLambertBRDF( wi, wo, albedo, backface );
     pdf = EvaluateLambertBRDFPdf( wi, lightingContext );

@@ -103,7 +103,7 @@ float3 EvaluateCookTorranceMircofacetBRDF( float3 wi, float3 wo, float3 reflecta
     if ( WIdotN <= 0.0f || WOdotN <= 0.0f )
         return 0.0f;
 
-    float3 m = lightingContext.m;
+    float3 m = lightingContext.H;
     if ( all( m == 0.0f ) )
         return 0.0f;
 
@@ -118,7 +118,7 @@ float EvaluateCookTorranceMicrofacetBRDFPdf( float3 wi, float3 wo, float alpha, 
     if ( WIdotN <= 0.0f || WOdotN <= 0.0f )
         return 0.0f;
     
-    float3 m = lightingContext.m;
+    float3 m = lightingContext.H;
     float  pdf = EvaluateGGXMicrofacetDistributionPdf( m, alpha );
     return pdf / ( 4.0f * dot( wi, m ) );
 }
@@ -131,7 +131,7 @@ void SampleCookTorranceMicrofacetBRDF( float3 wo, float2 sample, float3 reflecta
     SampleGGXMicrofacetDistribution( sample, alpha, m );
     wi = -reflect( wo, m );
 
-    lightingContext.m = m;
+    lightingContext.H = m;
 
     float WIdotN = wi.z;
     lightingContext.WIdotN = WIdotN;

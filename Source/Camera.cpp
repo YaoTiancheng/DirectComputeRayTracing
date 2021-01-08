@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "Camera.h"
+#include "imgui/imgui.h"
 
 using namespace DirectX;
 
@@ -97,4 +98,22 @@ void Camera::GetTransformMatrixAndClearDirty( DirectX::XMFLOAT4X4* m )
 {
     GetTransformMatrix( m );
     m_IsDirty = false;
+}
+
+void Camera::OnImGUI()
+{
+    if ( ImGui::DragFloat3( "Position", (float*)&m_Position, 0.01f ) )
+        m_IsDirty = true;
+
+    XMFLOAT3 eulerAnglesDeg;
+    eulerAnglesDeg.x = XMConvertToDegrees( m_EulerAngles.x );
+    eulerAnglesDeg.y = XMConvertToDegrees( m_EulerAngles.y );
+    eulerAnglesDeg.z = XMConvertToDegrees( m_EulerAngles.z );
+    if ( ImGui::DragFloat3( "Euler Angles", (float*)&eulerAnglesDeg, 0.1f ) )
+    { 
+        m_EulerAngles.x = XMConvertToRadians( eulerAnglesDeg.x );
+        m_EulerAngles.y = XMConvertToRadians( eulerAnglesDeg.y );
+        m_EulerAngles.z = XMConvertToRadians( eulerAnglesDeg.z );
+        m_IsDirty = true;
+    }
 }

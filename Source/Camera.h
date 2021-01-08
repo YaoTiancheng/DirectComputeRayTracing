@@ -15,6 +15,8 @@ public:
 
     void GetTransformMatrixAndClearDirty( DirectX::XMFLOAT4X4* m );
 
+    void OnImGUI();
+
 private:
     DirectX::XMFLOAT4 m_Position;
     DirectX::XMFLOAT4 m_EulerAngles;

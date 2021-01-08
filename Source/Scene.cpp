@@ -554,6 +554,16 @@ void Scene::OnImGUI()
     }
 
     {
+        ImGui::Begin( "Preview Camera" );
+
+        ImGui::PushItemWidth( ImGui::GetFontSize() * -9 );
+
+        m_Camera.OnImGUI();
+
+        ImGui::End();
+    }
+
+    {
         ImGui::Begin( "Render Stats." );
 
         ImGui::Text( "Average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate );

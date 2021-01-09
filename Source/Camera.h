@@ -7,7 +7,7 @@ public:
 
     bool OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam );
 
-    void Update();
+    void Update( float deltaTime );
 
     bool IsDirty() const { return m_IsDirty; }
 
@@ -22,6 +22,7 @@ private:
     DirectX::XMFLOAT4 m_EulerAngles;
     DirectX::XMFLOAT4 m_Velocity;
     DirectX::XMFLOAT2 m_LastPointerPosition;
+    float             m_Speed;
 
     bool m_IsDirty;
 };

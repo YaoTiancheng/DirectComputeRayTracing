@@ -114,6 +114,9 @@
     <ClInclude Include="Source\Logging.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Timers.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\Application.cpp">
@@ -229,13 +232,11 @@
     <None Include="Shaders\SumLuminance.hlsl" />
     <None Include="Shaders\SumLuminanceDef.inc.hlsl" />
     <None Include="Shaders\RayTracingDef.inc.hlsl" />
+    <None Include="Shaders\LightingContext.inc.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resources\DirectComputeRayTracing.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="Shaders\LightingContext.inc.hlsl" />
   </ItemGroup>
 </Project>

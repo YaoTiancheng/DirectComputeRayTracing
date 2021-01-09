@@ -259,6 +259,8 @@ bool Scene::ResetScene()
 
 void Scene::AddOneSampleAndRender()
 {
+    m_FrameTimer.BeginFrame();
+
     AddOneSample();
     m_SceneLuminance.Dispatch();
     m_PostProcessing.Execute( m_DefaultRenderTarget );
@@ -271,7 +273,7 @@ bool Scene::OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam )
 
 void Scene::AddOneSample()
 {
-    m_Camera.Update();
+    m_Camera.Update( m_FrameTimer.GetCurrentFrameDeltaTime() );
 
     if ( m_Camera.IsDirty() )
     {

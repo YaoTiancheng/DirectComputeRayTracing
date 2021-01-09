@@ -4,6 +4,7 @@
 #include "ComputeJob.h"
 #include "PostProcessingRenderer.h"
 #include "SceneLuminanceRenderer.h"
+#include "Timers.h"
 #include "../Shaders/PointLight.inc.hlsl"
 #include "../Shaders/Material.inc.hlsl"
 
@@ -106,4 +107,6 @@ private:
     int                                 m_PointLightSelectionIndex;
     int                                 m_MaterialSelectionIndex;
     int                                 m_RayTracingKernelIndex;
+
+    FrameTimer                          m_FrameTimer;
 };

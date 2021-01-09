@@ -9,6 +9,7 @@ Camera::Camera()
     , m_EulerAngles( 0.0f, 0.0f, 0.0f, 0.0f )
     , m_Velocity( 0.0f, 0.0f, 0.0f, 0.0f )
     , m_LastPointerPosition( 0.0f, 0.0f )
+    , m_Speed( 0.5f )
     , m_IsDirty( true )
 {
 }
@@ -40,13 +41,13 @@ bool Camera::OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam )
         if ( ( lParam & ( 1 << 30 ) ) == 0 )
         {
             if ( wParam == 'W' )
-                m_Velocity.z = 0.01f;
+                m_Velocity.z = m_Speed;
             else if ( wParam == 'S' )
-                m_Velocity.z = -0.01f;
+                m_Velocity.z = -m_Speed;
             else if ( wParam == 'A' )
-                m_Velocity.x = -0.01f;
+                m_Velocity.x = -m_Speed;
             else if ( wParam == 'D' )
-                m_Velocity.x = 0.01f;
+                m_Velocity.x = m_Speed;
         }
 
         break;
@@ -67,7 +68,7 @@ bool Camera::OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam )
     return true;
 }
 
-void Camera::Update()
+void Camera::Update( float deltaTime )
 {
     if ( m_Velocity.x != 0.0f || m_Velocity.z != 0.0f )
     {
@@ -76,7 +77,8 @@ void Camera::Update()
         XMMATRIX vM = XMMatrixRotationRollPitchYawFromVector( vEulerAngles );
         vVelocity = XMVector4Transform( vVelocity, vM );
         XMVECTOR vPosition = XMLoadFloat4( &m_Position );
-        vPosition = XMVectorAdd( vVelocity, vPosition );
+        XMVECTOR vDeltaTime = XMVectorSplatX( XMLoadFloat( &deltaTime ) );
+        vPosition = XMVectorMultiplyAdd( vVelocity, vDeltaTime, vPosition );
         XMStoreFloat4( &m_Position, vPosition );
 
         m_IsDirty = true;
@@ -116,4 +118,6 @@ void Camera::OnImGUI()
         m_EulerAngles.z = XMConvertToRadians( eulerAnglesDeg.z );
         m_IsDirty = true;
     }
+
+    ImGui::DragFloat( "Movement Speed", &m_Speed, 0.05f, 0.0f, 100000.0f );
 }

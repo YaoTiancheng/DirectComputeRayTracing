@@ -184,6 +184,7 @@
     <ClInclude Include="Source\PostProcessingRenderer.h" />
     <ClInclude Include="Source\RenderJobHelper.h" />
     <ClInclude Include="Source\SceneLuminanceRenderer.h" />
+    <ClInclude Include="Source\Timers.h" />
     <ClInclude Include="Source\Shader.h" />
     <ClInclude Include="Source\GPUBuffer.h" />
     <ClInclude Include="Source\GPUResourceCreationFlag.h" />

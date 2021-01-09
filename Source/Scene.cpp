@@ -8,6 +8,7 @@
 #include "Shader.h"
 #include "Logging.h"
 #include "imgui/imgui.h"
+#include "imgui/imgui_impl_dx11.h"
 #include "../Shaders/RayTracingDef.inc.hlsl"
 #include "../Shaders/SumLuminanceDef.inc.hlsl"
 
@@ -141,6 +142,8 @@ bool Scene::Init()
     if ( !m_PostProcessing.Init( resolutionWidth, resolutionHeight, m_FilmTexture, m_SceneLuminance.GetLuminanceResultBuffer() ) )
         return false;
 
+    UpdateRenderViewport( resolutionWidth, resolutionHeight );
+
     return true;
 }
 
@@ -263,11 +266,39 @@ void Scene::AddOneSampleAndRender()
 
     AddOneSample();
     m_SceneLuminance.Dispatch();
-    m_PostProcessing.Execute( m_DefaultRenderTarget );
+
+    ID3D11DeviceContext* deviceContext = GetDeviceContext();
+    ID3D11RenderTargetView* RTV = m_DefaultRenderTarget->GetRTV();
+    deviceContext->OMSetRenderTargets( 1, &RTV, nullptr );
+
+    DXGI_SWAP_CHAIN_DESC swapChainDesc;
+    GetSwapChain()->GetDesc( &swapChainDesc );
+    D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (float)swapChainDesc.BufferDesc.Width, (float)swapChainDesc.BufferDesc.Height, 0.0f, 1.0f };
+    deviceContext->RSSetViewports( 1, &viewport );
+
+    XMFLOAT4 clearColor = { 0.0f, 0.0f, 0.0f, 0.0f };
+    deviceContext->ClearRenderTargetView( RTV, (float*)&clearColor );
+
+    viewport = { (float)m_RenderViewport.m_TopLeftX, (float)m_RenderViewport.m_TopLeftY, (float)m_RenderViewport.m_Width, (float)m_RenderViewport.m_Height, 0.0f, 1.0f };
+    deviceContext->RSSetViewports( 1, &viewport );
+
+    m_PostProcessing.Execute();
 }
 
 bool Scene::OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam )
 {
+    if ( message == WM_SIZE )
+    {
+        m_DefaultRenderTarget.reset();
+
+        UINT width = LOWORD( lParam );
+        UINT height = HIWORD( lParam );
+        ResizeSwapChainBuffers( width, height );
+        
+        m_DefaultRenderTarget.reset( GPUTexture::CreateFromSwapChain() );
+
+        UpdateRenderViewport( width, height );
+    }
     return m_Camera.OnWndMessage( message, wParam, lParam );
 }
 
@@ -404,6 +435,24 @@ void Scene::UpdateRayTracingJob()
     m_RayTracingJob.m_DispatchSizeX = (uint32_t)ceil( m_RayTracingConstants.resolutionX / 16.0f );
     m_RayTracingJob.m_DispatchSizeY = (uint32_t)ceil( m_RayTracingConstants.resolutionY / 16.0f );
     m_RayTracingJob.m_DispatchSizeZ = 1;
+}
+
+void Scene::UpdateRenderViewport( uint32_t backbufferWidth, uint32_t backbufferHeight )
+{
+    const CommandLineArgs* commandLineArgs = CommandLineArgs::Singleton();
+    uint32_t renderWidth = commandLineArgs->ResolutionX();
+    uint32_t renderHeight = commandLineArgs->ResolutionY();
+    float scale = (float)backbufferWidth / renderWidth;
+    float desiredViewportHeight = renderHeight * scale;
+    if ( desiredViewportHeight > backbufferHeight )
+    {
+        scale = (float)backbufferHeight / renderHeight;
+    }
+    
+    m_RenderViewport.m_Width    = renderWidth * scale;
+    m_RenderViewport.m_Height   = renderHeight * scale;
+    m_RenderViewport.m_TopLeftX = ( backbufferWidth - m_RenderViewport.m_Width ) * 0.5f;
+    m_RenderViewport.m_TopLeftY = ( backbufferHeight - m_RenderViewport.m_Height ) * 0.5f;
 }
 
 void Scene::OnImGUI()
@@ -572,6 +621,13 @@ void Scene::OnImGUI()
 
         ImGui::End();
     }
+
+    // Rendering
+    ImGui::Render();
+    ImGui_ImplDX11_RenderDrawData( ImGui::GetDrawData() );
+
+    ID3D11RenderTargetView* RTV = nullptr;
+    GetDeviceContext()->OMSetRenderTargets( 1, &RTV, nullptr );
 }
 
 

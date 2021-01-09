@@ -30,7 +30,7 @@ PostProcessingRenderer::PostProcessingRenderer()
 {
 }
 
-bool PostProcessingRenderer::Init( uint32_t resolutionWidth, uint32_t resolutionHeight, const GPUTexturePtr& filmTexture, const GPUBufferPtr& luminanceBuffer )
+bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, const GPUTexturePtr& filmTexture, const GPUBufferPtr& luminanceBuffer )
 {
     std::vector<D3D_SHADER_MACRO> shaderDefines;
     shaderDefines.push_back( { NULL, NULL } );
@@ -45,7 +45,7 @@ bool PostProcessingRenderer::Init( uint32_t resolutionWidth, uint32_t resolution
     if ( !m_ShaderDisablePostFX )
         return false;
 
-    m_ConstantParams = XMFLOAT4( 1.0f / ( resolutionWidth * resolutionHeight ), 0.7f, 0.0f, 0.0f );
+    m_ConstantParams = XMFLOAT4( 1.0f / ( renderWidth * renderHeight ), 0.7f, 0.0f, 0.0f );
     m_ConstantsBuffer.reset( GPUBuffer::Create(
           sizeof( XMFLOAT4 )
         , 0
@@ -68,7 +68,7 @@ bool PostProcessingRenderer::Init( uint32_t resolutionWidth, uint32_t resolution
 
     D3D11_SAMPLER_DESC samplerDesc;
     ZeroMemory( &samplerDesc, sizeof( D3D11_SAMPLER_DESC ) );
-    samplerDesc.Filter   = D3D11_FILTER_MAXIMUM_MIN_MAG_MIP_POINT;
+    samplerDesc.Filter   = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
     samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
     samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
     samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
@@ -78,8 +78,6 @@ bool PostProcessingRenderer::Init( uint32_t resolutionWidth, uint32_t resolution
     HRESULT hr = GetDevice()->CreateSamplerState( &samplerDesc, &m_CopySamplerState );
     if ( FAILED( hr ) )
         return false;
-
-    m_DefaultViewport = { 0.0f, 0.0f, (float)resolutionWidth, (float)resolutionHeight, 0.0f, 1.0f };
 
     m_PostProcessingJob.m_SamplerStates.push_back( m_CopySamplerState.Get() );
     m_PostProcessingJob.m_ConstantBuffers.push_back( m_ConstantsBuffer->GetBuffer() );
@@ -95,7 +93,7 @@ bool PostProcessingRenderer::Init( uint32_t resolutionWidth, uint32_t resolution
     return true;
 }
 
-void PostProcessingRenderer::Execute( const std::unique_ptr<GPUTexture>& renderTargetTexture )
+void PostProcessingRenderer::Execute()
 {
     if ( m_IsConstantBufferDirty )
     {
@@ -112,13 +110,6 @@ void PostProcessingRenderer::Execute( const std::unique_ptr<GPUTexture>& renderT
         UpdateJob();
         m_IsJobDirty = false;
     }
-
-    ID3D11DeviceContext* deviceContext = GetDeviceContext();
-
-    ID3D11RenderTargetView* rawDefaultRenderTargetView = renderTargetTexture->GetRTV();
-    deviceContext->OMSetRenderTargets( 1, &rawDefaultRenderTargetView, nullptr );
-
-    deviceContext->RSSetViewports( 1, &m_DefaultViewport );
 
     m_PostProcessingJob.Dispatch();
 }

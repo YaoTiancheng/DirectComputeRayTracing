@@ -7,9 +7,9 @@ class PostProcessingRenderer
 public:
     PostProcessingRenderer();
 
-    bool Init( uint32_t resolutionWidth, uint32_t resolutionHeight, const GPUTexturePtr& filmTexture, const GPUBufferPtr& luminanceBuffer );
+    bool Init( uint32_t renderWidth, uint32_t renderHeight, const GPUTexturePtr& filmTexture, const GPUBufferPtr& luminanceBuffer );
 
-    void Execute( const GPUTexturePtr& renderTargetTexture );
+    void Execute();
 
     bool OnImGUI();
 
@@ -19,8 +19,6 @@ private:
     void UpdateJob();
 
 private:
-    D3D11_VIEWPORT                      m_DefaultViewport;
-
     template <typename T>
     using ComPtr = Microsoft::WRL::ComPtr<T>;
 

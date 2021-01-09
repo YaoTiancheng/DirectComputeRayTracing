@@ -5,6 +5,7 @@
 #include "PostProcessingRenderer.h"
 #include "SceneLuminanceRenderer.h"
 #include "Timers.h"
+#include "Rectangle.h"
 #include "../Shaders/PointLight.inc.hlsl"
 #include "../Shaders/Material.inc.hlsl"
 
@@ -52,6 +53,8 @@ private:
     void ClearFilmTexture();
 
     void UpdateRayTracingJob();
+
+    void UpdateRenderViewport( uint32_t backbufferWidth, uint32_t backbufferHeight );
 
 private:
     static const int kMaxSamplesCount = 65536;
@@ -109,4 +112,6 @@ private:
     int                                 m_RayTracingKernelIndex;
 
     FrameTimer                          m_FrameTimer;
+
+    SRectangle                          m_RenderViewport;
 };

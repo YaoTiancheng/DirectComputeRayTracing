@@ -75,3 +75,10 @@ void FiniRenderSystem()
     g_Device = nullptr;
 }
 
+void ResizeSwapChainBuffers( uint32_t width, uint32_t height )
+{
+    DXGI_SWAP_CHAIN_DESC swapChainDesc;
+    g_SwapChain->GetDesc( &swapChainDesc );
+    g_SwapChain->ResizeBuffers( swapChainDesc.BufferCount, width, height, swapChainDesc.BufferDesc.Format, swapChainDesc.Flags );
+}
+

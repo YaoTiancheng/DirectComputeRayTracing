@@ -7,7 +7,7 @@ class GPUTexture
 public:
     static GPUTexture* Create( uint32_t width, uint32_t height, DXGI_FORMAT format, uint32_t flags );
 
-    static GPUTexture* CreateFromSwapChain();
+    static GPUTexture* CreateFromSwapChain( DXGI_FORMAT format );
 
     static GPUTexture* CreateFromFile( const wchar_t* filename );
 

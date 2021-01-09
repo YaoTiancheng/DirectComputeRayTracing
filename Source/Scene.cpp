@@ -115,11 +115,11 @@ bool Scene::Init()
     if ( !m_SampleCounterBuffer )
         return false;
 
-    m_RenderResultTexture.reset( GPUTexture::Create( resolutionWidth, resolutionHeight, DXGI_FORMAT_R8G8B8A8_UNORM, GPUResourceCreationFlags_IsRenderTarget ) );
+    m_RenderResultTexture.reset( GPUTexture::Create( resolutionWidth, resolutionHeight, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, GPUResourceCreationFlags_IsRenderTarget ) );
     if ( !m_RenderResultTexture )
         return false;
 
-    m_DefaultRenderTarget.reset( GPUTexture::CreateFromSwapChain() );
+    m_DefaultRenderTarget.reset( GPUTexture::CreateFromSwapChain( DXGI_FORMAT_R8G8B8A8_UNORM_SRGB ) );
     if ( !m_DefaultRenderTarget )
         return false;
 
@@ -308,7 +308,7 @@ bool Scene::OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam )
         UINT height = HIWORD( lParam );
         ResizeSwapChainBuffers( width, height );
         
-        m_DefaultRenderTarget.reset( GPUTexture::CreateFromSwapChain() );
+        m_DefaultRenderTarget.reset( GPUTexture::CreateFromSwapChain( DXGI_FORMAT_R8G8B8A8_UNORM_SRGB ) );
 
         UpdateRenderViewport( width, height );
     }

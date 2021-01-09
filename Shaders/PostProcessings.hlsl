@@ -61,8 +61,6 @@ float4 MainPS( VertexOut i ) : SV_TARGET
     c.xyz = ReinhardTonemap( c.xyz );
 #endif
 
-    c.xyz = pow( c.xyz, 0.45f );
-
     return float4( c.xyz, 1.0f );
 }
 #else

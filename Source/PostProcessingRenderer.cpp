@@ -30,19 +30,26 @@ PostProcessingRenderer::PostProcessingRenderer()
 {
 }
 
-bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, const GPUTexturePtr& filmTexture, const GPUBufferPtr& luminanceBuffer )
+bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, const GPUTexturePtr& filmTexture, const GPUTexturePtr& renderResultTexture, const GPUBufferPtr& luminanceBuffer )
 {
     std::vector<D3D_SHADER_MACRO> shaderDefines;
     shaderDefines.push_back( { NULL, NULL } );
-    m_Shader.reset( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
-    if ( !m_Shader )
+    m_PostFXShader.reset( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
+    if ( !m_PostFXShader )
         return false;
 
     shaderDefines.clear();
     shaderDefines.push_back( { "DISABLE_POST_FX", "0" } );
     shaderDefines.push_back( { NULL, NULL } );
-    m_ShaderDisablePostFX.reset( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
-    if ( !m_ShaderDisablePostFX )
+    m_PostFXDisabledShader.reset( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
+    if ( !m_PostFXDisabledShader )
+        return false;
+
+    shaderDefines.clear();
+    shaderDefines.push_back( { "COPY", "0" } );
+    shaderDefines.push_back( { NULL, NULL } );
+    m_CopyShader.reset( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
+    if ( !m_CopyShader )
         return false;
 
     m_ConstantParams = XMFLOAT4( 1.0f / ( renderWidth * renderHeight ), 0.7f, 0.0f, 0.0f );
@@ -62,7 +69,7 @@ bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, 
     if ( !m_ScreenQuadVerticesBuffer )
         return false;
 
-    m_ScreenQuadVertexInputLayout.Attach( m_Shader->CreateInputLayout( s_ScreenQuadInputElementDesc, 1 ) );
+    m_ScreenQuadVertexInputLayout.Attach( m_PostFXShader->CreateInputLayout( s_ScreenQuadInputElementDesc, 1 ) );
     if ( !m_ScreenQuadVertexInputLayout )
         return false;
 
@@ -75,25 +82,38 @@ bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, 
     samplerDesc.MaxAnisotropy = 1;
     samplerDesc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
     samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
-    HRESULT hr = GetDevice()->CreateSamplerState( &samplerDesc, &m_CopySamplerState );
+    HRESULT hr = GetDevice()->CreateSamplerState( &samplerDesc, &m_LinearSamplerState );
     if ( FAILED( hr ) )
         return false;
 
-    m_PostProcessingJob.m_SamplerStates.push_back( m_CopySamplerState.Get() );
-    m_PostProcessingJob.m_ConstantBuffers.push_back( m_ConstantsBuffer->GetBuffer() );
-    m_PostProcessingJob.m_SRVs.push_back( filmTexture->GetSRV() );
-    m_PostProcessingJob.m_SRVs.push_back( luminanceBuffer->GetSRV() );
-    m_PostProcessingJob.m_VertexBuffer = m_ScreenQuadVerticesBuffer.get();
-    m_PostProcessingJob.m_InputLayout = m_ScreenQuadVertexInputLayout.Get();
-    m_PostProcessingJob.m_VertexCount = 6;
-    m_PostProcessingJob.m_VertexStride = sizeof( XMFLOAT4 );
+    samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
+    hr = GetDevice()->CreateSamplerState( &samplerDesc, &m_PointSamplerState );
+    if ( FAILED( hr ) )
+        return false;
+
+    m_PostFXJob.m_SamplerStates.push_back( m_PointSamplerState.Get() );
+    m_PostFXJob.m_ConstantBuffers.push_back( m_ConstantsBuffer->GetBuffer() );
+    m_PostFXJob.m_SRVs.push_back( filmTexture->GetSRV() );
+    m_PostFXJob.m_SRVs.push_back( luminanceBuffer->GetSRV() );
+    m_PostFXJob.m_VertexBuffer = m_ScreenQuadVerticesBuffer.get();
+    m_PostFXJob.m_InputLayout = m_ScreenQuadVertexInputLayout.Get();
+    m_PostFXJob.m_VertexCount = 6;
+    m_PostFXJob.m_VertexStride = sizeof( XMFLOAT4 );
+
+    m_CopyJob.m_SamplerStates.push_back( m_LinearSamplerState.Get() );
+    m_CopyJob.m_SRVs.push_back( renderResultTexture->GetSRV() );
+    m_CopyJob.m_VertexBuffer = m_ScreenQuadVerticesBuffer.get();
+    m_CopyJob.m_InputLayout = m_ScreenQuadVertexInputLayout.Get();
+    m_CopyJob.m_VertexCount = 6;
+    m_CopyJob.m_VertexStride = sizeof( XMFLOAT4 );
+    m_CopyJob.m_Shader = m_CopyShader.get();
 
     m_IsJobDirty = true;
 
     return true;
 }
 
-void PostProcessingRenderer::Execute()
+void PostProcessingRenderer::ExecutePostFX()
 {
     if ( m_IsConstantBufferDirty )
     {
@@ -111,7 +131,12 @@ void PostProcessingRenderer::Execute()
         m_IsJobDirty = false;
     }
 
-    m_PostProcessingJob.Dispatch();
+    m_PostFXJob.Dispatch();
+}
+
+void PostProcessingRenderer::ExecuteCopy()
+{
+    m_CopyJob.Dispatch();
 }
 
 bool PostProcessingRenderer::OnImGUI()
@@ -130,5 +155,5 @@ bool PostProcessingRenderer::OnImGUI()
 
 void PostProcessingRenderer::UpdateJob()
 {
-    m_PostProcessingJob.m_Shader = m_IsPostFXDisabled ? m_ShaderDisablePostFX.get() : m_Shader.get();
+    m_PostFXJob.m_Shader = m_IsPostFXDisabled ? m_PostFXDisabledShader.get() : m_PostFXShader.get();
 }

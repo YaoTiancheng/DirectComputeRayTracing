@@ -84,6 +84,7 @@ private:
     ComputeShaderPtr                    m_RayTracingShader[ kRayTracingKernelCount ];
 
     GPUTexturePtr                       m_FilmTexture;
+    GPUTexturePtr                       m_RenderResultTexture;
     GPUTexturePtr                       m_DefaultRenderTarget;
     GPUTexturePtr                       m_CookTorranceCompETexture;
     GPUTexturePtr                       m_CookTorranceCompEAvgTexture;

@@ -13,7 +13,8 @@ struct VertexOut
 Texture2D               g_FilmTexture     : register( t0 );
 StructuredBuffer<float> g_LuminanceBuffer : register( t1 );
 
-SamplerState CopySampler;
+SamplerState LinearSampler;
+SamplerState PointSampler;
 
 float ComputeEV100FromAverageLuminance( float avgLum )
 {
@@ -47,9 +48,10 @@ VertexOut MainVS( float4 pos : POSITION )
     return o;
 }
 
+#if !defined( COPY )
 float4 MainPS( VertexOut i ) : SV_TARGET
 {
-    float4 c = g_FilmTexture.Sample( CopySampler, i.texcoord );
+    float4 c = g_FilmTexture.Sample( PointSampler, i.texcoord );
     c.xyz /= c.w;
 
 #if !defined( DISABLE_POST_FX )
@@ -63,3 +65,10 @@ float4 MainPS( VertexOut i ) : SV_TARGET
 
     return float4( c.xyz, 1.0f );
 }
+#else
+float4 MainPS( VertexOut i ) : SV_TARGET
+{
+    float4 c = g_FilmTexture.Sample( LinearSampler, i.texcoord );
+    return c;
+}
+#endif

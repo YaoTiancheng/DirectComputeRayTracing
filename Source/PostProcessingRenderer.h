@@ -7,9 +7,11 @@ class PostProcessingRenderer
 public:
     PostProcessingRenderer();
 
-    bool Init( uint32_t renderWidth, uint32_t renderHeight, const GPUTexturePtr& filmTexture, const GPUBufferPtr& luminanceBuffer );
+    bool Init( uint32_t renderWidth, uint32_t renderHeight, const GPUTexturePtr& filmTexture, const GPUTexturePtr& renderResultTexture, const GPUBufferPtr& luminanceBuffer );
 
-    void Execute();
+    void ExecutePostFX();
+
+    void ExecuteCopy();
 
     bool OnImGUI();
 
@@ -22,16 +24,19 @@ private:
     template <typename T>
     using ComPtr = Microsoft::WRL::ComPtr<T>;
 
-    ComPtr<ID3D11SamplerState>          m_CopySamplerState;
+    ComPtr<ID3D11SamplerState>          m_LinearSamplerState;
+    ComPtr<ID3D11SamplerState>          m_PointSamplerState;
     ComPtr<ID3D11InputLayout>           m_ScreenQuadVertexInputLayout;
 
-    GfxShaderPtr                        m_Shader;
-    GfxShaderPtr                        m_ShaderDisablePostFX;
+    GfxShaderPtr                        m_PostFXShader;
+    GfxShaderPtr                        m_PostFXDisabledShader;
+    GfxShaderPtr                        m_CopyShader;
 
     GPUBufferPtr                        m_ConstantsBuffer;
     GPUBufferPtr                        m_ScreenQuadVerticesBuffer;
 
-    GraphicsJob                         m_PostProcessingJob;
+    GraphicsJob                         m_PostFXJob;
+    GraphicsJob                         m_CopyJob;
 
     DirectX::XMFLOAT4                   m_ConstantParams;
     bool                                m_IsConstantBufferDirty;

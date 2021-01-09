@@ -115,6 +115,10 @@ bool Scene::Init()
     if ( !m_SampleCounterBuffer )
         return false;
 
+    m_RenderResultTexture.reset( GPUTexture::Create( resolutionWidth, resolutionHeight, DXGI_FORMAT_R8G8B8A8_UNORM, GPUResourceCreationFlags_IsRenderTarget ) );
+    if ( !m_RenderResultTexture )
+        return false;
+
     m_DefaultRenderTarget.reset( GPUTexture::CreateFromSwapChain() );
     if ( !m_DefaultRenderTarget )
         return false;
@@ -139,7 +143,7 @@ bool Scene::Init()
     if ( !m_SceneLuminance.Init( resolutionWidth, resolutionHeight, m_FilmTexture ) )
         return false;
 
-    if ( !m_PostProcessing.Init( resolutionWidth, resolutionHeight, m_FilmTexture, m_SceneLuminance.GetLuminanceResultBuffer() ) )
+    if ( !m_PostProcessing.Init( resolutionWidth, resolutionHeight, m_FilmTexture, m_RenderResultTexture, m_SceneLuminance.GetLuminanceResultBuffer() ) )
         return false;
 
     UpdateRenderViewport( resolutionWidth, resolutionHeight );
@@ -268,12 +272,21 @@ void Scene::AddOneSampleAndRender()
     m_SceneLuminance.Dispatch();
 
     ID3D11DeviceContext* deviceContext = GetDeviceContext();
-    ID3D11RenderTargetView* RTV = m_DefaultRenderTarget->GetRTV();
+
+    ID3D11RenderTargetView* RTV = m_RenderResultTexture->GetRTV();
+    deviceContext->OMSetRenderTargets( 1, &RTV, nullptr );
+
+    D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (float)m_RayTracingConstants.resolutionX, (float)m_RayTracingConstants.resolutionY, 0.0f, 1.0f };
+    deviceContext->RSSetViewports( 1, &viewport );
+
+    m_PostProcessing.ExecutePostFX();
+
+    RTV = m_DefaultRenderTarget->GetRTV();
     deviceContext->OMSetRenderTargets( 1, &RTV, nullptr );
 
     DXGI_SWAP_CHAIN_DESC swapChainDesc;
     GetSwapChain()->GetDesc( &swapChainDesc );
-    D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (float)swapChainDesc.BufferDesc.Width, (float)swapChainDesc.BufferDesc.Height, 0.0f, 1.0f };
+    viewport = { 0.0f, 0.0f, (float)swapChainDesc.BufferDesc.Width, (float)swapChainDesc.BufferDesc.Height, 0.0f, 1.0f };
     deviceContext->RSSetViewports( 1, &viewport );
 
     XMFLOAT4 clearColor = { 0.0f, 0.0f, 0.0f, 0.0f };
@@ -282,7 +295,7 @@ void Scene::AddOneSampleAndRender()
     viewport = { (float)m_RenderViewport.m_TopLeftX, (float)m_RenderViewport.m_TopLeftY, (float)m_RenderViewport.m_Width, (float)m_RenderViewport.m_Height, 0.0f, 1.0f };
     deviceContext->RSSetViewports( 1, &viewport );
 
-    m_PostProcessing.Execute();
+    m_PostProcessing.ExecuteCopy();
 }
 
 bool Scene::OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam )
@@ -439,9 +452,8 @@ void Scene::UpdateRayTracingJob()
 
 void Scene::UpdateRenderViewport( uint32_t backbufferWidth, uint32_t backbufferHeight )
 {
-    const CommandLineArgs* commandLineArgs = CommandLineArgs::Singleton();
-    uint32_t renderWidth = commandLineArgs->ResolutionX();
-    uint32_t renderHeight = commandLineArgs->ResolutionY();
+    uint32_t renderWidth = m_RayTracingConstants.resolutionX;
+    uint32_t renderHeight = m_RayTracingConstants.resolutionY;
     float scale = (float)backbufferWidth / renderWidth;
     float desiredViewportHeight = renderHeight * scale;
     if ( desiredViewportHeight > backbufferHeight )

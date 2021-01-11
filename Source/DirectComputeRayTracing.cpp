@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "Scene.h"
+#include "DirectComputeRayTracing.h"
 #include "D3D11RenderSystem.h"
 #include "CommandLineArgs.h"
 #include "Mesh.h"
@@ -14,7 +14,7 @@
 
 using namespace DirectX;
 
-Scene::Scene()
+CDirectComputeRayTracing::CDirectComputeRayTracing()
     : m_IsFilmDirty( true )
     , m_UniformRealDistribution( 0.0f, std::nexttoward( 1.0f, 0.0f ) )
     , m_PointLightSelectionIndex( -1 )
@@ -29,11 +29,11 @@ Scene::Scene()
     m_MersenneURBG = std::mt19937( randomDevice() );
 }
 
-Scene::~Scene()
+CDirectComputeRayTracing::~CDirectComputeRayTracing()
 {
 }
 
-bool Scene::Init()
+bool CDirectComputeRayTracing::Init()
 {
     uint32_t resolutionWidth = CommandLineArgs::Singleton()->ResolutionX();
     uint32_t resolutionHeight = CommandLineArgs::Singleton()->ResolutionY();
@@ -155,7 +155,7 @@ bool Scene::Init()
     return true;
 }
 
-bool Scene::ResetScene()
+bool CDirectComputeRayTracing::ResetScene()
 {
     const CommandLineArgs* commandLineArgs = CommandLineArgs::Singleton();
 
@@ -268,7 +268,7 @@ bool Scene::ResetScene()
     return true;
 }
 
-void Scene::AddOneSampleAndRender()
+void CDirectComputeRayTracing::AddOneSampleAndRender()
 {
     m_FrameTimer.BeginFrame();
 
@@ -302,7 +302,7 @@ void Scene::AddOneSampleAndRender()
     m_PostProcessing.ExecuteCopy();
 }
 
-bool Scene::OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam )
+bool CDirectComputeRayTracing::OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam )
 {
     if ( message == WM_SIZE )
     {
@@ -321,7 +321,7 @@ bool Scene::OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam )
     return m_Camera.OnWndMessage( message, wParam, lParam );
 }
 
-void Scene::AddOneSample()
+void CDirectComputeRayTracing::AddOneSample()
 {
     m_Camera.Update( m_FrameTimer.GetCurrentFrameDeltaTime() );
 
@@ -349,7 +349,7 @@ void Scene::AddOneSample()
         DispatchRayTracing();
 }
 
-bool Scene::UpdateResources()
+bool CDirectComputeRayTracing::UpdateResources()
 {
     if ( void* address = m_SamplesBuffer->Map() )
     {
@@ -410,7 +410,7 @@ bool Scene::UpdateResources()
     return true;
 }
 
-void Scene::DispatchRayTracing()
+void CDirectComputeRayTracing::DispatchRayTracing()
 {
     static const uint32_t s_SamplerCountBufferClearValue[ 4 ] = { 0 };
     GetDeviceContext()->ClearUnorderedAccessViewUint( m_SampleCounterBuffer->GetUAV(), s_SamplerCountBufferClearValue );
@@ -418,14 +418,14 @@ void Scene::DispatchRayTracing()
     m_RayTracingJob.Dispatch();
 }
 
-void Scene::ClearFilmTexture()
+void CDirectComputeRayTracing::ClearFilmTexture()
 {
     ID3D11DeviceContext* deviceContext = GetDeviceContext();
     const static float kClearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
     deviceContext->ClearRenderTargetView( m_FilmTexture->GetRTV(), kClearColor );
 }
 
-void Scene::UpdateRayTracingJob()
+void CDirectComputeRayTracing::UpdateRayTracingJob()
 {
     m_RayTracingJob.m_SamplerStates = { m_UVClampSamplerState.Get() };
 
@@ -456,7 +456,7 @@ void Scene::UpdateRayTracingJob()
     m_RayTracingJob.m_DispatchSizeZ = 1;
 }
 
-void Scene::UpdateRenderViewport( uint32_t backbufferWidth, uint32_t backbufferHeight )
+void CDirectComputeRayTracing::UpdateRenderViewport( uint32_t backbufferWidth, uint32_t backbufferHeight )
 {
     uint32_t renderWidth = m_RayTracingConstants.resolutionX;
     uint32_t renderHeight = m_RayTracingConstants.resolutionY;
@@ -473,7 +473,7 @@ void Scene::UpdateRenderViewport( uint32_t backbufferWidth, uint32_t backbufferH
     m_RenderViewport.m_TopLeftY = ( backbufferHeight - m_RenderViewport.m_Height ) * 0.5f;
 }
 
-void Scene::OnImGUI()
+void CDirectComputeRayTracing::OnImGUI()
 {
     {
         ImGui::Begin( "Settings" );

@@ -190,7 +190,7 @@
     <ClInclude Include="Source\GPUBuffer.h" />
     <ClInclude Include="Source\GPUResourceCreationFlag.h" />
     <ClInclude Include="Source\GPUTexture.h" />
-    <ClInclude Include="Source\Scene.h" />
+    <ClInclude Include="Source\DirectComputeRayTracing.h" />
     <ClInclude Include="Source\stdafx.h" />
     <ClInclude Include="Source\OBJLoader\tiny_obj_loader.h" />
     <ClInclude Include="Source\Mesh.h" />
@@ -248,7 +248,7 @@
     <ClCompile Include="Source\Shader.cpp" />
     <ClCompile Include="Source\GPUBuffer.cpp" />
     <ClCompile Include="Source\GPUTexture.cpp" />
-    <ClCompile Include="Source\Scene.cpp" />
+    <ClCompile Include="Source\DirectComputeRayTracing.cpp" />
     <ClCompile Include="Source\stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>

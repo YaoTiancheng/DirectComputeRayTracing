@@ -26,12 +26,12 @@ struct RayTracingConstants
 };
 
 
-class Scene
+class CDirectComputeRayTracing
 {
 public:
-    Scene();
+    CDirectComputeRayTracing();
 
-    ~Scene();
+    ~CDirectComputeRayTracing();
 
     bool Init();
 

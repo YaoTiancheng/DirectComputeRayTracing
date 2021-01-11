@@ -7,6 +7,8 @@ class GPUTexture
 public:
     static GPUTexture* Create( uint32_t width, uint32_t height, DXGI_FORMAT format, uint32_t flags );
 
+    static GPUTexture* CreateFromSwapChain();
+
     static GPUTexture* CreateFromSwapChain( DXGI_FORMAT format );
 
     static GPUTexture* CreateFromFile( const wchar_t* filename );
@@ -21,6 +23,8 @@ public:
 
 private:
     GPUTexture();
+
+    static GPUTexture* CreateFromSwapChainInternal( const D3D11_RENDER_TARGET_VIEW_DESC *desc );
 
     ID3D11Resource*             m_Texture;
     ID3D11ShaderResourceView*   m_SRV;

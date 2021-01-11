@@ -85,7 +85,8 @@ private:
 
     GPUTexturePtr                       m_FilmTexture;
     GPUTexturePtr                       m_RenderResultTexture;
-    GPUTexturePtr                       m_DefaultRenderTarget;
+    GPUTexturePtr                       m_sRGBBackbuffer;
+    GPUTexturePtr                       m_LinearBackbuffer;
     GPUTexturePtr                       m_CookTorranceCompETexture;
     GPUTexturePtr                       m_CookTorranceCompEAvgTexture;
     GPUTexturePtr                       m_CookTorranceCompInvCDFTexture;

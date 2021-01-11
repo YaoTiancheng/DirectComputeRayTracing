@@ -119,8 +119,12 @@ bool Scene::Init()
     if ( !m_RenderResultTexture )
         return false;
 
-    m_DefaultRenderTarget.reset( GPUTexture::CreateFromSwapChain( DXGI_FORMAT_R8G8B8A8_UNORM_SRGB ) );
-    if ( !m_DefaultRenderTarget )
+    m_sRGBBackbuffer.reset( GPUTexture::CreateFromSwapChain( DXGI_FORMAT_R8G8B8A8_UNORM_SRGB ) );
+    if ( !m_sRGBBackbuffer)
+        return false;
+
+    m_LinearBackbuffer.reset( GPUTexture::CreateFromSwapChain() );
+    if ( !m_LinearBackbuffer )
         return false;
 
     D3D11_SAMPLER_DESC samplerDesc;
@@ -281,7 +285,7 @@ void Scene::AddOneSampleAndRender()
 
     m_PostProcessing.ExecutePostFX();
 
-    RTV = m_DefaultRenderTarget->GetRTV();
+    RTV = m_sRGBBackbuffer->GetRTV();
     deviceContext->OMSetRenderTargets( 1, &RTV, nullptr );
 
     DXGI_SWAP_CHAIN_DESC swapChainDesc;
@@ -302,13 +306,15 @@ bool Scene::OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam )
 {
     if ( message == WM_SIZE )
     {
-        m_DefaultRenderTarget.reset();
+        m_sRGBBackbuffer.reset();
+        m_LinearBackbuffer.reset();
 
         UINT width = LOWORD( lParam );
         UINT height = HIWORD( lParam );
         ResizeSwapChainBuffers( width, height );
         
-        m_DefaultRenderTarget.reset( GPUTexture::CreateFromSwapChain( DXGI_FORMAT_R8G8B8A8_UNORM_SRGB ) );
+        m_sRGBBackbuffer.reset( GPUTexture::CreateFromSwapChain( DXGI_FORMAT_R8G8B8A8_UNORM_SRGB ) );
+        m_LinearBackbuffer.reset( GPUTexture::CreateFromSwapChain() );
 
         UpdateRenderViewport( width, height );
     }
@@ -636,9 +642,13 @@ void Scene::OnImGUI()
 
     // Rendering
     ImGui::Render();
+
+    ID3D11RenderTargetView* RTV = m_LinearBackbuffer->GetRTV();
+    GetDeviceContext()->OMSetRenderTargets( 1, &RTV, nullptr );
+
     ImGui_ImplDX11_RenderDrawData( ImGui::GetDrawData() );
 
-    ID3D11RenderTargetView* RTV = nullptr;
+    RTV = nullptr;
     GetDeviceContext()->OMSetRenderTargets( 1, &RTV, nullptr );
 }
 

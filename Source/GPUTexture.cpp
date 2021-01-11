@@ -73,7 +73,21 @@ GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT for
     return gpuTexture;
 }
 
+GPUTexture* GPUTexture::CreateFromSwapChain()
+{
+    return CreateFromSwapChainInternal( nullptr );
+}
+
 GPUTexture* GPUTexture::CreateFromSwapChain( DXGI_FORMAT format )
+{
+    D3D11_RENDER_TARGET_VIEW_DESC desc;
+    ZeroMemory( &desc, sizeof( desc ) );
+    desc.Format = format;
+    desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+    return CreateFromSwapChainInternal( &desc );
+}
+
+GPUTexture * GPUTexture::CreateFromSwapChainInternal( const D3D11_RENDER_TARGET_VIEW_DESC* desc )
 {
     ID3D11Texture2D* backBuffer = nullptr;
     HRESULT hr = GetSwapChain()->GetBuffer( 0, __uuidof( ID3D11Texture2D ), (void**)( &backBuffer ) );
@@ -81,11 +95,7 @@ GPUTexture* GPUTexture::CreateFromSwapChain( DXGI_FORMAT format )
         return nullptr;
 
     ID3D11RenderTargetView* RTV = nullptr;
-    D3D11_RENDER_TARGET_VIEW_DESC desc;
-    ZeroMemory( &desc, sizeof( desc ) );
-    desc.Format = format;
-    desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-    hr = GetDevice()->CreateRenderTargetView( backBuffer, &desc, &RTV );
+    hr = GetDevice()->CreateRenderTargetView( backBuffer, desc, &RTV );
     if ( FAILED( hr ) )
     {
         backBuffer->Release();

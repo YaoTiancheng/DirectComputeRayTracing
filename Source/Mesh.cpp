@@ -133,6 +133,11 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
                     vertex.position = XMFLOAT3( attrib.vertices[ idx.vertex_index * 3 ], attrib.vertices[ idx.vertex_index * 3 + 1 ], attrib.vertices[ idx.vertex_index * 3 + 2 ] );
                     vertex.normal   = XMFLOAT3( attrib.normals[ idx.normal_index * 3 ], attrib.normals[ idx.normal_index * 3 + 1 ], attrib.normals[ idx.normal_index * 3 + 2 ] );
                     vertex.tangent  = tangents[ idx.normal_index ];
+
+                    vertex.position.x = -vertex.position.x;
+                    vertex.normal.x   = -vertex.normal.x;
+                    vertex.tangent.x  = -vertex.tangent.x;
+
                     m_Vertices.emplace_back( vertex );
 
                     tinyOBJIndexToVertexIndexMap.insert( std::make_pair( idx, vertexIndex ) );

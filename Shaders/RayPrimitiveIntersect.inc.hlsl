@@ -31,7 +31,7 @@ bool RayTriangleIntersect( float3 origin
 
     t = dot( v0v2, qvec ) * invDet; 
 
-    backface = det < -1e-10;
+    backface = det > -1e-10;
 
     return abs( det ) >= 1e-10 && u >= 0 && u <= 1 && v >= 0 && u + v <= 1 && t >= tMin && t < tMax;
 }

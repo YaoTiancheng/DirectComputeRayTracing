@@ -57,7 +57,7 @@ bool RayTriangleIntersect( float3 origin
     , Vertex v2
     , uint triangleId
     , out float t
-    , out Intersection intersection )
+    , inout Intersection intersection )
 {
     bool intersect = false, backface = false;
     float u, v;

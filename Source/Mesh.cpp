@@ -117,7 +117,7 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
                 if ( idx.vertex_index == -1 || idx.normal_index == -1 )
                     return false;
 
-                size_t vertexIndex = 0;
+                uint32_t vertexIndex = 0;
                 auto iter = tinyOBJIndexToVertexIndexMap.find( idx );
                 if ( iter != tinyOBJIndexToVertexIndexMap.end() )
                 {
@@ -128,7 +128,7 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
                     if ( m_Vertices.size() == UINT_MAX )
                         return false;
 
-                    vertexIndex = m_Vertices.size();
+                    vertexIndex = (uint32_t)m_Vertices.size();
                     Vertex vertex;
                     vertex.position = XMFLOAT3( attrib.vertices[ idx.vertex_index * 3 ], attrib.vertices[ idx.vertex_index * 3 + 1 ], attrib.vertices[ idx.vertex_index * 3 + 2 ] );
                     vertex.normal   = XMFLOAT3( attrib.normals[ idx.normal_index * 3 ], attrib.normals[ idx.normal_index * 3 + 1 ], attrib.normals[ idx.normal_index * 3 + 2 ] );
@@ -142,7 +142,7 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
 
                     tinyOBJIndexToVertexIndexMap.insert( std::make_pair( idx, vertexIndex ) );
                 }
-                indices.push_back( (uint32_t)vertexIndex );
+                indices.push_back( vertexIndex );
             }
         }
     }

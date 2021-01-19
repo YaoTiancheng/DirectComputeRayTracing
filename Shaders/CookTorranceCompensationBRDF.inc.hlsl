@@ -10,12 +10,6 @@
 #define TEXTURE_SIZE_PDF_SCALE          float2( 32.0f,  1.0f )
 #define TEXTURE_SIZE_COMP_E_FRESNEL     float3( 32.0f, 16.0f, 16.0f )
 
-Texture2D g_CookTorranceCompETexture        : register( t4 );
-Texture2D g_CookTorranceCompEAvgTexture     : register( t5 );
-Texture2D g_CookTorranceCompInvCDFTexture   : register( t6 );
-Texture2D g_CookTorranceCompPdfScaleTexture : register( t7 );
-Texture2DArray g_CookTorranceCompEFresnelTexture : register( t8 );
-
 float EvaluateCookTorranceCompE( float cosTheta, float alpha )
 {
     float2 texelPos = float2( cosTheta, alpha ) * ( TEXTURE_SIZE_COMP_E - 1.0f );

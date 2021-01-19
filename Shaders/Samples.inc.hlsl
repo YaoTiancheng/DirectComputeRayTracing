@@ -1,24 +1,35 @@
 #ifndef _SAMPLES_H_
 #define _SAMPLES_H_
 
-StructuredBuffer<float> g_Samples : register( t3 );
-
-float GetNextSample()
+uint GetSampleIndex( uint2 pixelPos )
 {
-    uint sampleIndex;
-    InterlockedAdd( g_SampleCounter[ 0 ], 1, sampleIndex );
-    sampleIndex = sampleIndex % g_SamplesCount;
-    return g_Samples[ sampleIndex ];
+    uint2 localSampleIndex = pixelPos % RT_SAMPLE_TILE_SIZE;
+    return localSampleIndex.y * RT_SAMPLE_TILE_SIZE + localSampleIndex.x;
 }
 
-float2 GetNextSample2()
+uint GetSampleIndexNextRayDepth( uint sampleIndex )
 {
-    uint sampleIndex;
-    InterlockedAdd( g_SampleCounter[ 0 ], 2, sampleIndex );
-    float2 sample;
-    sample.x = g_Samples[ ( sampleIndex - 1 ) % g_SamplesCount ];
-    sample.y = g_Samples[ sampleIndex % g_SamplesCount ];
-    return sample;
+    return sampleIndex + RT_SAMPLE_TILE_SIZE * RT_SAMPLE_TILE_SIZE;
+}
+
+float2 GetPixelSample( uint sampleIndex )
+{
+    return g_PixelSamples[ sampleIndex ];
+}
+
+float GetLightSelectionSample( uint sampleIndex )
+{
+    return g_LightSelectionSamples[ sampleIndex ];
+}
+
+float GetBRDFSelectionSample( uint sampleIndex )
+{
+    return g_BRDFSelectionSamples[ sampleIndex ];
+}
+
+float2 GetBRDFSample( uint sampleIndex )
+{
+    return g_BRDFSamples[ sampleIndex ];
 }
 
 #endif

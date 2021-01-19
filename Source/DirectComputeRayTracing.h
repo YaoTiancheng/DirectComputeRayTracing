@@ -95,14 +95,16 @@ private:
     GPUTexturePtr                       m_EnvironmentTexture;
 
     GPUBufferPtr                        m_RayTracingConstantsBuffer;
-    GPUBufferPtr                        m_SamplesBuffer;
     GPUBufferPtr                        m_VerticesBuffer;
     GPUBufferPtr                        m_TrianglesBuffer;
     GPUBufferPtr                        m_BVHNodesBuffer;
     GPUBufferPtr                        m_PointLightsBuffer;
     GPUBufferPtr                        m_MaterialIdsBuffer;
     GPUBufferPtr                        m_MaterialsBuffer;
-    GPUBufferPtr                        m_SampleCounterBuffer;
+    GPUBufferPtr                        m_PixelSamplesBuffer;
+    GPUBufferPtr                        m_LightSelectionSamplesBuffer;
+    GPUBufferPtr                        m_BRDFSelectionSamplesBuffer;
+    GPUBufferPtr                        m_BRDFSamplesBuffer;
 
     ComputeJob                          m_RayTracingJob;
 

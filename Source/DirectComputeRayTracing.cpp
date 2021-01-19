@@ -14,6 +14,8 @@
 
 using namespace DirectX;
 
+static const uint32_t s_MaxRayBounce = 5;
+
 CDirectComputeRayTracing::CDirectComputeRayTracing()
     : m_IsFilmDirty( true )
     , m_UniformRealDistribution( 0.0f, std::nexttoward( 1.0f, 0.0f ) )
@@ -101,18 +103,33 @@ bool CDirectComputeRayTracing::Init()
     if ( !m_RayTracingConstantsBuffer )
         return false;
 
-    m_SamplesBuffer.reset( GPUBuffer::Create(
-          sizeof( float ) * kMaxSamplesCount
-        , sizeof( float )
+    const uint32_t k_SampleCount = RT_SAMPLE_TILE_SIZE * RT_SAMPLE_TILE_SIZE * s_MaxRayBounce;
+    m_PixelSamplesBuffer.reset( GPUBuffer::Create(
+          sizeof( float ) * 2 * RT_SAMPLE_TILE_SIZE * RT_SAMPLE_TILE_SIZE
+        , sizeof( float ) * 2
         , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer ) );
-    if ( !m_SamplesBuffer )
+    if ( !m_PixelSamplesBuffer )
         return false;
 
-    m_SampleCounterBuffer.reset( GPUBuffer::Create(
-          4
-        , 4
-        , GPUResourceCreationFlags_IsStructureBuffer | GPUResourceCreationFlags_HasUAV ) );
-    if ( !m_SampleCounterBuffer )
+    m_LightSelectionSamplesBuffer.reset( GPUBuffer::Create(
+          sizeof( float ) * k_SampleCount
+        , sizeof( float )
+        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer ) );
+    if ( !m_LightSelectionSamplesBuffer )
+        return false;
+
+    m_BRDFSelectionSamplesBuffer.reset( GPUBuffer::Create(
+          sizeof( float ) * k_SampleCount
+        , sizeof( float )
+        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer ) );
+    if ( !m_BRDFSelectionSamplesBuffer )
+        return false;
+
+    m_BRDFSamplesBuffer.reset( GPUBuffer::Create(
+          sizeof( float ) * 2 * k_SampleCount
+        , sizeof( float ) * 2
+        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer ) );
+    if ( !m_BRDFSamplesBuffer )
         return false;
 
     m_RenderResultTexture.reset( GPUTexture::Create( resolutionWidth, resolutionHeight, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, GPUResourceCreationFlags_IsRenderTarget ) );
@@ -351,14 +368,60 @@ void CDirectComputeRayTracing::AddOneSample()
 
 bool CDirectComputeRayTracing::UpdateResources()
 {
-    if ( void* address = m_SamplesBuffer->Map() )
+    if ( void* address = m_PixelSamplesBuffer->Map() )
     {
-        float* samples = reinterpret_cast< float* >( address );
-        for ( int i = 0; i < kMaxSamplesCount; ++i )
+        float* samples = reinterpret_cast<float*>( address );
+        uint32_t samplesCount = RT_SAMPLE_TILE_SIZE * RT_SAMPLE_TILE_SIZE * 2;
+        for ( int i = 0; i < samplesCount; ++i )
         {
             samples[ i ] = m_UniformRealDistribution( m_MersenneURBG );
         }
-        m_SamplesBuffer->Unmap();
+        m_PixelSamplesBuffer->Unmap();
+    }
+    else
+    {
+        return false;
+    }
+
+    if ( void* address = m_LightSelectionSamplesBuffer->Map() )
+    {
+        float* samples = reinterpret_cast<float*>( address );
+        uint32_t samplesCount = RT_SAMPLE_TILE_SIZE * RT_SAMPLE_TILE_SIZE * m_RayTracingConstants.maxBounceCount;
+        for ( int i = 0; i < samplesCount; ++i )
+        {
+            samples[ i ] = m_UniformRealDistribution( m_MersenneURBG );
+        }
+        m_LightSelectionSamplesBuffer->Unmap();
+    }
+    else
+    {
+        return false;
+    }
+
+    if ( void* address = m_BRDFSelectionSamplesBuffer->Map() )
+    {
+        float* samples = reinterpret_cast<float*>( address );
+        uint32_t samplesCount = RT_SAMPLE_TILE_SIZE * RT_SAMPLE_TILE_SIZE * m_RayTracingConstants.maxBounceCount;
+        for ( int i = 0; i < samplesCount; ++i )
+        {
+            samples[ i ] = m_UniformRealDistribution( m_MersenneURBG );
+        }
+        m_BRDFSelectionSamplesBuffer->Unmap();
+    }
+    else
+    {
+        return false;
+    }
+
+    if ( void* address = m_BRDFSamplesBuffer->Map() )
+    {
+        float* samples = reinterpret_cast<float*>( address );
+        uint32_t samplesCount = RT_SAMPLE_TILE_SIZE * RT_SAMPLE_TILE_SIZE * 2 * m_RayTracingConstants.maxBounceCount;
+        for ( int i = 0; i < samplesCount; ++i )
+        {
+            samples[ i ] = m_UniformRealDistribution( m_MersenneURBG );
+        }
+        m_BRDFSamplesBuffer->Unmap();
     }
     else
     {
@@ -412,9 +475,6 @@ bool CDirectComputeRayTracing::UpdateResources()
 
 void CDirectComputeRayTracing::DispatchRayTracing()
 {
-    static const uint32_t s_SamplerCountBufferClearValue[ 4 ] = { 0 };
-    GetDeviceContext()->ClearUnorderedAccessViewUint( m_SampleCounterBuffer->GetUAV(), s_SamplerCountBufferClearValue );
-
     m_RayTracingJob.Dispatch();
 }
 
@@ -429,13 +489,12 @@ void CDirectComputeRayTracing::UpdateRayTracingJob()
 {
     m_RayTracingJob.m_SamplerStates = { m_UVClampSamplerState.Get() };
 
-    m_RayTracingJob.m_UAVs = { m_FilmTexture->GetUAV(), m_SampleCounterBuffer->GetUAV() };
+    m_RayTracingJob.m_UAVs = { m_FilmTexture->GetUAV() };
 
     m_RayTracingJob.m_SRVs = {
           m_VerticesBuffer->GetSRV()
         , m_TrianglesBuffer->GetSRV()
         , m_PointLightsBuffer->GetSRV()
-        , m_SamplesBuffer->GetSRV()
         , m_CookTorranceCompETexture->GetSRV()
         , m_CookTorranceCompEAvgTexture->GetSRV()
         , m_CookTorranceCompInvCDFTexture->GetSRV()
@@ -445,6 +504,10 @@ void CDirectComputeRayTracing::UpdateRayTracingJob()
         , m_MaterialIdsBuffer->GetSRV()
         , m_MaterialsBuffer->GetSRV()
         , m_EnvironmentTexture->GetSRV()
+        , m_PixelSamplesBuffer->GetSRV()
+        , m_LightSelectionSamplesBuffer->GetSRV()
+        , m_BRDFSelectionSamplesBuffer->GetSRV()
+        , m_BRDFSamplesBuffer->GetSRV()
     };
 
     m_RayTracingJob.m_ConstantBuffers = { m_RayTracingConstantsBuffer->GetBuffer() };
@@ -499,7 +562,7 @@ void CDirectComputeRayTracing::OnImGUI()
             }
             if ( m_RayTracingKernelIndex == 0 )
             {
-                if ( ImGui::DragInt( "Max Bounce Count", (int*)&m_RayTracingConstants.maxBounceCount, 0.5f, 0, 10 ) )
+                if ( ImGui::DragInt( "Max Bounce Count", (int*)&m_RayTracingConstants.maxBounceCount, 0.5f, 0, s_MaxRayBounce ) )
                     m_IsConstantBufferDirty = true;
             }
         }

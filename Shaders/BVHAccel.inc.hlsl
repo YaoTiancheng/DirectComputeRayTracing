@@ -2,7 +2,6 @@
 #define _BVHACCEL_H_
 
 #include "RayPrimitiveIntersect.inc.hlsl"
-#include "BVHNode.inc.hlsl"
 
 uint BVHNodeGetPrimitiveCount( BVHNode node )
 {
@@ -33,9 +32,6 @@ void BVHTraversalStackReset( uint dispatchThreadIndex )
 {
     gs_BVHTraversalStacks[ dispatchThreadIndex ].count = 0;
 }
-
-
-StructuredBuffer<BVHNode> g_BVHNodes : register( t9 );
 
 bool BVHIntersect( float3 origin
     , float3 direction

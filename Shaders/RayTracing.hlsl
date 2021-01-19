@@ -17,15 +17,25 @@ cbuffer RayTracingConstants : register( b0 )
 #include "Vertex.inc.hlsl"
 #include "PointLight.inc.hlsl"
 #include "Material.inc.hlsl"
+#include "BVHNode.inc.hlsl"
 
-StructuredBuffer<Vertex>                g_Vertices      : register( t0 );
-StructuredBuffer<uint>                  g_Triangles     : register( t1 );
-StructuredBuffer<PointLight>            g_PointLights   : register( t2 );
-StructuredBuffer<uint>                  g_MaterialIds   : register( t10 );
-StructuredBuffer<Material>              g_Materials     : register( t11 );
-TextureCube<float3>                     g_EnvTexture    : register( t12 );
-RWTexture2D<float4>                     g_FilmTexture   : register( u0 );
-RWStructuredBuffer<uint>                g_SampleCounter : register( u1 );
+StructuredBuffer<Vertex>                g_Vertices                          : register( t0 );
+StructuredBuffer<uint>                  g_Triangles                         : register( t1 );
+StructuredBuffer<PointLight>            g_PointLights                       : register( t2 );
+Texture2D                               g_CookTorranceCompETexture          : register( t3 );
+Texture2D                               g_CookTorranceCompEAvgTexture       : register( t4 );
+Texture2D                               g_CookTorranceCompInvCDFTexture     : register( t5 );
+Texture2D                               g_CookTorranceCompPdfScaleTexture   : register( t6 );
+Texture2DArray                          g_CookTorranceCompEFresnelTexture   : register( t7 );
+StructuredBuffer<BVHNode>               g_BVHNodes                          : register( t8 );
+StructuredBuffer<uint>                  g_MaterialIds                       : register( t9 );
+StructuredBuffer<Material>              g_Materials                         : register( t10 );
+TextureCube<float3>                     g_EnvTexture                        : register( t11 );
+StructuredBuffer<float2>                g_PixelSamples                      : register( t12 );
+StructuredBuffer<float>                 g_LightSelectionSamples             : register( t13 );
+StructuredBuffer<float>                 g_BRDFSelectionSamples              : register( t14 );
+StructuredBuffer<float2>                g_BRDFSamples                       : register( t15 );
+RWTexture2D<float4>                     g_FilmTexture                       : register( u0 );
 
 SamplerState UVClampSampler;
 
@@ -103,7 +113,7 @@ float3 UniformSampleOneLight( float sample, Intersection intersection, float3 wo
     }
     else
     {
-        uint lightIndex = floor( GetNextSample() * g_PointLightCount );
+        uint lightIndex = floor( sample * g_PointLightCount );
         return EstimateDirect( g_PointLights[ lightIndex ], intersection, epsilon, wo, dispatchThreadIndex ) * g_PointLightCount;
     }
 }
@@ -119,12 +129,14 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     if ( any( pixelPos > g_Resolution ) )
         return;
 
+    uint sampleIndex = GetSampleIndex( pixelPos );
+
     float3 pathThroughput = 1.0f;
     float3 l = 0.0f;
     float3 wi, wo;
     Intersection intersection;
 
-    float2 pixelSample = GetNextSample2();
+    float2 pixelSample = GetPixelSample( sampleIndex );
     float2 filmSample = ( pixelSample + pixelPos ) / g_Resolution;
     GenerateRay( filmSample, g_FilmSize, g_FilmDistance, g_CameraTransform, intersection.position, wo );
 
@@ -135,7 +147,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
         {
             wo = -wo;
 
-            float lightSelectionSample = GetNextSample();
+            float lightSelectionSample = GetLightSelectionSample( sampleIndex );
             l += pathThroughput * ( UniformSampleOneLight( lightSelectionSample, intersection, wo, intersection.rayEpsilon, threadId ) + intersection.emission );
 
             if ( iBounce == g_MaxBounceCount )
@@ -143,7 +155,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 
             float3 brdf;
             float pdf;
-            SampleBSDF( wo, GetNextSample2(), GetNextSample(), intersection, wi, brdf, pdf );
+            SampleBSDF( wo, GetBRDFSample( sampleIndex ), GetBRDFSelectionSample( sampleIndex ), intersection, wi, brdf, pdf );
 
             if ( all( brdf == 0.0f ) || pdf == 0.0f )
                 break;
@@ -162,6 +174,8 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
             }
 
             ++iBounce;
+
+            sampleIndex = GetSampleIndexNextRayDepth( sampleIndex );
         }
     }
     else
@@ -184,7 +198,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     float3 wo;
     Intersection intersection;
 
-    float2 pixelSample = GetNextSample2();
+    float2 pixelSample = GetPixelSample( GetSampleIndex( pixelPos ) );
     float2 filmSample = ( pixelSample + pixelPos ) / g_Resolution;
     GenerateRay( filmSample, g_FilmSize, g_FilmDistance, g_CameraTransform, intersection.position, wo );
 

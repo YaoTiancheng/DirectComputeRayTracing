@@ -100,49 +100,40 @@ float3 EvaluateCookTorranceMircofacetBRDF( float3 wi, float3 wo, float3 reflecta
 {
     float WIdotN = lightingContext.WIdotN;
     float WOdotN = lightingContext.WOdotN;
-    if ( WIdotN <= 0.0f || WOdotN <= 0.0f )
+    float WOdotM = lightingContext.WOdotH;
+    if ( WIdotN <= 0.0f || WOdotN <= 0.0f || WOdotM <= 0.0f )
         return 0.0f;
 
     float3 m = lightingContext.H;
     if ( all( m == 0.0f ) )
         return 0.0f;
 
-    float WOdotM = dot( wo, m );
     return reflectance * EvaluateGGXMicrofacetDistribution( m, alpha ) * EvaluateGGXGeometricShadowing( wi, wo, alpha ) * EvaluateDielectricFresnel( min( 1.0f, WOdotM ), etaI, etaT ) / ( 4.0f * WIdotN * WOdotN );
 }
 
 float EvaluateCookTorranceMicrofacetBRDFPdf( float3 wi, float3 wo, float alpha, LightingContext lightingContext )
 {
     float WIdotN = lightingContext.WIdotN;
-    float WOdotN = lightingContext.WOdotN;
-    if ( WIdotN <= 0.0f || WOdotN <= 0.0f )
+    if ( WIdotN <= 0.0f )
         return 0.0f;
     
     float3 m = lightingContext.H;
-    float  pdf = EvaluateGGXMicrofacetDistributionPdf( m, alpha );
-    return pdf / ( 4.0f * dot( wi, m ) );
+    float WOdotM = lightingContext.WOdotH;
+    float pdf = EvaluateGGXMicrofacetDistributionPdf( m, alpha );
+    return pdf / ( 4.0f * WOdotM );
 }
 
 void SampleCookTorranceMicrofacetBRDF( float3 wo, float2 sample, float3 reflectance, float alpha, float etaI, float etaT, out float3 wi, out float3 value, out float pdf, inout LightingContext lightingContext )
 {
-    float WOdotN = lightingContext.WOdotN;
-
     float3 m;
     SampleGGXMicrofacetDistribution( sample, alpha, m );
     wi = -reflect( wo, m );
 
-    lightingContext.H = m;
+    LightingContextAssignH( wo, m, lightingContext );
 
     float WIdotN = wi.z;
     lightingContext.WIdotN = WIdotN;
 
-    if ( WIdotN <= 0.0f || WOdotN <= 0.0f )
-    {
-        value = 0.0f;
-        pdf = 0.0f;
-        return;
-    }
-    
     value = EvaluateCookTorranceMircofacetBRDF( wi, wo, reflectance, alpha, etaI, etaT, lightingContext );
     pdf   = EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, alpha, lightingContext );
 }

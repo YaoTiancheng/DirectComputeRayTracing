@@ -6,12 +6,20 @@ struct LightingContext
     float WOdotN;
     float WIdotN;
     float3 H;
+    float WOdotH;
 };
 
-void LightingContextAssignH( float3 wo, float3 wi, inout LightingContext lightingContext )
+void LightingContextCalculateH( float3 wo, float3 wi, inout LightingContext lightingContext )
 {
     lightingContext.H = wi + wo;
     lightingContext.H = all( lightingContext.H == 0.0f ) ? 0.0f : normalize( lightingContext.H );
+    lightingContext.WOdotH = dot( lightingContext.H, wo );
+}
+
+void LightingContextAssignH( float3 wo, float3 h, inout LightingContext lightingContext )
+{
+    lightingContext.H = h;
+    lightingContext.WOdotH = dot( h, wo );
 }
 
 LightingContext LightingContextInit( float3 wo, float3 wi )
@@ -19,7 +27,7 @@ LightingContext LightingContextInit( float3 wo, float3 wi )
     LightingContext context;
     context.WOdotN = wo.z;
     context.WIdotN = wi.z;
-    LightingContextAssignH( wo, wi, context );
+    LightingContextCalculateH( wo, wi, context );
     return context;
 }
 

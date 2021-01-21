@@ -81,7 +81,7 @@ void SampleBSDF( float3 wo
         pdf += EvaluateCookTorranceCompPdf( wi, intersection.alpha, lightingContext ) * specularCompWeight;
 
         value += EvaluateLambertBRDF( wi, wo, intersection.albedo, intersection.backface ) * diffuseWeight;
-        pdf += EvaluateLambertBRDFPdf( wi, lightingContext ) * diffuseWeight;
+        pdf += EvaluateLambertBRDFPdf( lightingContext ) * diffuseWeight;
     }
     else if ( BRDFSelectionSample < specularWeight + specularCompWeight )
     {
@@ -92,7 +92,7 @@ void SampleBSDF( float3 wo
         pdf += EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * specularWeight;
 
         value += EvaluateLambertBRDF( wi, wo, intersection.albedo, intersection.backface ) * diffuseWeight;
-        pdf += EvaluateLambertBRDFPdf( wi, lightingContext ) * diffuseWeight;
+        pdf += EvaluateLambertBRDFPdf( lightingContext ) * diffuseWeight;
     }
     else
     {

@@ -103,33 +103,11 @@ bool CDirectComputeRayTracing::Init()
     if ( !m_RayTracingConstantsBuffer )
         return false;
 
-    const uint32_t k_SampleCount = RT_SAMPLE_TILE_SIZE * RT_SAMPLE_TILE_SIZE * s_MaxRayBounce;
-    m_PixelSamplesBuffer.reset( GPUBuffer::Create(
-          sizeof( float ) * 2 * RT_SAMPLE_TILE_SIZE * RT_SAMPLE_TILE_SIZE
-        , sizeof( float ) * 2
+    m_InitRngStateBuffer.reset( GPUBuffer::Create(
+          16 * resolutionWidth * resolutionHeight
+        , 16
         , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer ) );
-    if ( !m_PixelSamplesBuffer )
-        return false;
-
-    m_LightSelectionSamplesBuffer.reset( GPUBuffer::Create(
-          sizeof( float ) * k_SampleCount
-        , sizeof( float )
-        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer ) );
-    if ( !m_LightSelectionSamplesBuffer )
-        return false;
-
-    m_BRDFSelectionSamplesBuffer.reset( GPUBuffer::Create(
-          sizeof( float ) * k_SampleCount
-        , sizeof( float )
-        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer ) );
-    if ( !m_BRDFSelectionSamplesBuffer )
-        return false;
-
-    m_BRDFSamplesBuffer.reset( GPUBuffer::Create(
-          sizeof( float ) * 2 * k_SampleCount
-        , sizeof( float ) * 2
-        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer ) );
-    if ( !m_BRDFSamplesBuffer )
+    if ( !m_InitRngStateBuffer )
         return false;
 
     m_RenderResultTexture.reset( GPUTexture::Create( resolutionWidth, resolutionHeight, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, GPUResourceCreationFlags_IsRenderTarget ) );
@@ -157,7 +135,6 @@ bool CDirectComputeRayTracing::Init()
     if ( FAILED( hr ) )
         return false;
 
-    m_RayTracingConstants.samplesCount = kMaxSamplesCount;
     m_RayTracingConstants.resolutionX = resolutionWidth;
     m_RayTracingConstants.resolutionY = resolutionHeight;
 
@@ -354,6 +331,7 @@ void CDirectComputeRayTracing::AddOneSample()
     {
         ClearFilmTexture();
         m_IsFilmDirty = false;
+        m_SampleCountPerPixel = 0;
     }
 
     if ( m_IsRayTracingJobDirty )
@@ -363,65 +341,57 @@ void CDirectComputeRayTracing::AddOneSample()
     }
 
     if ( UpdateResources() )
+    {
         DispatchRayTracing();
+        m_SampleCountPerPixel++;
+    }
+}
+
+static uint32_t Interleave_32bit( uint32_t vx, uint32_t vy )
+{
+    uint x = vx & 0x0000ffff;                   // x = ---- ---- ---- ---- fedc ba98 7654 3210
+    uint y = vy & 0x0000ffff;
+
+    x = ( x | ( x << 8 ) ) & 0x00FF00FF;        // x = ---- ---- fedc ba98 ---- ---- 7654 3210
+    x = ( x | ( x << 4 ) ) & 0x0F0F0F0F;        // x = ---- fedc ---- ba98 ---- 7654 ---- 3210
+    x = ( x | ( x << 2 ) ) & 0x33333333;        // x = --fe --dc --ba --98 --76 --54 --32 --10
+    x = ( x | ( x << 1 ) ) & 0x55555555;        // x = -f-e -d-c -b-a -9-8 -7-6 -5-4 -3-2 -1-0
+
+    y = ( y | ( y << 8 ) ) & 0x00FF00FF;
+    y = ( y | ( y << 4 ) ) & 0x0F0F0F0F;
+    y = ( y | ( y << 2 ) ) & 0x33333333;
+    y = ( y | ( y << 1 ) ) & 0x55555555;
+
+    return x | ( y << 1 );
+}
+
+uint64_t NextRandom64( uint64_t* rng )
+{
+    uint64_t z = ( ( *rng ) += 0x9E3779B97F4A7C15ull );
+    z = ( z ^ ( z >> 30 ) ) * 0xBF58476D1CE4E5B9ull;
+    z = ( z ^ ( z >> 27 ) ) * 0x94D049BB133111EBull;
+    return z ^ ( z >> 31 );
 }
 
 bool CDirectComputeRayTracing::UpdateResources()
 {
-    if ( void* address = m_PixelSamplesBuffer->Map() )
+    if ( void* address = m_InitRngStateBuffer->Map() )
     {
-        float* samples = reinterpret_cast<float*>( address );
-        uint32_t samplesCount = RT_SAMPLE_TILE_SIZE * RT_SAMPLE_TILE_SIZE * 2;
+        uint32_t* rng = reinterpret_cast<uint32_t*>( address );
+        uint32_t samplesCount = m_RayTracingConstants.resolutionX * m_RayTracingConstants.resolutionY;
         for ( int i = 0; i < samplesCount; ++i )
         {
-            samples[ i ] = m_UniformRealDistribution( m_MersenneURBG );
+            uint32_t px = i % m_RayTracingConstants.resolutionX;
+            uint32_t py = i / m_RayTracingConstants.resolutionX;
+            uint64_t splitMix64 = ( uint64_t( m_SampleCountPerPixel ) << 32 ) | Interleave_32bit( px, py );
+            uint64_t s0 = NextRandom64( &splitMix64 );
+            uint64_t s1 = NextRandom64( &splitMix64 );
+            rng[ i * 4 ]     = uint32_t( s0 );
+            rng[ i * 4 + 1 ] = uint32_t( s0 >> 32 );
+            rng[ i * 4 + 2 ] = uint32_t( s1 );
+            rng[ i * 4 + 3 ] = uint32_t( s1 >> 32 );
         }
-        m_PixelSamplesBuffer->Unmap();
-    }
-    else
-    {
-        return false;
-    }
-
-    if ( void* address = m_LightSelectionSamplesBuffer->Map() )
-    {
-        float* samples = reinterpret_cast<float*>( address );
-        uint32_t samplesCount = RT_SAMPLE_TILE_SIZE * RT_SAMPLE_TILE_SIZE * m_RayTracingConstants.maxBounceCount;
-        for ( int i = 0; i < samplesCount; ++i )
-        {
-            samples[ i ] = m_UniformRealDistribution( m_MersenneURBG );
-        }
-        m_LightSelectionSamplesBuffer->Unmap();
-    }
-    else
-    {
-        return false;
-    }
-
-    if ( void* address = m_BRDFSelectionSamplesBuffer->Map() )
-    {
-        float* samples = reinterpret_cast<float*>( address );
-        uint32_t samplesCount = RT_SAMPLE_TILE_SIZE * RT_SAMPLE_TILE_SIZE * m_RayTracingConstants.maxBounceCount;
-        for ( int i = 0; i < samplesCount; ++i )
-        {
-            samples[ i ] = m_UniformRealDistribution( m_MersenneURBG );
-        }
-        m_BRDFSelectionSamplesBuffer->Unmap();
-    }
-    else
-    {
-        return false;
-    }
-
-    if ( void* address = m_BRDFSamplesBuffer->Map() )
-    {
-        float* samples = reinterpret_cast<float*>( address );
-        uint32_t samplesCount = RT_SAMPLE_TILE_SIZE * RT_SAMPLE_TILE_SIZE * 2 * m_RayTracingConstants.maxBounceCount;
-        for ( int i = 0; i < samplesCount; ++i )
-        {
-            samples[ i ] = m_UniformRealDistribution( m_MersenneURBG );
-        }
-        m_BRDFSamplesBuffer->Unmap();
+        m_InitRngStateBuffer->Unmap();
     }
     else
     {
@@ -504,10 +474,7 @@ void CDirectComputeRayTracing::UpdateRayTracingJob()
         , m_MaterialIdsBuffer->GetSRV()
         , m_MaterialsBuffer->GetSRV()
         , m_EnvironmentTexture->GetSRV()
-        , m_PixelSamplesBuffer->GetSRV()
-        , m_LightSelectionSamplesBuffer->GetSRV()
-        , m_BRDFSelectionSamplesBuffer->GetSRV()
-        , m_BRDFSamplesBuffer->GetSRV()
+        , m_InitRngStateBuffer->GetSRV()
     };
 
     m_RayTracingJob.m_ConstantBuffers = { m_RayTracingConstantsBuffer->GetBuffer() };

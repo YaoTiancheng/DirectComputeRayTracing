@@ -3,21 +3,21 @@
 
 cbuffer RayTracingConstants : register( b0 )
 {
+    row_major float4x4  g_CameraTransform;
+    float2              g_FilmSize;
+    uint2               g_Resolution;
+    float4              g_Background;
     uint                g_MaxBounceCount;
     uint                g_PrimitiveCount;
     uint                g_PointLightCount;
-    uint                g_SamplesCount;
-    uint2               g_Resolution;
-    float2              g_FilmSize;
     float               g_FilmDistance;
-    row_major float4x4  g_CameraTransform;
-    float4              g_Background;
 }
 
 #include "Vertex.inc.hlsl"
 #include "PointLight.inc.hlsl"
 #include "Material.inc.hlsl"
 #include "BVHNode.inc.hlsl"
+#include "Xoshiro.inc.hlsl"
 
 StructuredBuffer<Vertex>                g_Vertices                          : register( t0 );
 StructuredBuffer<uint>                  g_Triangles                         : register( t1 );
@@ -31,10 +31,7 @@ StructuredBuffer<BVHNode>               g_BVHNodes                          : re
 StructuredBuffer<uint>                  g_MaterialIds                       : register( t9 );
 StructuredBuffer<Material>              g_Materials                         : register( t10 );
 TextureCube<float3>                     g_EnvTexture                        : register( t11 );
-StructuredBuffer<float2>                g_PixelSamples                      : register( t12 );
-StructuredBuffer<float>                 g_LightSelectionSamples             : register( t13 );
-StructuredBuffer<float>                 g_BRDFSelectionSamples              : register( t14 );
-StructuredBuffer<float2>                g_BRDFSamples                       : register( t15 );
+StructuredBuffer<Xoshiro128StarStar>    g_InitRngState                      : register( t12 );
 RWTexture2D<float4>                     g_FilmTexture                       : register( u0 );
 
 SamplerState UVClampSampler;
@@ -129,14 +126,14 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     if ( any( pixelPos > g_Resolution ) )
         return;
 
-    uint sampleIndex = GetSampleIndex( pixelPos );
+    Xoshiro128StarStar rng = g_InitRngState[ pixelPos.y * g_Resolution.x + pixelPos.x ];
 
     float3 pathThroughput = 1.0f;
     float3 l = 0.0f;
     float3 wi, wo;
     Intersection intersection;
 
-    float2 pixelSample = GetPixelSample( sampleIndex );
+    float2 pixelSample = GetNextSample2D( rng );
     float2 filmSample = ( pixelSample + pixelPos ) / g_Resolution;
     GenerateRay( filmSample, g_FilmSize, g_FilmDistance, g_CameraTransform, intersection.position, wo );
 
@@ -147,7 +144,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
         {
             wo = -wo;
 
-            float lightSelectionSample = GetLightSelectionSample( sampleIndex );
+            float lightSelectionSample = GetNextSample1D( rng );
             l += pathThroughput * ( UniformSampleOneLight( lightSelectionSample, intersection, wo, intersection.rayEpsilon, threadId ) + intersection.emission );
 
             if ( iBounce == g_MaxBounceCount )
@@ -155,7 +152,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 
             float3 brdf;
             float pdf;
-            SampleBSDF( wo, GetBRDFSample( sampleIndex ), GetBRDFSelectionSample( sampleIndex ), intersection, wi, brdf, pdf );
+            SampleBSDF( wo, GetNextSample2D( rng ), GetNextSample1D( rng ), intersection, wi, brdf, pdf );
 
             if ( all( brdf == 0.0f ) || pdf == 0.0f )
                 break;
@@ -174,8 +171,6 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
             }
 
             ++iBounce;
-
-            sampleIndex = GetSampleIndexNextRayDepth( sampleIndex );
         }
     }
     else
@@ -194,11 +189,13 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     if ( any( pixelPos > g_Resolution ) )
         return;
 
+    Xoshiro128StarStar rng = g_InitRngState[ pixelPos.y * g_Resolution.x + pixelPos.x ];
+
     float3 l = 0.0f;
     float3 wo;
     Intersection intersection;
 
-    float2 pixelSample = GetPixelSample( GetSampleIndex( pixelPos ) );
+    float2 pixelSample = GetNextSample2D( rng );
     float2 filmSample = ( pixelSample + pixelPos ) / g_Resolution;
     GenerateRay( filmSample, g_FilmSize, g_FilmDistance, g_CameraTransform, intersection.position, wo );
 

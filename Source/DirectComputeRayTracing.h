@@ -12,17 +12,15 @@
 
 struct RayTracingConstants
 {
+    DirectX::XMFLOAT4X4 cameraTransform;
+    DirectX::XMFLOAT2   filmSize;
+    uint32_t            resolutionX;
+    uint32_t            resolutionY;
+    DirectX::XMFLOAT4   background;
     uint32_t            maxBounceCount;
     uint32_t            primitiveCount;
     uint32_t            pointLightCount;
-    uint32_t            samplesCount;
-    uint32_t            resolutionX;
-    uint32_t            resolutionY;
-    DirectX::XMFLOAT2   filmSize;
     float               filmDistance;
-    uint32_t            padding[ 3 ];
-    DirectX::XMFLOAT4X4 cameraTransform;
-    DirectX::XMFLOAT4   background;
 };
 
 
@@ -57,7 +55,6 @@ private:
     void UpdateRenderViewport( uint32_t backbufferWidth, uint32_t backbufferHeight );
 
 private:
-    static const int kMaxSamplesCount = 65536;
     static const int kMaxPointLightsCount = 64;
     static const int kRayTracingKernelCount = 6;
 
@@ -67,6 +64,8 @@ private:
     std::vector<std::string>            m_MaterialNames;
 
     RayTracingConstants                 m_RayTracingConstants;
+
+    uint32_t                            m_SampleCountPerPixel;
 
     bool                                m_IsFilmDirty;
     bool                                m_IsConstantBufferDirty;
@@ -101,10 +100,7 @@ private:
     GPUBufferPtr                        m_PointLightsBuffer;
     GPUBufferPtr                        m_MaterialIdsBuffer;
     GPUBufferPtr                        m_MaterialsBuffer;
-    GPUBufferPtr                        m_PixelSamplesBuffer;
-    GPUBufferPtr                        m_LightSelectionSamplesBuffer;
-    GPUBufferPtr                        m_BRDFSelectionSamplesBuffer;
-    GPUBufferPtr                        m_BRDFSamplesBuffer;
+    GPUBufferPtr                        m_InitRngStateBuffer;
 
     ComputeJob                          m_RayTracingJob;
 

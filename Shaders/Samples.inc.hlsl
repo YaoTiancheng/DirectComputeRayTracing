@@ -1,35 +1,21 @@
 #ifndef _SAMPLES_H_
 #define _SAMPLES_H_
 
-uint GetSampleIndex( uint2 pixelPos )
+float GetNextSample1D( inout Xoshiro128StarStar rng )
 {
-    uint2 localSampleIndex = pixelPos % RT_SAMPLE_TILE_SIZE;
-    return localSampleIndex.y * RT_SAMPLE_TILE_SIZE + localSampleIndex.x;
+    // Use upper 24 bits and divide by 2^24 to get a number u in [0,1).
+    // In floating-point precision this also ensures that 1.0-u != 0.0.
+    uint bits = Xoshiro_NextRandom( rng );
+    return ( bits >> 8 ) / float( 1 << 24 );
 }
 
-uint GetSampleIndexNextRayDepth( uint sampleIndex )
+float2 GetNextSample2D( inout Xoshiro128StarStar rng )
 {
-    return sampleIndex + RT_SAMPLE_TILE_SIZE * RT_SAMPLE_TILE_SIZE;
-}
-
-float2 GetPixelSample( uint sampleIndex )
-{
-    return g_PixelSamples[ sampleIndex ];
-}
-
-float GetLightSelectionSample( uint sampleIndex )
-{
-    return g_LightSelectionSamples[ sampleIndex ];
-}
-
-float GetBRDFSelectionSample( uint sampleIndex )
-{
-    return g_BRDFSelectionSamples[ sampleIndex ];
-}
-
-float2 GetBRDFSample( uint sampleIndex )
-{
-    return g_BRDFSamples[ sampleIndex ];
+    float2 sample;
+    // Don't use the float2 initializer to ensure consistent order of evaluation.
+    sample.x = GetNextSample1D( rng );
+    sample.y = GetNextSample1D( rng );
+    return sample;
 }
 
 #endif

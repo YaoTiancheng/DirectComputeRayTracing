@@ -236,6 +236,7 @@
     <None Include="Shaders\SumLuminanceDef.inc.hlsl" />
     <None Include="Shaders\RayTracingDef.inc.hlsl" />
     <None Include="Shaders\LightingContext.inc.hlsl" />
+    <None Include="Shaders\Xoshiro.inc.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resources\DirectComputeRayTracing.rc">
@@ -243,6 +244,6 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="Shaders\Xoshiro.inc.hlsl" />
+    <FxCompile Include="Shaders\UInt64.inc.hlsl" />
   </ItemGroup>
 </Project>

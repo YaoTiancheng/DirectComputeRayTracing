@@ -73,9 +73,6 @@ private:
     bool                                m_IsMaterialBufferDirty;
     bool                                m_IsRayTracingJobDirty;
 
-    std::mt19937                        m_MersenneURBG;
-    std::uniform_real_distribution<float>   m_UniformRealDistribution;
-
     template <typename T>
     using ComPtr = Microsoft::WRL::ComPtr<T>;
     ComPtr<ID3D11SamplerState>          m_UVClampSamplerState;
@@ -94,13 +91,13 @@ private:
     GPUTexturePtr                       m_EnvironmentTexture;
 
     GPUBufferPtr                        m_RayTracingConstantsBuffer;
+    GPUBufferPtr                        m_RayTracingFrameConstantBuffer;
     GPUBufferPtr                        m_VerticesBuffer;
     GPUBufferPtr                        m_TrianglesBuffer;
     GPUBufferPtr                        m_BVHNodesBuffer;
     GPUBufferPtr                        m_PointLightsBuffer;
     GPUBufferPtr                        m_MaterialIdsBuffer;
     GPUBufferPtr                        m_MaterialsBuffer;
-    GPUBufferPtr                        m_InitRngStateBuffer;
 
     ComputeJob                          m_RayTracingJob;
 

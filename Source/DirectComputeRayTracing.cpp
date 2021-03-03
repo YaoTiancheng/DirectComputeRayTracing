@@ -16,9 +16,14 @@ using namespace DirectX;
 
 static const uint32_t s_MaxRayBounce = 5;
 
+struct RayTracingFrameConstants
+{
+    uint32_t frameSeed;
+    uint32_t padding[ 3 ];
+};
+
 CDirectComputeRayTracing::CDirectComputeRayTracing()
     : m_IsFilmDirty( true )
-    , m_UniformRealDistribution( 0.0f, std::nexttoward( 1.0f, 0.0f ) )
     , m_PointLightSelectionIndex( -1 )
     , m_MaterialSelectionIndex( -1 )
     , m_RayTracingKernelIndex( 0 )
@@ -28,7 +33,6 @@ CDirectComputeRayTracing::CDirectComputeRayTracing()
     , m_IsRayTracingJobDirty( true )
 {
     std::random_device randomDevice;
-    m_MersenneURBG = std::mt19937( randomDevice() );
 }
 
 CDirectComputeRayTracing::~CDirectComputeRayTracing()
@@ -103,11 +107,11 @@ bool CDirectComputeRayTracing::Init()
     if ( !m_RayTracingConstantsBuffer )
         return false;
 
-    m_InitRngStateBuffer.reset( GPUBuffer::Create(
-          16 * resolutionWidth * resolutionHeight
-        , 16
-        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer ) );
-    if ( !m_InitRngStateBuffer )
+    m_RayTracingFrameConstantBuffer.reset( GPUBuffer::Create(
+          sizeof( RayTracingFrameConstants )
+        , 0
+        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsConstantBuffer ) );
+    if ( !m_RayTracingFrameConstantBuffer )
         return false;
 
     m_RenderResultTexture.reset( GPUTexture::Create( resolutionWidth, resolutionHeight, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, GPUResourceCreationFlags_IsRenderTarget ) );
@@ -347,51 +351,13 @@ void CDirectComputeRayTracing::AddOneSample()
     }
 }
 
-static uint32_t Interleave_32bit( uint32_t vx, uint32_t vy )
-{
-    uint x = vx & 0x0000ffff;                   // x = ---- ---- ---- ---- fedc ba98 7654 3210
-    uint y = vy & 0x0000ffff;
-
-    x = ( x | ( x << 8 ) ) & 0x00FF00FF;        // x = ---- ---- fedc ba98 ---- ---- 7654 3210
-    x = ( x | ( x << 4 ) ) & 0x0F0F0F0F;        // x = ---- fedc ---- ba98 ---- 7654 ---- 3210
-    x = ( x | ( x << 2 ) ) & 0x33333333;        // x = --fe --dc --ba --98 --76 --54 --32 --10
-    x = ( x | ( x << 1 ) ) & 0x55555555;        // x = -f-e -d-c -b-a -9-8 -7-6 -5-4 -3-2 -1-0
-
-    y = ( y | ( y << 8 ) ) & 0x00FF00FF;
-    y = ( y | ( y << 4 ) ) & 0x0F0F0F0F;
-    y = ( y | ( y << 2 ) ) & 0x33333333;
-    y = ( y | ( y << 1 ) ) & 0x55555555;
-
-    return x | ( y << 1 );
-}
-
-uint64_t NextRandom64( uint64_t* rng )
-{
-    uint64_t z = ( ( *rng ) += 0x9E3779B97F4A7C15ull );
-    z = ( z ^ ( z >> 30 ) ) * 0xBF58476D1CE4E5B9ull;
-    z = ( z ^ ( z >> 27 ) ) * 0x94D049BB133111EBull;
-    return z ^ ( z >> 31 );
-}
-
 bool CDirectComputeRayTracing::UpdateResources()
 {
-    if ( void* address = m_InitRngStateBuffer->Map() )
+    if ( void* address = m_RayTracingFrameConstantBuffer->Map() )
     {
-        uint32_t* rng = reinterpret_cast<uint32_t*>( address );
-        uint32_t samplesCount = m_RayTracingConstants.resolutionX * m_RayTracingConstants.resolutionY;
-        for ( int i = 0; i < samplesCount; ++i )
-        {
-            uint32_t px = i % m_RayTracingConstants.resolutionX;
-            uint32_t py = i / m_RayTracingConstants.resolutionX;
-            uint64_t splitMix64 = ( uint64_t( m_SampleCountPerPixel ) << 32 ) | Interleave_32bit( px, py );
-            uint64_t s0 = NextRandom64( &splitMix64 );
-            uint64_t s1 = NextRandom64( &splitMix64 );
-            rng[ i * 4 ]     = uint32_t( s0 );
-            rng[ i * 4 + 1 ] = uint32_t( s0 >> 32 );
-            rng[ i * 4 + 2 ] = uint32_t( s1 );
-            rng[ i * 4 + 3 ] = uint32_t( s1 >> 32 );
-        }
-        m_InitRngStateBuffer->Unmap();
+        RayTracingFrameConstants* constants = (RayTracingFrameConstants*)address;
+        constants->frameSeed = m_SampleCountPerPixel;
+        m_RayTracingFrameConstantBuffer->Unmap();
     }
     else
     {
@@ -474,10 +440,9 @@ void CDirectComputeRayTracing::UpdateRayTracingJob()
         , m_MaterialIdsBuffer->GetSRV()
         , m_MaterialsBuffer->GetSRV()
         , m_EnvironmentTexture->GetSRV()
-        , m_InitRngStateBuffer->GetSRV()
     };
 
-    m_RayTracingJob.m_ConstantBuffers = { m_RayTracingConstantsBuffer->GetBuffer() };
+    m_RayTracingJob.m_ConstantBuffers = { m_RayTracingConstantsBuffer->GetBuffer(), m_RayTracingFrameConstantBuffer->GetBuffer() };
 
     m_RayTracingJob.m_Shader = m_RayTracingShader[ m_RayTracingKernelIndex ].get();
 

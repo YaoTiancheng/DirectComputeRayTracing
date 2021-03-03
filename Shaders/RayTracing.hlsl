@@ -13,6 +13,11 @@ cbuffer RayTracingConstants : register( b0 )
     float               g_FilmDistance;
 }
 
+cbuffer RayTracingFrameConstants : register( b1 )
+{
+    uint                g_FrameSeed;
+}
+
 #include "Vertex.inc.hlsl"
 #include "PointLight.inc.hlsl"
 #include "Material.inc.hlsl"
@@ -126,7 +131,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     if ( any( pixelPos > g_Resolution ) )
         return;
 
-    Xoshiro128StarStar rng = g_InitRngState[ pixelPos.y * g_Resolution.x + pixelPos.x ];
+    Xoshiro128StarStar rng = InitializeRandomNumberGenerator( pixelPos, g_FrameSeed );
 
     float3 pathThroughput = 1.0f;
     float3 l = 0.0f;
@@ -189,7 +194,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     if ( any( pixelPos > g_Resolution ) )
         return;
 
-    Xoshiro128StarStar rng = g_InitRngState[ pixelPos.y * g_Resolution.x + pixelPos.x ];
+    Xoshiro128StarStar rng = InitializeRandomNumberGenerator( pixelPos, g_FrameSeed );
 
     float3 l = 0.0f;
     float3 wo;

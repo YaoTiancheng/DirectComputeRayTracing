@@ -55,6 +55,8 @@ private:
     void UpdateRenderViewport( uint32_t backbufferWidth, uint32_t backbufferHeight );
 
 private:
+    
+
     static const int kMaxPointLightsCount = 64;
     static const int kRayTracingKernelCount = 6;
 
@@ -65,7 +67,7 @@ private:
 
     RayTracingConstants                 m_RayTracingConstants;
 
-    uint32_t                            m_SampleCountPerPixel;
+    uint32_t                            m_FrameSeed;
 
     bool                                m_IsFilmDirty;
     bool                                m_IsConstantBufferDirty;
@@ -107,6 +109,9 @@ private:
     int                                 m_PointLightSelectionIndex;
     int                                 m_MaterialSelectionIndex;
     int                                 m_RayTracingKernelIndex;
+
+    enum class EFrameSeedType { FrameIndex = 0, SampleCount = 1, Fixed = 2, _Count = 3 };
+    EFrameSeedType                      m_FrameSeedType;
 
     FrameTimer                          m_FrameTimer;
 

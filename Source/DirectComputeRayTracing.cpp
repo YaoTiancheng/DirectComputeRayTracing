@@ -31,6 +31,8 @@ CDirectComputeRayTracing::CDirectComputeRayTracing()
     , m_IsPointLightBufferDirty( false )
     , m_IsMaterialBufferDirty( false )
     , m_IsRayTracingJobDirty( true )
+    , m_FrameSeed( 0 )
+    , m_FrameSeedType( EFrameSeedType::FrameIndex )
 {
     std::random_device randomDevice;
 }
@@ -335,7 +337,11 @@ void CDirectComputeRayTracing::AddOneSample()
     {
         ClearFilmTexture();
         m_IsFilmDirty = false;
-        m_SampleCountPerPixel = 0;
+
+        if ( m_FrameSeedType == EFrameSeedType::SampleCount )
+        {
+            m_FrameSeed = 0;
+        }
     }
 
     if ( m_IsRayTracingJobDirty )
@@ -347,7 +353,11 @@ void CDirectComputeRayTracing::AddOneSample()
     if ( UpdateResources() )
     {
         DispatchRayTracing();
-        m_SampleCountPerPixel++;
+    }
+
+    if ( m_FrameSeedType != EFrameSeedType::Fixed )
+    {
+        m_FrameSeed++;
     }
 }
 
@@ -356,7 +366,7 @@ bool CDirectComputeRayTracing::UpdateResources()
     if ( void* address = m_RayTracingFrameConstantBuffer->Map() )
     {
         RayTracingFrameConstants* constants = (RayTracingFrameConstants*)address;
-        constants->frameSeed = m_SampleCountPerPixel;
+        constants->frameSeed = m_FrameSeed;
         m_RayTracingFrameConstantBuffer->Unmap();
     }
     else
@@ -496,6 +506,23 @@ void CDirectComputeRayTracing::OnImGUI()
             {
                 if ( ImGui::DragInt( "Max Bounce Count", (int*)&m_RayTracingConstants.maxBounceCount, 0.5f, 0, s_MaxRayBounce ) )
                     m_IsConstantBufferDirty = true;
+            }
+        }
+
+        if ( ImGui::CollapsingHeader( "Samples" ) )
+        {
+            static const char* s_FrameSeedTypeNames[] = { "Frame Index", "Sample Count", "Fixed" };
+            if ( ImGui::Combo( "Frame Seed Type", (int*)&m_FrameSeedType, s_FrameSeedTypeNames, IM_ARRAYSIZE( s_FrameSeedTypeNames ) ) )
+            {
+                m_IsFilmDirty = true;
+            }
+
+            if ( m_FrameSeedType == EFrameSeedType::Fixed )
+            {
+                if ( ImGui::InputInt( "Frame Seed", (int*)&m_FrameSeed, 1 ) )
+                {
+                    m_IsFilmDirty = true;
+                }
             }
         }
 

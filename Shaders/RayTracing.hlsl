@@ -36,7 +36,6 @@ StructuredBuffer<BVHNode>               g_BVHNodes                          : re
 StructuredBuffer<uint>                  g_MaterialIds                       : register( t9 );
 StructuredBuffer<Material>              g_Materials                         : register( t10 );
 TextureCube<float3>                     g_EnvTexture                        : register( t11 );
-StructuredBuffer<Xoshiro128StarStar>    g_InitRngState                      : register( t12 );
 RWTexture2D<float4>                     g_FilmTexture                       : register( u0 );
 
 SamplerState UVClampSampler;

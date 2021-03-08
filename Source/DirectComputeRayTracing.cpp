@@ -14,9 +14,16 @@
 
 using namespace DirectX;
 
+static const uint32_t s_MaxRayBounce = 5;
+
+struct RayTracingFrameConstants
+{
+    uint32_t frameSeed;
+    uint32_t padding[ 3 ];
+};
+
 CDirectComputeRayTracing::CDirectComputeRayTracing()
     : m_IsFilmDirty( true )
-    , m_UniformRealDistribution( 0.0f, std::nexttoward( 1.0f, 0.0f ) )
     , m_PointLightSelectionIndex( -1 )
     , m_MaterialSelectionIndex( -1 )
     , m_RayTracingKernelIndex( 0 )
@@ -24,9 +31,10 @@ CDirectComputeRayTracing::CDirectComputeRayTracing()
     , m_IsPointLightBufferDirty( false )
     , m_IsMaterialBufferDirty( false )
     , m_IsRayTracingJobDirty( true )
+    , m_FrameSeed( 0 )
+    , m_FrameSeedType( EFrameSeedType::FrameIndex )
 {
     std::random_device randomDevice;
-    m_MersenneURBG = std::mt19937( randomDevice() );
 }
 
 CDirectComputeRayTracing::~CDirectComputeRayTracing()
@@ -101,18 +109,11 @@ bool CDirectComputeRayTracing::Init()
     if ( !m_RayTracingConstantsBuffer )
         return false;
 
-    m_SamplesBuffer.reset( GPUBuffer::Create(
-          sizeof( float ) * kMaxSamplesCount
-        , sizeof( float )
-        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer ) );
-    if ( !m_SamplesBuffer )
-        return false;
-
-    m_SampleCounterBuffer.reset( GPUBuffer::Create(
-          4
-        , 4
-        , GPUResourceCreationFlags_IsStructureBuffer | GPUResourceCreationFlags_HasUAV ) );
-    if ( !m_SampleCounterBuffer )
+    m_RayTracingFrameConstantBuffer.reset( GPUBuffer::Create(
+          sizeof( RayTracingFrameConstants )
+        , 0
+        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsConstantBuffer ) );
+    if ( !m_RayTracingFrameConstantBuffer )
         return false;
 
     m_RenderResultTexture.reset( GPUTexture::Create( resolutionWidth, resolutionHeight, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, GPUResourceCreationFlags_IsRenderTarget ) );
@@ -140,7 +141,6 @@ bool CDirectComputeRayTracing::Init()
     if ( FAILED( hr ) )
         return false;
 
-    m_RayTracingConstants.samplesCount = kMaxSamplesCount;
     m_RayTracingConstants.resolutionX = resolutionWidth;
     m_RayTracingConstants.resolutionY = resolutionHeight;
 
@@ -337,6 +337,11 @@ void CDirectComputeRayTracing::AddOneSample()
     {
         ClearFilmTexture();
         m_IsFilmDirty = false;
+
+        if ( m_FrameSeedType == EFrameSeedType::SampleCount )
+        {
+            m_FrameSeed = 0;
+        }
     }
 
     if ( m_IsRayTracingJobDirty )
@@ -346,19 +351,23 @@ void CDirectComputeRayTracing::AddOneSample()
     }
 
     if ( UpdateResources() )
+    {
         DispatchRayTracing();
+    }
+
+    if ( m_FrameSeedType != EFrameSeedType::Fixed )
+    {
+        m_FrameSeed++;
+    }
 }
 
 bool CDirectComputeRayTracing::UpdateResources()
 {
-    if ( void* address = m_SamplesBuffer->Map() )
+    if ( void* address = m_RayTracingFrameConstantBuffer->Map() )
     {
-        float* samples = reinterpret_cast< float* >( address );
-        for ( int i = 0; i < kMaxSamplesCount; ++i )
-        {
-            samples[ i ] = m_UniformRealDistribution( m_MersenneURBG );
-        }
-        m_SamplesBuffer->Unmap();
+        RayTracingFrameConstants* constants = (RayTracingFrameConstants*)address;
+        constants->frameSeed = m_FrameSeed;
+        m_RayTracingFrameConstantBuffer->Unmap();
     }
     else
     {
@@ -412,9 +421,6 @@ bool CDirectComputeRayTracing::UpdateResources()
 
 void CDirectComputeRayTracing::DispatchRayTracing()
 {
-    static const uint32_t s_SamplerCountBufferClearValue[ 4 ] = { 0 };
-    GetDeviceContext()->ClearUnorderedAccessViewUint( m_SampleCounterBuffer->GetUAV(), s_SamplerCountBufferClearValue );
-
     m_RayTracingJob.Dispatch();
 }
 
@@ -429,13 +435,12 @@ void CDirectComputeRayTracing::UpdateRayTracingJob()
 {
     m_RayTracingJob.m_SamplerStates = { m_UVClampSamplerState.Get() };
 
-    m_RayTracingJob.m_UAVs = { m_FilmTexture->GetUAV(), m_SampleCounterBuffer->GetUAV() };
+    m_RayTracingJob.m_UAVs = { m_FilmTexture->GetUAV() };
 
     m_RayTracingJob.m_SRVs = {
           m_VerticesBuffer->GetSRV()
         , m_TrianglesBuffer->GetSRV()
         , m_PointLightsBuffer->GetSRV()
-        , m_SamplesBuffer->GetSRV()
         , m_CookTorranceCompETexture->GetSRV()
         , m_CookTorranceCompEAvgTexture->GetSRV()
         , m_CookTorranceCompInvCDFTexture->GetSRV()
@@ -447,7 +452,7 @@ void CDirectComputeRayTracing::UpdateRayTracingJob()
         , m_EnvironmentTexture->GetSRV()
     };
 
-    m_RayTracingJob.m_ConstantBuffers = { m_RayTracingConstantsBuffer->GetBuffer() };
+    m_RayTracingJob.m_ConstantBuffers = { m_RayTracingConstantsBuffer->GetBuffer(), m_RayTracingFrameConstantBuffer->GetBuffer() };
 
     m_RayTracingJob.m_Shader = m_RayTracingShader[ m_RayTracingKernelIndex ].get();
 
@@ -499,8 +504,25 @@ void CDirectComputeRayTracing::OnImGUI()
             }
             if ( m_RayTracingKernelIndex == 0 )
             {
-                if ( ImGui::DragInt( "Max Bounce Count", (int*)&m_RayTracingConstants.maxBounceCount, 0.5f, 0, 10 ) )
+                if ( ImGui::DragInt( "Max Bounce Count", (int*)&m_RayTracingConstants.maxBounceCount, 0.5f, 0, s_MaxRayBounce ) )
                     m_IsConstantBufferDirty = true;
+            }
+        }
+
+        if ( ImGui::CollapsingHeader( "Samples" ) )
+        {
+            static const char* s_FrameSeedTypeNames[] = { "Frame Index", "Sample Count", "Fixed" };
+            if ( ImGui::Combo( "Frame Seed Type", (int*)&m_FrameSeedType, s_FrameSeedTypeNames, IM_ARRAYSIZE( s_FrameSeedTypeNames ) ) )
+            {
+                m_IsFilmDirty = true;
+            }
+
+            if ( m_FrameSeedType == EFrameSeedType::Fixed )
+            {
+                if ( ImGui::InputInt( "Frame Seed", (int*)&m_FrameSeed, 1 ) )
+                {
+                    m_IsFilmDirty = true;
+                }
             }
         }
 

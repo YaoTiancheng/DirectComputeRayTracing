@@ -12,17 +12,15 @@
 
 struct RayTracingConstants
 {
+    DirectX::XMFLOAT4X4 cameraTransform;
+    DirectX::XMFLOAT2   filmSize;
+    uint32_t            resolutionX;
+    uint32_t            resolutionY;
+    DirectX::XMFLOAT4   background;
     uint32_t            maxBounceCount;
     uint32_t            primitiveCount;
     uint32_t            pointLightCount;
-    uint32_t            samplesCount;
-    uint32_t            resolutionX;
-    uint32_t            resolutionY;
-    DirectX::XMFLOAT2   filmSize;
     float               filmDistance;
-    uint32_t            padding[ 3 ];
-    DirectX::XMFLOAT4X4 cameraTransform;
-    DirectX::XMFLOAT4   background;
 };
 
 
@@ -57,7 +55,8 @@ private:
     void UpdateRenderViewport( uint32_t backbufferWidth, uint32_t backbufferHeight );
 
 private:
-    static const int kMaxSamplesCount = 65536;
+    
+
     static const int kMaxPointLightsCount = 64;
     static const int kRayTracingKernelCount = 6;
 
@@ -68,14 +67,13 @@ private:
 
     RayTracingConstants                 m_RayTracingConstants;
 
+    uint32_t                            m_FrameSeed;
+
     bool                                m_IsFilmDirty;
     bool                                m_IsConstantBufferDirty;
     bool                                m_IsPointLightBufferDirty;
     bool                                m_IsMaterialBufferDirty;
     bool                                m_IsRayTracingJobDirty;
-
-    std::mt19937                        m_MersenneURBG;
-    std::uniform_real_distribution<float>   m_UniformRealDistribution;
 
     template <typename T>
     using ComPtr = Microsoft::WRL::ComPtr<T>;
@@ -95,14 +93,13 @@ private:
     GPUTexturePtr                       m_EnvironmentTexture;
 
     GPUBufferPtr                        m_RayTracingConstantsBuffer;
-    GPUBufferPtr                        m_SamplesBuffer;
+    GPUBufferPtr                        m_RayTracingFrameConstantBuffer;
     GPUBufferPtr                        m_VerticesBuffer;
     GPUBufferPtr                        m_TrianglesBuffer;
     GPUBufferPtr                        m_BVHNodesBuffer;
     GPUBufferPtr                        m_PointLightsBuffer;
     GPUBufferPtr                        m_MaterialIdsBuffer;
     GPUBufferPtr                        m_MaterialsBuffer;
-    GPUBufferPtr                        m_SampleCounterBuffer;
 
     ComputeJob                          m_RayTracingJob;
 
@@ -112,6 +109,9 @@ private:
     int                                 m_PointLightSelectionIndex;
     int                                 m_MaterialSelectionIndex;
     int                                 m_RayTracingKernelIndex;
+
+    enum class EFrameSeedType { FrameIndex = 0, SampleCount = 1, Fixed = 2, _Count = 3 };
+    EFrameSeedType                      m_FrameSeedType;
 
     FrameTimer                          m_FrameTimer;
 

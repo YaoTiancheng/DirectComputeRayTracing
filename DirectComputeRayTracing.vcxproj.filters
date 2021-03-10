@@ -120,6 +120,9 @@
     <ClInclude Include="Source\DirectComputeRayTracing.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Source\StringConversion.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\Application.cpp">
@@ -237,13 +240,11 @@
     <None Include="Shaders\RayTracingDef.inc.hlsl" />
     <None Include="Shaders\LightingContext.inc.hlsl" />
     <None Include="Shaders\Xoshiro.inc.hlsl" />
+    <None Include="Shaders\UInt64.inc.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resources\DirectComputeRayTracing.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="Shaders\UInt64.inc.hlsl" />
   </ItemGroup>
 </Project>

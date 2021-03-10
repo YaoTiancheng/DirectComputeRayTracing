@@ -7,6 +7,7 @@
 #include "GPUBuffer.h"
 #include "Shader.h"
 #include "Logging.h"
+#include "StringConversion.h"
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_dx11.h"
 #include "../Shaders/RayTracingDef.inc.hlsl"
@@ -22,7 +23,7 @@ struct RayTracingFrameConstants
     uint32_t padding[ 3 ];
 };
 
-CDirectComputeRayTracing::CDirectComputeRayTracing()
+CDirectComputeRayTracing::CDirectComputeRayTracing( HWND hWnd )
     : m_IsFilmDirty( true )
     , m_PointLightSelectionIndex( -1 )
     , m_MaterialSelectionIndex( -1 )
@@ -33,6 +34,7 @@ CDirectComputeRayTracing::CDirectComputeRayTracing()
     , m_IsRayTracingJobDirty( true )
     , m_FrameSeed( 0 )
     , m_FrameSeedType( EFrameSeedType::FrameIndex )
+    , m_hWnd( hWnd )
 {
     std::random_device randomDevice;
 }
@@ -43,6 +45,8 @@ CDirectComputeRayTracing::~CDirectComputeRayTracing()
 
 bool CDirectComputeRayTracing::Init()
 {
+    m_EnvironmentImageFilepath = StringConversion::UTF16WStringToUTF8String( CommandLineArgs::Singleton()->GetEnvironmentTextureFilename() );
+
     uint32_t resolutionWidth = CommandLineArgs::Singleton()->ResolutionX();
     uint32_t resolutionHeight = CommandLineArgs::Singleton()->ResolutionY();
 
@@ -76,7 +80,7 @@ bool CDirectComputeRayTracing::Init()
     if ( !m_CookTorranceCompEFresnelTexture )
         return false;
 
-    m_EnvironmentTexture.reset( GPUTexture::CreateFromFile( CommandLineArgs::Singleton()->GetEnvironmentTextureFilename().c_str() ) );
+    CreateEnvironmentTextureFromCurrentFilepath();
     if ( !m_EnvironmentTexture )
         return false;
 
@@ -478,6 +482,12 @@ void CDirectComputeRayTracing::UpdateRenderViewport( uint32_t backbufferWidth, u
     m_RenderViewport.m_TopLeftY = ( backbufferHeight - m_RenderViewport.m_Height ) * 0.5f;
 }
 
+void CDirectComputeRayTracing::CreateEnvironmentTextureFromCurrentFilepath()
+{
+    std::wstring filepath = StringConversion::UTF8StringToUTF16WString( m_EnvironmentImageFilepath );
+    m_EnvironmentTexture.reset( GPUTexture::CreateFromFile( filepath.c_str() ) );
+}
+
 void CDirectComputeRayTracing::OnImGUI()
 {
     {
@@ -533,6 +543,32 @@ void CDirectComputeRayTracing::OnImGUI()
                 ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
                 if ( ImGui::ColorEdit3( "Background Color", (float*)&m_RayTracingConstants.background ) )
                     m_IsConstantBufferDirty = true;
+
+                ImGui::InputText( "Image File", const_cast<char*>( m_EnvironmentImageFilepath.c_str() ), m_EnvironmentImageFilepath.size(), ImGuiInputTextFlags_ReadOnly );
+                if ( ImGui::Button( "Browse##BrowseEnvImage" ) )
+                {
+                    OPENFILENAMEA ofn;
+                    char filepath[ MAX_PATH ];
+                    ZeroMemory( &ofn, sizeof( ofn ) );
+                    ofn.lStructSize = sizeof( ofn );
+                    ofn.hwndOwner = m_hWnd;
+                    ofn.lpstrFile = filepath;
+                    ofn.lpstrFile[ 0 ] = '\0';
+                    ofn.nMaxFile = sizeof( filepath );
+                    ofn.lpstrFilter = "DDS\0*.DDS\0";
+                    ofn.nFilterIndex = 1;
+                    ofn.lpstrFileTitle = NULL;
+                    ofn.nMaxFileTitle = 0;
+                    ofn.lpstrInitialDir = NULL;
+                    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+                    if ( GetOpenFileNameA( &ofn ) == TRUE )
+                    {
+                        m_EnvironmentImageFilepath = filepath;
+                        CreateEnvironmentTextureFromCurrentFilepath();
+                        m_IsRayTracingJobDirty = true;
+                    }
+                }
             }
 
             m_SceneLuminance.OnImGUI();

@@ -27,7 +27,7 @@ struct RayTracingConstants
 class CDirectComputeRayTracing
 {
 public:
-    CDirectComputeRayTracing();
+    explicit CDirectComputeRayTracing( HWND hWnd );
 
     ~CDirectComputeRayTracing();
 
@@ -54,11 +54,15 @@ private:
 
     void UpdateRenderViewport( uint32_t backbufferWidth, uint32_t backbufferHeight );
 
+    void CreateEnvironmentTextureFromCurrentFilepath();
+
 private:
     
 
     static const int kMaxPointLightsCount = 64;
     static const int kRayTracingKernelCount = 6;
+
+    HWND                                m_hWnd;
 
     Camera                              m_Camera;
     std::vector<PointLight>             m_PointLights;
@@ -116,4 +120,6 @@ private:
     FrameTimer                          m_FrameTimer;
 
     SRectangle                          m_RenderViewport;
+
+    std::string                         m_EnvironmentImageFilepath;
 };

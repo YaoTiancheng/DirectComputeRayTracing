@@ -185,6 +185,7 @@
     <ClInclude Include="Source\Rectangle.h" />
     <ClInclude Include="Source\RenderJobHelper.h" />
     <ClInclude Include="Source\SceneLuminanceRenderer.h" />
+    <ClInclude Include="Source\StringConversion.h" />
     <ClInclude Include="Source\Timers.h" />
     <ClInclude Include="Source\Shader.h" />
     <ClInclude Include="Source\GPUBuffer.h" />

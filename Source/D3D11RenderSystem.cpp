@@ -2,6 +2,8 @@
 #include "D3D11RenderSystem.h"
 #include "CommandLineArgs.h"
 
+#define SAFE_RELEASE( x ) if( x != nullptr ) { x->Release(); x = nullptr; }
+
 ID3D11Device*           g_Device = nullptr;
 ID3D11DeviceContext*    g_DeviceContext = nullptr;
 IDXGISwapChain*         g_SwapChain = nullptr;
@@ -59,20 +61,20 @@ bool InitRenderSystem( HWND hWnd )
 
 void FiniRenderSystem()
 {
-    g_SwapChain->Release();
-    g_DeviceContext->Release();
+    SAFE_RELEASE( g_SwapChain );
+    SAFE_RELEASE( g_DeviceContext );
 
-    ID3D11Debug *d3dDebug;
-    HRESULT hr = g_Device->QueryInterface( __uuidof( ID3D11Debug ), reinterpret_cast< void** >( &d3dDebug ) );
-    if ( SUCCEEDED( hr ) )
-        hr = d3dDebug->ReportLiveDeviceObjects( D3D11_RLDO_DETAIL );
-    if ( d3dDebug )
-        d3dDebug->Release();
-    g_Device->Release();
-
-    g_SwapChain = nullptr;
-    g_DeviceContext = nullptr;
-    g_Device = nullptr;
+    if ( g_Device )
+    {
+        ID3D11Debug* d3dDebug;
+        HRESULT hr = g_Device->QueryInterface( __uuidof( ID3D11Debug ), reinterpret_cast<void**>( &d3dDebug ) );
+        if ( SUCCEEDED( hr ) )
+            hr = d3dDebug->ReportLiveDeviceObjects( D3D11_RLDO_DETAIL );
+        if ( d3dDebug )
+            d3dDebug->Release();
+        g_Device->Release();
+        g_Device = nullptr;
+    }
 }
 
 void ResizeSwapChainBuffers( uint32_t width, uint32_t height )

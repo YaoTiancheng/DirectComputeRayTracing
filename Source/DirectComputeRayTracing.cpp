@@ -8,14 +8,133 @@
 #include "Shader.h"
 #include "Logging.h"
 #include "StringConversion.h"
+#include "Camera.h"
+#include "ComputeJob.h"
+#include "PostProcessingRenderer.h"
+#include "SceneLuminanceRenderer.h"
+#include "Timers.h"
+#include "Rectangle.h"
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_dx11.h"
+#include "imgui/imgui_impl_win32.h"
+#include "../Shaders/PointLight.inc.hlsl"
+#include "../Shaders/Material.inc.hlsl"
 #include "../Shaders/RayTracingDef.inc.hlsl"
 #include "../Shaders/SumLuminanceDef.inc.hlsl"
 
 using namespace DirectX;
 
 static const uint32_t s_MaxRayBounce = 5;
+static const uint32_t s_MaxPointLightsCount = 64;
+static const int s_RayTracingKernelCount = 6;
+
+struct RayTracingConstants
+{
+    DirectX::XMFLOAT4X4             cameraTransform;
+    DirectX::XMFLOAT2               filmSize;
+    uint32_t                        resolutionX;
+    uint32_t                        resolutionY;
+    DirectX::XMFLOAT4               background;
+    uint32_t                        maxBounceCount;
+    uint32_t                        primitiveCount;
+    uint32_t                        pointLightCount;
+    float                           filmDistance;
+};
+
+struct SRenderer
+{
+    explicit SRenderer( HWND hWnd )
+        : m_hWnd( hWnd )
+    {
+    }
+
+    bool OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam );
+
+    bool Init();
+
+    bool ResetScene();
+
+    void DispatchRayTracing();
+
+    void RenderOneFrame();
+
+    bool UpdateResources();
+
+    void ClearFilmTexture();
+
+    void UpdateRayTracingJob();
+
+    void UpdateRenderViewport( uint32_t backbufferWidth, uint32_t backbufferHeight );
+
+    void ResizeBackbuffer( uint32_t backbufferWidth, uint32_t backbufferHeight );
+
+    void CreateEnvironmentTextureFromCurrentFilepath();
+
+    void OnImGUI();
+
+    HWND                                m_hWnd;
+
+    Camera                              m_Camera;
+    std::vector<PointLight>             m_PointLights;
+    std::vector<Material>               m_Materials;
+    std::vector<std::string>            m_MaterialNames;
+
+    RayTracingConstants                 m_RayTracingConstants;
+
+    uint32_t                            m_FrameSeed = 0;
+
+    bool                                m_IsFilmDirty = true;
+    bool                                m_IsConstantBufferDirty = true;
+    bool                                m_IsPointLightBufferDirty = false;
+    bool                                m_IsMaterialBufferDirty = false;
+    bool                                m_IsRayTracingJobDirty = true;
+
+    template <typename T>
+    using ComPtr = Microsoft::WRL::ComPtr<T>;
+    ComPtr<ID3D11SamplerState>          m_UVClampSamplerState;
+
+    ComputeShaderPtr                    m_RayTracingShader[ s_RayTracingKernelCount ];
+
+    GPUTexturePtr                       m_FilmTexture;
+    GPUTexturePtr                       m_RenderResultTexture;
+    GPUTexturePtr                       m_sRGBBackbuffer;
+    GPUTexturePtr                       m_LinearBackbuffer;
+    GPUTexturePtr                       m_CookTorranceCompETexture;
+    GPUTexturePtr                       m_CookTorranceCompEAvgTexture;
+    GPUTexturePtr                       m_CookTorranceCompInvCDFTexture;
+    GPUTexturePtr                       m_CookTorranceCompPdfScaleTexture;
+    GPUTexturePtr                       m_CookTorranceCompEFresnelTexture;
+    GPUTexturePtr                       m_EnvironmentTexture;
+
+    GPUBufferPtr                        m_RayTracingConstantsBuffer;
+    GPUBufferPtr                        m_RayTracingFrameConstantBuffer;
+    GPUBufferPtr                        m_VerticesBuffer;
+    GPUBufferPtr                        m_TrianglesBuffer;
+    GPUBufferPtr                        m_BVHNodesBuffer;
+    GPUBufferPtr                        m_PointLightsBuffer;
+    GPUBufferPtr                        m_MaterialIdsBuffer;
+    GPUBufferPtr                        m_MaterialsBuffer;
+
+    PostProcessingRenderer              m_PostProcessing;
+    SceneLuminanceRenderer              m_SceneLuminance;
+
+    ComputeJob                          m_RayTracingJob;
+
+    enum class EFrameSeedType { FrameIndex = 0, SampleCount = 1, Fixed = 2, _Count = 3 };
+    EFrameSeedType                      m_FrameSeedType = EFrameSeedType::FrameIndex;
+
+    FrameTimer                          m_FrameTimer;
+
+    SRectangle                          m_RenderViewport;
+
+    std::string                         m_EnvironmentImageFilepath;
+
+    int                                 m_RayTracingKernelIndex = 0;
+    int                                 m_PointLightSelectionIndex = -1;
+    int                                 m_MaterialSelectionIndex = -1;
+};
+
+SRenderer* s_Renderer = nullptr;
 
 struct RayTracingFrameConstants
 {
@@ -23,27 +142,102 @@ struct RayTracingFrameConstants
     uint32_t padding[ 3 ];
 };
 
-CDirectComputeRayTracing::CDirectComputeRayTracing( HWND hWnd )
-    : m_IsFilmDirty( true )
-    , m_PointLightSelectionIndex( -1 )
-    , m_MaterialSelectionIndex( -1 )
-    , m_RayTracingKernelIndex( 0 )
-    , m_IsConstantBufferDirty( true )
-    , m_IsPointLightBufferDirty( false )
-    , m_IsMaterialBufferDirty( false )
-    , m_IsRayTracingJobDirty( true )
-    , m_FrameSeed( 0 )
-    , m_FrameSeedType( EFrameSeedType::FrameIndex )
-    , m_hWnd( hWnd )
+static bool InitImGui( HWND hWnd )
 {
-    std::random_device randomDevice;
+    IMGUI_CHECKVERSION();
+
+    ImGui::CreateContext();
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+
+    // Setup Dear ImGui style
+    ImGui::StyleColorsDark();
+
+    // Setup Platform/Renderer backends
+    if ( !ImGui_ImplWin32_Init( hWnd ) )
+    {
+        ImGui::DestroyContext();
+        return false;
+    }
+
+    if ( !ImGui_ImplDX11_Init( GetDevice(), GetDeviceContext() ) )
+    {
+        ImGui_ImplWin32_Shutdown();
+        ImGui::DestroyContext();
+        return false;
+    }
+
+    return true;
+}
+
+static void ShutDownImGui()
+{
+    ImGui_ImplDX11_Shutdown();
+    ImGui_ImplWin32_Shutdown();
+    ImGui::DestroyContext();
+}
+
+static void ImGUINewFrame()
+{
+    ImGui_ImplDX11_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
+}
+
+CDirectComputeRayTracing::CDirectComputeRayTracing( HWND hWnd )
+{
+    s_Renderer = new SRenderer( hWnd );
 }
 
 CDirectComputeRayTracing::~CDirectComputeRayTracing()
 {
+    delete s_Renderer;
+    ShutDownImGui();
+    FiniRenderSystem();
 }
 
 bool CDirectComputeRayTracing::Init()
+{
+    if ( !InitRenderSystem( s_Renderer->m_hWnd ) )
+        return false;
+
+    if ( !InitImGui( s_Renderer->m_hWnd ) )
+        return false;
+
+    return s_Renderer->Init();
+}
+
+void CDirectComputeRayTracing::RenderOneFrame()
+{
+    s_Renderer->RenderOneFrame();
+}
+
+// Forward declare message handler from imgui_impl_win32.cpp
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam );
+
+bool CDirectComputeRayTracing::OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam )
+{
+    if ( ImGui_ImplWin32_WndProcHandler( s_Renderer->m_hWnd, message, wParam, lParam ) )
+        return true;
+
+    if ( message == WM_SIZE )
+    {
+        UINT width = LOWORD( lParam );
+        UINT height = HIWORD( lParam );
+        s_Renderer->ResizeBackbuffer( width, height );
+        s_Renderer->UpdateRenderViewport( width, height );
+    }
+
+    return s_Renderer->OnWndMessage( message, wParam, lParam );
+}
+
+bool SRenderer::OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam )
+{
+    return m_Camera.OnWndMessage( message, wParam, lParam );
+}
+
+bool SRenderer::Init()
 {
     m_EnvironmentImageFilepath = StringConversion::UTF16WStringToUTF8String( CommandLineArgs::Singleton()->GetEnvironmentTextureFilename() );
 
@@ -53,7 +247,7 @@ bool CDirectComputeRayTracing::Init()
     ID3D11Device* device = GetDevice();
 
     m_FilmTexture.reset( GPUTexture::Create(
-        resolutionWidth
+          resolutionWidth
         , resolutionHeight
         , DXGI_FORMAT_R32G32B32A32_FLOAT
         , GPUResourceCreationFlags_HasUAV | GPUResourceCreationFlags_IsRenderTarget ) );
@@ -86,8 +280,8 @@ bool CDirectComputeRayTracing::Init()
 
     std::vector<D3D_SHADER_MACRO> rayTracingShaderDefines;
     
-    static const char* s_RayTracingKernelDefines[ kRayTracingKernelCount ] = { NULL, "OUTPUT_NORMAL", "OUTPUT_TANGENT", "OUTPUT_ALBEDO", "OUTPUT_NEGATIVE_NDOTV", "OUTPUT_BACKFACE" };
-    for ( int i = 0; i < kRayTracingKernelCount; ++i )
+    static const char* s_RayTracingKernelDefines[ s_RayTracingKernelCount ] = { NULL, "OUTPUT_NORMAL", "OUTPUT_TANGENT", "OUTPUT_ALBEDO", "OUTPUT_NEGATIVE_NDOTV", "OUTPUT_BACKFACE" };
+    for ( int i = 0; i < s_RayTracingKernelCount; ++i )
     {
         if ( CommandLineArgs::Singleton()->GetNoBVHAccel() )
         {
@@ -156,10 +350,13 @@ bool CDirectComputeRayTracing::Init()
 
     UpdateRenderViewport( resolutionWidth, resolutionHeight );
 
+    if ( !ResetScene() )
+        return false;
+
     return true;
 }
 
-bool CDirectComputeRayTracing::ResetScene()
+bool SRenderer::ResetScene()
 {
     const CommandLineArgs* commandLineArgs = CommandLineArgs::Singleton();
 
@@ -245,10 +442,10 @@ bool CDirectComputeRayTracing::ResetScene()
             return false;
     }
 
-    m_PointLights.reserve( kMaxPointLightsCount );
+    m_PointLights.reserve( s_MaxPointLightsCount );
 
     m_PointLightsBuffer.reset( GPUBuffer::Create(
-          sizeof( PointLight ) * kMaxPointLightsCount
+          sizeof( PointLight ) * s_MaxPointLightsCount
         , sizeof( PointLight )
         , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer
         , m_PointLights.data() ) );
@@ -272,60 +469,7 @@ bool CDirectComputeRayTracing::ResetScene()
     return true;
 }
 
-void CDirectComputeRayTracing::AddOneSampleAndRender()
-{
-    m_FrameTimer.BeginFrame();
-
-    AddOneSample();
-    m_SceneLuminance.Dispatch();
-
-    ID3D11DeviceContext* deviceContext = GetDeviceContext();
-
-    ID3D11RenderTargetView* RTV = m_RenderResultTexture->GetRTV();
-    deviceContext->OMSetRenderTargets( 1, &RTV, nullptr );
-
-    D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (float)m_RayTracingConstants.resolutionX, (float)m_RayTracingConstants.resolutionY, 0.0f, 1.0f };
-    deviceContext->RSSetViewports( 1, &viewport );
-
-    m_PostProcessing.ExecutePostFX();
-
-    RTV = m_sRGBBackbuffer->GetRTV();
-    deviceContext->OMSetRenderTargets( 1, &RTV, nullptr );
-
-    DXGI_SWAP_CHAIN_DESC swapChainDesc;
-    GetSwapChain()->GetDesc( &swapChainDesc );
-    viewport = { 0.0f, 0.0f, (float)swapChainDesc.BufferDesc.Width, (float)swapChainDesc.BufferDesc.Height, 0.0f, 1.0f };
-    deviceContext->RSSetViewports( 1, &viewport );
-
-    XMFLOAT4 clearColor = { 0.0f, 0.0f, 0.0f, 0.0f };
-    deviceContext->ClearRenderTargetView( RTV, (float*)&clearColor );
-
-    viewport = { (float)m_RenderViewport.m_TopLeftX, (float)m_RenderViewport.m_TopLeftY, (float)m_RenderViewport.m_Width, (float)m_RenderViewport.m_Height, 0.0f, 1.0f };
-    deviceContext->RSSetViewports( 1, &viewport );
-
-    m_PostProcessing.ExecuteCopy();
-}
-
-bool CDirectComputeRayTracing::OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam )
-{
-    if ( message == WM_SIZE )
-    {
-        m_sRGBBackbuffer.reset();
-        m_LinearBackbuffer.reset();
-
-        UINT width = LOWORD( lParam );
-        UINT height = HIWORD( lParam );
-        ResizeSwapChainBuffers( width, height );
-        
-        m_sRGBBackbuffer.reset( GPUTexture::CreateFromSwapChain( DXGI_FORMAT_R8G8B8A8_UNORM_SRGB ) );
-        m_LinearBackbuffer.reset( GPUTexture::CreateFromSwapChain() );
-
-        UpdateRenderViewport( width, height );
-    }
-    return m_Camera.OnWndMessage( message, wParam, lParam );
-}
-
-void CDirectComputeRayTracing::AddOneSample()
+void SRenderer::DispatchRayTracing()
 {
     m_Camera.Update( m_FrameTimer.GetCurrentFrameDeltaTime() );
 
@@ -356,7 +500,7 @@ void CDirectComputeRayTracing::AddOneSample()
 
     if ( UpdateResources() )
     {
-        DispatchRayTracing();
+        m_RayTracingJob.Dispatch();
     }
 
     if ( m_FrameSeedType != EFrameSeedType::Fixed )
@@ -365,7 +509,56 @@ void CDirectComputeRayTracing::AddOneSample()
     }
 }
 
-bool CDirectComputeRayTracing::UpdateResources()
+void SRenderer::RenderOneFrame()
+{
+    m_FrameTimer.BeginFrame();
+
+    DispatchRayTracing();
+
+    m_SceneLuminance.Dispatch();
+
+    ID3D11DeviceContext* deviceContext = GetDeviceContext();
+
+    ID3D11RenderTargetView* RTV = m_RenderResultTexture->GetRTV();
+    deviceContext->OMSetRenderTargets( 1, &RTV, nullptr );
+
+    D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (float)m_RayTracingConstants.resolutionX, (float)m_RayTracingConstants.resolutionY, 0.0f, 1.0f };
+    deviceContext->RSSetViewports( 1, &viewport );
+
+    m_PostProcessing.ExecutePostFX();
+
+    RTV = m_sRGBBackbuffer->GetRTV();
+    deviceContext->OMSetRenderTargets( 1, &RTV, nullptr );
+
+    DXGI_SWAP_CHAIN_DESC swapChainDesc;
+    GetSwapChain()->GetDesc( &swapChainDesc );
+    viewport = { 0.0f, 0.0f, (float)swapChainDesc.BufferDesc.Width, (float)swapChainDesc.BufferDesc.Height, 0.0f, 1.0f };
+    deviceContext->RSSetViewports( 1, &viewport );
+
+    XMFLOAT4 clearColor = { 0.0f, 0.0f, 0.0f, 0.0f };
+    deviceContext->ClearRenderTargetView( RTV, (float*)&clearColor );
+
+    viewport = { (float)m_RenderViewport.m_TopLeftX, (float)m_RenderViewport.m_TopLeftY, (float)m_RenderViewport.m_Width, (float)m_RenderViewport.m_Height, 0.0f, 1.0f };
+    deviceContext->RSSetViewports( 1, &viewport );
+
+    m_PostProcessing.ExecuteCopy();
+
+    ImGUINewFrame();
+    OnImGUI();
+    ImGui::Render();
+
+    RTV = m_LinearBackbuffer->GetRTV();
+    GetDeviceContext()->OMSetRenderTargets( 1, &RTV, nullptr );
+
+    ImGui_ImplDX11_RenderDrawData( ImGui::GetDrawData() );
+
+    RTV = nullptr;
+    GetDeviceContext()->OMSetRenderTargets( 1, &RTV, nullptr );
+
+    GetSwapChain()->Present( 0, 0 );
+}
+
+bool SRenderer::UpdateResources()
 {
     if ( void* address = m_RayTracingFrameConstantBuffer->Map() )
     {
@@ -423,19 +616,14 @@ bool CDirectComputeRayTracing::UpdateResources()
     return true;
 }
 
-void CDirectComputeRayTracing::DispatchRayTracing()
-{
-    m_RayTracingJob.Dispatch();
-}
-
-void CDirectComputeRayTracing::ClearFilmTexture()
+void SRenderer::ClearFilmTexture()
 {
     ID3D11DeviceContext* deviceContext = GetDeviceContext();
     const static float kClearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
     deviceContext->ClearRenderTargetView( m_FilmTexture->GetRTV(), kClearColor );
 }
 
-void CDirectComputeRayTracing::UpdateRayTracingJob()
+void SRenderer::UpdateRayTracingJob()
 {
     m_RayTracingJob.m_SamplerStates = { m_UVClampSamplerState.Get() };
 
@@ -465,7 +653,7 @@ void CDirectComputeRayTracing::UpdateRayTracingJob()
     m_RayTracingJob.m_DispatchSizeZ = 1;
 }
 
-void CDirectComputeRayTracing::UpdateRenderViewport( uint32_t backbufferWidth, uint32_t backbufferHeight )
+void SRenderer::UpdateRenderViewport( uint32_t backbufferWidth, uint32_t backbufferHeight )
 {
     uint32_t renderWidth = m_RayTracingConstants.resolutionX;
     uint32_t renderHeight = m_RayTracingConstants.resolutionY;
@@ -482,13 +670,24 @@ void CDirectComputeRayTracing::UpdateRenderViewport( uint32_t backbufferWidth, u
     m_RenderViewport.m_TopLeftY = ( backbufferHeight - m_RenderViewport.m_Height ) * 0.5f;
 }
 
-void CDirectComputeRayTracing::CreateEnvironmentTextureFromCurrentFilepath()
+void SRenderer::ResizeBackbuffer( uint32_t backbufferWidth, uint32_t backbufferHeight )
+{
+    m_sRGBBackbuffer.reset();
+    m_LinearBackbuffer.reset();
+
+    ResizeSwapChainBuffers( backbufferWidth, backbufferHeight );
+
+    m_sRGBBackbuffer.reset( GPUTexture::CreateFromSwapChain( DXGI_FORMAT_R8G8B8A8_UNORM_SRGB ) );
+    m_LinearBackbuffer.reset( GPUTexture::CreateFromSwapChain() );
+}
+
+void SRenderer::CreateEnvironmentTextureFromCurrentFilepath()
 {
     std::wstring filepath = StringConversion::UTF8StringToUTF16WString( m_EnvironmentImageFilepath );
     m_EnvironmentTexture.reset( GPUTexture::CreateFromFile( filepath.c_str() ) );
 }
 
-void CDirectComputeRayTracing::OnImGUI()
+void SRenderer::OnImGUI()
 {
     {
         ImGui::Begin( "Settings" );
@@ -505,7 +704,7 @@ void CDirectComputeRayTracing::OnImGUI()
 
         if ( ImGui::CollapsingHeader( "Kernel" ) )
         {
-            static const char* s_KernelTypeNames[ kRayTracingKernelCount ] = { "Path Tracing", "Output Normal", "Output Tangent", "Output Albedo", "Output Negative NdotV", "Output Backface" };
+            static const char* s_KernelTypeNames[ s_RayTracingKernelCount ] = { "Path Tracing", "Output Normal", "Output Tangent", "Output Albedo", "Output Negative NdotV", "Output Backface" };
             if ( ImGui::Combo( "Type", &m_RayTracingKernelIndex, s_KernelTypeNames, IM_ARRAYSIZE( s_KernelTypeNames ) ) )
             {
                 m_IsRayTracingJobDirty = true;
@@ -588,7 +787,7 @@ void CDirectComputeRayTracing::OnImGUI()
             {
                 if ( ImGui::BeginMenu( "Create" ) )
                 {
-                    if ( ImGui::MenuItem( "Point Light", "", false, m_PointLights.size() < kMaxPointLightsCount ) )
+                    if ( ImGui::MenuItem( "Point Light", "", false, m_PointLights.size() < s_MaxPointLightsCount ) )
                     {
                         m_PointLights.emplace_back();
                         m_PointLights.back().color = XMFLOAT3( 1.0f, 1.0f, 1.0f );
@@ -697,19 +896,4 @@ void CDirectComputeRayTracing::OnImGUI()
 
         ImGui::End();
     }
-
-    // Rendering
-    ImGui::Render();
-
-    ID3D11RenderTargetView* RTV = m_LinearBackbuffer->GetRTV();
-    GetDeviceContext()->OMSetRenderTargets( 1, &RTV, nullptr );
-
-    ImGui_ImplDX11_RenderDrawData( ImGui::GetDrawData() );
-
-    RTV = nullptr;
-    GetDeviceContext()->OMSetRenderTargets( 1, &RTV, nullptr );
 }
-
-
-
-

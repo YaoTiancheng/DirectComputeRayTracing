@@ -57,7 +57,7 @@ void CommandLineArgs::Parse( const wchar_t* cmdLine )
         else if ( iArg == numArgs - 1 )
         {
             char mbFinename[ MAX_PATH ];
-            errno_t err = wcstombs( mbFinename, argStr, MAX_PATH );
+            errno_t err = (errno_t)wcstombs( mbFinename, argStr, MAX_PATH );
             m_Filename = mbFinename;
         }
     }

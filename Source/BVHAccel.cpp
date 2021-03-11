@@ -87,13 +87,14 @@ static void BuildNodes(
     {
         assert( currentNodeInfo.primEnd != currentNodeInfo.primBegin );
 
-        uint32_t bvhNodeIndex = bvhNodes->size();
+        uint32_t bvhNodeIndex = (uint32_t)bvhNodes->size();
 
         if ( currentNodeInfo.parentIndex != -1 )
         {
             ( *bvhNodes )[ currentNodeInfo.parentIndex ].childIndex = bvhNodeIndex;
         }
         
+        assert( bvhNodes->size() < UINT_MAX );
         bvhNodes->emplace_back();
         UnpackedBVHNode* bvhNode = &bvhNodes->back();
 
@@ -257,7 +258,7 @@ static void BuildNodes(
                 }
 
                 // Find smallest cost
-                size_t minCostIndex = std::distance( std::begin( cost ), std::min_element( std::begin( cost ), std::end( cost ) ) );
+                uint32_t minCostIndex = (uint32_t)std::distance( std::begin( cost ), std::min_element( std::begin( cost ), std::end( cost ) ) );
                 float minCost = cost[ minCostIndex ];
 
                 if ( primCount > k_MaxPrimCountInNode || minCost < primCount )

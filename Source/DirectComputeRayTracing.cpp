@@ -424,7 +424,7 @@ bool SRenderer::ResetScene()
         return false;
 
     m_MaterialsBuffer.reset( GPUBuffer::Create(
-          sizeof( Material ) * m_Materials.size()
+          uint32_t( sizeof( Material ) * m_Materials.size() )
         , sizeof( Material )
         , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer
         , m_Materials.data() ) );
@@ -454,7 +454,7 @@ bool SRenderer::ResetScene()
 
     m_RayTracingConstants.maxBounceCount = 2;
     m_RayTracingConstants.primitiveCount = mesh.GetTriangleCount();
-    m_RayTracingConstants.pointLightCount = m_PointLights.size();
+    m_RayTracingConstants.pointLightCount = (uint32_t)m_PointLights.size();
     m_RayTracingConstants.filmSize = XMFLOAT2( 0.05333f, 0.03f );
     m_RayTracingConstants.filmDistance = 0.04f;
     m_RayTracingConstants.cameraTransform =
@@ -664,10 +664,10 @@ void SRenderer::UpdateRenderViewport( uint32_t backbufferWidth, uint32_t backbuf
         scale = (float)backbufferHeight / renderHeight;
     }
     
-    m_RenderViewport.m_Width    = renderWidth * scale;
-    m_RenderViewport.m_Height   = renderHeight * scale;
-    m_RenderViewport.m_TopLeftX = ( backbufferWidth - m_RenderViewport.m_Width ) * 0.5f;
-    m_RenderViewport.m_TopLeftY = ( backbufferHeight - m_RenderViewport.m_Height ) * 0.5f;
+    m_RenderViewport.m_Width    = uint32_t( renderWidth * scale );
+    m_RenderViewport.m_Height   = uint32_t( renderHeight * scale );
+    m_RenderViewport.m_TopLeftX = uint32_t( ( backbufferWidth - m_RenderViewport.m_Width ) * 0.5f );
+    m_RenderViewport.m_TopLeftY = uint32_t( ( backbufferHeight - m_RenderViewport.m_Height ) * 0.5f );
 }
 
 void SRenderer::ResizeBackbuffer( uint32_t backbufferWidth, uint32_t backbufferHeight )
@@ -814,7 +814,7 @@ void SRenderer::OnImGUI()
         for ( size_t iLight = 0; iLight < m_PointLights.size(); ++iLight )
         {
             bool isSelected = ( iLight == m_PointLightSelectionIndex );
-            sprintf( label, "Point Lights %d", iLight );
+            sprintf( label, "Point Lights %d", uint32_t( iLight ) );
             if ( ImGui::Selectable( label, isSelected ) )
             {
                 m_PointLightSelectionIndex = (int)iLight;

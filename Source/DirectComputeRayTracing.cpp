@@ -52,7 +52,7 @@ struct SRenderer
 
     bool Init();
 
-    bool ResetScene();
+    bool ResetScene( const char* filepath );
 
     void DispatchRayTracing();
 
@@ -350,19 +350,18 @@ bool SRenderer::Init()
 
     UpdateRenderViewport( resolutionWidth, resolutionHeight );
 
-    if ( !ResetScene() )
+    if ( !ResetScene( CommandLineArgs::Singleton()->GetFilename().c_str() ) )
         return false;
 
     return true;
 }
 
-bool SRenderer::ResetScene()
+bool SRenderer::ResetScene( const char* filePath )
 {
     const CommandLineArgs* commandLineArgs = CommandLineArgs::Singleton();
 
     Mesh mesh;
     {
-        const char* filePath = commandLineArgs->GetFilename().c_str();
         char filePathNoExtension[ MAX_PATH ];
         char fileDir[ MAX_PATH ];
         strcpy( filePathNoExtension, filePath );
@@ -442,6 +441,7 @@ bool SRenderer::ResetScene()
             return false;
     }
 
+    m_PointLights.clear();
     m_PointLights.reserve( s_MaxPointLightsCount );
 
     m_PointLightsBuffer.reset( GPUBuffer::Create(
@@ -457,14 +457,16 @@ bool SRenderer::ResetScene()
     m_RayTracingConstants.pointLightCount = (uint32_t)m_PointLights.size();
     m_RayTracingConstants.filmSize = XMFLOAT2( 0.05333f, 0.03f );
     m_RayTracingConstants.filmDistance = 0.04f;
-    m_RayTracingConstants.cameraTransform =
-    { 1.0f, 0.0f, 0.0f, 0.0f,
-      0.0f, 1.0f, 0.0f, 0.0f,
-      0.0f, 0.0f, 1.0f, 0.0f,
-      0.0f, 0.0f, 0.0f, 1.0f };
     m_RayTracingConstants.background = { 1.0f, 1.0f, 1.0f, 0.f };
 
-    m_IsFilmDirty = true;
+    m_IsConstantBufferDirty = true;
+    m_IsMaterialBufferDirty = true;
+    m_IsPointLightBufferDirty = true;
+    m_IsRayTracingJobDirty = true;
+    m_Camera.SetDirty();
+
+    m_PointLightSelectionIndex = -1;
+    m_MaterialSelectionIndex = -1;
 
     return true;
 }
@@ -783,6 +785,28 @@ void SRenderer::OnImGUI()
 
         if ( ImGui::BeginMenuBar() )
         {
+            if ( ImGui::MenuItem( "Load" ) )
+            {
+                OPENFILENAMEA ofn;
+                char filepath[ MAX_PATH ];
+                ZeroMemory( &ofn, sizeof( ofn ) );
+                ofn.lStructSize = sizeof( ofn );
+                ofn.hwndOwner = m_hWnd;
+                ofn.lpstrFile = filepath;
+                ofn.lpstrFile[ 0 ] = '\0';
+                ofn.nMaxFile = sizeof( filepath );
+                ofn.lpstrFilter = "Wavefront OBJ\0*.OBJ\0";
+                ofn.nFilterIndex = 1;
+                ofn.lpstrFileTitle = NULL;
+                ofn.nMaxFileTitle = 0;
+                ofn.lpstrInitialDir = NULL;
+                ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+                if ( GetOpenFileNameA( &ofn ) == TRUE )
+                {
+                    ResetScene( filepath );
+                }
+            }
             if ( ImGui::BeginMenu( "Edit" ) )
             {
                 if ( ImGui::BeginMenu( "Create" ) )

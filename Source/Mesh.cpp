@@ -84,6 +84,8 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
         XMStoreFloat3( tangents.data() + i, vBinormal );
     }
 
+    bool hasTexcoord = !attrib.texcoords.empty();
+
     std::vector<uint32_t> indices;
     std::vector<uint32_t> materialIds;
     bool needDefaultMaterial = false;
@@ -133,6 +135,7 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
                     vertex.position = XMFLOAT3( attrib.vertices[ idx.vertex_index * 3 ], attrib.vertices[ idx.vertex_index * 3 + 1 ], attrib.vertices[ idx.vertex_index * 3 + 2 ] );
                     vertex.normal   = XMFLOAT3( attrib.normals[ idx.normal_index * 3 ], attrib.normals[ idx.normal_index * 3 + 1 ], attrib.normals[ idx.normal_index * 3 + 2 ] );
                     vertex.tangent  = tangents[ idx.normal_index ];
+                    vertex.texcoord = hasTexcoord ? XMFLOAT2( attrib.texcoords[ idx.texcoord_index * 2 ], attrib.texcoords[ idx.texcoord_index * 2 + 1 ] ) : XMFLOAT2( 0.0f, 0.0f );
 
                     vertex.position.x = -vertex.position.x;
                     vertex.normal.x   = -vertex.normal.x;
@@ -156,6 +159,8 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
         dstMat.emission  = DirectX::XMFLOAT3( iterSrcMat.emission[ 0 ], iterSrcMat.emission[ 1 ], iterSrcMat.emission[ 2 ] );
         dstMat.roughness = std::fmax( iterSrcMat.roughness, 0.00018f );
         dstMat.ior       = iterSrcMat.ior;
+        dstMat.texTiling = XMFLOAT2( 1.0f, 1.0f );
+        dstMat.flags     = 0;
         m_Materials.emplace_back( dstMat );
         m_MaterialNames.emplace_back( iterSrcMat.name );
     }
@@ -167,6 +172,8 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
         defaultMat.emission  = DirectX::XMFLOAT3( 0.0f, 0.0f, 0.0f );
         defaultMat.roughness = 1.0f;
         defaultMat.ior       = 1.5f;
+        defaultMat.texTiling = XMFLOAT2( 1.0f, 1.0f );
+        defaultMat.flags     = 0;
         m_Materials.emplace_back( defaultMat );
         m_MaterialNames.emplace_back( "Default Material" );
     }

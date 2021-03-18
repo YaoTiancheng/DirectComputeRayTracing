@@ -897,6 +897,14 @@ void SRenderer::OnImGUI()
                     m_IsMaterialBufferDirty = true;
                 if ( ImGui::DragFloat( "IOR", &selection->ior, 0.01f, 1.0f, 3.0f ) )
                     m_IsMaterialBufferDirty = true;
+                if ( ImGui::DragFloat2( "Texture Tiling", (float*)&selection->texTiling, 0.01f, 0.0f, 100000.0f ) )
+                    m_IsMaterialBufferDirty = true;
+                if ( ImGui::CheckboxFlags( "Albedo Texture", (int*)&selection->flags, MATERIAL_FLAG_ALBEDO_TEXTURE ) )
+                    m_IsMaterialBufferDirty = true;
+                if ( ImGui::CheckboxFlags( "Emission Texture", (int*)&selection->flags, MATERIAL_FLAG_EMISSION_TEXTURE ) )
+                    m_IsMaterialBufferDirty = true;
+                if ( ImGui::CheckboxFlags( "Roughness Texture", (int*)&selection->flags, MATERIAL_FLAG_ROUGHNESS_TEXTURE ) )
+                    m_IsMaterialBufferDirty = true;
             }
         }
 

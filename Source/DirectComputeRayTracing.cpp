@@ -130,6 +130,8 @@ struct SRenderer
 
     std::string                         m_EnvironmentImageFilepath;
 
+    bool                                m_HasValidScene;
+
     int                                 m_RayTracingKernelIndex = 0;
     int                                 m_PointLightSelectionIndex = -1;
     int                                 m_MaterialSelectionIndex = -1;
@@ -329,14 +331,15 @@ bool SRenderer::Init()
 
     UpdateRenderViewport( resolutionWidth, resolutionHeight );
 
-    if ( !ResetScene( CommandLineArgs::Singleton()->GetFilename().c_str() ) )
-        return false;
+    m_HasValidScene = ResetScene( CommandLineArgs::Singleton()->GetFilename().c_str() );
 
     return true;
 }
 
 bool SRenderer::ResetScene( const char* filePath )
 {
+    m_IsFilmDirty = true; // Clear film in case scene reset failed and ray tracing being disabled.
+
     const CommandLineArgs* commandLineArgs = CommandLineArgs::Singleton();
 
     Mesh mesh;
@@ -477,7 +480,7 @@ void SRenderer::DispatchRayTracing()
         m_IsRayTracingJobDirty = false;
     }
 
-    if ( UpdateResources() )
+    if ( m_HasValidScene && UpdateResources() )
     {
         m_RayTracingJob.Dispatch();
     }
@@ -815,7 +818,7 @@ void SRenderer::OnImGUI()
 
                 if ( GetOpenFileNameA( &ofn ) == TRUE )
                 {
-                    ResetScene( filepath );
+                    m_HasValidScene = ResetScene( filepath );
                 }
             }
             if ( ImGui::BeginMenu( "Edit" ) )

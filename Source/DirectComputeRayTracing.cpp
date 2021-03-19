@@ -19,7 +19,6 @@
 #include "imgui/imgui_impl_win32.h"
 #include "../Shaders/PointLight.inc.hlsl"
 #include "../Shaders/Material.inc.hlsl"
-#include "../Shaders/RayTracingDef.inc.hlsl"
 #include "../Shaders/SumLuminanceDef.inc.hlsl"
 
 using namespace DirectX;
@@ -69,6 +68,8 @@ struct SRenderer
     void ResizeBackbuffer( uint32_t backbufferWidth, uint32_t backbufferHeight );
 
     void CreateEnvironmentTextureFromCurrentFilepath();
+
+    bool CompileAndCreateRayTracingKernels( uint32_t traversalStackSize, bool noBVHAccel );
 
     void OnImGUI();
 
@@ -278,28 +279,6 @@ bool SRenderer::Init()
     if ( !m_EnvironmentTexture )
         return false;
 
-    std::vector<D3D_SHADER_MACRO> rayTracingShaderDefines;
-    
-    static const char* s_RayTracingKernelDefines[ s_RayTracingKernelCount ] = { NULL, "OUTPUT_NORMAL", "OUTPUT_TANGENT", "OUTPUT_ALBEDO", "OUTPUT_NEGATIVE_NDOTV", "OUTPUT_BACKFACE" };
-    for ( int i = 0; i < s_RayTracingKernelCount; ++i )
-    {
-        if ( CommandLineArgs::Singleton()->GetNoBVHAccel() )
-        {
-            rayTracingShaderDefines.push_back( { "NO_BVH_ACCEL", "0" } );
-        }
-        if ( s_RayTracingKernelDefines[ i ] )
-        {
-            rayTracingShaderDefines.push_back( { s_RayTracingKernelDefines[ i ], "0" } );
-        }
-        rayTracingShaderDefines.push_back( { NULL, NULL } );
-
-        m_RayTracingShader[ i ].reset( ComputeShader::CreateFromFile( L"Shaders\\RayTracing.hlsl", rayTracingShaderDefines ) );
-        if ( !m_RayTracingShader[ i ] )
-            return false;
-
-        rayTracingShaderDefines.clear();
-    }
-
     m_RayTracingConstantsBuffer.reset( GPUBuffer::Create(
           sizeof( RayTracingConstants )
         , 0
@@ -388,12 +367,10 @@ bool SRenderer::ResetScene( const char* filePath )
         uint32_t BVHMaxDepth = mesh.GetBVHMaxDepth();
         uint32_t BVHMaxStackSize = mesh.GetBVHMaxStackSize();
         LOG_STRING_FORMAT( "BVH created from mesh. Node count:%d, max depth:%d, max stack size:%d\n", mesh.GetBVHNodeCount(), BVHMaxDepth, BVHMaxStackSize );
-        if ( BVHMaxStackSize > RT_BVH_TRAVERSAL_STACK_SIZE )
-        {
-            LOG_STRING_FORMAT( "Error: Abort because BVH max stack size %d exceeding shader BVH traversal stack size %d.\n", BVHMaxStackSize, RT_BVH_TRAVERSAL_STACK_SIZE );
-            return false;
-        }
     }
+
+    if ( !CompileAndCreateRayTracingKernels( mesh.GetBVHMaxStackSize(), commandLineArgs->GetNoBVHAccel() ) )
+        return false;
 
     m_Materials = mesh.GetMaterials();
     m_MaterialNames = mesh.GetMaterialNames();
@@ -689,6 +666,40 @@ void SRenderer::CreateEnvironmentTextureFromCurrentFilepath()
     m_EnvironmentTexture.reset( GPUTexture::CreateFromFile( filepath.c_str() ) );
 }
 
+bool SRenderer::CompileAndCreateRayTracingKernels( uint32_t traversalStackSize, bool noBVHAccel )
+{
+    std::vector<D3D_SHADER_MACRO> rayTracingShaderDefines;
+
+    static const char* s_RayTracingKernelDefines[ s_RayTracingKernelCount ] = { NULL, "OUTPUT_NORMAL", "OUTPUT_TANGENT", "OUTPUT_ALBEDO", "OUTPUT_NEGATIVE_NDOTV", "OUTPUT_BACKFACE" };
+
+    static const uint32_t s_MaxRadix10IntegerBufferLengh = 12;
+    char buffer_TraversalStackSize[ s_MaxRadix10IntegerBufferLengh ];
+    _itoa( traversalStackSize, buffer_TraversalStackSize, 10 );
+
+    for ( int i = 0; i < s_RayTracingKernelCount; ++i )
+    {
+        rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_STACK_SIZE", buffer_TraversalStackSize } );
+
+        if ( noBVHAccel )
+        {
+            rayTracingShaderDefines.push_back( { "NO_BVH_ACCEL", "0" } );
+        }
+        if ( s_RayTracingKernelDefines[ i ] )
+        {
+            rayTracingShaderDefines.push_back( { s_RayTracingKernelDefines[ i ], "0" } );
+        }
+        rayTracingShaderDefines.push_back( { NULL, NULL } );
+
+        m_RayTracingShader[ i ].reset( ComputeShader::CreateFromFile( L"Shaders\\RayTracing.hlsl", rayTracingShaderDefines ) );
+        if ( !m_RayTracingShader[ i ] )
+            return false;
+
+        rayTracingShaderDefines.clear();
+    }
+
+    return true;
+}
+
 void SRenderer::OnImGUI()
 {
     {
@@ -761,7 +772,7 @@ void SRenderer::OnImGUI()
                     ofn.lpstrFileTitle = NULL;
                     ofn.nMaxFileTitle = 0;
                     ofn.lpstrInitialDir = NULL;
-                    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+                    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
 
                     if ( GetOpenFileNameA( &ofn ) == TRUE )
                     {
@@ -800,7 +811,7 @@ void SRenderer::OnImGUI()
                 ofn.lpstrFileTitle = NULL;
                 ofn.nMaxFileTitle = 0;
                 ofn.lpstrInitialDir = NULL;
-                ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+                ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
 
                 if ( GetOpenFileNameA( &ofn ) == TRUE )
                 {

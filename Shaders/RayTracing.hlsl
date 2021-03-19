@@ -1,6 +1,4 @@
 
-#include "RayTracingDef.inc.hlsl"
-
 cbuffer RayTracingConstants : register( b0 )
 {
     row_major float4x4  g_CameraTransform;

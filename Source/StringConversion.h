@@ -19,12 +19,12 @@ namespace StringConversion
         return converter.to_bytes( src );
     }
 
-    std::wstring UTF8StringToUTF16WString( const std::string& src )
+    inline std::wstring UTF8StringToUTF16WString( const std::string& src )
     {
         return StringToWString< std::codecvt_utf8_utf16< wchar_t > >( src );
     }
 
-    std::string UTF16WStringToUTF8String( const std::wstring& src )
+    inline std::string UTF16WStringToUTF8String( const std::wstring& src )
     {
         return WStringToString< std::codecvt_utf8_utf16< wchar_t > >( src );
     }

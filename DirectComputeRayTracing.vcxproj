@@ -406,11 +406,6 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Shaders\RayTracingDef.inc.hlsl">
-      <FileType>Document</FileType>
-    </None>
-  </ItemGroup>
-  <ItemGroup>
     <None Include="Shaders\LightingContext.inc.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>

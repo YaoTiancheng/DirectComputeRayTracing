@@ -237,7 +237,6 @@
     <None Include="Shaders\EnvironmentShader.inc.hlsl" />
     <None Include="Shaders\SumLuminance.hlsl" />
     <None Include="Shaders\SumLuminanceDef.inc.hlsl" />
-    <None Include="Shaders\RayTracingDef.inc.hlsl" />
     <None Include="Shaders\LightingContext.inc.hlsl" />
     <None Include="Shaders\Xoshiro.inc.hlsl" />
     <None Include="Shaders\UInt64.inc.hlsl" />

@@ -17,14 +17,14 @@
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_dx11.h"
 #include "imgui/imgui_impl_win32.h"
-#include "../Shaders/PointLight.inc.hlsl"
+#include "../Shaders/Light.inc.hlsl"
 #include "../Shaders/Material.inc.hlsl"
 #include "../Shaders/SumLuminanceDef.inc.hlsl"
 
 using namespace DirectX;
 
 static const uint32_t s_MaxRayBounce = 5;
-static const uint32_t s_MaxPointLightsCount = 64;
+static const uint32_t s_MaxLightsCount = 64;
 static const int s_RayTracingKernelCount = 6;
 
 struct RayTracingConstants
@@ -36,8 +36,23 @@ struct RayTracingConstants
     DirectX::XMFLOAT4               background;
     uint32_t                        maxBounceCount;
     uint32_t                        primitiveCount;
-    uint32_t                        pointLightCount;
+    uint32_t                        lightCount;
     float                           filmDistance;
+};
+
+enum class ELightType
+{
+    Point     = 0,
+    Rectangle = 1,
+};
+
+struct SLightSetting
+{
+    XMFLOAT3                        position;
+    XMFLOAT3                        rotation;
+    XMFLOAT3                        color;
+    XMFLOAT2                        size;
+    ELightType                      lightType;
 };
 
 struct SRenderer
@@ -76,7 +91,7 @@ struct SRenderer
     HWND                                m_hWnd;
 
     Camera                              m_Camera;
-    std::vector<PointLight>             m_PointLights;
+    std::vector<SLightSetting>          m_LightSettings;
     std::vector<Material>               m_Materials;
     std::vector<std::string>            m_MaterialNames;
 
@@ -86,7 +101,7 @@ struct SRenderer
 
     bool                                m_IsFilmDirty = true;
     bool                                m_IsConstantBufferDirty = true;
-    bool                                m_IsPointLightBufferDirty = false;
+    bool                                m_IsLightBufferDirty = false;
     bool                                m_IsMaterialBufferDirty = false;
     bool                                m_IsRayTracingJobDirty = true;
 
@@ -112,7 +127,7 @@ struct SRenderer
     GPUBufferPtr                        m_VerticesBuffer;
     GPUBufferPtr                        m_TrianglesBuffer;
     GPUBufferPtr                        m_BVHNodesBuffer;
-    GPUBufferPtr                        m_PointLightsBuffer;
+    GPUBufferPtr                        m_LightsBuffer;
     GPUBufferPtr                        m_MaterialIdsBuffer;
     GPUBufferPtr                        m_MaterialsBuffer;
 
@@ -133,7 +148,7 @@ struct SRenderer
     bool                                m_HasValidScene;
 
     int                                 m_RayTracingKernelIndex = 0;
-    int                                 m_PointLightSelectionIndex = -1;
+    int                                 m_LightSelectionIndex = -1;
     int                                 m_MaterialSelectionIndex = -1;
 };
 
@@ -421,31 +436,31 @@ bool SRenderer::ResetScene( const char* filePath )
             return false;
     }
 
-    m_PointLights.clear();
-    m_PointLights.reserve( s_MaxPointLightsCount );
+    m_LightSettings.clear();
+    m_LightSettings.reserve( s_MaxLightsCount );
 
-    m_PointLightsBuffer.reset( GPUBuffer::Create(
-          sizeof( PointLight ) * s_MaxPointLightsCount
-        , sizeof( PointLight )
+    m_LightsBuffer.reset( GPUBuffer::Create(
+          sizeof( SLight ) * s_MaxLightsCount
+        , sizeof( SLight )
         , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer
-        , m_PointLights.data() ) );
-    if ( !m_PointLightsBuffer )
+        , nullptr ) );
+    if ( !m_LightsBuffer )
         return false;
 
     m_RayTracingConstants.maxBounceCount = 2;
     m_RayTracingConstants.primitiveCount = mesh.GetTriangleCount();
-    m_RayTracingConstants.pointLightCount = (uint32_t)m_PointLights.size();
+    m_RayTracingConstants.lightCount = (uint32_t)m_LightSettings.size();
     m_RayTracingConstants.filmSize = XMFLOAT2( 0.05333f, 0.03f );
     m_RayTracingConstants.filmDistance = 0.04f;
     m_RayTracingConstants.background = { 1.0f, 1.0f, 1.0f, 0.f };
 
     m_IsConstantBufferDirty = true;
     m_IsMaterialBufferDirty = true;
-    m_IsPointLightBufferDirty = true;
+    m_IsLightBufferDirty = true;
     m_IsRayTracingJobDirty = true;
     m_Camera.SetDirty();
 
-    m_PointLightSelectionIndex = -1;
+    m_LightSelectionIndex = -1;
     m_MaterialSelectionIndex = -1;
 
     return true;
@@ -461,7 +476,7 @@ void SRenderer::DispatchRayTracing()
         m_IsConstantBufferDirty = true;
     }
 
-    m_IsFilmDirty = m_IsFilmDirty || m_IsConstantBufferDirty || m_IsPointLightBufferDirty || m_IsMaterialBufferDirty || m_IsRayTracingJobDirty;
+    m_IsFilmDirty = m_IsFilmDirty || m_IsConstantBufferDirty || m_IsLightBufferDirty || m_IsMaterialBufferDirty || m_IsRayTracingJobDirty;
 
     if ( m_IsFilmDirty )
     {
@@ -567,13 +582,50 @@ bool SRenderer::UpdateResources()
         }
     }
 
-    if ( m_IsPointLightBufferDirty )
+    if ( m_IsLightBufferDirty )
     {
-        if ( void* address = m_PointLightsBuffer->Map() )
+        if ( void* address = m_LightsBuffer->Map() )
         {
-            memcpy( address, m_PointLights.data(), sizeof( PointLight ) * m_PointLights.size() );
-            m_PointLightsBuffer->Unmap();
-            m_IsPointLightBufferDirty = false;
+            for ( uint32_t i = 0; i < (uint32_t)m_LightSettings.size(); ++i )
+            {
+                SLightSetting* lightSetting = m_LightSettings.data() + i;
+                SLight* light = ( (SLight*)address ) + i;
+
+                XMVECTOR xmPosition = XMLoadFloat3( &lightSetting->position );
+                XMVECTOR xmQuat     = XMQuaternionRotationRollPitchYaw( lightSetting->rotation.x, lightSetting->rotation.y, lightSetting->rotation.z );
+                XMFLOAT3 size3      = XMFLOAT3( lightSetting->size.x, lightSetting->size.y, 1.0f );
+                XMVECTOR xmScale    = XMLoadFloat3( &size3 );
+                XMMATRIX xmTransform = XMMatrixAffineTransformation( xmScale, g_XMZero, xmQuat, xmPosition );
+
+                // Shader uses column major
+                xmTransform = XMMatrixTranspose( xmTransform ); 
+                XMFLOAT4X4 transform44;
+                XMStoreFloat4x4( &transform44, xmTransform );
+                light->transform = XMFLOAT4X3( (float*)&transform44 );
+
+                light->color = lightSetting->color;
+
+                switch ( lightSetting->lightType )
+                {
+                case ELightType::Point:
+                {
+                    light->flags = LIGHT_FLAGS_POINT_LIGHT;
+                    break;
+                }
+                case ELightType::Rectangle:
+                {
+                    light->flags = 0;
+                    break;
+                }
+                default:
+                {
+                    light->flags = 0;
+                    break;
+                }
+                }
+            }
+            m_LightsBuffer->Unmap();
+            m_IsLightBufferDirty = false;
         }
         else
         {
@@ -614,7 +666,7 @@ void SRenderer::UpdateRayTracingJob()
     m_RayTracingJob.m_SRVs = {
           m_VerticesBuffer->GetSRV()
         , m_TrianglesBuffer->GetSRV()
-        , m_PointLightsBuffer->GetSRV()
+        , m_LightsBuffer->GetSRV()
         , m_CookTorranceCompETexture->GetSRV()
         , m_CookTorranceCompEAvgTexture->GetSRV()
         , m_CookTorranceCompInvCDFTexture->GetSRV()
@@ -825,22 +877,39 @@ void SRenderer::OnImGUI()
             {
                 if ( ImGui::BeginMenu( "Create" ) )
                 {
-                    if ( ImGui::MenuItem( "Point Light", "", false, m_PointLights.size() < s_MaxPointLightsCount ) )
+                    ELightType lightType = ELightType::Point;
+                    bool menuItemClicked = false;
+                    if ( ImGui::MenuItem( "Point Light", "", false, m_LightSettings.size() < s_MaxLightsCount ) )
                     {
-                        m_PointLights.emplace_back();
-                        m_PointLights.back().color = XMFLOAT3( 1.0f, 1.0f, 1.0f );
-                        m_PointLights.back().position = XMFLOAT3( 0.0f, 0.0f, 0.0f );
-                        m_RayTracingConstants.pointLightCount++;
-                        m_IsConstantBufferDirty = true;
-                        m_IsPointLightBufferDirty = true;
+                        lightType = ELightType::Point;
+                        menuItemClicked = true;
                     }
+                    if ( ImGui::MenuItem( "Rectangle Light", "", false, m_LightSettings.size() < s_MaxLightsCount ) )
+                    {
+                        lightType = ELightType::Rectangle;
+                        menuItemClicked = true;
+                    }
+
+                    if ( menuItemClicked )
+                    {
+                        m_LightSettings.emplace_back();
+                        m_LightSettings.back().color = XMFLOAT3( 1.0f, 1.0f, 1.0f );
+                        m_LightSettings.back().position = XMFLOAT3( 0.0f, 0.0f, 0.0f );
+                        m_LightSettings.back().rotation = XMFLOAT3( 0.0f, 0.0f, 0.0f );
+                        m_LightSettings.back().size = XMFLOAT2( 1.0f, 1.0f );
+                        m_LightSettings.back().lightType = lightType;
+                        m_RayTracingConstants.lightCount++;
+                        m_IsConstantBufferDirty = true;
+                        m_IsLightBufferDirty = true;
+                    }
+
                     ImGui::EndMenu();
                 }
-                if ( ImGui::MenuItem( "Delete", "", false, m_PointLightSelectionIndex != -1 ) )
+                if ( ImGui::MenuItem( "Delete", "", false, m_LightSelectionIndex != -1 ) )
                 {
-                    m_PointLights.erase( m_PointLights.begin() + m_PointLightSelectionIndex );
-                    m_PointLightSelectionIndex = -1;
-                    m_RayTracingConstants.pointLightCount--;
+                    m_LightSettings.erase( m_LightSettings.begin() + m_LightSelectionIndex );
+                    m_LightSelectionIndex = -1;
+                    m_RayTracingConstants.lightCount--;
                     m_IsConstantBufferDirty = true;
                 }
                 ImGui::EndMenu();
@@ -849,13 +918,13 @@ void SRenderer::OnImGUI()
         }
 
         char label[ 32 ];
-        for ( size_t iLight = 0; iLight < m_PointLights.size(); ++iLight )
+        for ( size_t iLight = 0; iLight < m_LightSettings.size(); ++iLight )
         {
-            bool isSelected = ( iLight == m_PointLightSelectionIndex );
-            sprintf( label, "Point Lights %d", uint32_t( iLight ) );
+            bool isSelected = ( iLight == m_LightSelectionIndex );
+            sprintf( label, "Light %d", uint32_t( iLight ) );
             if ( ImGui::Selectable( label, isSelected ) )
             {
-                m_PointLightSelectionIndex = (int)iLight;
+                m_LightSelectionIndex = (int)iLight;
                 m_MaterialSelectionIndex = -1;
             }
         }
@@ -872,7 +941,7 @@ void SRenderer::OnImGUI()
             if ( ImGui::Selectable( m_MaterialNames[ iMaterial ].c_str(), isSelected ) )
             {
                 m_MaterialSelectionIndex = (int)iMaterial;
-                m_PointLightSelectionIndex = -1;
+                m_LightSelectionIndex = -1;
             }
         }
 
@@ -884,16 +953,45 @@ void SRenderer::OnImGUI()
 
         ImGui::PushItemWidth( ImGui::GetFontSize() * -9 );
 
-        if ( m_PointLightSelectionIndex >= 0 )
+        if ( m_LightSelectionIndex >= 0 )
         {
             ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
-            if ( m_PointLightSelectionIndex < m_PointLights.size() )
+            if ( m_LightSelectionIndex < m_LightSettings.size() )
             {
-                PointLight* selection = m_PointLights.data() + m_PointLightSelectionIndex;
+                SLightSetting* selection = m_LightSettings.data() + m_LightSelectionIndex;
+
                 if ( ImGui::DragFloat3( "Position", (float*)&selection->position, 1.0f ) )
-                    m_IsPointLightBufferDirty = true;
+                    m_IsLightBufferDirty = true;
+
+                if ( selection->lightType == ELightType::Rectangle )
+                {
+                    XMFLOAT3 eulerAnglesDeg;
+                    eulerAnglesDeg.x = XMConvertToDegrees( selection->rotation.x );
+                    eulerAnglesDeg.y = XMConvertToDegrees( selection->rotation.y );
+                    eulerAnglesDeg.z = XMConvertToDegrees( selection->rotation.z );
+                    if ( ImGui::DragFloat3( "Rotation", (float*)&eulerAnglesDeg, 1.0f ) )
+                    {
+                        selection->rotation.x = XMConvertToRadians( eulerAnglesDeg.x );
+                        selection->rotation.y = XMConvertToRadians( eulerAnglesDeg.y );
+                        selection->rotation.z = XMConvertToRadians( eulerAnglesDeg.z );
+                        m_IsLightBufferDirty = true;
+                    }
+                }
+
+                static const char* s_LightTypeNames[] = { "Point", "Rectangle" };
+                if ( ImGui::Combo( "Type", (int*)&selection->lightType, s_LightTypeNames, IM_ARRAYSIZE( s_LightTypeNames ) ) )
+                {
+                    m_IsLightBufferDirty = true;
+                }
+
+                if ( selection->lightType == ELightType::Rectangle )
+                {
+                    if ( ImGui::DragFloat2( "Size", (float*)&selection->size, 0.1f, 0.0001f, 10000000.0f ) )
+                        m_IsLightBufferDirty = true;
+                }
+
                 if ( ImGui::ColorEdit3( "Color", (float*)&selection->color ) )
-                    m_IsPointLightBufferDirty = true;
+                    m_IsLightBufferDirty = true;
             }
         }
         else if ( m_MaterialSelectionIndex >= 0 )

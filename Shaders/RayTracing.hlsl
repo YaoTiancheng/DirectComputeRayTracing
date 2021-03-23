@@ -7,7 +7,7 @@ cbuffer RayTracingConstants : register( b0 )
     float4              g_Background;
     uint                g_MaxBounceCount;
     uint                g_PrimitiveCount;
-    uint                g_PointLightCount;
+    uint                g_LightCount;
     float               g_FilmDistance;
 }
 
@@ -17,14 +17,14 @@ cbuffer RayTracingFrameConstants : register( b1 )
 }
 
 #include "Vertex.inc.hlsl"
-#include "PointLight.inc.hlsl"
+#include "Light.inc.hlsl"
 #include "Material.inc.hlsl"
 #include "BVHNode.inc.hlsl"
 #include "Xoshiro.inc.hlsl"
 
 StructuredBuffer<Vertex>                g_Vertices                          : register( t0 );
 StructuredBuffer<uint>                  g_Triangles                         : register( t1 );
-StructuredBuffer<PointLight>            g_PointLights                       : register( t2 );
+StructuredBuffer<SLight>                g_Lights                            : register( t2 );
 Texture2D                               g_CookTorranceCompETexture          : register( t3 );
 Texture2D                               g_CookTorranceCompEAvgTexture       : register( t4 );
 Texture2D                               g_CookTorranceCompInvCDFTexture     : register( t5 );
@@ -43,6 +43,7 @@ SamplerState UVClampSampler;
 #include "BVHAccel.inc.hlsl"
 #include "HitShader.inc.hlsl"
 #include "EnvironmentShader.inc.hlsl"
+#include "LightSampling.inc.hlsl"
 
 void GenerateRay( float2 sample
 	, float2 filmSize
@@ -87,33 +88,35 @@ void AddSampleToFilm( float3 l
     g_FilmTexture[ pixelPos ] = c;
 }
 
-float3 EstimateDirect( PointLight pointLight, Intersection intersection, float epsilon, float3 wo, uint dispatchThreadIndex )
+float3 EstimateDirect( SLight light, Intersection intersection, float2 lightSample, float epsilon, float3 wo, uint dispatchThreadIndex )
 {
-    float3 wi = pointLight.position - intersection.position;
-    float len = length( wi );
-    wi /= len;
+    float3 l, wi;
+    float distance, pdf;
+    if ( light.flags & LIGHT_FLAGS_POINT_LIGHT )
+        SamplePointLight( light, lightSample, intersection.position, l, wi, distance, pdf );
+    else
+        SampleRectangleLight( light, lightSample, intersection.position, l, wi, distance, pdf );
 
-    if ( !IsOcculuded( intersection.position, wi, epsilon, len, dispatchThreadIndex ) )
+    if ( !IsOcculuded( intersection.position, wi, epsilon, distance, dispatchThreadIndex ) )
     {
-        float3 l = pointLight.color / ( len * len );
         float3 brdf = EvaluateBSDF( wi, wo, intersection );
         float NdotL = max( 0, dot( intersection.normal, wi ) );
-        return l * brdf * NdotL;
+        return l * brdf * NdotL / pdf;
     }
 
     return 0.0f;
 }
 
-float3 UniformSampleOneLight( float sample, Intersection intersection, float3 wo, float epsilon, uint dispatchThreadIndex )
+float3 UniformSampleOneLight( float sample, float2 lightSample, Intersection intersection, float3 wo, float epsilon, uint dispatchThreadIndex )
 {
-    if ( g_PointLightCount == 0 )
+    if ( g_LightCount == 0 )
     {
         return 0.0f;
     }
     else
     {
-        uint lightIndex = floor( sample * g_PointLightCount );
-        return EstimateDirect( g_PointLights[ lightIndex ], intersection, epsilon, wo, dispatchThreadIndex ) * g_PointLightCount;
+        uint lightIndex = floor( sample * g_LightCount );
+        return EstimateDirect( g_Lights[ lightIndex ], intersection, lightSample, epsilon, wo, dispatchThreadIndex ) * g_LightCount;
     }
 }
 
@@ -147,7 +150,8 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
             wo = -wo;
 
             float lightSelectionSample = GetNextSample1D( rng );
-            l += pathThroughput * ( UniformSampleOneLight( lightSelectionSample, intersection, wo, intersection.rayEpsilon, threadId ) + intersection.emission );
+            float2 lightSample = GetNextSample2D( rng );
+            l += pathThroughput * ( UniformSampleOneLight( lightSelectionSample, lightSample, intersection, wo, intersection.rayEpsilon, threadId ) + intersection.emission );
 
             if ( iBounce == g_MaxBounceCount )
                 break;

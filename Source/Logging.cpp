@@ -8,7 +8,7 @@ void LogString( const char* str )
 
 void LogStringFormat( const char* format, ... )
 {
-    const uint32_t s_MaxBufferLength = 256;
+    const uint32_t s_MaxBufferLength = 512;
     char buffer[ s_MaxBufferLength ];
 
     va_list argptr;

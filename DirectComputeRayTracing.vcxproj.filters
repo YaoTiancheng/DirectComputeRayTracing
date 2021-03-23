@@ -232,7 +232,6 @@
     </None>
     <None Include="Shaders\Vertex.inc.hlsl" />
     <None Include="Shaders\Material.inc.hlsl" />
-    <None Include="Shaders\PointLight.inc.hlsl" />
     <None Include="Shaders\BVHNode.inc.hlsl" />
     <None Include="Shaders\EnvironmentShader.inc.hlsl" />
     <None Include="Shaders\SumLuminance.hlsl" />
@@ -240,10 +239,14 @@
     <None Include="Shaders\LightingContext.inc.hlsl" />
     <None Include="Shaders\Xoshiro.inc.hlsl" />
     <None Include="Shaders\UInt64.inc.hlsl" />
+    <None Include="Shaders\Light.inc.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resources\DirectComputeRayTracing.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="Shaders\LightSampling.inc.hlsl" />
   </ItemGroup>
 </Project>

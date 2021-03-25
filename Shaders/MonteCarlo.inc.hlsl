@@ -46,4 +46,11 @@ float2 ConcentricSampleDisk( float2 sample )
     return r * float2( cos( theta ), sin( theta ) );
 }
 
+float PowerHeuristic( uint nf, float fPdf, uint ng, float gPdf )
+{
+    float f = nf * fPdf;
+    float g = ng * gPdf;
+    return ( f * f ) / ( f * f + g * g );
+}
+
 #endif

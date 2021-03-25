@@ -84,7 +84,7 @@ struct SRenderer
 
     void CreateEnvironmentTextureFromCurrentFilepath();
 
-    bool CompileAndCreateRayTracingKernels( uint32_t traversalStackSize, bool noBVHAccel );
+    bool CompileAndCreateRayTracingKernels( uint32_t traversalStackSize, bool noBVHAccel, bool multipleImportanceSampling );
 
     void OnImGUI();
 
@@ -146,6 +146,7 @@ struct SRenderer
     std::string                         m_EnvironmentImageFilepath;
 
     bool                                m_HasValidScene;
+    bool                                m_IsMultipleImportanceSamplingEnabled;
 
     int                                 m_RayTracingKernelIndex = 0;
     int                                 m_LightSelectionIndex = -1;
@@ -387,8 +388,11 @@ bool SRenderer::ResetScene( const char* filePath )
         LOG_STRING_FORMAT( "BVH created from mesh. Node count:%d, max depth:%d, max stack size:%d\n", mesh.GetBVHNodeCount(), BVHMaxDepth, BVHMaxStackSize );
     }
 
-    if ( !CompileAndCreateRayTracingKernels( mesh.GetBVHMaxStackSize(), commandLineArgs->GetNoBVHAccel() ) )
+    if ( !CompileAndCreateRayTracingKernels( mesh.GetBVHMaxStackSize(), commandLineArgs->GetNoBVHAccel(), commandLineArgs->IsMultipleImportanceSamplingEnabled() ) )
         return false;
+
+    // Update after shader created successfully so the UI display match the real shader option state.
+    m_IsMultipleImportanceSamplingEnabled = commandLineArgs->IsMultipleImportanceSamplingEnabled();
 
     m_Materials = mesh.GetMaterials();
     m_MaterialNames = mesh.GetMaterialNames();
@@ -721,7 +725,7 @@ void SRenderer::CreateEnvironmentTextureFromCurrentFilepath()
     m_EnvironmentTexture.reset( GPUTexture::CreateFromFile( filepath.c_str() ) );
 }
 
-bool SRenderer::CompileAndCreateRayTracingKernels( uint32_t traversalStackSize, bool noBVHAccel )
+bool SRenderer::CompileAndCreateRayTracingKernels( uint32_t traversalStackSize, bool noBVHAccel, bool multipleImportanceSampling )
 {
     std::vector<D3D_SHADER_MACRO> rayTracingShaderDefines;
 
@@ -738,6 +742,10 @@ bool SRenderer::CompileAndCreateRayTracingKernels( uint32_t traversalStackSize, 
         if ( noBVHAccel )
         {
             rayTracingShaderDefines.push_back( { "NO_BVH_ACCEL", "0" } );
+        }
+        if ( multipleImportanceSampling )
+        {
+            rayTracingShaderDefines.push_back( { "MULTIPLE_IMPORTANCE_SAMPLING", "0" } );
         }
         if ( s_RayTracingKernelDefines[ i ] )
         {
@@ -1036,6 +1044,7 @@ void SRenderer::OnImGUI()
     {
         ImGui::Begin( "Render Stats." );
 
+        ImGui::Text( "MIS: %s", m_IsMultipleImportanceSamplingEnabled ? "On" : "Off" );
         ImGui::Text( "Average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate );
 
         ImGui::End();

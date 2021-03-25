@@ -46,6 +46,31 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
     return value;
 }
 
+float EvaluateBSDFPdf( float3 wi, float3 wo, Intersection intersection )
+{
+    float3 biNormal = cross( intersection.tangent, intersection.normal );
+    float3x3 tbn2world = float3x3( intersection.tangent, biNormal, intersection.normal );
+    float3x3 world2tbn = transpose( tbn2world );
+
+    wo = mul( wo, world2tbn );
+    wi = mul( wi, world2tbn );
+
+    LightingContext lightingContext = LightingContextInit( wo, wi );
+
+    float E = EvaluateCookTorranceCompE( lightingContext.WOdotN, intersection.alpha );
+    float EAvg = EvaluateCookTorranceCompEAvg( intersection.alpha );
+    float cosThetaO = lightingContext.WOdotN;
+    float specularWeight = SpecularWeight( cosThetaO, intersection.alpha, intersection.ior );
+    float specularCompWeight = SpecularCompWeight( intersection.ior, E, EAvg );
+    float diffuseWeight = 1.0f - specularWeight - specularCompWeight;
+
+    float pdf = EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * specularWeight;
+    pdf += EvaluateCookTorranceCompPdf( wi, intersection.alpha, lightingContext ) * specularCompWeight;
+    pdf += EvaluateLambertBRDFPdf( lightingContext ) * diffuseWeight;
+
+    return pdf;
+}
+
 void SampleBSDF( float3 wo
     , float2 BRDFSample
     , float BRDFSelectionSample

@@ -88,14 +88,75 @@ void AddSampleToFilm( float3 l
     g_FilmTexture[ pixelPos ] = c;
 }
 
-float3 EstimateDirect( SLight light, Intersection intersection, float2 lightSample, float epsilon, float3 wo, uint dispatchThreadIndex )
+struct SLightSamples
 {
+    float  lightSelectionSample;
+    float2 lightSample;
+#if defined( MULTIPLE_IMPORTANCE_SAMPLING )
+    float  bsdfSelectionSample;
+    float2 bsdfSample;
+#endif
+};
+
+float3 EstimateDirect( SLight light, Intersection intersection, SLightSamples samples, float epsilon, float3 wo, uint dispatchThreadIndex )
+{
+#if defined( MULTIPLE_IMPORTANCE_SAMPLING )
+    float3 l, wi, result = 0.0f;
+    float distance, lightPdf;
+    bool isDeltaLight = false;
+    if ( light.flags & LIGHT_FLAGS_POINT_LIGHT )
+    {
+        SamplePointLight( light, samples.lightSample, intersection.position, l, wi, distance, lightPdf );
+        isDeltaLight = true;
+    }
+    else
+    {
+        SampleRectangleLight( light, samples.lightSample, intersection.position, l, wi, distance, lightPdf );
+    }
+
+    if ( !IsOcculuded( intersection.position, wi, epsilon, distance, dispatchThreadIndex ) )
+    {
+        float3 bsdf = EvaluateBSDF( wi, wo, intersection );
+        float NdotWI = max( 0, dot( intersection.normal, wi ) );
+        float bsdfPdf = EvaluateBSDFPdf( wi, wo, intersection );
+        float weight = isDeltaLight ? 1.0f : PowerHeuristic( 1, lightPdf, 1, bsdfPdf );
+
+        result = l * bsdf * NdotWI * weight / lightPdf;
+    }
+
+    if ( !isDeltaLight )
+    {
+        float3 bsdf;
+        float bsdfPdf;
+        SampleBSDF( wo, samples.bsdfSample, samples.bsdfSelectionSample, intersection, wi, bsdf, bsdfPdf ); // TODO: Make sample passed as arguments
+
+        if ( all( bsdf == 0.0f ) || bsdfPdf == 0.0f )
+            return result;
+
+        lightPdf = EvaluateRectangleLightPdf( light, wi, intersection.position, distance );
+        if ( lightPdf == 0.0f )
+            return result;
+
+        float weight = PowerHeuristic( 1, bsdfPdf, 1, lightPdf );
+
+        l = 0.0f;
+        if ( !IsOcculuded( intersection.position, wi, epsilon, distance, dispatchThreadIndex ) )
+        {
+            l = light.color;
+        }
+
+        float NdotWI = max( 0, dot( intersection.normal, wi ) );
+        result += l * bsdf * NdotWI * weight / bsdfPdf;
+    }
+
+    return result;
+#else
     float3 l, wi;
     float distance, pdf;
     if ( light.flags & LIGHT_FLAGS_POINT_LIGHT )
-        SamplePointLight( light, lightSample, intersection.position, l, wi, distance, pdf );
+        SamplePointLight( light, samples.lightSample, intersection.position, l, wi, distance, pdf );
     else
-        SampleRectangleLight( light, lightSample, intersection.position, l, wi, distance, pdf );
+        SampleRectangleLight( light, samples.lightSample, intersection.position, l, wi, distance, pdf );
 
     if ( !IsOcculuded( intersection.position, wi, epsilon, distance, dispatchThreadIndex ) )
     {
@@ -105,19 +166,13 @@ float3 EstimateDirect( SLight light, Intersection intersection, float2 lightSamp
     }
 
     return 0.0f;
+#endif
 }
 
-float3 UniformSampleOneLight( float sample, float2 lightSample, Intersection intersection, float3 wo, float epsilon, uint dispatchThreadIndex )
+float3 UniformSampleOneLight( SLightSamples samples, Intersection intersection, float3 wo, float epsilon, uint dispatchThreadIndex )
 {
-    if ( g_LightCount == 0 )
-    {
-        return 0.0f;
-    }
-    else
-    {
-        uint lightIndex = floor( sample * g_LightCount );
-        return EstimateDirect( g_Lights[ lightIndex ], intersection, lightSample, epsilon, wo, dispatchThreadIndex ) * g_LightCount;
-    }
+    uint lightIndex = floor( samples.lightSelectionSample * g_LightCount );
+    return g_LightCount != 0 ? EstimateDirect( g_Lights[ lightIndex ], intersection, samples, epsilon, wo, dispatchThreadIndex ) * g_LightCount : 0.0f;
 }
 
 #define GROUP_SIZE_X 16
@@ -149,9 +204,14 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
         {
             wo = -wo;
 
-            float lightSelectionSample = GetNextSample1D( rng );
-            float2 lightSample = GetNextSample2D( rng );
-            l += pathThroughput * ( UniformSampleOneLight( lightSelectionSample, lightSample, intersection, wo, intersection.rayEpsilon, threadId ) + intersection.emission );
+            SLightSamples lightSamples;
+            lightSamples.lightSelectionSample = GetNextSample1D( rng );
+            lightSamples.lightSample          = GetNextSample2D( rng );
+#if defined( MULTIPLE_IMPORTANCE_SAMPLING )
+            lightSamples.bsdfSelectionSample  = GetNextSample1D( rng );
+            lightSamples.bsdfSample           = GetNextSample2D( rng );
+#endif
+            l += pathThroughput * ( UniformSampleOneLight( lightSamples, intersection, wo, intersection.rayEpsilon, threadId ) + intersection.emission );
 
             if ( iBounce == g_MaxBounceCount )
                 break;

@@ -12,6 +12,7 @@ public:
 
     bool ShaderDebugEnabled() const { return m_ShaderDebugEnabled; }
     bool UseDebugDevice() const { return m_UseDebugDevice; }
+    bool IsMultipleImportanceSamplingEnabled() const { return m_MultipleImportanceSamplingEnabled; }
 
     const std::string& GetFilename() const { return m_Filename; }
 
@@ -27,6 +28,7 @@ private:
     bool        m_ShaderDebugEnabled;
     bool        m_UseDebugDevice;
     bool        m_NoBVHAccel;
+    bool        m_MultipleImportanceSamplingEnabled;
     std::string m_Filename;
     std::wstring m_EnvironmentTextureFilename;
 

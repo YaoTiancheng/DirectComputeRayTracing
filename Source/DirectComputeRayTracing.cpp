@@ -55,6 +55,38 @@ struct SLightSetting
     ELightType                      lightType;
 };
 
+struct SSceneObjectSelection
+{
+    void SelectLight( int index )
+    {
+        DeselectAll();
+        m_LightSelectionIndex = index;
+    }
+
+    void SelectMaterial( int index )
+    {
+        DeselectAll();
+        m_MaterialSelectionIndex = index;
+    }
+
+    void SelectCamera()
+    {
+        DeselectAll();
+        m_IsCameraSelected = true;
+    }
+
+    void DeselectAll()
+    {
+        m_LightSelectionIndex = -1;
+        m_MaterialSelectionIndex = -1;
+        m_IsCameraSelected = false;
+    }
+
+    int                             m_LightSelectionIndex = -1;
+    int                             m_MaterialSelectionIndex = -1;
+    bool                            m_IsCameraSelected = false;
+};
+
 struct SRenderer
 {
     explicit SRenderer( HWND hWnd )
@@ -149,8 +181,7 @@ struct SRenderer
     bool                                m_IsMultipleImportanceSamplingEnabled;
 
     int                                 m_RayTracingKernelIndex = 0;
-    int                                 m_LightSelectionIndex = -1;
-    int                                 m_MaterialSelectionIndex = -1;
+    SSceneObjectSelection               m_SceneObjectSelection;
 };
 
 SRenderer* s_Renderer = nullptr;
@@ -464,8 +495,7 @@ bool SRenderer::ResetScene( const char* filePath )
     m_IsRayTracingJobDirty = true;
     m_Camera.SetDirty();
 
-    m_LightSelectionIndex = -1;
-    m_MaterialSelectionIndex = -1;
+    m_SceneObjectSelection.DeselectAll();
 
     return true;
 }
@@ -913,10 +943,10 @@ void SRenderer::OnImGUI()
 
                     ImGui::EndMenu();
                 }
-                if ( ImGui::MenuItem( "Delete", "", false, m_LightSelectionIndex != -1 ) )
+                if ( ImGui::MenuItem( "Delete", "", false, m_SceneObjectSelection.m_LightSelectionIndex != -1 ) )
                 {
-                    m_LightSettings.erase( m_LightSettings.begin() + m_LightSelectionIndex );
-                    m_LightSelectionIndex = -1;
+                    m_LightSettings.erase( m_LightSettings.begin() + m_SceneObjectSelection.m_LightSelectionIndex );
+                    m_SceneObjectSelection.m_LightSelectionIndex = -1;
                     m_RayTracingConstants.lightCount--;
                     m_IsConstantBufferDirty = true;
                 }
@@ -925,31 +955,38 @@ void SRenderer::OnImGUI()
             ImGui::EndMenuBar();
         }
 
-        char label[ 32 ];
-        for ( size_t iLight = 0; iLight < m_LightSettings.size(); ++iLight )
+        if ( ImGui::CollapsingHeader( "Camera" ) )
         {
-            bool isSelected = ( iLight == m_LightSelectionIndex );
-            sprintf( label, "Light %d", uint32_t( iLight ) );
-            if ( ImGui::Selectable( label, isSelected ) )
+            bool isSelected = m_SceneObjectSelection.m_IsCameraSelected;
+            if ( ImGui::Selectable( "Preview Camera", isSelected ) )
             {
-                m_LightSelectionIndex = (int)iLight;
-                m_MaterialSelectionIndex = -1;
+                m_SceneObjectSelection.SelectCamera();
             }
         }
 
-        ImGui::End();
-    }
-
-    {
-        ImGui::Begin( "Materials" );
-
-        for ( size_t iMaterial = 0; iMaterial < m_Materials.size(); ++iMaterial )
+        if ( ImGui::CollapsingHeader( "Lights" ) )
         {
-            bool isSelected = ( iMaterial == m_MaterialSelectionIndex );
-            if ( ImGui::Selectable( m_MaterialNames[ iMaterial ].c_str(), isSelected ) )
+            char label[ 32 ];
+            for ( size_t iLight = 0; iLight < m_LightSettings.size(); ++iLight )
             {
-                m_MaterialSelectionIndex = (int)iMaterial;
-                m_LightSelectionIndex = -1;
+                bool isSelected = ( iLight == m_SceneObjectSelection.m_LightSelectionIndex );
+                sprintf( label, "Light %d", uint32_t( iLight ) );
+                if ( ImGui::Selectable( label, isSelected ) )
+                {
+                    m_SceneObjectSelection.SelectLight( (int)iLight );
+                }
+            }
+        }
+
+        if ( ImGui::CollapsingHeader( "Materials" ) )
+        {
+            for ( size_t iMaterial = 0; iMaterial < m_Materials.size(); ++iMaterial )
+            {
+                bool isSelected = ( iMaterial == m_SceneObjectSelection.m_MaterialSelectionIndex );
+                if ( ImGui::Selectable( m_MaterialNames[ iMaterial ].c_str(), isSelected ) )
+                {
+                    m_SceneObjectSelection.SelectMaterial( (int)iMaterial );
+                }
             }
         }
 
@@ -961,12 +998,12 @@ void SRenderer::OnImGUI()
 
         ImGui::PushItemWidth( ImGui::GetFontSize() * -9 );
 
-        if ( m_LightSelectionIndex >= 0 )
+        if ( m_SceneObjectSelection.m_LightSelectionIndex >= 0 )
         {
             ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
-            if ( m_LightSelectionIndex < m_LightSettings.size() )
+            if ( m_SceneObjectSelection.m_LightSelectionIndex < m_LightSettings.size() )
             {
-                SLightSetting* selection = m_LightSettings.data() + m_LightSelectionIndex;
+                SLightSetting* selection = m_LightSettings.data() + m_SceneObjectSelection.m_LightSelectionIndex;
 
                 if ( ImGui::DragFloat3( "Position", (float*)&selection->position, 1.0f ) )
                     m_IsLightBufferDirty = true;
@@ -1002,11 +1039,11 @@ void SRenderer::OnImGUI()
                     m_IsLightBufferDirty = true;
             }
         }
-        else if ( m_MaterialSelectionIndex >= 0 )
+        else if ( m_SceneObjectSelection.m_MaterialSelectionIndex >= 0 )
         {
-            if ( m_MaterialSelectionIndex < m_Materials.size() )
+            if ( m_SceneObjectSelection.m_MaterialSelectionIndex < m_Materials.size() )
             {
-                Material* selection = m_Materials.data() + m_MaterialSelectionIndex;
+                Material* selection = m_Materials.data() + m_SceneObjectSelection.m_MaterialSelectionIndex;
                 ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float );
                 if ( ImGui::ColorEdit3( "Albedo", (float*)&selection->albedo ) )
                     m_IsMaterialBufferDirty = true;
@@ -1027,16 +1064,10 @@ void SRenderer::OnImGUI()
                     m_IsMaterialBufferDirty = true;
             }
         }
-
-        ImGui::End();
-    }
-
-    {
-        ImGui::Begin( "Preview Camera" );
-
-        ImGui::PushItemWidth( ImGui::GetFontSize() * -9 );
-
-        m_Camera.OnImGUI();
+        else if ( m_SceneObjectSelection.m_IsCameraSelected )
+        {
+            m_Camera.OnImGUI();
+        }
 
         ImGui::End();
     }

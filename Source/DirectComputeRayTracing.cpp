@@ -182,6 +182,7 @@ struct SRenderer
 
     int                                 m_RayTracingKernelIndex = 0;
     SSceneObjectSelection               m_SceneObjectSelection;
+    bool                                m_ShowUI = true;
 };
 
 SRenderer* s_Renderer = nullptr;
@@ -795,6 +796,14 @@ bool SRenderer::CompileAndCreateRayTracingKernels( uint32_t traversalStackSize, 
 
 void SRenderer::OnImGUI()
 {
+    if ( ImGui::GetIO().KeysDown[ VK_F1 ] && ImGui::GetIO().KeysDownDuration[ VK_F1 ] == 0.0f )
+    {
+        m_ShowUI = !m_ShowUI;
+    }
+
+    if ( !m_ShowUI )
+        return;
+
     {
         ImGui::Begin( "Settings" );
         ImGui::PushItemWidth( ImGui::GetFontSize() * -12 );

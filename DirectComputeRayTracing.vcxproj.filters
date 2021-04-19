@@ -123,6 +123,9 @@
     <ClInclude Include="Source\StringConversion.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Source\BxDFTexturesBuilder.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\Application.cpp">
@@ -197,6 +200,9 @@
     <ClCompile Include="Source\DirectComputeRayTracing.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Source\BxDFTexturesBuilder.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Image Include="Resources\small.ico">
@@ -240,13 +246,12 @@
     <None Include="Shaders\Xoshiro.inc.hlsl" />
     <None Include="Shaders\UInt64.inc.hlsl" />
     <None Include="Shaders\Light.inc.hlsl" />
+    <None Include="Shaders\LightSampling.inc.hlsl" />
+    <None Include="Shaders\BxDFTextureDef.inc.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resources\DirectComputeRayTracing.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="Shaders\LightSampling.inc.hlsl" />
   </ItemGroup>
 </Project>

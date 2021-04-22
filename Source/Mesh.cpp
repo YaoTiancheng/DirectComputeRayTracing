@@ -157,7 +157,7 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
         Material dstMat;
         dstMat.albedo    = DirectX::XMFLOAT3( iterSrcMat.diffuse[ 0 ], iterSrcMat.diffuse[ 1 ], iterSrcMat.diffuse[ 2 ] );
         dstMat.emission  = DirectX::XMFLOAT3( iterSrcMat.emission[ 0 ], iterSrcMat.emission[ 1 ], iterSrcMat.emission[ 2 ] );
-        dstMat.roughness = std::fmax( iterSrcMat.roughness, 0.00018f );
+        dstMat.roughness = iterSrcMat.roughness;
         dstMat.ior       = iterSrcMat.ior;
         dstMat.texTiling = XMFLOAT2( 1.0f, 1.0f );
         dstMat.flags     = 0;

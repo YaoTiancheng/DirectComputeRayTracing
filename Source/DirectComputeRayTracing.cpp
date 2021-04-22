@@ -314,7 +314,7 @@ bool SRenderer::Init()
     if ( !m_CookTorranceCompEAvgTexture )
         return false;
 
-    m_CookTorranceCompInvCDFTexture.reset( GPUTexture::CreateFromFile( L"BuiltinResources\\CookTorranceComp_InvCDF.DDS" ) );
+    m_CookTorranceCompInvCDFTexture.reset( BxDFTexturesBuilder::CreateCookTorranceMultiscatteringBRDFInvCDFTexture() );
     if ( !m_CookTorranceCompInvCDFTexture )
         return false;
 

@@ -7,4 +7,6 @@ namespace BxDFTexturesBuilder
     GPUTexture* CreateCoorkTorranceBRDFEnergyFresnelDielectricTexture();
 
     GPUTexture* CreateCookTorranceBRDFAverageEnergyTexture();
+
+    GPUTexture* CreateCookTorranceMultiscatteringBRDFInvCDFTexture();
 }

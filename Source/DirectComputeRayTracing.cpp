@@ -318,7 +318,7 @@ bool SRenderer::Init()
     if ( !m_CookTorranceCompInvCDFTexture )
         return false;
 
-    m_CookTorranceCompPdfScaleTexture.reset( GPUTexture::CreateFromFile( L"BuiltinResources\\CookTorranceComp_PdfScale.DDS" ) );
+    m_CookTorranceCompPdfScaleTexture.reset( BxDFTexturesBuilder::CreateCookTorranceMultiscatteringBRDFPDFScaleTexture() );
     if ( !m_CookTorranceCompPdfScaleTexture )
         return false;
 

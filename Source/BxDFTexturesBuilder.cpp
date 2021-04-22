@@ -395,3 +395,17 @@ GPUTexture* BxDFTexturesBuilder::CreateCookTorranceMultiscatteringBRDFInvCDFText
     initialData.SysMemSlicePitch = 0;
     return GPUTexture::Create( BXDFTEX_COOKTORRANCE_MULTISCATTERING_INV_CDF_X, BXDFTEX_COOKTORRANCE_MULTISCATTERING_INV_CDF_Y, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_IsImmutable, 1, &initialData );
 }
+
+static uint16_t s_CookTorranceMultiscatteringBRDFPDFScaleData[ BXDFTEX_COOKTORRANCE_MULTISCATTERING_PDF_SCALE_X ] =
+{
+    0,   418,  1403,  2771,  4437,  6333,  8416, 10649, 12998, 15436, 17936, 20477, 23040, 25611, 28175, 30720, 33236, 35715, 38148, 40532, 42859, 45128, 47335, 49477, 51551, 53559, 55498, 57369, 59173, 60910, 62581, 64187,
+};
+
+GPUTexture* BxDFTexturesBuilder::CreateCookTorranceMultiscatteringBRDFPDFScaleTexture()
+{
+    D3D11_SUBRESOURCE_DATA initialData;
+    initialData.pSysMem = s_CookTorranceMultiscatteringBRDFPDFScaleData;
+    initialData.SysMemPitch = sizeof( uint16_t ) * BXDFTEX_COOKTORRANCE_MULTISCATTERING_PDF_SCALE_X;
+    initialData.SysMemSlicePitch = 0;
+    return GPUTexture::Create( BXDFTEX_COOKTORRANCE_MULTISCATTERING_PDF_SCALE_X, 1, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_IsImmutable, 1, &initialData );
+}

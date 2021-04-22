@@ -3,7 +3,7 @@
 #include "D3D11RenderSystem.h"
 #include "DDSTextureLoader.h"
 
-GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT format, uint32_t flags )
+GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT format, uint32_t flags, uint32_t arraySize, const D3D11_SUBRESOURCE_DATA* initialData )
 {
     bool hasUAV         = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_HasUAV ) != 0;
     bool isRenderTarget = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_IsRenderTarget ) != 0;
@@ -13,7 +13,7 @@ GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT for
     desc.Width              = width;
     desc.Height             = height;
     desc.MipLevels          = 1;
-    desc.ArraySize          = 1;
+    desc.ArraySize          = arraySize;
     desc.Format             = format;
     desc.SampleDesc.Count   = 1;
     desc.Usage              = D3D11_USAGE_DEFAULT;
@@ -25,7 +25,7 @@ GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT for
     desc.BindFlags          = bindFlags;
 
     ID3D11Texture2D* texture = nullptr;
-    HRESULT hr = GetDevice()->CreateTexture2D( &desc, nullptr, &texture );
+    HRESULT hr = GetDevice()->CreateTexture2D( &desc, initialData, &texture );
     if ( FAILED( hr ) )
         return nullptr;
 

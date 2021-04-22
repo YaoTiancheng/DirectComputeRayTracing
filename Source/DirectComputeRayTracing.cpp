@@ -14,6 +14,7 @@
 #include "SceneLuminanceRenderer.h"
 #include "Timers.h"
 #include "Rectangle.h"
+#include "BxDFTexturesBuilder.h"
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_dx11.h"
 #include "imgui/imgui_impl_win32.h"
@@ -305,23 +306,23 @@ bool SRenderer::Init()
     if ( !m_FilmTexture )
         return false;
 
-    m_CookTorranceCompETexture.reset( GPUTexture::CreateFromFile( L"BuiltinResources\\CookTorranceComp_E.DDS" ) );
+    m_CookTorranceCompETexture.reset( BxDFTexturesBuilder::CreateCoorkTorranceBRDFEnergyTexture() );
     if ( !m_CookTorranceCompETexture )
         return false;
 
-    m_CookTorranceCompEAvgTexture.reset( GPUTexture::CreateFromFile( L"BuiltinResources\\CookTorranceComp_E_Avg.DDS" ) );
+    m_CookTorranceCompEAvgTexture.reset( BxDFTexturesBuilder::CreateCookTorranceBRDFAverageEnergyTexture() );
     if ( !m_CookTorranceCompEAvgTexture )
         return false;
 
-    m_CookTorranceCompInvCDFTexture.reset( GPUTexture::CreateFromFile( L"BuiltinResources\\CookTorranceComp_InvCDF.DDS" ) );
+    m_CookTorranceCompInvCDFTexture.reset( BxDFTexturesBuilder::CreateCookTorranceMultiscatteringBRDFInvCDFTexture() );
     if ( !m_CookTorranceCompInvCDFTexture )
         return false;
 
-    m_CookTorranceCompPdfScaleTexture.reset( GPUTexture::CreateFromFile( L"BuiltinResources\\CookTorranceComp_PdfScale.DDS" ) );
+    m_CookTorranceCompPdfScaleTexture.reset( BxDFTexturesBuilder::CreateCookTorranceMultiscatteringBRDFPDFScaleTexture() );
     if ( !m_CookTorranceCompPdfScaleTexture )
         return false;
 
-    m_CookTorranceCompEFresnelTexture.reset( GPUTexture::CreateFromFile( L"BuiltinResources\\CookTorranceComp_EFresnel.DDS" ) );
+    m_CookTorranceCompEFresnelTexture.reset( BxDFTexturesBuilder::CreateCoorkTorranceBRDFEnergyFresnelDielectricTexture() );
     if ( !m_CookTorranceCompEFresnelTexture )
         return false;
 

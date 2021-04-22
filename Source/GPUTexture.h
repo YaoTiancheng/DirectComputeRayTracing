@@ -5,7 +5,7 @@
 class GPUTexture
 {
 public:
-    static GPUTexture* Create( uint32_t width, uint32_t height, DXGI_FORMAT format, uint32_t flags );
+    static GPUTexture* Create( uint32_t width, uint32_t height, DXGI_FORMAT format, uint32_t flags, uint32_t arraySize = 1, const D3D11_SUBRESOURCE_DATA* initialData = nullptr );
 
     static GPUTexture* CreateFromSwapChain();
 

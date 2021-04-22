@@ -3,12 +3,13 @@
 
 #include "Math.inc.hlsl"
 #include "LightingContext.inc.hlsl"
+#include "BxDFTextureDef.inc.hlsl"
 
-#define TEXTURE_SIZE_COMP_E             float2( 32.0f, 32.0f )
-#define TEXTURE_SIZE_COMP_E_AVG         float2( 32.0f,  1.0f )
-#define TEXTURE_SIZE_INV_CDF            float2( 32.0f, 32.0f )
-#define TEXTURE_SIZE_PDF_SCALE          float2( 32.0f,  1.0f )
-#define TEXTURE_SIZE_COMP_E_FRESNEL     float3( 32.0f, 16.0f, 16.0f )
+#define TEXTURE_SIZE_COMP_E             float2( BXDFTEX_COOKTORRANCE_E_SIZE_X, BXDFTEX_COOKTORRANCE_E_SIZE_Y )
+#define TEXTURE_SIZE_COMP_E_AVG         float2( BXDFTEX_COOKTORRANCE_E_AVG_SIZE_X,  1.0f )
+#define TEXTURE_SIZE_INV_CDF            float2( BXDFTEX_COOKTORRANCE_MULTISCATTERING_INV_CDF_X, BXDFTEX_COOKTORRANCE_MULTISCATTERING_INV_CDF_Y )
+#define TEXTURE_SIZE_PDF_SCALE          float2( BXDFTEX_COOKTORRANCE_MULTISCATTERING_PDF_SCALE_X,  1.0f )
+#define TEXTURE_SIZE_COMP_E_FRESNEL     float3( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z )
 
 float EvaluateCookTorranceCompE( float cosTheta, float alpha )
 {

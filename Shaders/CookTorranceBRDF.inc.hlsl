@@ -57,7 +57,7 @@ float EvaluateGGXGeometricShadowing( float3 wi, float3 wo, float alpha )
     return EvaluateGGXGeometricShadowingOneDirection( alpha2, wi ) * EvaluateGGXGeometricShadowingOneDirection( alpha2, wo );
 }
 
-#define ALPHA_THRESHOLD 0.00001f
+#define ALPHA_THRESHOLD 0.000196f
 
 //
 // Cook-Torrance microfacet BRDF
@@ -104,7 +104,7 @@ float EvaluateCookTorranceMicrofacetBRDFPdf( float3 wi, float3 wo, float alpha, 
     }
 }
 
-void SampleCookTorranceMicrofacetBRDF( float3 wo, float2 sample, float3 reflectance, float alpha, float etaI, float etaT, out float3 wi, out float3 value, out float pdf, inout LightingContext lightingContext )
+void SampleCookTorranceMicrofacetBRDF( float3 wo, float2 sample, float3 reflectance, float alpha, float etaI, float etaT, out float3 wi, out float3 value, out float pdf, out bool isDeltaBrdf, inout LightingContext lightingContext )
 {
     if ( alpha >= ALPHA_THRESHOLD )
     {
@@ -119,10 +119,12 @@ void SampleCookTorranceMicrofacetBRDF( float3 wo, float2 sample, float3 reflecta
 
         value = EvaluateCookTorranceMircofacetBRDF( wi, wo, reflectance, alpha, etaI, etaT, lightingContext );
         pdf = EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, alpha, lightingContext );
+        isDeltaBrdf = false;
     }
     else
     {
         SampleCookTorranceMicrofacetBRDF( wo, reflectance, etaI, etaT, wi, value, pdf, lightingContext );
+        isDeltaBrdf = true;
     }
 }
 

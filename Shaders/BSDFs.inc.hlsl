@@ -77,7 +77,8 @@ void SampleBSDF( float3 wo
     , Intersection intersection
     , out float3 wi
     , out float3 value
-    , out float pdf )
+    , out float pdf
+    , out bool isDeltaBxdf )
 {
     float3 biNormal = cross( intersection.tangent.xyz, intersection.normal.xyz );
     float3x3 tbn2world = float3x3( intersection.tangent, biNormal, intersection.normal );
@@ -97,9 +98,10 @@ void SampleBSDF( float3 wo
     float specularWeight = SpecularWeight( cosThetaO, intersection.alpha, intersection.ior );
     float specularCompWeight = SpecularCompWeight( intersection.ior, E, EAvg );
     float diffuseWeight = 1.0f - specularWeight - specularCompWeight;
+    isDeltaBxdf = false;
     if ( BRDFSelectionSample < specularWeight )
     {
-        SampleCookTorranceMicrofacetBRDF( wo, BRDFSample, intersection.specular, intersection.alpha, etaI, etaT, wi, value, pdf, lightingContext );
+        SampleCookTorranceMicrofacetBRDF( wo, BRDFSample, intersection.specular, intersection.alpha, etaI, etaT, wi, value, pdf, isDeltaBxdf, lightingContext );
         pdf *= specularWeight;
 
         value += EvaluateCookTorranceCompBRDF( wi, wo, intersection.specular, intersection.alpha, intersection.ior, lightingContext );

@@ -109,7 +109,7 @@ float3 EvaluateCookTorranceCompBRDF( float3 wi, float3 wo, float3 reflectance, f
     float eO = EvaluateCookTorranceCompE( WOdotN, alpha );
     float eAvg = EvaluateCookTorranceCompEAvg( alpha );
     float3 fresnel = EvaluateCookTorranceCompFresnel( ior, eAvg );
-    return reflectance * ( 1.0f - eI ) * ( 1.0f - eO ) * fresnel / ( PI * ( 1.0f - eAvg ) );
+    return eAvg < 1.0f ? reflectance * ( 1.0f - eI ) * ( 1.0f - eO ) * fresnel / ( PI * ( 1.0f - eAvg ) ) : 0.0f;
 }
 
 float EvaluateCookTorranceCompPdf( float3 wi, float alpha, LightingContext lightingContext )
@@ -120,7 +120,7 @@ float EvaluateCookTorranceCompPdf( float3 wi, float alpha, LightingContext light
         return 0.0f;
 
     float pdfScale = EvaluateCookTorranceCompPdfScale( alpha );
-    return ( 1.0f - EvaluateCookTorranceCompE( cosTheta, alpha ) ) * cosTheta / pdfScale;
+    return pdfScale > 0.0f ? ( 1.0f - EvaluateCookTorranceCompE( cosTheta, alpha ) ) * cosTheta / pdfScale : 0.0f;
 }
 
 void SampleCookTorranceCompBRDF( float3 wo, float2 sample, float3 reflectance, float alpha, float ior, out float3 wi, out float3 value, out float pdf, inout LightingContext lightingContext )

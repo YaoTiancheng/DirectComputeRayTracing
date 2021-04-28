@@ -1060,7 +1060,7 @@ void SRenderer::OnImGUI()
                 ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
                 if ( ImGui::ColorEdit3( "Emission", (float*)&selection->emission ) )
                     m_IsMaterialBufferDirty = true;
-                if ( ImGui::DragFloat( "Roughness", &selection->roughness, 0.01f, 0.001f, 1.0f ) )
+                if ( ImGui::DragFloat( "Roughness", &selection->roughness, 0.01f, 0.0f, 1.0f ) )
                     m_IsMaterialBufferDirty = true;
                 if ( ImGui::DragFloat( "IOR", &selection->ior, 0.01f, 1.0f, 3.0f ) )
                     m_IsMaterialBufferDirty = true;

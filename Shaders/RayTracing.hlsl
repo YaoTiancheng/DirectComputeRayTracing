@@ -128,7 +128,8 @@ float3 EstimateDirect( SLight light, Intersection intersection, SLightSamples sa
     {
         float3 bsdf;
         float bsdfPdf;
-        SampleBSDF( wo, samples.bsdfSample, samples.bsdfSelectionSample, intersection, wi, bsdf, bsdfPdf ); // TODO: Make sample passed as arguments
+        bool isDeltaBxdf;
+        SampleBSDF( wo, samples.bsdfSample, samples.bsdfSelectionSample, intersection, wi, bsdf, bsdfPdf, isDeltaBxdf );
 
         if ( all( bsdf == 0.0f ) || bsdfPdf == 0.0f )
             return result;
@@ -137,7 +138,7 @@ float3 EstimateDirect( SLight light, Intersection intersection, SLightSamples sa
         if ( lightPdf == 0.0f )
             return result;
 
-        float weight = PowerHeuristic( 1, bsdfPdf, 1, lightPdf );
+        float weight = !isDeltaBxdf ? PowerHeuristic( 1, bsdfPdf, 1, lightPdf ) : 1.0f;
 
         l = 0.0f;
         if ( !IsOcculuded( intersection.position, wi, epsilon, distance, dispatchThreadIndex ) )
@@ -218,7 +219,8 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 
             float3 brdf;
             float pdf;
-            SampleBSDF( wo, GetNextSample2D( rng ), GetNextSample1D( rng ), intersection, wi, brdf, pdf );
+            bool isDeltaBxdf;
+            SampleBSDF( wo, GetNextSample2D( rng ), GetNextSample1D( rng ), intersection, wi, brdf, pdf, isDeltaBxdf );
 
             if ( all( brdf == 0.0f ) || pdf == 0.0f )
                 break;

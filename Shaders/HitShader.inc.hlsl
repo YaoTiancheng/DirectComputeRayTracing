@@ -67,6 +67,7 @@ void HitShader( float3 rayOrigin
     intersection.emission   = emission;
     intersection.alpha      = roughness * roughness;
     intersection.ior        = g_Materials[ g_MaterialIds[ triangleId ] ].ior;
+    intersection.transmission = 1.0f;
 
     intersection.backface   = backface;
 }

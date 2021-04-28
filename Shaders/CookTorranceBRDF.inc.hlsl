@@ -100,7 +100,7 @@ float EvaluateCookTorranceMicrofacetBRDFPdf( float3 wi, float3 wo, float alpha, 
     }
     else
     {
-        return EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo );
+        return EvaluateSpecularBRDFPdf( wi, wo );
     }
 }
 
@@ -123,7 +123,7 @@ void SampleCookTorranceMicrofacetBRDF( float3 wo, float2 sample, float3 reflecta
     }
     else
     {
-        SampleCookTorranceMicrofacetBRDF( wo, reflectance, etaI, etaT, wi, value, pdf, lightingContext );
+        SampleSpecularBRDF( wo, reflectance, etaI, etaT, wi, value, pdf, lightingContext );
         isDeltaBrdf = true;
     }
 }

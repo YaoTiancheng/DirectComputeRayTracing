@@ -248,10 +248,16 @@
     <None Include="Shaders\Light.inc.hlsl" />
     <None Include="Shaders\LightSampling.inc.hlsl" />
     <None Include="Shaders\BxDFTextureDef.inc.hlsl" />
+    <None Include="Shaders\Fresnel.inc.hlsl" />
+    <None Include="Shaders\SpecularBRDF.inc.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resources\DirectComputeRayTracing.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="Shaders\SpecularBTDF.inc.hlsl" />
+    <FxCompile Include="Shaders\SpecularBSDF.inc.hlsl" />
   </ItemGroup>
 </Project>

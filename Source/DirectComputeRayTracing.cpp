@@ -24,7 +24,7 @@
 
 using namespace DirectX;
 
-static const uint32_t s_MaxRayBounce = 5;
+static const uint32_t s_MaxRayBounce = 20;
 static const uint32_t s_MaxLightsCount = 64;
 static const int s_RayTracingKernelCount = 6;
 

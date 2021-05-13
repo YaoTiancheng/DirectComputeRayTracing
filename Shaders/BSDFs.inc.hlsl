@@ -2,9 +2,8 @@
 #define _BSDF_H_
 
 #include "LambertBRDF.inc.hlsl"
-#include "CookTorranceBRDF.inc.hlsl"
 #include "CookTorranceCompensationBRDF.inc.hlsl"
-#include "SpecularBSDF.inc.hlsl"
+#include "CookTorranceBSDF.inc.hlsl"
 #include "Intersection.inc.hlsl"
 #include "LightingContext.inc.hlsl"
 
@@ -145,10 +144,9 @@ void SampleBSDF( float3 wo
     else
     {
         float sample = ( BRDFSelectionSample - opaqueWeight ) / transmissionWeight;
-        SampleSpecularBSDF( wo, sample, intersection.specular, etaI, etaT, wi, value, pdf, lightingContext );
+        SampleCookTorranceMicrofacetBSDF( wo, sample, BRDFSample, intersection.specular, intersection.alpha, etaI, etaT, wi, value, pdf, isDeltaBxdf, lightingContext );
         value *= transmissionWeight;
         pdf *= transmissionWeight;
-        isDeltaBxdf = true;
     }
 
     wi = mul( wi, tbn2world );

@@ -138,16 +138,16 @@ float3 EvaluateCookTorranceMircofacetBTDF( float3 wi, float3 wo, float3 transmit
         if ( WIdotN == 0.0f || WOdotN == 0.0f )
             return 0.0f;
 
-        float3 m = normalize( wo * etaI + wi * etaT );
-        if ( m.z < 0.0f ) m = -m;
+        float3 m = normalize( wo * etaI + wi * etaT ); // Could it be read from lightingContext?
         float WIdotM = dot( wi, m );
         float WOdotM = dot( wo, m );
         float sqrtDenom = etaI * WOdotM + etaT * WIdotM;
 
-        return transmittance * EvaluateGGXMicrofacetDistribution( m, alpha ) * EvaluateGGXGeometricShadowing( wi, wo, alpha ) 
-            * ( 1.0f - EvaluateDielectricFresnel( abs( WIdotM ), etaT, etaI ) ) * etaT * etaT * abs( WIdotM ) * abs( WOdotM ) 
-            * ( ( etaI * etaI ) / ( etaT * etaT ) )
-            / ( WOdotN * WIdotN * sqrtDenom * sqrtDenom );
+        return ( 1.0f - EvaluateDielectricFresnel( abs( WIdotM ), etaT, etaI ) ) * transmittance 
+            * abs( EvaluateGGXMicrofacetDistribution( m, alpha ) * EvaluateGGXGeometricShadowing( wi, wo, alpha )
+            * abs( WIdotM ) * abs( WOdotM ) 
+            * etaI * etaI // etaT * etaT * ( ( etaI * etaI ) / ( etaT * etaT ) )
+            / ( WOdotN * WIdotN * sqrtDenom * sqrtDenom ) );
     }
     else
     {
@@ -159,7 +159,7 @@ float EvaluateCookTorranceMicrofacetBTDFPdf( float3 wi, float3 wo, float alpha, 
 {
     if ( alpha >= ALPHA_THRESHOLD )
     {
-        float3 m = normalize( wo * etaI + wi * etaT );
+        float3 m = normalize( wo * etaI + wi * etaT ); // Could it be read from lightingContext?
         float WIdotM = dot( wi, m );
         float WOdotM = dot( wo, m );
         float sqrtDenom = etaI * WOdotM + etaT * WIdotM;
@@ -190,6 +190,11 @@ void SampleCookTorranceMicrofacetBTDF( float3 wo, float2 sample, float3 transmit
         wi = refract( -wo, m, etaI / etaT );
         if ( all( wi == 0.0f ) )
             return;
+
+        LightingContextAssignH( wo, m, lightingContext );
+
+        float WIdotN = wi.z;
+        lightingContext.WIdotN = WIdotN;
 
         value = EvaluateCookTorranceMircofacetBTDF( wi, wo, transmittance, alpha, etaI, etaT, lightingContext );
         pdf   = EvaluateCookTorranceMicrofacetBTDFPdf( wi, wo, alpha, etaI, etaT, lightingContext );

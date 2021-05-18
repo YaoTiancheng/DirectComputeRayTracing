@@ -117,7 +117,7 @@ float3 EstimateDirect( SLight light, Intersection intersection, SLightSamples sa
     if ( !IsOcculuded( intersection.position, wi, epsilon, distance, dispatchThreadIndex ) )
     {
         float3 bsdf = EvaluateBSDF( wi, wo, intersection );
-        float NdotWI = max( 0, dot( intersection.normal, wi ) );
+        float NdotWI = abs( dot( intersection.normal, wi ) );
         float bsdfPdf = EvaluateBSDFPdf( wi, wo, intersection );
         float weight = isDeltaLight ? 1.0f : PowerHeuristic( 1, lightPdf, 1, bsdfPdf );
 
@@ -146,7 +146,7 @@ float3 EstimateDirect( SLight light, Intersection intersection, SLightSamples sa
             l = light.color;
         }
 
-        float NdotWI = max( 0, dot( intersection.normal, wi ) );
+        float NdotWI = abs( dot( intersection.normal, wi ) );
         result += l * bsdf * NdotWI * weight / bsdfPdf;
     }
 
@@ -162,7 +162,7 @@ float3 EstimateDirect( SLight light, Intersection intersection, SLightSamples sa
     if ( !IsOcculuded( intersection.position, wi, epsilon, distance, dispatchThreadIndex ) )
     {
         float3 brdf = EvaluateBSDF( wi, wo, intersection );
-        float NdotL = max( 0, dot( intersection.normal, wi ) );
+        float NdotL = abs( dot( intersection.normal, wi ) );
         return l * brdf * NdotL / pdf;
     }
 

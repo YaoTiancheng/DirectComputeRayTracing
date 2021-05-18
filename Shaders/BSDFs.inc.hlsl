@@ -23,6 +23,10 @@ float SpecularCompWeight( float ior, float E, float EAvg )
 
 float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
 {
+    float WOdotN = dot( wo, intersection.normal );
+    bool invert = WOdotN < 0.0f;
+    intersection.normal = invert ? -intersection.normal : intersection.normal;
+
     float3 biNormal = cross( intersection.tangent, intersection.normal );
     float3x3 tbn2world = float3x3( intersection.tangent, biNormal, intersection.normal );
     float3x3 world2tbn = transpose( tbn2world );
@@ -32,7 +36,10 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
 
     LightingContext lightingContext = LightingContextInit( wo, wi );
 
-    float3 value = EvaluateCookTorranceMircofacetBRDF( wi, wo, intersection.specular, intersection.alpha, 1.0f, intersection.ior, lightingContext );
+    float etaI = invert ? intersection.ior : 1.0f;
+    float etaT = invert ? 1.0f : intersection.ior;
+
+    float3 value = EvaluateCookTorranceMircofacetBRDF( wi, wo, intersection.specular, intersection.alpha, etaI, etaT, lightingContext );
     value += EvaluateCookTorranceCompBRDF( wi, wo, intersection.specular, intersection.alpha, intersection.ior, lightingContext );
 
     float E = EvaluateCookTorranceCompE( lightingContext.WOdotN, intersection.alpha );
@@ -43,11 +50,19 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
     float diffuseWeight = 1.0f - specularWeight - specularCompWeight;
     value += EvaluateLambertBRDF( wi, wo, intersection.albedo, intersection.backface ) * diffuseWeight;
 
+    float transmissionWeight = intersection.transmission;
+    float opaqueWeight = 1.0f - transmissionWeight;
+    value = value * opaqueWeight + EvaluateCookTorranceMicrofacetBSDF( wi, wo, intersection.specular, intersection.alpha, etaI, etaT, lightingContext ) * transmissionWeight;
+
     return value;
 }
 
 float EvaluateBSDFPdf( float3 wi, float3 wo, Intersection intersection )
 {
+    float WOdotN = dot( wo, intersection.normal );
+    bool invert = WOdotN < 0.0f;
+    intersection.normal = invert ? -intersection.normal : intersection.normal;
+
     float3 biNormal = cross( intersection.tangent, intersection.normal );
     float3x3 tbn2world = float3x3( intersection.tangent, biNormal, intersection.normal );
     float3x3 world2tbn = transpose( tbn2world );
@@ -56,6 +71,9 @@ float EvaluateBSDFPdf( float3 wi, float3 wo, Intersection intersection )
     wi = mul( wi, world2tbn );
 
     LightingContext lightingContext = LightingContextInit( wo, wi );
+
+    float etaI = invert ? intersection.ior : 1.0f;
+    float etaT = invert ? 1.0f : intersection.ior;
 
     float E = EvaluateCookTorranceCompE( lightingContext.WOdotN, intersection.alpha );
     float EAvg = EvaluateCookTorranceCompEAvg( intersection.alpha );
@@ -67,6 +85,10 @@ float EvaluateBSDFPdf( float3 wi, float3 wo, Intersection intersection )
     float pdf = EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * specularWeight;
     pdf += EvaluateCookTorranceCompPdf( wi, intersection.alpha, lightingContext ) * specularCompWeight;
     pdf += EvaluateLambertBRDFPdf( lightingContext ) * diffuseWeight;
+
+    float transmissionWeight = intersection.transmission;
+    float opaqueWeight = 1.0f - transmissionWeight;
+    pdf = pdf * opaqueWeight + EvaluateCookTorranceMicrofacetBSDFPdf( wi, wo, intersection.alpha, etaI, etaT, lightingContext ) * transmissionWeight;
 
     return pdf;
 }

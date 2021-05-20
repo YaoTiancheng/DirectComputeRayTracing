@@ -1,9 +1,16 @@
 #ifndef _FRESNEL_H_
 #define _FRESNEL_H_
 
-float EvaluateDielectricFresnel( float WOdotM, float etaI, float etaT )
+float EvaluateDielectricFresnel( float cosThetaI, float etaI, float etaT )
 {
-    float cosThetaI = WOdotM;
+    if ( cosThetaI < 0.0f )
+    {
+        float etaTemp = etaI;
+        etaI = etaT;
+        etaT = etaTemp;
+        cosThetaI = -cosThetaI;
+    }
+
     float sinThetaI = sqrt( 1.0f - cosThetaI * cosThetaI );
     float sinThetaT = etaI / etaT * sinThetaI;
     if ( sinThetaT >= 1.0f )

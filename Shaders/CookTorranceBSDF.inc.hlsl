@@ -45,17 +45,22 @@ void SampleGGXMicrofacetDistribution( float2 sample, float alpha, out float3 m )
 // GGX geometric shadowing
 //
 
-float EvaluateGGXGeometricShadowingOneDirection( float alpha2, float3 w )
+float EvaluateGGXGeometricShadowingOneDirection( float alpha2, float3 m, float3 w )
 {
+    // Ensure consistent orientation.
+    // (Can't see backfacing microfacet normal from the front and vice versa)
+    if ( dot( w, m ) * w.z <= 0.0f )
+        return 0.0f;
+
     float NdotW = abs( w.z );
     float denominator = sqrt( alpha2 + ( 1.0f - alpha2 ) * NdotW * NdotW ) + NdotW;
     return 2.0f * NdotW / denominator;
 }
 
-float EvaluateGGXGeometricShadowing( float3 wi, float3 wo, float alpha )
+float EvaluateGGXGeometricShadowing( float3 wi, float3 wo, float3 m, float alpha )
 {
     float alpha2 = alpha * alpha;
-    return EvaluateGGXGeometricShadowingOneDirection( alpha2, wi ) * EvaluateGGXGeometricShadowingOneDirection( alpha2, wo );
+    return EvaluateGGXGeometricShadowingOneDirection( alpha2, m, wi ) * EvaluateGGXGeometricShadowingOneDirection( alpha2, m, wo );
 }
 
 #define ALPHA_THRESHOLD 0.000196f
@@ -78,7 +83,7 @@ float3 EvaluateCookTorranceMircofacetBRDF( float3 wi, float3 wo, float3 reflecta
         if ( all( m == 0.0f ) )
             return 0.0f;
 
-        return reflectance * EvaluateGGXMicrofacetDistribution( m, alpha ) * EvaluateGGXGeometricShadowing( wi, wo, alpha ) * EvaluateDielectricFresnel( min( 1.0f, WOdotM ), etaI, etaT ) / ( 4.0f * WIdotN * WOdotN );
+        return reflectance * EvaluateGGXMicrofacetDistribution( m, alpha ) * EvaluateGGXGeometricShadowing( wi, wo, m, alpha ) * EvaluateDielectricFresnel( min( 1.0f, WOdotM ), etaI, etaT ) / ( 4.0f * WIdotN * WOdotN );
     }
     else
     {
@@ -138,13 +143,14 @@ float3 EvaluateCookTorranceMircofacetBTDF( float3 wi, float3 wo, float3 transmit
         if ( WIdotN == 0.0f || WOdotN == 0.0f )
             return 0.0f;
 
-        float3 m = normalize( wo * etaI + wi * etaT ); // Could it be read from lightingContext?
+        float3 m = normalize( wo * etaI + wi * etaT );
+        if ( m.z < 0.0f ) m = -m; // Ensure same facing as the wo otherwise it will be rejected in G
         float WIdotM = dot( wi, m );
         float WOdotM = dot( wo, m );
         float sqrtDenom = etaI * WOdotM + etaT * WIdotM;
 
-        return ( 1.0f - EvaluateDielectricFresnel( abs( WIdotM ), etaT, etaI ) ) * transmittance 
-            * abs( EvaluateGGXMicrofacetDistribution( m, alpha ) * EvaluateGGXGeometricShadowing( wi, wo, alpha )
+        return ( 1.0f - EvaluateDielectricFresnel( WIdotM, etaI, etaT ) ) * transmittance 
+            * abs( EvaluateGGXMicrofacetDistribution( m, alpha ) * EvaluateGGXGeometricShadowing( wi, wo, m, alpha )
             * abs( WIdotM ) * abs( WOdotM ) 
             * etaI * etaI // etaT * etaT * ( ( etaI * etaI ) / ( etaT * etaT ) )
             / ( WOdotN * WIdotN * sqrtDenom * sqrtDenom ) );
@@ -159,7 +165,8 @@ float EvaluateCookTorranceMicrofacetBTDFPdf( float3 wi, float3 wo, float alpha, 
 {
     if ( alpha >= ALPHA_THRESHOLD )
     {
-        float3 m = normalize( wo * etaI + wi * etaT ); // Could it be read from lightingContext?
+        float3 m = normalize( wo * etaI + wi * etaT );
+        if ( m.z < 0.0f ) m = -m; // Ensure same facing as the wo otherwise it will be rejected in G
         float WIdotM = dot( wi, m );
         float WOdotM = dot( wo, m );
         float sqrtDenom = etaI * WOdotM + etaT * WIdotM;

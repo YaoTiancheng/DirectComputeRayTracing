@@ -25,8 +25,7 @@ void SampleSpecularBTDF( float3 wo, float3 reflectance, float etaI, float etaT, 
 
     lightingContext.WIdotN = wi.z;
 
-    // etaT and etaI are swapped becasue we are evaluating fresnel on the opposite hemisphere
-    value = lightingContext.WOdotN > 0.0f ? reflectance * ( 1.0f - EvaluateDielectricFresnel( abs( lightingContext.WIdotN ), etaT, etaI ) ) : 0.0f; 
+    value = lightingContext.WOdotN > 0.0f ? reflectance * ( 1.0f - EvaluateDielectricFresnel( lightingContext.WIdotN, etaI, etaT ) ) : 0.0f; 
     value *= ( etaI * etaI ) / ( etaT * etaT );
     value /= abs( lightingContext.WIdotN );
 

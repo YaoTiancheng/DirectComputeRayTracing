@@ -227,7 +227,6 @@
     </None>
     <None Include="Shaders\RayTracing.hlsl" />
     <None Include="Shaders\LambertBRDF.inc.hlsl" />
-    <None Include="Shaders\CookTorranceBRDF.inc.hlsl" />
     <None Include="Shaders\CookTorranceCompensationBRDF.inc.hlsl" />
     <None Include="Shaders\Math.inc.hlsl" />
     <None Include="Shaders\BVHAccel.inc.hlsl" />
@@ -250,14 +249,12 @@
     <None Include="Shaders\BxDFTextureDef.inc.hlsl" />
     <None Include="Shaders\Fresnel.inc.hlsl" />
     <None Include="Shaders\SpecularBRDF.inc.hlsl" />
+    <None Include="Shaders\SpecularBTDF.inc.hlsl" />
+    <None Include="Shaders\CookTorranceBSDF.inc.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resources\DirectComputeRayTracing.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="Shaders\SpecularBTDF.inc.hlsl" />
-    <FxCompile Include="Shaders\SpecularBSDF.inc.hlsl" />
   </ItemGroup>
 </Project>

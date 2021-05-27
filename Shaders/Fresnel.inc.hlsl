@@ -3,6 +3,8 @@
 
 float EvaluateDielectricFresnel( float cosThetaI, float etaI, float etaT )
 {
+    cosThetaI = clamp( cosThetaI, -1.0f, 1.0f );
+
     if ( cosThetaI < 0.0f )
     {
         float etaTemp = etaI;

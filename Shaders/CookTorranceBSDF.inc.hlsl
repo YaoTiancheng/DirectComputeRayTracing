@@ -5,6 +5,7 @@
 #include "LightingContext.inc.hlsl"
 #include "SpecularBRDF.inc.hlsl"
 #include "SpecularBTDF.inc.hlsl"
+#include "BxDFTextures.inc.hlsl"
 
 float3 GGXSampleHemisphere( float2 sample, float alpha )
 {
@@ -63,7 +64,7 @@ float EvaluateGGXGeometricShadowing( float3 wi, float3 wo, float3 m, float alpha
     return EvaluateGGXGeometricShadowingOneDirection( alpha2, m, wi ) * EvaluateGGXGeometricShadowingOneDirection( alpha2, m, wo );
 }
 
-#define ALPHA_THRESHOLD 0.000196f
+#define ALPHA_THRESHOLD 0.00052441f
 
 //
 // Cook-Torrance microfacet BRDF
@@ -233,12 +234,22 @@ float EvaluateCookTorranceMicrofacetBSDFPdf( float3 wi, float3 wo, float alpha, 
 
 void SampleCookTorranceMicrofacetBSDF( float3 wo, float selectionSample, float2 bxdfSample, float3 color, float alpha, float etaI, float etaT, out float3 wi, out float3 value, out float pdf, out bool isDeltaBxdf, inout LightingContext lightingContext )
 {
-    if ( selectionSample < 0.5f )
-        SampleCookTorranceMicrofacetBRDF( wo, bxdfSample, color, alpha, etaI, etaT, wi, value, pdf, isDeltaBxdf, lightingContext );
-    else
-        SampleCookTorranceMicrofacetBTDF( wo, bxdfSample, color, alpha, etaI, etaT, wi, value, pdf, isDeltaBxdf, lightingContext );
+    float cosThetaO = wo.z;
+    float eta = etaT / etaI;
+    float specularE = SampleCookTorranceMicrofacetBRDFEnergyFresnelDielectricTexture( cosThetaO, alpha, eta );
+    float totalE    = SampleCookTorranceMicrofacetBSDFEnergyFresnelDielectricTexture( cosThetaO, alpha, eta );
+    float specularWeight = min( 1.0f, specularE / totalE );
 
-    pdf *= 0.5f;
+    if ( selectionSample < specularWeight )
+    {
+        SampleCookTorranceMicrofacetBRDF( wo, bxdfSample, color, alpha, etaI, etaT, wi, value, pdf, isDeltaBxdf, lightingContext );
+        pdf *= specularWeight;
+    }
+    else
+    {
+        SampleCookTorranceMicrofacetBTDF( wo, bxdfSample, color, alpha, etaI, etaT, wi, value, pdf, isDeltaBxdf, lightingContext );
+        pdf *= 1.0f - specularWeight;
+    }
 }
 
 #endif

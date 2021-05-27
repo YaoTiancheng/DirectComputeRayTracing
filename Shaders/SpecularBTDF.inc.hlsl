@@ -25,11 +25,14 @@ void SampleSpecularBTDF( float3 wo, float3 reflectance, float etaI, float etaT, 
 
     lightingContext.WIdotN = wi.z;
 
-    value = lightingContext.WOdotN > 0.0f ? reflectance * ( 1.0f - EvaluateDielectricFresnel( lightingContext.WIdotN, etaI, etaT ) ) : 0.0f; 
-    value *= ( etaI * etaI ) / ( etaT * etaT );
-    value /= abs( lightingContext.WIdotN );
+    if ( lightingContext.WIdotN == 0.0f || lightingContext.WOdotN == 0.0f )
+        return;
 
-    pdf = lightingContext.WOdotN > 0.0f ? 1.0f : 0.0f;
+    value = reflectance * ( 1.0f - EvaluateDielectricFresnel( lightingContext.WIdotN, etaI, etaT ) ) 
+        * ( etaI * etaI ) / ( etaT * etaT ) 
+        / abs( lightingContext.WIdotN );
+
+    pdf = 1.0f;
 }
 
 #endif

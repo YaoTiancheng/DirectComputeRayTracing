@@ -30,10 +30,11 @@ Texture2D                               g_CookTorranceCompEAvgTexture       : re
 Texture2D                               g_CookTorranceCompInvCDFTexture     : register( t5 );
 Texture2D                               g_CookTorranceCompPdfScaleTexture   : register( t6 );
 Texture2DArray                          g_CookTorranceCompEFresnelTexture   : register( t7 );
-StructuredBuffer<BVHNode>               g_BVHNodes                          : register( t8 );
-StructuredBuffer<uint>                  g_MaterialIds                       : register( t9 );
-StructuredBuffer<Material>              g_Materials                         : register( t10 );
-TextureCube<float3>                     g_EnvTexture                        : register( t11 );
+Texture2DArray                          g_CookTorranceBSDFEFresnelTexture   : register( t8 );
+StructuredBuffer<BVHNode>               g_BVHNodes                          : register( t9 );
+StructuredBuffer<uint>                  g_MaterialIds                       : register( t10 );
+StructuredBuffer<Material>              g_Materials                         : register( t11 );
+TextureCube<float3>                     g_EnvTexture                        : register( t12 );
 RWTexture2D<float4>                     g_FilmTexture                       : register( u0 );
 
 SamplerState UVClampSampler;

@@ -16,9 +16,16 @@ float EvaluateSpecularBRDFPdf( float3 wi, float3 wo )
 
 void SampleSpecularBRDF( float3 wo, float3 reflectance, float etaI, float etaT, out float3 wi, out float3 value, out float pdf, inout LightingContext lightingContext )
 {
+    value = 0.0f;
+    pdf   = 0.0f;
+
     wi = float3( -wo.x, -wo.y, wo.z );
-    value = lightingContext.WOdotN > 0.0f ? reflectance * EvaluateDielectricFresnel( lightingContext.WOdotN, etaI, etaT ) / wi.z : 0.0f;
-    pdf = lightingContext.WOdotN > 0.0f ? 1.0f : 0.0f;
+
+    if ( lightingContext.WOdotN == 0.0f )
+        return;
+
+    value = reflectance * EvaluateDielectricFresnel( lightingContext.WOdotN, etaI, etaT ) / wi.z;
+    pdf   = 1.0f;
 
     lightingContext.WIdotN = wi.z;
     lightingContext.H = float3( 0.0f, 0.0f, 1.0f );

@@ -135,6 +135,17 @@ void SampleCookTorranceMicrofacetBRDF( float3 wo, float2 sample, float3 reflecta
     }
 }
 
+float CookTorranceMicrofacetBTDF( float3 wi, float3 wo, float3 m, float alpha, float etaI, float etaT, float WIdotN, float WOdotN, float WIdotM, float WOdotM, float sqrtDenom )
+{
+    return sqrtDenom != 0 ? 
+        ( 1.0f - EvaluateDielectricFresnel( WIdotM, etaI, etaT ) ) * abs( EvaluateGGXMicrofacetDistribution( m, alpha ) * EvaluateGGXGeometricShadowing( wi, wo, m, alpha )
+        * abs( WIdotM ) * abs( WOdotM ) 
+        * etaI * etaI // etaT * etaT * ( ( etaI * etaI ) / ( etaT * etaT ) )
+        / ( WOdotN * WIdotN * sqrtDenom * sqrtDenom ) )
+        :
+        1.0f;
+}
+
 float3 EvaluateCookTorranceMircofacetBTDF( float3 wi, float3 wo, float3 transmittance, float alpha, float etaI, float etaT, LightingContext lightingContext )
 {
     if ( alpha >= ALPHA_THRESHOLD )
@@ -150,11 +161,7 @@ float3 EvaluateCookTorranceMircofacetBTDF( float3 wi, float3 wo, float3 transmit
         float WOdotM = dot( wo, m );
         float sqrtDenom = etaI * WOdotM + etaT * WIdotM;
 
-        return ( 1.0f - EvaluateDielectricFresnel( WIdotM, etaI, etaT ) ) * transmittance 
-            * abs( EvaluateGGXMicrofacetDistribution( m, alpha ) * EvaluateGGXGeometricShadowing( wi, wo, m, alpha )
-            * abs( WIdotM ) * abs( WOdotM ) 
-            * etaI * etaI // etaT * etaT * ( ( etaI * etaI ) / ( etaT * etaT ) )
-            / ( WOdotN * WIdotN * sqrtDenom * sqrtDenom ) );
+        return CookTorranceMicrofacetBTDF( wi, wo, m, alpha, etaI, etaT, WIdotN, WOdotN, WIdotM, WOdotM, sqrtDenom ) * transmittance;
     }
     else
     {
@@ -204,8 +211,17 @@ void SampleCookTorranceMicrofacetBTDF( float3 wo, float2 sample, float3 transmit
         float WIdotN = wi.z;
         lightingContext.WIdotN = WIdotN;
 
-        value = EvaluateCookTorranceMircofacetBTDF( wi, wo, transmittance, alpha, etaI, etaT, lightingContext );
-        pdf   = EvaluateCookTorranceMicrofacetBTDFPdf( wi, wo, alpha, etaI, etaT, lightingContext );
+        if ( WIdotN == 0.0f )
+            return;
+
+        float WIdotM = dot( wi, m );
+        float WOdotM = lightingContext.WOdotH;
+        float sqrtDenom = etaI * WOdotM + etaT * WIdotM;
+
+        value = CookTorranceMicrofacetBTDF( wi, wo, m, alpha, etaI, etaT, WIdotN, WOdotN, WIdotM, WOdotM, sqrtDenom ) * transmittance;
+
+        float dwh_dwi = abs( ( etaT * etaT * WIdotM ) / ( sqrtDenom * sqrtDenom ) );
+        pdf = sqrtDenom != 0.0f ? EvaluateGGXMicrofacetDistributionPdf( m, alpha ) * dwh_dwi : 1.0f;
 
         isDeltaBtdf = false;
     }

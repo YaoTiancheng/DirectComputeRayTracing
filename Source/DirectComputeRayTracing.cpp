@@ -153,7 +153,9 @@ struct SRenderer
     GPUTexturePtr                       m_CookTorranceCompInvCDFTexture;
     GPUTexturePtr                       m_CookTorranceCompPdfScaleTexture;
     GPUTexturePtr                       m_CookTorranceCompEFresnelTexture;
-    GPUTexturePtr                       m_CookTorranceBSDFEFresnelTexture;
+    GPUTexturePtr                       m_CookTorranceBSDFETexture;
+    GPUTexturePtr                       m_CookTorranceBSDFAvgETexture;
+    GPUTexturePtr                       m_CookTorranceBTDFETexture;
     GPUTexturePtr                       m_EnvironmentTexture;
 
     GPUBufferPtr                        m_RayTracingConstantsBuffer;
@@ -327,8 +329,16 @@ bool SRenderer::Init()
     if ( !m_CookTorranceCompEFresnelTexture )
         return false;
 
-    m_CookTorranceBSDFEFresnelTexture.reset( BxDFTexturesBuilder::CreateCookTorranceBSDFEnergyFresnelDielectricTexture() );
-    if ( !m_CookTorranceBSDFEFresnelTexture )
+    m_CookTorranceBSDFETexture.reset( BxDFTexturesBuilder::CreateCookTorranceBSDFEnergyFresnelDielectricTexture() );
+    if ( !m_CookTorranceBSDFETexture )
+        return false;
+
+    m_CookTorranceBSDFAvgETexture.reset( BxDFTexturesBuilder::CreateCookTorranceBSDFAverageEnergyTexture() );
+    if ( !m_CookTorranceBSDFAvgETexture )
+        return false;
+
+    m_CookTorranceBTDFETexture.reset( BxDFTexturesBuilder::CreateCookTorranceBTDFEnergyTexture() );
+    if ( !m_CookTorranceBTDFETexture )
         return false;
 
     CreateEnvironmentTextureFromCurrentFilepath();
@@ -713,7 +723,9 @@ void SRenderer::UpdateRayTracingJob()
         , m_CookTorranceCompInvCDFTexture->GetSRV()
         , m_CookTorranceCompPdfScaleTexture->GetSRV()
         , m_CookTorranceCompEFresnelTexture->GetSRV()
-        , m_CookTorranceBSDFEFresnelTexture->GetSRV()
+        , m_CookTorranceBSDFETexture->GetSRV()
+        , m_CookTorranceBSDFAvgETexture->GetSRV()
+        , m_CookTorranceBTDFETexture->GetSRV()
         , m_BVHNodesBuffer ? m_BVHNodesBuffer->GetSRV() : nullptr
         , m_MaterialIdsBuffer->GetSRV()
         , m_MaterialsBuffer->GetSRV()

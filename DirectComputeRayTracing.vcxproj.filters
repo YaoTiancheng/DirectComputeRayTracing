@@ -251,13 +251,11 @@
     <None Include="Shaders\SpecularBRDF.inc.hlsl" />
     <None Include="Shaders\SpecularBTDF.inc.hlsl" />
     <None Include="Shaders\CookTorranceBSDF.inc.hlsl" />
+    <None Include="Shaders\BxDFTextures.inc.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resources\DirectComputeRayTracing.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="Shaders\BxDFTextures.inc.hlsl" />
   </ItemGroup>
 </Project>

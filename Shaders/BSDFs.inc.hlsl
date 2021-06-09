@@ -52,7 +52,7 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
 
     float transmissionWeight = intersection.transmission;
     float opaqueWeight = 1.0f - transmissionWeight;
-    value = value * opaqueWeight + EvaluateCookTorranceMicrofacetBSDF( wi, wo, intersection.specular, intersection.alpha, etaI, etaT, lightingContext ) * transmissionWeight;
+    value = value * opaqueWeight + EvaluateCookTorranceMicrofacetMultiscatteringBSDF( wi, wo, intersection.specular, intersection.alpha, etaI, etaT, lightingContext ) * transmissionWeight;
 
     return value;
 }
@@ -88,7 +88,7 @@ float EvaluateBSDFPdf( float3 wi, float3 wo, Intersection intersection )
 
     float transmissionWeight = intersection.transmission;
     float opaqueWeight = 1.0f - transmissionWeight;
-    pdf = pdf * opaqueWeight + EvaluateCookTorranceMicrofacetBSDFPdf( wi, wo, intersection.alpha, etaI, etaT, lightingContext ) * transmissionWeight;
+    pdf = pdf * opaqueWeight + EvaluateCookTorranceMicrofacetMultiscatteringBSDFPdf( wi, wo, intersection.alpha, etaI, etaT, lightingContext ) * transmissionWeight;
 
     return pdf;
 }
@@ -166,7 +166,7 @@ void SampleBSDF( float3 wo
     else
     {
         float sample = ( BRDFSelectionSample - opaqueWeight ) / transmissionWeight;
-        SampleCookTorranceMicrofacetBSDF( wo, sample, BRDFSample, intersection.specular, intersection.alpha, etaI, etaT, wi, value, pdf, isDeltaBxdf, lightingContext );
+        SampleCookTorranceMicrofacetMultiscatteringBSDF( wo, sample, BRDFSample, intersection.specular, intersection.alpha, etaI, etaT, wi, value, pdf, isDeltaBxdf, lightingContext );
         value *= transmissionWeight;
         pdf *= transmissionWeight;
     }

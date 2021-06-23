@@ -117,7 +117,7 @@ float3 EstimateDirect( SLight light, Intersection intersection, SLightSamples sa
         SampleRectangleLight( light, samples.lightSample, intersection.position, l, wi, distance, lightPdf );
     }
 
-    if ( !IsOcculuded( intersection.position, wi, epsilon, distance, dispatchThreadIndex ) )
+    if ( any( l > 0.0f ) && lightPdf > 0.0f && !IsOcculuded( intersection.position, wi, epsilon, distance, dispatchThreadIndex ) )
     {
         float3 bsdf = EvaluateBSDF( wi, wo, intersection );
         float NdotWI = abs( dot( intersection.normal, wi ) );

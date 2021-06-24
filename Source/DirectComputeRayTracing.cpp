@@ -156,6 +156,8 @@ struct SRenderer
     GPUTexturePtr                       m_CookTorranceBSDFETexture;
     GPUTexturePtr                       m_CookTorranceBSDFAvgETexture;
     GPUTexturePtr                       m_CookTorranceBTDFETexture;
+    GPUTexturePtr                       m_CookTorranceBSDFInvCDFTexture;
+    GPUTexturePtr                       m_CookTorranceBSDFPDFScaleTexture;
     GPUTexturePtr                       m_EnvironmentTexture;
 
     GPUBufferPtr                        m_RayTracingConstantsBuffer;
@@ -339,6 +341,14 @@ bool SRenderer::Init()
 
     m_CookTorranceBTDFETexture.reset( BxDFTexturesBuilder::CreateCookTorranceBTDFEnergyTexture() );
     if ( !m_CookTorranceBTDFETexture )
+        return false;
+
+    m_CookTorranceBSDFInvCDFTexture.reset( BxDFTexturesBuilder::CreateCookTorranceBSDFMultiscatteringInvCDFTexture() );
+    if ( !m_CookTorranceBSDFInvCDFTexture )
+        return false;
+
+    m_CookTorranceBSDFPDFScaleTexture.reset( BxDFTexturesBuilder::CreateCookTorranceBSDFMultiscatteringPDFScaleTexture() );
+    if ( !m_CookTorranceBSDFPDFScaleTexture )
         return false;
 
     CreateEnvironmentTextureFromCurrentFilepath();
@@ -726,6 +736,8 @@ void SRenderer::UpdateRayTracingJob()
         , m_CookTorranceBSDFETexture->GetSRV()
         , m_CookTorranceBSDFAvgETexture->GetSRV()
         , m_CookTorranceBTDFETexture->GetSRV()
+        , m_CookTorranceBSDFInvCDFTexture->GetSRV()
+        , m_CookTorranceBSDFPDFScaleTexture->GetSRV()
         , m_BVHNodesBuffer ? m_BVHNodesBuffer->GetSRV() : nullptr
         , m_MaterialIdsBuffer->GetSRV()
         , m_MaterialsBuffer->GetSRV()

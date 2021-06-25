@@ -8,41 +8,6 @@
 #include "BxDFTextures.inc.hlsl"
 #include "MonteCarlo.inc.hlsl"
 
-float3 GGXSampleHemisphere( float2 sample, float alpha )
-{
-    float theta = atan( alpha * sqrt( sample.x / ( 1.0f - sample.x ) ) );
-    float phi = 2.0f * PI * sample.y;
-
-    float s = sin( theta );
-    return float3( cos( phi ) * s, sin( phi ) * s, cos( theta ) );
-}
-
-float EvaluateGGXMicrofacetDistribution( float3 m, float alpha )
-{
-    float alpha2 = alpha * alpha;
-    float NdotM = m.z;
-    float NdotM2 = NdotM * NdotM;
-    float factor = NdotM2 * ( alpha2 - 1.0f ) + 1.0f;
-    float denominator = factor * factor * PI;
-    return alpha2 / denominator;
-}
-
-float EvaluateGGXMicrofacetDistributionPdf( float3 m, float alpha )
-{
-    return EvaluateGGXMicrofacetDistribution( m, alpha ) * abs( m.z );
-}
-
-void SampleGGXMicrofacetDistribution( float2 sample, float alpha, out float3 m, out float pdf )
-{
-    m = GGXSampleHemisphere( sample, alpha );
-    pdf = EvaluateGGXMicrofacetDistributionPdf( m, alpha );
-}
-
-void SampleGGXMicrofacetDistribution( float2 sample, float alpha, out float3 m )
-{
-    m = GGXSampleHemisphere( sample, alpha );
-}
-
 //
 // GGX geometric shadowing
 //
@@ -63,6 +28,70 @@ float EvaluateGGXGeometricShadowing( float3 wi, float3 wo, float3 m, float alpha
 {
     float alpha2 = alpha * alpha;
     return EvaluateGGXGeometricShadowingOneDirection( alpha2, m, wi ) * EvaluateGGXGeometricShadowingOneDirection( alpha2, m, wo );
+}
+
+//
+// NDF
+//
+
+float3 SampleGGXNDF( float2 sample, float alpha )
+{
+    float theta = atan( alpha * sqrt( sample.x / ( 1.0f - sample.x ) ) );
+    float phi = 2.0f * PI * sample.y;
+
+    float s = sin( theta );
+    return float3( cos( phi ) * s, sin( phi ) * s, cos( theta ) );
+}
+
+// From "Sampling the GGX Distribution of Visible Normals" by Eric Heitz
+float3 SampleGGXVNDF( float3 wo, float2 sample, float alpha )
+{
+    float U1 = sample.x;
+    float U2 = sample.y;
+    // Section 3.2: transforming the view direction to the hemisphere configuration
+    float3 Vh = normalize( float3( alpha * wo.x, alpha * wo.y, wo.z ) );
+    // Section 4.1: orthonormal basis (with special case if cross product is zero)
+    float lensq = Vh.x * Vh.x + Vh.y * Vh.y;
+    float3 T1 = lensq > 0 ? float3( -Vh.y, Vh.x, 0 ) / sqrt( lensq ) : float3( 1, 0, 0 );
+    float3 T2 = cross( Vh, T1 );
+    // Section 4.2: parameterization of the projected area
+    float r = sqrt( U1 );
+    float phi = 2.0 * PI * U2;
+    float t1 = r * cos( phi );
+    float t2 = r * sin( phi );
+    float s = 0.5 * ( 1.0 + Vh.z );
+    t2 = ( 1.0 - s ) * sqrt( 1.0 - t1 * t1 ) + s * t2;
+    // Section 4.3: reprojection onto hemisphere
+    float3 Nh = t1 * T1 + t2 * T2 + sqrt( max( 0.0, 1.0 - t1 * t1 - t2 * t2 ) ) * Vh;
+    // Section 3.4: transforming the normal back to the ellipsoid configuration
+    float3 Ne = normalize( float3( alpha * Nh.x, alpha * Nh.y, max( 0.0, Nh.z ) ) );
+    return Ne;
+}
+
+float EvaluateGGXMicrofacetDistribution( float3 m, float alpha )
+{
+    float alpha2 = alpha * alpha;
+    float NdotM = m.z;
+    float NdotM2 = NdotM * NdotM;
+    float factor = NdotM2 * ( alpha2 - 1.0f ) + 1.0f;
+    float denominator = factor * factor * PI;
+    return alpha2 / denominator;
+}
+
+float EvaluateGGXMicrofacetDistributionPdf( float3 wo, float3 m, float alpha )
+{
+    return EvaluateGGXMicrofacetDistribution( m, alpha ) * EvaluateGGXGeometricShadowingOneDirection( alpha * alpha, m, wo ) * max( 0, dot( wo, m ) ) / wo.z;
+}
+
+void SampleGGXMicrofacetDistribution( float3 wo, float2 sample, float alpha, out float3 m, out float pdf )
+{
+    m = SampleGGXVNDF( wo, sample, alpha );
+    pdf = EvaluateGGXMicrofacetDistributionPdf( wo, m, alpha );
+}
+
+void SampleGGXMicrofacetDistribution( float3 wo, float2 sample, float alpha, out float3 m )
+{
+    m = SampleGGXVNDF( wo, sample, alpha );
 }
 
 #define ALPHA_THRESHOLD 0.00052441f
@@ -103,7 +132,7 @@ float EvaluateCookTorranceMicrofacetBRDFPdf( float3 wi, float3 wo, float alpha, 
 
         float3 m = lightingContext.H;
         float WOdotM = lightingContext.WOdotH;
-        float pdf = EvaluateGGXMicrofacetDistributionPdf( m, alpha );
+        float pdf = EvaluateGGXMicrofacetDistributionPdf( wo, m, alpha );
         return pdf / ( 4.0f * WOdotM );
     }
     else
@@ -117,7 +146,7 @@ void SampleCookTorranceMicrofacetBRDF( float3 wo, float2 sample, float3 reflecta
     if ( alpha >= ALPHA_THRESHOLD )
     {
         float3 m;
-        SampleGGXMicrofacetDistribution( sample, alpha, m );
+        SampleGGXMicrofacetDistribution( wo, sample, alpha, m );
         wi = -reflect( wo, m );
 
         LightingContextAssignH( wo, m, lightingContext );
@@ -185,7 +214,7 @@ float EvaluateCookTorranceMicrofacetBTDFPdf( float3 wi, float3 wo, float alpha, 
         float sqrtDenom = etaI * WOdotM + etaT * WIdotM;
 
         float dwh_dwi = abs( ( etaT * etaT * WIdotM ) / ( sqrtDenom * sqrtDenom ) );
-        return EvaluateGGXMicrofacetDistributionPdf( m, alpha ) * dwh_dwi;
+        return EvaluateGGXMicrofacetDistributionPdf( wo, m, alpha ) * dwh_dwi;
     }
     else
     {
@@ -206,7 +235,7 @@ void SampleCookTorranceMicrofacetBTDF( float3 wo, float2 sample, float3 transmit
             return;
 
         float3 m;
-        SampleGGXMicrofacetDistribution( sample, alpha, m );
+        SampleGGXMicrofacetDistribution( wo, sample, alpha, m );
         wi = refract( -wo, m, etaI / etaT );
         if ( all( wi == 0.0f ) )
             return;
@@ -226,7 +255,7 @@ void SampleCookTorranceMicrofacetBTDF( float3 wo, float2 sample, float3 transmit
         value = CookTorranceMicrofacetBTDF( wi, wo, m, alpha, etaI, etaT, WIdotN, WOdotN, WIdotM, WOdotM, sqrtDenom ) * transmittance;
 
         float dwh_dwi = abs( ( etaT * etaT * WIdotM ) / ( sqrtDenom * sqrtDenom ) );
-        pdf = sqrtDenom != 0.0f ? EvaluateGGXMicrofacetDistributionPdf( m, alpha ) * dwh_dwi : 1.0f;
+        pdf = sqrtDenom != 0.0f ? EvaluateGGXMicrofacetDistributionPdf( wo, m, alpha ) * dwh_dwi : 1.0f;
 
         isDeltaBtdf = false;
     }

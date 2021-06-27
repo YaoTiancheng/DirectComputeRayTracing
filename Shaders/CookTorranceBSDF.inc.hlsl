@@ -288,23 +288,115 @@ float EvaluateCookTorranceMicrofacetBSDFPdf( float3 wi, float3 wo, float alpha, 
 
 void SampleCookTorranceMicrofacetBSDF( float3 wo, float selectionSample, float2 bxdfSample, float3 color, float alpha, float etaI, float etaT, out float3 wi, out float3 value, out float pdf, out bool isDeltaBxdf, inout LightingContext lightingContext )
 {
-    float cosThetaO = wo.z;
-    float eta = etaT / etaI;
-    float invEta = etaI / etaT;
-    float Efresnel_r = SampleCookTorranceMicrofacetBRDFEnergyFresnelDielectricTexture( cosThetaO, alpha, eta );
-    float Efresnel_t = SampleCookTorranceMicrofacetBTDFEnergyTexture( cosThetaO, alpha, eta ) * invEta * invEta;
-    float Wr = Efresnel_r / ( Efresnel_r + Efresnel_t );
+    value = 0.0f;
+    pdf   = 0.0f;
+    wi    = 0.0f;
 
-    if ( selectionSample < Wr )
+    if ( wo.z == 0.0f )
+        return;
+
+    if ( etaI == etaT )
     {
-        SampleCookTorranceMicrofacetBRDF( wo, bxdfSample, color, alpha, etaI, etaT, wi, value, pdf, isDeltaBxdf, lightingContext );
+        value = color / wo.z;
+        pdf = 1.0f;
+        wi = -wo;
+        return;
+    }
+
+    isDeltaBxdf = alpha < ALPHA_THRESHOLD;
+
+    float G1_o = 0.0f;
+    float D    = 0.0f;
+    float alpha2 = alpha * alpha;
+
+    float3 m;
+    float WOdotM;
+    if ( !isDeltaBxdf )
+    {
+        SampleGGXMicrofacetDistribution( wo, bxdfSample, alpha, m );
+        D = EvaluateGGXMicrofacetDistribution( m, alpha );
+        G1_o = EvaluateGGXGeometricShadowingOneDirection( alpha2, m, wo );
+        WOdotM = dot( wo, m );
+        pdf = D * G1_o * WOdotM / wo.z;
+    }
+    else
+    {
+        m = float3( 0, 0, 1 );
+        WOdotM = wo.z;
+        pdf = 1.0f;
+    }
+
+    lightingContext.H = m;
+    lightingContext.WOdotH = WOdotM;
+
+    if ( WOdotM <= 0.0f )
+        return;
+
+    float F = EvaluateDielectricFresnel( WOdotM, etaI, etaT );
+    float Wr = F;
+
+    float WIdotM;
+    bool sampleReflection = selectionSample < Wr;
+    if ( sampleReflection )
+    {
+        wi = -reflect( wo, m );
+        
+        lightingContext.WIdotN = wi.z;
+        if ( wi.z <= 0.0f )
+            return;
+
+        WIdotM = dot( wi, m );
         pdf *= Wr;
     }
     else
     {
-        SampleCookTorranceMicrofacetBTDF( wo, bxdfSample, color, alpha, etaI, etaT, wi, value, pdf, isDeltaBxdf, lightingContext );
+        wi = refract( -wo, m, etaI / etaT );
+
+        lightingContext.WIdotN = wi.z;
+        if ( wi.z == 0.0f )
+            return;
+
+        WIdotM = dot( wi, m );
+        F = EvaluateDielectricFresnel( WIdotM, etaI, etaT );
         pdf *= 1.0f - Wr;
     }
+
+    float WIdotN = wi.z;
+    float WOdotN = wo.z;
+
+    if ( !isDeltaBxdf )
+    {
+        float G1_i = EvaluateGGXGeometricShadowingOneDirection( alpha2, m, wi );
+        float G = G1_o * G1_i;
+
+        float dwh_dwi;
+        if ( sampleReflection )
+        {
+            value = D * G * F / ( 4.0f * WIdotN * WOdotN );
+            dwh_dwi = 1.0f / ( 4.0f * WOdotM );
+        }
+        else
+        {
+            float sqrtDenom = etaI * WOdotM + etaT * WIdotM;
+            value = ( 1.0f - F ) * abs( D * G * abs( WIdotM ) * abs( WOdotM ) * etaI * etaI / ( WOdotN * WIdotN * sqrtDenom * sqrtDenom ) );
+            dwh_dwi = abs( ( etaT * etaT * WIdotM ) / ( sqrtDenom * sqrtDenom ) );
+        }
+
+        pdf *= dwh_dwi;
+    }
+    else
+    {
+        if ( sampleReflection )
+        {
+            value = F / wi.z;
+        }
+        else
+        {
+            value = ( 1.0f - F ) * ( etaI * etaI ) / ( etaT * etaT ) / ( -wi.z );
+        }
+    }
+    
+    value *= color;
 }
 
 //
@@ -390,6 +482,48 @@ void SampleCookTorranceMicrofacetMultiscatteringBxDF( float3 wo, float2 sample, 
 // Multiscattering BSDF
 //
 
+void SampleCookTorranceMultiscatteringBSDF( float3 wo, float selectionSample, float2 bxdfSample, float3 color, float alpha, float Ems_r, float Ems_t, float Eo, float eta, float invEta, float Eavg, float Eavg_inv, float Favg, float reciprocalFactor, out float3 wi, out float3 value, out float pdf, LightingContext lightingContext )
+{
+    value = 0.0f;
+    pdf   = 0.0f;
+    wi    = 0.0f;
+
+    if ( wo.z == 0.0f )
+        return;
+
+    float Wr = Ems_r / ( Ems_r + Ems_t );
+    bool sampleReflection = selectionSample < Wr;
+
+    eta = sampleReflection ? eta : invEta;
+
+    wi = CookTorranceBSDFMultiscatteringBxDFSampleHemisphere( bxdfSample, alpha, eta );
+
+    if ( !sampleReflection )
+        wi.z = -wi.z;
+
+    LightingContextCalculateH( wo, wi, lightingContext );
+    lightingContext.WIdotN = wi.z;
+
+    float cosThetaI = abs( wi.z );
+    if ( cosThetaI == 0.0f )
+        return;
+
+    float factor = sampleReflection ? Favg : ( 1 - Favg ) * reciprocalFactor;
+    float Ei = SampleCookTorranceMicrofacetBSDFEnergyTexture( cosThetaI, alpha, eta );
+    Eavg = sampleReflection ? Eavg : Eavg_inv;
+    value = MultiscatteringBxDF( Ei, Eo, Eavg ) * factor * color;
+
+    float pdfScale = SampleCookTorranceMicrofacetBSDFPDFScaleTexture( alpha, eta );
+    pdf = pdfScale > 0.0f
+        ? ( 1.0f - Ei ) * cosThetaI / pdfScale
+        : 0.0f;
+    pdf *= sampleReflection ? Wr : 1 - Wr;
+}
+
+//
+// Microfacet Multiscattering BSDF
+//
+
 float ReciprocalFactor( float Favg, float Favg_inv, float Eavg, float Eavg_inv, float eta )
 {
     if ( Eavg == 1.0f || Eavg_inv == 1.0f )
@@ -442,8 +576,6 @@ float EvaluateCookTorranceMicrofacetMultiscatteringBSDFPdf( float3 wi, float3 wo
 
 void SampleCookTorranceMicrofacetMultiscatteringBSDF( float3 wo, float selectionSample, float2 bxdfSample, float3 color, float alpha, float etaI, float etaT, out float3 wi, out float3 value, out float pdf, out bool isDeltaBxdf, inout LightingContext lightingContext )
 {
-    isDeltaBxdf = false;
-
     float cosThetaO  = wo.z;
     float eta        = etaT / etaI;
     float invEta     = 1.0f / eta;
@@ -457,32 +589,19 @@ void SampleCookTorranceMicrofacetMultiscatteringBSDF( float3 wo, float selection
     float reciprocalFactor = ReciprocalFactor( Favg, Favg_inv, Eavg, Eavg_inv, eta );
     float Ems_r      = ( 1.0f - Ebsdf ) * Favg;
     float Ems_t      = ( 1.0f - Ebsdf ) * ( 1.0f - Favg ) * reciprocalFactor;
-    float Etotal     = Efresnel_r + Efresnel_t + Ems_r + Ems_t;
 
-    float Wr = Efresnel_r / Etotal;
-    float Wt = Efresnel_t / Etotal;
-    float Wms_r = Ems_r / Etotal;
-    float Wms_t = Ems_t / Etotal;
-
-    if ( selectionSample < Wr )
+    float weight = ( Efresnel_r + Efresnel_t ) / ( Efresnel_r + Efresnel_t + Ems_r + Ems_t );
+    bool sampleMicrofacet = selectionSample < weight;
+    if ( sampleMicrofacet )
     {
-        SampleCookTorranceMicrofacetBRDF( wo, bxdfSample, color, alpha, etaI, etaT, wi, value, pdf, isDeltaBxdf, lightingContext );
-        pdf *= Wr;
-    }
-    else if ( selectionSample < ( Wr + Wt ) )
-    {
-        SampleCookTorranceMicrofacetBTDF( wo, bxdfSample, color, alpha, etaI, etaT, wi, value, pdf, isDeltaBxdf, lightingContext );
-        pdf *= Wt;
-    }
-    else if ( selectionSample < ( Wr + Wt + Wms_r ) )
-    {
-        SampleCookTorranceMicrofacetMultiscatteringBxDF( wo, bxdfSample, color, alpha, eta, Ebsdf, Eavg, Favg, wi, value, pdf, lightingContext );
-        pdf *= Wms_r;
+        SampleCookTorranceMicrofacetBSDF( wo, selectionSample / weight, bxdfSample, color, alpha, etaI, etaT, wi, value, pdf, isDeltaBxdf, lightingContext );
+        pdf *= weight;
     }
     else
     {
-        SampleCookTorranceMicrofacetMultiscatteringBxDF( wo, bxdfSample, color, alpha, invEta, Ebsdf, Eavg_inv, reciprocalFactor * ( 1.0f - Favg ), wi, value, pdf, lightingContext );
-        pdf *= Wms_t;
+        SampleCookTorranceMultiscatteringBSDF( wo, ( selectionSample - weight ) / ( 1 - weight ), bxdfSample, color, alpha, Ems_r, Ems_t, Ebsdf, eta, invEta, Eavg, Eavg_inv, Favg, reciprocalFactor, wi, value, pdf, lightingContext );
+        pdf *= 1 - weight;
+        isDeltaBxdf = false;
     }
 }
 

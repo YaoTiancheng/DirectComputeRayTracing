@@ -185,6 +185,7 @@ struct SRenderer
 
     bool                                m_HasValidScene;
     bool                                m_IsMultipleImportanceSamplingEnabled;
+    uint32_t                            m_SPP;
 
     int                                 m_RayTracingKernelIndex = 0;
     SSceneObjectSelection               m_SceneObjectSelection;
@@ -548,6 +549,8 @@ void SRenderer::DispatchRayTracing()
         {
             m_FrameSeed = 0;
         }
+
+        m_SPP = 0;
     }
 
     if ( m_IsRayTracingJobDirty )
@@ -565,6 +568,8 @@ void SRenderer::DispatchRayTracing()
     {
         m_FrameSeed++;
     }
+
+    ++m_SPP;
 }
 
 void SRenderer::RenderOneFrame()
@@ -1117,6 +1122,7 @@ void SRenderer::OnImGUI()
 
         ImGui::Text( "MIS: %s", m_IsMultipleImportanceSamplingEnabled ? "On" : "Off" );
         ImGui::Text( "Average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate );
+        ImGui::Text( "SPP: %d", m_SPP );
 
         ImGui::End();
     }

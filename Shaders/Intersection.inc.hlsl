@@ -10,7 +10,7 @@ struct Intersection
     float3  position;
     float3  normal;
     float3  tangent;
-    float   rayEpsilon;
+    float3  geometryNormal;
     float   ior;
     float   transmission;
     bool    backface;

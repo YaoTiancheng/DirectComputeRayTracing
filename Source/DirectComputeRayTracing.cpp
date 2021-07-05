@@ -553,23 +553,26 @@ void SRenderer::DispatchRayTracing()
         m_SPP = 0;
     }
 
-    if ( m_IsRayTracingJobDirty )
+    if ( m_HasValidScene )
     {
-        UpdateRayTracingJob();
-        m_IsRayTracingJobDirty = false;
-    }
+        if ( m_IsRayTracingJobDirty )
+        {
+            UpdateRayTracingJob();
+            m_IsRayTracingJobDirty = false;
+        }
 
-    if ( m_HasValidScene && UpdateResources() )
-    {
-        m_RayTracingJob.Dispatch();
-    }
+        if ( UpdateResources() )
+        {
+            m_RayTracingJob.Dispatch();
+        }
 
-    if ( m_FrameSeedType != EFrameSeedType::Fixed )
-    {
-        m_FrameSeed++;
-    }
+        if ( m_FrameSeedType != EFrameSeedType::Fixed )
+        {
+            m_FrameSeed++;
+        }
 
-    ++m_SPP;
+        ++m_SPP;
+    }
 }
 
 void SRenderer::RenderOneFrame()
@@ -1125,6 +1128,11 @@ void SRenderer::OnImGUI()
         ImGui::Text( "MIS: %s", m_IsMultipleImportanceSamplingEnabled ? "On" : "Off" );
         ImGui::Text( "Average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate );
         ImGui::Text( "SPP: %d", m_SPP );
+        if ( !m_HasValidScene )
+        {
+            static const ImVec4 s_WarningColor( 1.0f, 0.0f, 0.0f, 1.0f );
+            ImGui::TextColored( s_WarningColor, "Scene Error!!! Rendering disabled. Check the log for what happened." );
+        }
 
         ImGui::End();
     }

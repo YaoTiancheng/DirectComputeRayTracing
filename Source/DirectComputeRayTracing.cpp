@@ -24,7 +24,7 @@
 
 using namespace DirectX;
 
-static const uint32_t s_MaxRayBounce = 5;
+static const uint32_t s_MaxRayBounce = 20;
 static const uint32_t s_MaxLightsCount = 64;
 static const int s_RayTracingKernelCount = 6;
 
@@ -153,6 +153,11 @@ struct SRenderer
     GPUTexturePtr                       m_CookTorranceCompInvCDFTexture;
     GPUTexturePtr                       m_CookTorranceCompPdfScaleTexture;
     GPUTexturePtr                       m_CookTorranceCompEFresnelTexture;
+    GPUTexturePtr                       m_CookTorranceBSDFETexture;
+    GPUTexturePtr                       m_CookTorranceBSDFAvgETexture;
+    GPUTexturePtr                       m_CookTorranceBTDFETexture;
+    GPUTexturePtr                       m_CookTorranceBSDFInvCDFTexture;
+    GPUTexturePtr                       m_CookTorranceBSDFPDFScaleTexture;
     GPUTexturePtr                       m_EnvironmentTexture;
 
     GPUBufferPtr                        m_RayTracingConstantsBuffer;
@@ -180,6 +185,7 @@ struct SRenderer
 
     bool                                m_HasValidScene;
     bool                                m_IsMultipleImportanceSamplingEnabled;
+    uint32_t                            m_SPP;
 
     int                                 m_RayTracingKernelIndex = 0;
     SSceneObjectSelection               m_SceneObjectSelection;
@@ -324,6 +330,26 @@ bool SRenderer::Init()
 
     m_CookTorranceCompEFresnelTexture.reset( BxDFTexturesBuilder::CreateCoorkTorranceBRDFEnergyFresnelDielectricTexture() );
     if ( !m_CookTorranceCompEFresnelTexture )
+        return false;
+
+    m_CookTorranceBSDFETexture.reset( BxDFTexturesBuilder::CreateCookTorranceBSDFEnergyFresnelDielectricTexture() );
+    if ( !m_CookTorranceBSDFETexture )
+        return false;
+
+    m_CookTorranceBSDFAvgETexture.reset( BxDFTexturesBuilder::CreateCookTorranceBSDFAverageEnergyTexture() );
+    if ( !m_CookTorranceBSDFAvgETexture )
+        return false;
+
+    m_CookTorranceBTDFETexture.reset( BxDFTexturesBuilder::CreateCookTorranceBTDFEnergyTexture() );
+    if ( !m_CookTorranceBTDFETexture )
+        return false;
+
+    m_CookTorranceBSDFInvCDFTexture.reset( BxDFTexturesBuilder::CreateCookTorranceBSDFMultiscatteringInvCDFTexture() );
+    if ( !m_CookTorranceBSDFInvCDFTexture )
+        return false;
+
+    m_CookTorranceBSDFPDFScaleTexture.reset( BxDFTexturesBuilder::CreateCookTorranceBSDFMultiscatteringPDFScaleTexture() );
+    if ( !m_CookTorranceBSDFPDFScaleTexture )
         return false;
 
     CreateEnvironmentTextureFromCurrentFilepath();
@@ -523,6 +549,8 @@ void SRenderer::DispatchRayTracing()
         {
             m_FrameSeed = 0;
         }
+
+        m_SPP = 0;
     }
 
     if ( m_IsRayTracingJobDirty )
@@ -540,6 +568,8 @@ void SRenderer::DispatchRayTracing()
     {
         m_FrameSeed++;
     }
+
+    ++m_SPP;
 }
 
 void SRenderer::RenderOneFrame()
@@ -708,6 +738,11 @@ void SRenderer::UpdateRayTracingJob()
         , m_CookTorranceCompInvCDFTexture->GetSRV()
         , m_CookTorranceCompPdfScaleTexture->GetSRV()
         , m_CookTorranceCompEFresnelTexture->GetSRV()
+        , m_CookTorranceBSDFETexture->GetSRV()
+        , m_CookTorranceBSDFAvgETexture->GetSRV()
+        , m_CookTorranceBTDFETexture->GetSRV()
+        , m_CookTorranceBSDFInvCDFTexture->GetSRV()
+        , m_CookTorranceBSDFPDFScaleTexture->GetSRV()
         , m_BVHNodesBuffer ? m_BVHNodesBuffer->GetSRV() : nullptr
         , m_MaterialIdsBuffer->GetSRV()
         , m_MaterialsBuffer->GetSRV()
@@ -1060,9 +1095,11 @@ void SRenderer::OnImGUI()
                 ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
                 if ( ImGui::ColorEdit3( "Emission", (float*)&selection->emission ) )
                     m_IsMaterialBufferDirty = true;
-                if ( ImGui::DragFloat( "Roughness", &selection->roughness, 0.01f, 0.001f, 1.0f ) )
+                if ( ImGui::DragFloat( "Roughness", &selection->roughness, 0.01f, 0.0f, 1.0f ) )
                     m_IsMaterialBufferDirty = true;
                 if ( ImGui::DragFloat( "IOR", &selection->ior, 0.01f, 1.0f, 3.0f ) )
+                    m_IsMaterialBufferDirty = true;
+                if ( ImGui::DragFloat( "Transmission", &selection->transmission, 0.01f, 0.0f, 1.0f ) )
                     m_IsMaterialBufferDirty = true;
                 if ( ImGui::DragFloat2( "Texture Tiling", (float*)&selection->texTiling, 0.01f, 0.0f, 100000.0f ) )
                     m_IsMaterialBufferDirty = true;
@@ -1087,6 +1124,7 @@ void SRenderer::OnImGUI()
 
         ImGui::Text( "MIS: %s", m_IsMultipleImportanceSamplingEnabled ? "On" : "Off" );
         ImGui::Text( "Average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate );
+        ImGui::Text( "SPP: %d", m_SPP );
 
         ImGui::End();
     }

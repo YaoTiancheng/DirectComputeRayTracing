@@ -30,10 +30,15 @@ Texture2D                               g_CookTorranceCompEAvgTexture       : re
 Texture2D                               g_CookTorranceCompInvCDFTexture     : register( t5 );
 Texture2D                               g_CookTorranceCompPdfScaleTexture   : register( t6 );
 Texture2DArray                          g_CookTorranceCompEFresnelTexture   : register( t7 );
-StructuredBuffer<BVHNode>               g_BVHNodes                          : register( t8 );
-StructuredBuffer<uint>                  g_MaterialIds                       : register( t9 );
-StructuredBuffer<Material>              g_Materials                         : register( t10 );
-TextureCube<float3>                     g_EnvTexture                        : register( t11 );
+Texture2DArray                          g_CookTorranceBSDFETexture          : register( t8 );
+Texture2DArray                          g_CookTorranceBSDFAvgETexture       : register( t9 );
+Texture2DArray                          g_CookTorranceBTDFETexture          : register( t10 );
+Texture2DArray                          g_CookTorranceBSDFInvCDFTexture     : register( t11 );
+Texture2DArray                          g_CookTorranceBSDFPDFScaleTexture   : register( t12 );
+StructuredBuffer<BVHNode>               g_BVHNodes                          : register( t13 );
+StructuredBuffer<uint>                  g_MaterialIds                       : register( t14 );
+StructuredBuffer<Material>              g_Materials                         : register( t15 );
+TextureCube<float3>                     g_EnvTexture                        : register( t16 );
 RWTexture2D<float4>                     g_FilmTexture                       : register( u0 );
 
 SamplerState UVClampSampler;
@@ -44,6 +49,22 @@ SamplerState UVClampSampler;
 #include "HitShader.inc.hlsl"
 #include "EnvironmentShader.inc.hlsl"
 #include "LightSampling.inc.hlsl"
+
+// Based on "A Fast and Robust Method for Avoiding Self Intersection" by Carsten Wächter and Nikolaus Binder
+float3 OffsetRayOrigin( float3 p, float3 n, float3 d )
+{
+    static float s_Origin = 1.0f / 32.0f;
+    static float s_FloatScale = 1.0f / 65536.0f;
+    static float s_IntScale = 256.0f;
+
+    // Ray could be either leaving or entering the surface.
+    // So if the ray is entering the surface make the origin offset along the negative normal direction.
+    n *= sign( dot( n, d ) );
+
+    int3 of_i = int3( s_IntScale * n );
+    float3 p_i = asfloat( asint( p ) + ( ( p < 0 ) ? -of_i : of_i ) );
+    return abs( p ) < s_Origin ? p + s_FloatScale * n : p_i;
+}
 
 void GenerateRay( float2 sample
 	, float2 filmSize
@@ -63,20 +84,18 @@ void GenerateRay( float2 sample
 
 bool IntersectScene( float3 origin
 	, float3 direction
-    , float epsilon
     , uint dispatchThreadIndex
 	, out Intersection intersection )
 {
-    return BVHIntersect( origin, direction, epsilon.x, dispatchThreadIndex, intersection );
+    return BVHIntersect( origin, direction, 0, dispatchThreadIndex, intersection );
 }
 
 bool IsOcculuded( float3 origin
     , float3 direction
-    , float epsilon
     , float distance
     , uint dispatchThreadIndex )
 {
-    return BVHIntersect( origin, direction, epsilon.x, distance - epsilon.x, dispatchThreadIndex );
+    return BVHIntersect( origin, direction, 0, distance, dispatchThreadIndex );
 }
 
 void AddSampleToFilm( float3 l
@@ -98,7 +117,7 @@ struct SLightSamples
 #endif
 };
 
-float3 EstimateDirect( SLight light, Intersection intersection, SLightSamples samples, float epsilon, float3 wo, uint dispatchThreadIndex )
+float3 EstimateDirect( SLight light, Intersection intersection, SLightSamples samples, float3 wo, uint dispatchThreadIndex )
 {
 #if defined( MULTIPLE_IMPORTANCE_SAMPLING )
     float3 l, wi, result = 0.0f;
@@ -114,10 +133,10 @@ float3 EstimateDirect( SLight light, Intersection intersection, SLightSamples sa
         SampleRectangleLight( light, samples.lightSample, intersection.position, l, wi, distance, lightPdf );
     }
 
-    if ( !IsOcculuded( intersection.position, wi, epsilon, distance, dispatchThreadIndex ) )
+    if ( any( l > 0.0f ) && lightPdf > 0.0f && !IsOcculuded( OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi ), wi, distance, dispatchThreadIndex ) )
     {
         float3 bsdf = EvaluateBSDF( wi, wo, intersection );
-        float NdotWI = max( 0, dot( intersection.normal, wi ) );
+        float NdotWI = abs( dot( intersection.normal, wi ) );
         float bsdfPdf = EvaluateBSDFPdf( wi, wo, intersection );
         float weight = isDeltaLight ? 1.0f : PowerHeuristic( 1, lightPdf, 1, bsdfPdf );
 
@@ -128,7 +147,8 @@ float3 EstimateDirect( SLight light, Intersection intersection, SLightSamples sa
     {
         float3 bsdf;
         float bsdfPdf;
-        SampleBSDF( wo, samples.bsdfSample, samples.bsdfSelectionSample, intersection, wi, bsdf, bsdfPdf ); // TODO: Make sample passed as arguments
+        bool isDeltaBxdf;
+        SampleBSDF( wo, samples.bsdfSample, samples.bsdfSelectionSample, intersection, wi, bsdf, bsdfPdf, isDeltaBxdf );
 
         if ( all( bsdf == 0.0f ) || bsdfPdf == 0.0f )
             return result;
@@ -137,15 +157,15 @@ float3 EstimateDirect( SLight light, Intersection intersection, SLightSamples sa
         if ( lightPdf == 0.0f )
             return result;
 
-        float weight = PowerHeuristic( 1, bsdfPdf, 1, lightPdf );
+        float weight = !isDeltaBxdf ? PowerHeuristic( 1, bsdfPdf, 1, lightPdf ) : 1.0f;
 
         l = 0.0f;
-        if ( !IsOcculuded( intersection.position, wi, epsilon, distance, dispatchThreadIndex ) )
+        if ( !IsOcculuded( OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi ), wi, distance, dispatchThreadIndex ) )
         {
             l = light.color;
         }
 
-        float NdotWI = max( 0, dot( intersection.normal, wi ) );
+        float NdotWI = abs( dot( intersection.normal, wi ) );
         result += l * bsdf * NdotWI * weight / bsdfPdf;
     }
 
@@ -158,10 +178,10 @@ float3 EstimateDirect( SLight light, Intersection intersection, SLightSamples sa
     else
         SampleRectangleLight( light, samples.lightSample, intersection.position, l, wi, distance, pdf );
 
-    if ( !IsOcculuded( intersection.position, wi, epsilon, distance, dispatchThreadIndex ) )
+    if ( any( l > 0.0f ) && pdf > 0.0f && !IsOcculuded( OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi ), wi, distance, dispatchThreadIndex ) )
     {
         float3 brdf = EvaluateBSDF( wi, wo, intersection );
-        float NdotL = max( 0, dot( intersection.normal, wi ) );
+        float NdotL = abs( dot( intersection.normal, wi ) );
         return l * brdf * NdotL / pdf;
     }
 
@@ -169,10 +189,10 @@ float3 EstimateDirect( SLight light, Intersection intersection, SLightSamples sa
 #endif
 }
 
-float3 UniformSampleOneLight( SLightSamples samples, Intersection intersection, float3 wo, float epsilon, uint dispatchThreadIndex )
+float3 UniformSampleOneLight( SLightSamples samples, Intersection intersection, float3 wo, uint dispatchThreadIndex )
 {
     uint lightIndex = floor( samples.lightSelectionSample * g_LightCount );
-    return g_LightCount != 0 ? EstimateDirect( g_Lights[ lightIndex ], intersection, samples, epsilon, wo, dispatchThreadIndex ) * g_LightCount : 0.0f;
+    return g_LightCount != 0 ? EstimateDirect( g_Lights[ lightIndex ], intersection, samples, wo, dispatchThreadIndex ) * g_LightCount : 0.0f;
 }
 
 #define GROUP_SIZE_X 16
@@ -197,7 +217,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     float2 filmSample = ( pixelSample + pixelPos ) / g_Resolution;
     GenerateRay( filmSample, g_FilmSize, g_FilmDistance, g_CameraTransform, intersection.position, wo );
 
-    if ( IntersectScene( intersection.position, wo, 0.0f, threadId, intersection ) )
+    if ( IntersectScene( intersection.position, wo, threadId, intersection ) )
     {
         uint iBounce = 0;
         while ( 1 )
@@ -211,14 +231,15 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
             lightSamples.bsdfSelectionSample  = GetNextSample1D( rng );
             lightSamples.bsdfSample           = GetNextSample2D( rng );
 #endif
-            l += pathThroughput * ( UniformSampleOneLight( lightSamples, intersection, wo, intersection.rayEpsilon, threadId ) + intersection.emission );
+            l += pathThroughput * ( UniformSampleOneLight( lightSamples, intersection, wo, threadId ) + intersection.emission );
 
             if ( iBounce == g_MaxBounceCount )
                 break;
 
             float3 brdf;
             float pdf;
-            SampleBSDF( wo, GetNextSample2D( rng ), GetNextSample1D( rng ), intersection, wi, brdf, pdf );
+            bool isDeltaBxdf;
+            SampleBSDF( wo, GetNextSample2D( rng ), GetNextSample1D( rng ), intersection, wi, brdf, pdf, isDeltaBxdf );
 
             if ( all( brdf == 0.0f ) || pdf == 0.0f )
                 break;
@@ -226,7 +247,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
             float NdotL = abs( dot( wi, intersection.normal ) );
             pathThroughput = pathThroughput * brdf * NdotL / pdf;
 
-            if ( !IntersectScene( intersection.position, wi, intersection.rayEpsilon, threadId, intersection ) )
+            if ( !IntersectScene( OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi ), wi, threadId, intersection ) )
             {
                 l += pathThroughput * EnvironmentShader( wi ) * g_Background;
                 break;
@@ -265,7 +286,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     float2 filmSample = ( pixelSample + pixelPos ) / g_Resolution;
     GenerateRay( filmSample, g_FilmSize, g_FilmDistance, g_CameraTransform, intersection.position, wo );
 
-    if ( IntersectScene( intersection.position, wo, 0.0f, threadId, intersection ) )
+    if ( IntersectScene( intersection.position, wo, threadId, intersection ) )
     {
 #if defined( OUTPUT_NORMAL )
         l = intersection.normal * 0.5f + 0.5f;

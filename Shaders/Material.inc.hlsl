@@ -13,6 +13,7 @@ struct Material
     float3 emission;
     float  roughness;
     float  ior;
+    float  transmission;
     float2 texTiling;
     uint   flags;
 };

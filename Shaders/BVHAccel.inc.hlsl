@@ -130,8 +130,9 @@ bool BVHIntersect( float3 origin
                     Vertex v1 = g_Vertices[ g_Triangles[ iPrim * 3 + 1 ] ];
                     Vertex v2 = g_Vertices[ g_Triangles[ iPrim * 3 + 2 ] ];
                     float t, u, v;
+                    float3 geometryNormal;
                     bool backface;
-                    if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
+                    if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, geometryNormal, backface ) )
                     {
                         return true;
                     }
@@ -154,7 +155,8 @@ bool BVHIntersect( float3 origin
         Vertex v0 = g_Vertices[ g_Triangles[ iPrim * 3 ] ];
         Vertex v1 = g_Vertices[ g_Triangles[ iPrim * 3 + 1 ] ];
         Vertex v2 = g_Vertices[ g_Triangles[ iPrim * 3 + 2 ] ];
-        if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
+        float3 geometryNormal;
+        if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, geometryNormal, backface ) )
         {
             return true;
         }

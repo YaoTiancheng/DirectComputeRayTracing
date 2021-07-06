@@ -26,7 +26,7 @@ using namespace DirectX;
 
 static const uint32_t s_MaxRayBounce = 20;
 static const uint32_t s_MaxLightsCount = 64;
-static const int s_RayTracingKernelCount = 6;
+static const int s_RayTracingOutputCount = 6;
 
 struct RayTracingConstants
 {
@@ -117,7 +117,7 @@ struct SRenderer
 
     void CreateEnvironmentTextureFromCurrentFilepath();
 
-    bool CompileAndCreateRayTracingKernels( uint32_t traversalStackSize, bool noBVHAccel, bool multipleImportanceSampling );
+    bool CompileAndCreateRayTracingKernel();
 
     void OnImGUI();
 
@@ -137,12 +137,13 @@ struct SRenderer
     bool                                m_IsLightBufferDirty = false;
     bool                                m_IsMaterialBufferDirty = false;
     bool                                m_IsRayTracingJobDirty = true;
+    bool                                m_IsRayTracingShaderDirty = true;
 
     template <typename T>
     using ComPtr = Microsoft::WRL::ComPtr<T>;
     ComPtr<ID3D11SamplerState>          m_UVClampSamplerState;
 
-    ComputeShaderPtr                    m_RayTracingShader[ s_RayTracingKernelCount ];
+    ComputeShaderPtr                    m_RayTracingShader;
 
     GPUTexturePtr                       m_FilmTexture;
     GPUTexturePtr                       m_RenderResultTexture;
@@ -185,9 +186,11 @@ struct SRenderer
 
     bool                                m_HasValidScene;
     bool                                m_IsMultipleImportanceSamplingEnabled;
+    bool                                m_IsBVHDisabled;
+    uint32_t                            m_BVHTraversalStackSize;
     uint32_t                            m_SPP;
 
-    int                                 m_RayTracingKernelIndex = 0;
+    int                                 m_RayTracingOutputIndex = 0;
     SSceneObjectSelection               m_SceneObjectSelection;
     bool                                m_ShowUI = true;
 };
@@ -408,6 +411,9 @@ bool SRenderer::Init()
 
     m_HasValidScene = ResetScene( CommandLineArgs::Singleton()->GetFilename().c_str() );
 
+    m_IsBVHDisabled = CommandLineArgs::Singleton()->GetNoBVHAccel();
+    m_IsMultipleImportanceSamplingEnabled = CommandLineArgs::Singleton()->IsMultipleImportanceSamplingEnabled();
+
     return true;
 }
 
@@ -447,11 +453,10 @@ bool SRenderer::ResetScene( const char* filePath )
         LOG_STRING_FORMAT( "BVH created from mesh. Node count:%d, max depth:%d, max stack size:%d\n", mesh.GetBVHNodeCount(), BVHMaxDepth, BVHMaxStackSize );
     }
 
-    if ( !CompileAndCreateRayTracingKernels( mesh.GetBVHMaxStackSize(), commandLineArgs->GetNoBVHAccel(), commandLineArgs->IsMultipleImportanceSamplingEnabled() ) )
-        return false;
+    m_BVHTraversalStackSize = mesh.GetBVHMaxStackSize();
 
-    // Update after shader created successfully so the UI display match the real shader option state.
-    m_IsMultipleImportanceSamplingEnabled = commandLineArgs->IsMultipleImportanceSamplingEnabled();
+    // Need to recompile and create ray tracing shader
+    m_IsRayTracingShaderDirty = true;
 
     m_Materials = mesh.GetMaterials();
     m_MaterialNames = mesh.GetMaterialNames();
@@ -538,7 +543,15 @@ void SRenderer::DispatchRayTracing()
         m_IsConstantBufferDirty = true;
     }
 
+    m_IsRayTracingJobDirty = m_IsRayTracingJobDirty || m_IsRayTracingShaderDirty;
     m_IsFilmDirty = m_IsFilmDirty || m_IsConstantBufferDirty || m_IsLightBufferDirty || m_IsMaterialBufferDirty || m_IsRayTracingJobDirty;
+
+    // Compile shader if it is dirty
+    if ( m_IsRayTracingShaderDirty )
+    {
+        m_HasValidScene = CompileAndCreateRayTracingKernel();
+        m_IsRayTracingShaderDirty = false;
+    }
 
     if ( m_IsFilmDirty )
     {
@@ -754,7 +767,7 @@ void SRenderer::UpdateRayTracingJob()
 
     m_RayTracingJob.m_ConstantBuffers = { m_RayTracingConstantsBuffer->GetBuffer(), m_RayTracingFrameConstantBuffer->GetBuffer() };
 
-    m_RayTracingJob.m_Shader = m_RayTracingShader[ m_RayTracingKernelIndex ].get();
+    m_RayTracingJob.m_Shader = m_RayTracingShader.get();
 
     m_RayTracingJob.m_DispatchSizeX = (uint32_t)ceil( m_RayTracingConstants.resolutionX / 16.0f );
     m_RayTracingJob.m_DispatchSizeY = (uint32_t)ceil( m_RayTracingConstants.resolutionY / 16.0f );
@@ -795,40 +808,34 @@ void SRenderer::CreateEnvironmentTextureFromCurrentFilepath()
     m_EnvironmentTexture.reset( GPUTexture::CreateFromFile( filepath.c_str() ) );
 }
 
-bool SRenderer::CompileAndCreateRayTracingKernels( uint32_t traversalStackSize, bool noBVHAccel, bool multipleImportanceSampling )
+bool SRenderer::CompileAndCreateRayTracingKernel()
 {
     std::vector<D3D_SHADER_MACRO> rayTracingShaderDefines;
 
-    static const char* s_RayTracingKernelDefines[ s_RayTracingKernelCount ] = { NULL, "OUTPUT_NORMAL", "OUTPUT_TANGENT", "OUTPUT_ALBEDO", "OUTPUT_NEGATIVE_NDOTV", "OUTPUT_BACKFACE" };
-
     static const uint32_t s_MaxRadix10IntegerBufferLengh = 12;
     char buffer_TraversalStackSize[ s_MaxRadix10IntegerBufferLengh ];
-    _itoa( traversalStackSize, buffer_TraversalStackSize, 10 );
+    _itoa( m_BVHTraversalStackSize, buffer_TraversalStackSize, 10 );
+    
+    rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_STACK_SIZE", buffer_TraversalStackSize } );
 
-    for ( int i = 0; i < s_RayTracingKernelCount; ++i )
+    if ( m_IsBVHDisabled )
     {
-        rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_STACK_SIZE", buffer_TraversalStackSize } );
-
-        if ( noBVHAccel )
-        {
-            rayTracingShaderDefines.push_back( { "NO_BVH_ACCEL", "0" } );
-        }
-        if ( multipleImportanceSampling )
-        {
-            rayTracingShaderDefines.push_back( { "MULTIPLE_IMPORTANCE_SAMPLING", "0" } );
-        }
-        if ( s_RayTracingKernelDefines[ i ] )
-        {
-            rayTracingShaderDefines.push_back( { s_RayTracingKernelDefines[ i ], "0" } );
-        }
-        rayTracingShaderDefines.push_back( { NULL, NULL } );
-
-        m_RayTracingShader[ i ].reset( ComputeShader::CreateFromFile( L"Shaders\\RayTracing.hlsl", rayTracingShaderDefines ) );
-        if ( !m_RayTracingShader[ i ] )
-            return false;
-
-        rayTracingShaderDefines.clear();
+        rayTracingShaderDefines.push_back( { "NO_BVH_ACCEL", "0" } );
     }
+    if ( m_IsMultipleImportanceSamplingEnabled )
+    {
+        rayTracingShaderDefines.push_back( { "MULTIPLE_IMPORTANCE_SAMPLING", "0" } );
+    }
+    static const char* s_RayTracingOutputDefines[s_RayTracingOutputCount] = { NULL, "OUTPUT_NORMAL", "OUTPUT_TANGENT", "OUTPUT_ALBEDO", "OUTPUT_NEGATIVE_NDOTV", "OUTPUT_BACKFACE" };
+    if ( s_RayTracingOutputDefines[ m_RayTracingOutputIndex ] )
+    {
+        rayTracingShaderDefines.push_back( { s_RayTracingOutputDefines[ m_RayTracingOutputIndex ], "0" } );
+    }
+    rayTracingShaderDefines.push_back( { NULL, NULL } );
+
+    m_RayTracingShader.reset( ComputeShader::CreateFromFile( L"Shaders\\RayTracing.hlsl", rayTracingShaderDefines ) );
+    if ( !m_RayTracingShader )
+        return false;
 
     return true;
 }
@@ -858,14 +865,14 @@ void SRenderer::OnImGUI()
 
         if ( ImGui::CollapsingHeader( "Kernel" ) )
         {
-            static const char* s_KernelTypeNames[ s_RayTracingKernelCount ] = { "Path Tracing", "Output Normal", "Output Tangent", "Output Albedo", "Output Negative NdotV", "Output Backface" };
-            if ( ImGui::Combo( "Type", &m_RayTracingKernelIndex, s_KernelTypeNames, IM_ARRAYSIZE( s_KernelTypeNames ) ) )
+            static const char* s_OutputNames[ s_RayTracingOutputCount ] = { "Path Tracing", "Shading Normal", "Shading Tangent", "Albedo", "Negative NdotV", "Backface" };
+            if ( ImGui::Combo( "Output", &m_RayTracingOutputIndex, s_OutputNames, IM_ARRAYSIZE( s_OutputNames ) ) )
             {
-                m_IsRayTracingJobDirty = true;
+                m_IsRayTracingShaderDirty = true;
 
-                m_PostProcessing.SetPostFXDisable( m_RayTracingKernelIndex != 0 );
+                m_PostProcessing.SetPostFXDisable( m_RayTracingOutputIndex != 0 );
             }
-            if ( m_RayTracingKernelIndex == 0 )
+            if ( m_RayTracingOutputIndex == 0 )
             {
                 if ( ImGui::DragInt( "Max Bounce Count", (int*)&m_RayTracingConstants.maxBounceCount, 0.5f, 0, s_MaxRayBounce ) )
                     m_IsConstantBufferDirty = true;
@@ -889,7 +896,7 @@ void SRenderer::OnImGUI()
             }
         }
 
-        if ( m_RayTracingKernelIndex == 0 )
+        if ( m_RayTracingOutputIndex == 0 )
         {
             if ( ImGui::CollapsingHeader( "Environment" ) )
             {
@@ -1126,6 +1133,8 @@ void SRenderer::OnImGUI()
         ImGui::Begin( "Render Stats." );
 
         ImGui::Text( "MIS: %s", m_IsMultipleImportanceSamplingEnabled ? "On" : "Off" );
+        ImGui::Text( "No BVH: %s", m_IsBVHDisabled ? "On" : "Off" );
+        ImGui::Text( "BVH traversal stack size: %d", m_BVHTraversalStackSize );
         ImGui::Text( "Average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate );
         ImGui::Text( "SPP: %d", m_SPP );
         if ( !m_HasValidScene )
@@ -1135,5 +1144,18 @@ void SRenderer::OnImGUI()
         }
 
         ImGui::End();
+    }
+
+    {
+        if ( m_IsRayTracingShaderDirty )
+        {
+            ImVec2 center( ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f );
+            ImGui::SetNextWindowPos( center, ImGuiCond_Appearing, ImVec2( 0.5f, 0.5f ) );
+            if ( ImGui::Begin( "Hold on", nullptr, ImGuiWindowFlags_NoTitleBar ) )
+            {
+                ImGui::Text( "Compiling Shader..." );
+                ImGui::End();
+            }
+        }
     }
 }

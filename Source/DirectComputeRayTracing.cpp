@@ -176,7 +176,7 @@ struct SRenderer
     ComputeJob                          m_RayTracingJob;
 
     enum class EFrameSeedType { FrameIndex = 0, SampleCount = 1, Fixed = 2, _Count = 3 };
-    EFrameSeedType                      m_FrameSeedType = EFrameSeedType::FrameIndex;
+    EFrameSeedType                      m_FrameSeedType = EFrameSeedType::SampleCount;
 
     FrameTimer                          m_FrameTimer;
 
@@ -187,6 +187,7 @@ struct SRenderer
     bool                                m_HasValidScene;
     bool                                m_IsMultipleImportanceSamplingEnabled;
     bool                                m_IsBVHDisabled;
+    bool                                m_IsGGXVNDFSamplingEnabled = true;
     uint32_t                            m_BVHTraversalStackSize;
     uint32_t                            m_SPP;
 
@@ -826,6 +827,10 @@ bool SRenderer::CompileAndCreateRayTracingKernel()
     {
         rayTracingShaderDefines.push_back( { "MULTIPLE_IMPORTANCE_SAMPLING", "0" } );
     }
+    if ( m_IsGGXVNDFSamplingEnabled )
+    {
+        rayTracingShaderDefines.push_back( { "GGX_SAMPLE_VNDF", "0" } );
+    }
     static const char* s_RayTracingOutputDefines[s_RayTracingOutputCount] = { NULL, "OUTPUT_NORMAL", "OUTPUT_TANGENT", "OUTPUT_ALBEDO", "OUTPUT_NEGATIVE_NDOTV", "OUTPUT_BACKFACE" };
     if ( s_RayTracingOutputDefines[ m_RayTracingOutputIndex ] )
     {
@@ -893,6 +898,11 @@ void SRenderer::OnImGUI()
                 {
                     m_IsFilmDirty = true;
                 }
+            }
+
+            if ( ImGui::Checkbox( "GGX VNDF Sampling", &m_IsGGXVNDFSamplingEnabled ) )
+            {
+                m_IsRayTracingShaderDirty = true;
             }
         }
 

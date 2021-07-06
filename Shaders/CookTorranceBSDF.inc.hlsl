@@ -80,18 +80,30 @@ float EvaluateGGXMicrofacetDistribution( float3 m, float alpha )
 
 float EvaluateGGXMicrofacetDistributionPdf( float3 wo, float3 m, float alpha )
 {
+#if defined( GGX_SAMPLE_VNDF )
     return EvaluateGGXMicrofacetDistribution( m, alpha ) * EvaluateGGXGeometricShadowingOneDirection( alpha * alpha, m, wo ) * max( 0, dot( wo, m ) ) / wo.z;
+#else
+    return EvaluateGGXMicrofacetDistribution( m, alpha ) * abs( m.z );
+#endif
 }
 
 void SampleGGXMicrofacetDistribution( float3 wo, float2 sample, float alpha, out float3 m, out float pdf )
 {
+#if defined( GGX_SAMPLE_VNDF )
     m = SampleGGXVNDF( wo, sample, alpha );
+#else 
+    m = SampleGGXNDF( sample, alpha );
+#endif
     pdf = EvaluateGGXMicrofacetDistributionPdf( wo, m, alpha );
 }
 
 void SampleGGXMicrofacetDistribution( float3 wo, float2 sample, float alpha, out float3 m )
 {
+#if defined( GGX_SAMPLE_VNDF )
     m = SampleGGXVNDF( wo, sample, alpha );
+#else
+    m = SampleGGXNDF( sample, alpha );
+#endif
 }
 
 #define ALPHA_THRESHOLD 0.00052441f
@@ -317,7 +329,11 @@ void SampleCookTorranceMicrofacetBSDF( float3 wo, float selectionSample, float2 
         D = EvaluateGGXMicrofacetDistribution( m, alpha );
         G1_o = EvaluateGGXGeometricShadowingOneDirection( alpha2, m, wo );
         WOdotM = dot( wo, m );
+#if defined( GGX_SAMPLE_VNDF )
         pdf = D * G1_o * WOdotM / wo.z;
+#else
+        pdf = D * abs( m.z );
+#endif
     }
     else
     {

@@ -264,7 +264,7 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
         dstMat.emission  = DirectX::XMFLOAT3( iterSrcMat.emission[ 0 ], iterSrcMat.emission[ 1 ], iterSrcMat.emission[ 2 ] );
         dstMat.roughness = iterSrcMat.roughness;
         dstMat.ior       = iterSrcMat.ior;
-        dstMat.transmission = iterSrcMat.transmittance[ 0 ];
+        dstMat.transmission = 1.0f - iterSrcMat.dissolve;
         dstMat.texTiling = XMFLOAT2( 1.0f, 1.0f );
         dstMat.flags     = 0;
         m_Materials.emplace_back( dstMat );

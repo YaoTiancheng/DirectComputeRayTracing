@@ -1,7 +1,9 @@
 #include "stdafx.h"
 #include "Mesh.h"
+#include "Logging.h"
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "OBJLoader/tiny_obj_loader.h"
+#include "MikkTSpace/mikktspace.h"
 
 inline void hash_combine( std::size_t& seed ) { }
 
@@ -24,10 +26,7 @@ namespace std
             return h;
         }
     };
-}
 
-namespace std 
-{
     template<> struct equal_to<tinyobj::index_t> 
     {
         bool operator()( const tinyobj::index_t& lhs, const tinyobj::index_t& rhs ) const 
@@ -40,6 +39,114 @@ namespace std
 }
 
 using namespace DirectX;
+
+struct SVertexKey
+{
+    tinyobj::index_t m_TinyObjIndex;
+    XMFLOAT3         m_Tangent;
+};
+
+namespace std
+{
+    template<> struct hash<SVertexKey>
+    {
+        std::size_t operator()( SVertexKey const& s ) const noexcept
+        {
+            size_t h = 0;
+            hash_combine( h, s.m_TinyObjIndex, s.m_Tangent.x, s.m_Tangent.y, s.m_Tangent.z );
+            return h;
+        }
+    };
+
+    template<> struct equal_to<SVertexKey>
+    {
+        bool operator()( const SVertexKey& lhs, const SVertexKey& rhs ) const
+        {
+            std::equal_to<tinyobj::index_t> equal_to;
+            return equal_to( lhs.m_TinyObjIndex, rhs.m_TinyObjIndex )
+                && lhs.m_Tangent.x == rhs.m_Tangent.x
+                && lhs.m_Tangent.y == rhs.m_Tangent.y
+                && lhs.m_Tangent.z == rhs.m_Tangent.z;
+        }
+    };
+}
+
+struct STinyObjMeshMikkTSpaceContext
+{
+    STinyObjMeshMikkTSpaceContext( const tinyobj::attrib_t& attrib, const tinyobj::mesh_t& mesh, std::vector<XMFLOAT3>* tangents )
+        : m_Attrib( attrib ), m_Mesh( mesh ), m_Tangents( tangents )
+    {}
+    
+    const tinyobj::attrib_t& m_Attrib;
+    const tinyobj::mesh_t&   m_Mesh;
+    std::vector<XMFLOAT3>*   m_Tangents;
+};
+
+static int MikkTSpaceGetNumFaces( const SMikkTSpaceContext* pContext )
+{
+    STinyObjMeshMikkTSpaceContext* meshContext = (STinyObjMeshMikkTSpaceContext*)pContext->m_pUserData;
+    assert( meshContext->m_Mesh.num_face_vertices.size() <= std::numeric_limits<int>::max() );
+    return (int)meshContext->m_Mesh.num_face_vertices.size();
+}
+
+static int MikkTSpaceGetNumVerticesOfFace( const SMikkTSpaceContext* pContext, const int iFace )
+{
+    STinyObjMeshMikkTSpaceContext* meshContext = (STinyObjMeshMikkTSpaceContext*)pContext->m_pUserData;
+    assert( meshContext->m_Mesh.num_face_vertices[ iFace ] == 3 );
+    return 3;
+}
+
+static void MikkTSpaceGetPosition( const SMikkTSpaceContext* pContext, float fvPosOut[], const int iFace, const int iVert )
+{
+    STinyObjMeshMikkTSpaceContext* meshContext = (STinyObjMeshMikkTSpaceContext*)pContext->m_pUserData;
+    tinyobj::index_t idx = meshContext->m_Mesh.indices[ iFace * 3 + iVert ];
+    fvPosOut[ 0 ] = meshContext->m_Attrib.vertices[ idx.vertex_index * 3 ];
+    fvPosOut[ 1 ] = meshContext->m_Attrib.vertices[ idx.vertex_index * 3 + 1 ];
+    fvPosOut[ 2 ] = meshContext->m_Attrib.vertices[ idx.vertex_index * 3 + 2 ];
+}
+
+static void MikkTSpaceGetNormal( const SMikkTSpaceContext* pContext, float fvNormOut[], const int iFace, const int iVert )
+{
+    STinyObjMeshMikkTSpaceContext* meshContext = (STinyObjMeshMikkTSpaceContext*)pContext->m_pUserData;
+    tinyobj::index_t idx = meshContext->m_Mesh.indices[ iFace * 3 + iVert ];
+    fvNormOut[ 0 ] = meshContext->m_Attrib.normals[ idx.normal_index * 3 ];
+    fvNormOut[ 1 ] = meshContext->m_Attrib.normals[ idx.normal_index * 3 + 1 ];
+    fvNormOut[ 2 ] = meshContext->m_Attrib.normals[ idx.normal_index * 3 + 2 ];
+}
+
+static void MikkTSpaceGetTexcoord( const SMikkTSpaceContext* pContext, float fvTexcOut[], const int iFace, const int iVert )
+{
+    STinyObjMeshMikkTSpaceContext* meshContext = (STinyObjMeshMikkTSpaceContext*)pContext->m_pUserData;
+    tinyobj::index_t idx = meshContext->m_Mesh.indices[ iFace * 3 + iVert ];
+    if ( idx.texcoord_index != -1 )
+    { 
+        fvTexcOut[ 0 ] = meshContext->m_Attrib.texcoords[ idx.texcoord_index * 2 ];
+        fvTexcOut[ 1 ] = meshContext->m_Attrib.texcoords[ idx.texcoord_index * 2 + 1 ];
+    }
+    else
+    {
+        static XMFLOAT2 s_DefaultTexcoords[ 3 ] = {
+            { 0.0f, 0.0f }, { 1.0f, 0.0f }, { 0.0f, 1.0f }
+        };
+        fvTexcOut[ 0 ] = s_DefaultTexcoords[ iVert ].x;
+        fvTexcOut[ 1 ] = s_DefaultTexcoords[ iVert ].y;
+    }
+}
+
+static void MikkTSpaceSetTSpaceBasic( const SMikkTSpaceContext* pContext, const float fvTangent[], const float fSign, const int iFace, const int iVert )
+{
+    STinyObjMeshMikkTSpaceContext* meshContext = (STinyObjMeshMikkTSpaceContext*)pContext->m_pUserData;
+    ( *meshContext->m_Tangents )[ iFace * 3 + iVert ] = XMFLOAT3( fvTangent[ 0 ], fvTangent[ 1 ], fvTangent[ 2 ] );
+}
+
+
+static bool GenerateTangentVectorsForMesh( const tinyobj::attrib_t& attrib, const tinyobj::mesh_t& mesh, SMikkTSpaceContext* context, std::vector<XMFLOAT3>* outTangents )
+{
+    outTangents->resize( mesh.num_face_vertices.size() * 3 );
+    STinyObjMeshMikkTSpaceContext meshContext( attrib, mesh, outTangents );
+    context->m_pUserData = &meshContext;
+    return genTangSpaceDefault( context );
+}
 
 bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool buildBVH, const char* BVHFilename )
 {
@@ -54,35 +161,11 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
         return false;
     }
 
-    std::unordered_map<tinyobj::index_t, uint32_t> tinyOBJIndexToVertexIndexMap;
-    std::vector<XMFLOAT3> tangents;
+    std::unordered_map<SVertexKey, uint32_t> vertexKeyToVertexIndexMap;
 
     size_t normalCount = attrib.normals.size() / 3;
     if ( normalCount == 0 )
         return false;
-
-    // Generate tangents for normals
-    tangents.resize( normalCount );
-    for ( size_t i = 0; i < normalCount; ++i )
-    {
-        XMFLOAT3 normal( attrib.normals[ i * 3 ], attrib.normals[ i * 3 + 1 ], attrib.normals[ i * 3 + 2 ] );
-        XMVECTOR vNormal = XMLoadFloat3( &normal );
-        XMVECTOR vDot = XMVector3Dot( vNormal, g_XMIdentityR1 );
-        vDot = XMVectorAbs( vDot );
-        XMVECTOR vHelper;
-        if ( XMVector3NearEqual( vDot, g_XMOne, g_XMEpsilon ) )
-        {
-            vHelper = g_XMIdentityR0;
-        }
-        else
-        {
-            vHelper = g_XMIdentityR1;
-        }
-
-        XMVECTOR vBinormal = XMVector3Cross( vNormal, vHelper );
-        vBinormal = XMVector3Normalize( vBinormal );
-        XMStoreFloat3( tangents.data() + i, vBinormal );
-    }
 
     bool hasTexcoord = !attrib.texcoords.empty();
 
@@ -90,11 +173,30 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
     std::vector<uint32_t> materialIds;
     bool needDefaultMaterial = false;
 
+    SMikkTSpaceContext mikkTSpaceContext;
+    SMikkTSpaceInterface mikkTSpaceInterface;
+    mikkTSpaceContext.m_pInterface = &mikkTSpaceInterface;
+    ZeroMemory( &mikkTSpaceInterface, sizeof( SMikkTSpaceInterface ) );
+    mikkTSpaceInterface.m_getNumFaces           = MikkTSpaceGetNumFaces;
+    mikkTSpaceInterface.m_getNumVerticesOfFace  = MikkTSpaceGetNumVerticesOfFace;
+    mikkTSpaceInterface.m_getPosition           = MikkTSpaceGetPosition;
+    mikkTSpaceInterface.m_getNormal             = MikkTSpaceGetNormal;
+    mikkTSpaceInterface.m_getTexCoord           = MikkTSpaceGetTexcoord;
+    mikkTSpaceInterface.m_setTSpaceBasic        = MikkTSpaceSetTSpaceBasic;
+
+    std::vector<XMFLOAT3> tangents;
+
     for ( size_t iShapes = 0; iShapes < shapes.size(); ++iShapes )
     {
         tinyobj::mesh_t& mesh = shapes[ iShapes ].mesh;
 
         assert( mesh.num_face_vertices.size() == mesh.material_ids.size() );
+
+        if ( !GenerateTangentVectorsForMesh( attrib, mesh, &mikkTSpaceContext, &tangents ) )
+        {
+            LOG_STRING_FORMAT( "Generating tangent failed for mesh %s. This mesh was not loaded.\n", shapes[ iShapes ].name.c_str() );
+            continue;
+        }
 
         for ( size_t iFace = 0; iFace < mesh.num_face_vertices.size(); ++iFace )
         {
@@ -119,9 +221,12 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
                 if ( idx.vertex_index == -1 || idx.normal_index == -1 )
                     return false;
 
+                XMFLOAT3 tangent = tangents[ iFace * 3 + iVertex ];
+
+                SVertexKey vertexKey = { idx, tangent };
                 uint32_t vertexIndex = 0;
-                auto iter = tinyOBJIndexToVertexIndexMap.find( idx );
-                if ( iter != tinyOBJIndexToVertexIndexMap.end() )
+                auto iter = vertexKeyToVertexIndexMap.find( vertexKey );
+                if ( iter != vertexKeyToVertexIndexMap.end() )
                 {
                     vertexIndex = iter->second;
                 }
@@ -134,7 +239,7 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
                     Vertex vertex;
                     vertex.position = XMFLOAT3( attrib.vertices[ idx.vertex_index * 3 ], attrib.vertices[ idx.vertex_index * 3 + 1 ], attrib.vertices[ idx.vertex_index * 3 + 2 ] );
                     vertex.normal   = XMFLOAT3( attrib.normals[ idx.normal_index * 3 ], attrib.normals[ idx.normal_index * 3 + 1 ], attrib.normals[ idx.normal_index * 3 + 2 ] );
-                    vertex.tangent  = tangents[ idx.normal_index ];
+                    vertex.tangent  = tangent;
                     vertex.texcoord = hasTexcoord ? XMFLOAT2( attrib.texcoords[ idx.texcoord_index * 2 ], attrib.texcoords[ idx.texcoord_index * 2 + 1 ] ) : XMFLOAT2( 0.0f, 0.0f );
 
                     vertex.position.x = -vertex.position.x;
@@ -143,7 +248,7 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
 
                     m_Vertices.emplace_back( vertex );
 
-                    tinyOBJIndexToVertexIndexMap.insert( std::make_pair( idx, vertexIndex ) );
+                    vertexKeyToVertexIndexMap.insert( std::make_pair( vertexKey, vertexIndex ) );
                 }
                 indices.push_back( vertexIndex );
             }

@@ -4,6 +4,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 15.0.28010.2026
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectComputeRayTracing", "DirectComputeRayTracing.vcxproj", "{5376CBD2-3B00-46A2-AB27-CB4D9855CD3B}"
+	ProjectSection(ProjectDependencies) = postProject
+		{DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6} = {DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MikkTSpace", "MikkTSpace\MikkTSpace.vcxproj", "{DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +26,14 @@ Global
 		{5376CBD2-3B00-46A2-AB27-CB4D9855CD3B}.Release|x64.Build.0 = Release|x64
 		{5376CBD2-3B00-46A2-AB27-CB4D9855CD3B}.Release|x86.ActiveCfg = Release|Win32
 		{5376CBD2-3B00-46A2-AB27-CB4D9855CD3B}.Release|x86.Build.0 = Release|Win32
+		{DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6}.Debug|x64.ActiveCfg = Debug|x64
+		{DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6}.Debug|x64.Build.0 = Debug|x64
+		{DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6}.Debug|x86.ActiveCfg = Debug|Win32
+		{DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6}.Debug|x86.Build.0 = Debug|Win32
+		{DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6}.Release|x64.ActiveCfg = Release|x64
+		{DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6}.Release|x64.Build.0 = Release|x64
+		{DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6}.Release|x86.ActiveCfg = Release|Win32
+		{DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

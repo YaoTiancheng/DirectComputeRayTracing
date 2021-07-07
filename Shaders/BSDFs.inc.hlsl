@@ -27,7 +27,7 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
     bool invert = WOdotN < 0.0f;
     intersection.normal = invert ? -intersection.normal : intersection.normal;
 
-    float3 biNormal = cross( intersection.tangent, intersection.normal );
+    float3 biNormal = cross( intersection.normal, intersection.tangent );
     float3x3 tbn2world = float3x3( intersection.tangent, biNormal, intersection.normal );
     float3x3 world2tbn = transpose( tbn2world );
 
@@ -63,7 +63,7 @@ float EvaluateBSDFPdf( float3 wi, float3 wo, Intersection intersection )
     bool invert = WOdotN < 0.0f;
     intersection.normal = invert ? -intersection.normal : intersection.normal;
 
-    float3 biNormal = cross( intersection.tangent, intersection.normal );
+    float3 biNormal = cross( intersection.normal, intersection.tangent );
     float3x3 tbn2world = float3x3( intersection.tangent, biNormal, intersection.normal );
     float3x3 world2tbn = transpose( tbn2world );
 
@@ -106,7 +106,7 @@ void SampleBSDF( float3 wo
     bool invert = WOdotN < 0.0f;
     intersection.normal = invert ? -intersection.normal : intersection.normal;
 
-    float3 biNormal = cross( intersection.tangent.xyz, intersection.normal.xyz );
+    float3 biNormal = cross( intersection.normal, intersection.tangent );
     float3x3 tbn2world = float3x3( intersection.tangent, biNormal, intersection.normal );
     float3x3 world2tbn = transpose( tbn2world );
 

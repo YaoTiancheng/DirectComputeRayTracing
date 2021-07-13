@@ -3,50 +3,36 @@
 
 #include "BxDFTextureDef.inc.hlsl"
 
-#define SAMPLE_TEXTURE_1D_LINEAR( TEX ) \
-float SampleTexture1DLinear_##TEX( SamplerState s, float u, float dim ) \
-{ \
-    float2 dim2 = float2( dim, 1 ); \
-    float2 texelPos = float2( u, 0.0f ) * ( dim2 - 1.0f ); \
-    float2 uv = ( texelPos + 0.5f ) / dim2; \
-    float4 values = TEX.Gather( s, uv ); \
-    float fraction = frac( texelPos.x ); \
-    return lerp( values.w, values.z, fraction ); \
+// Remap texcoord 0 and 1 to center of the texel
+float TexcoordRemap( uint dim, float u )
+{
+    return u * ( float( dim - 1 ) / dim ) + 0.5f / dim;
 }
 
-#define SAMPLE_TEXTURE_2D_LINEAR( TEX ) \
-float SampleTexture2DLinear_##TEX( SamplerState s, float2 uv, float2 dim ) \
-{ \
-    float2 texelPos = uv * ( dim - 1.0f ); \
-           uv = ( texelPos + 0.5f ) / dim; \
-    float2 fraction = frac( texelPos ); \
-    float4 values = TEX.Gather( s, uv ); \
-    float2 value = lerp( values.wx, values.zy, fraction.x ); \
-    return lerp( value.x, value.y, fraction.y ); \
+// Remap texcoord 0 and 1 to center of the texel
+float2 TexcoordRemap( uint2 dim, float2 uv )
+{
+    return uv * ( float2( dim - 1 ) / dim ) + 0.5f / dim;
 }
 
-#define SAMPLE_TEXTURE_ARRAY_LINEAR( TEX ) \
-float SampleTextureArrayLinear_##TEX( SamplerState s, float3 uvw, float3 dim, uint sliceOffset ) \
-{ \
-    float3 texelPos = uvw * ( dim - 1.0f ); \
-           uvw = ( texelPos + 0.5f ) / dim; \
-    float3 fraction = frac( texelPos ); \
-    float4 values0 = TEX.Gather( s, float3( uvw.xy, (float)( (int)texelPos.z + sliceOffset ) ) ); \
-    float4 values1 = TEX.Gather( s, float3( uvw.xy, (float)( (int)texelPos.z + 1 + sliceOffset ) ) ); \
-    float2 value0 = lerp( values0.wx, values0.zy, fraction.x ); \
-    float2 value1 = lerp( values1.wx, values1.zy, fraction.x ); \
-    return lerp( lerp( value0.x, value0.y, fraction.y ), lerp( value1.x, value1.y, fraction.y ), fraction.z ); \
+float SampleTexture1DLinear( Texture2D<float> tex, float u, uint dim )
+{
+    return tex.SampleLevel( UVClampSampler, TexcoordRemap( dim, u ), 0 );
+}
+
+float SampleTexture2DLinear( Texture2D<float> tex, float2 uv, uint2 dim )
+{
+    return tex.SampleLevel( UVClampSampler, TexcoordRemap( dim, uv ), 0 );
+}
+
+float SampleTextureArrayLinear( Texture2DArray<float> tex, float3 uvw, uint3 dim, uint sliceOffset )
+{
+    float slicePos = uvw.z * ( dim.z - 1.0f );
+    float fraction = frac( slicePos );
+    float value0 = tex.SampleLevel( UVClampSampler, float3( TexcoordRemap( dim.xy, uvw.xy ), (float)( (int)slicePos + sliceOffset ) ), 0 );
+    float value1 = tex.SampleLevel( UVClampSampler, float3( TexcoordRemap( dim.xy, uvw.xy ), (float)( (int)slicePos + 1 + sliceOffset ) ), 0 );
+    return lerp( value0, value1, fraction );
 } 
-
-SAMPLE_TEXTURE_1D_LINEAR( g_CookTorranceCompEAvgTexture )
-SAMPLE_TEXTURE_2D_LINEAR( g_CookTorranceCompETexture )
-SAMPLE_TEXTURE_ARRAY_LINEAR( g_CookTorranceCompEFresnelTexture )
-SAMPLE_TEXTURE_ARRAY_LINEAR( g_CookTorranceBSDFETexture )
-SAMPLE_TEXTURE_ARRAY_LINEAR( g_CookTorranceBSDFAvgETexture )
-SAMPLE_TEXTURE_ARRAY_LINEAR( g_CookTorranceBTDFETexture )
-SAMPLE_TEXTURE_ARRAY_LINEAR( g_CookTorranceBSDFInvCDFTexture )
-SAMPLE_TEXTURE_ARRAY_LINEAR( g_CookTorranceBSDFPDFScaleTexture )
-
 
 #define BXDFTEX_COOKTORRANCE_E_SIZE                     float2( BXDFTEX_COOKTORRANCE_E_SIZE_X, BXDFTEX_COOKTORRANCE_E_SIZE_Y )
 #define BXDFTEX_COOKTORRANCE_E_FRESNEL_SIZE             float3( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z )
@@ -57,12 +43,12 @@ SAMPLE_TEXTURE_ARRAY_LINEAR( g_CookTorranceBSDFPDFScaleTexture )
 float SampleCookTorranceMicrofacetBRDFEnergyTexture( float cosThetaO, float alpha )
 {
     float2 uv = float2( cosThetaO, alpha );
-    return SampleTexture2DLinear_g_CookTorranceCompETexture( UVClampSampler, uv, BXDFTEX_COOKTORRANCE_E_SIZE );
+    return SampleTexture2DLinear( g_CookTorranceCompETexture, uv, BXDFTEX_COOKTORRANCE_E_SIZE );
 }
 
 float SampleCookTorranceMicrofacetBRDFAverageEnergyTexture( float alpha )
 {
-    return SampleTexture1DLinear_g_CookTorranceCompEAvgTexture( UVClampSampler, alpha, BXDFTEX_COOKTORRANCE_E_AVG_SIZE_X );
+    return SampleTexture1DLinear( g_CookTorranceCompEAvgTexture, alpha, BXDFTEX_COOKTORRANCE_E_AVG_SIZE_X );
 }
 
 float SampleCookTorranceMicrofacetBRDFEnergyFresnelDielectricTexture( float cosThetaO, float alpha, float eta )
@@ -72,7 +58,7 @@ float SampleCookTorranceMicrofacetBRDFEnergyFresnelDielectricTexture( float cosT
     uint sliceOffset = inverseEta ? BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z : 0;
     float w = ( eta - 1.0f ) / 2.0f;
     float3 uvw = float3( cosThetaO, alpha, w );
-    return SampleTextureArrayLinear_g_CookTorranceCompEFresnelTexture( UVClampSampler, uvw, BXDFTEX_COOKTORRANCE_E_FRESNEL_SIZE, sliceOffset );
+    return SampleTextureArrayLinear( g_CookTorranceCompEFresnelTexture, uvw, BXDFTEX_COOKTORRANCE_E_FRESNEL_SIZE, sliceOffset );
 }
 
 float SampleCookTorranceMicrofacetBSDFEnergyTexture( float cosThetaO, float alpha, float eta )
@@ -82,7 +68,7 @@ float SampleCookTorranceMicrofacetBSDFEnergyTexture( float cosThetaO, float alph
     uint sliceOffset = inverseEta ? BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z : 0;
     float w = ( eta - 1.0f ) / 2.0f;
     float3 uvw = float3( cosThetaO, alpha, w );
-    return SampleTextureArrayLinear_g_CookTorranceBSDFETexture( UVClampSampler, uvw, BXDFTEX_COOKTORRANCE_E_FRESNEL_SIZE, sliceOffset );
+    return SampleTextureArrayLinear( g_CookTorranceBSDFETexture, uvw, BXDFTEX_COOKTORRANCE_E_FRESNEL_SIZE, sliceOffset );
 }
 
 float SampleCookTorranceMicrofacetBSDFAverageEnergyTexture( float alpha, float eta )
@@ -92,7 +78,7 @@ float SampleCookTorranceMicrofacetBSDFAverageEnergyTexture( float alpha, float e
     uint sliceOffset = inverseEta ? 1 : 0;
     float v = ( eta - 1.0f ) / 2.0f;
     float3 uvw = float3( alpha, v, 0.0f );
-    return SampleTextureArrayLinear_g_CookTorranceBSDFAvgETexture( UVClampSampler, uvw, BXDFTEX_COOKTORRANCE_BSDF_E_AVG_SIZE, sliceOffset );
+    return SampleTextureArrayLinear( g_CookTorranceBSDFAvgETexture, uvw, BXDFTEX_COOKTORRANCE_BSDF_E_AVG_SIZE, sliceOffset );
 }
 
 float SampleCookTorranceMicrofacetBTDFEnergyTexture( float cosThetaO, float alpha, float eta )
@@ -102,7 +88,7 @@ float SampleCookTorranceMicrofacetBTDFEnergyTexture( float cosThetaO, float alph
     uint sliceOffset = inverseEta ? BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z : 0;
     float w = ( eta - 1.0f ) / 2.0f;
     float3 uvw = float3( cosThetaO, alpha, w );
-    return SampleTextureArrayLinear_g_CookTorranceBTDFETexture( UVClampSampler, uvw, BXDFTEX_COOKTORRANCE_E_FRESNEL_SIZE, sliceOffset );
+    return SampleTextureArrayLinear( g_CookTorranceBTDFETexture, uvw, BXDFTEX_COOKTORRANCE_E_FRESNEL_SIZE, sliceOffset );
 }
 
 float SampleCookTorranceMicrofacetBSDFInvCDFTexture( float cosThetaO, float alpha, float eta )
@@ -112,7 +98,7 @@ float SampleCookTorranceMicrofacetBSDFInvCDFTexture( float cosThetaO, float alph
     uint sliceOffset = inverseEta ? BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z : 0;
     float w = ( eta - 1.0f ) / 2.0f;
     float3 uvw = float3( cosThetaO, alpha, w );
-    return SampleTextureArrayLinear_g_CookTorranceBSDFInvCDFTexture( UVClampSampler, uvw, BXDFTEX_COOKTORRANCE_E_FRESNEL_SIZE, sliceOffset );
+    return SampleTextureArrayLinear( g_CookTorranceBSDFInvCDFTexture, uvw, BXDFTEX_COOKTORRANCE_E_FRESNEL_SIZE, sliceOffset );
 }
 
 float SampleCookTorranceMicrofacetBSDFPDFScaleTexture( float alpha, float eta )
@@ -122,7 +108,7 @@ float SampleCookTorranceMicrofacetBSDFPDFScaleTexture( float alpha, float eta )
     uint sliceOffset = inverseEta ? 1 : 0;
     float v = ( eta - 1.0f ) / 2.0f;
     float3 uvw = float3( alpha, v, 0.0f );
-    float scale = SampleTextureArrayLinear_g_CookTorranceBSDFPDFScaleTexture( UVClampSampler, uvw, BXDFTEX_COOKTORRANCE_BSDF_PDF_SCALE_SIZE, sliceOffset );
+    float scale = SampleTextureArrayLinear( g_CookTorranceBSDFPDFScaleTexture, uvw, BXDFTEX_COOKTORRANCE_BSDF_PDF_SCALE_SIZE, sliceOffset );
     return scale * 2.0f;
 }
 

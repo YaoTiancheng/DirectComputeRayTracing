@@ -2,19 +2,13 @@
 #define _BSDF_H_
 
 #include "LambertBRDF.inc.hlsl"
-#include "CookTorranceCompensationBRDF.inc.hlsl"
 #include "CookTorranceBSDF.inc.hlsl"
 #include "Intersection.inc.hlsl"
 #include "LightingContext.inc.hlsl"
 
 float SpecularWeight( float cosTheta, float alpha, float ior )
 {
-    return EvaluateCookTorranceCompEFresnel( cosTheta, alpha, ior );
-}
-
-float SpecularCompWeight( float ior, float E, float EAvg )
-{
-    return EvaluateCookTorranceCompFresnel( ior, EAvg ) * ( 1.0f - E );
+    return SampleCookTorranceMicrofacetBRDFEnergyFresnelDielectricTexture( cosTheta, alpha, ior );
 }
 
 //
@@ -39,19 +33,19 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
     float etaI = invert ? intersection.ior : 1.0f;
     float etaT = invert ? 1.0f : intersection.ior;
 
-    float3 value = EvaluateCookTorranceMircofacetBRDF( wi, wo, intersection.specular, intersection.alpha, etaI, etaT, lightingContext );
-    value += EvaluateCookTorranceCompBRDF( wi, wo, intersection.specular, intersection.alpha, intersection.ior, lightingContext );
-
-    float E = EvaluateCookTorranceCompE( wo.z, intersection.alpha );
-    float EAvg = EvaluateCookTorranceCompEAvg( intersection.alpha );
-    float cosThetaO = wo.z;
-    float specularWeight        = SpecularWeight( cosThetaO, intersection.alpha, intersection.ior );
-    float specularCompWeight    = SpecularCompWeight( intersection.ior, E, EAvg );
-    float diffuseWeight = 1.0f - specularWeight - specularCompWeight;
-    value += EvaluateLambertBRDF( wi, wo, intersection.albedo, intersection.backface ) * diffuseWeight;
-
     float transmissionWeight = intersection.transmission;
     float opaqueWeight = 1.0f - transmissionWeight;
+
+    float E = SampleCookTorranceMicrofacetBRDFEnergyTexture( wo.z, intersection.alpha );
+    float EAvg = SampleCookTorranceMicrofacetBRDFAverageEnergyTexture( intersection.alpha );
+    float Fms = MultiscatteringFresnel( intersection.ior, EAvg );
+    float cosThetaO = wo.z;
+    float specularWeight        = SpecularWeight( cosThetaO, intersection.alpha, intersection.ior );
+    float specularCompWeight    = Fms * ( 1.0f - E ) * opaqueWeight;
+    float diffuseWeight = 1.0f - specularWeight - specularCompWeight;
+    float3 value = EvaluateCookTorranceMircofacetBRDF( wi, wo, intersection.specular, intersection.alpha, etaI, etaT, lightingContext );
+    value += EvaluateCookTorranceMultiscatteringBRDF( wi, wo, intersection.specular, intersection.alpha, E, EAvg, Fms );
+    value += EvaluateLambertBRDF( wi, wo, intersection.albedo, intersection.backface ) * diffuseWeight;
     value = value * opaqueWeight + EvaluateCookTorranceMicrofacetMultiscatteringBSDF( wi, wo, intersection.specular, intersection.alpha, etaI, etaT, lightingContext ) * transmissionWeight;
 
     return value;
@@ -75,19 +69,20 @@ float EvaluateBSDFPdf( float3 wi, float3 wo, Intersection intersection )
     float etaI = invert ? intersection.ior : 1.0f;
     float etaT = invert ? 1.0f : intersection.ior;
 
-    float E = EvaluateCookTorranceCompE( wo.z, intersection.alpha );
-    float EAvg = EvaluateCookTorranceCompEAvg( intersection.alpha );
+    float transmissionWeight = intersection.transmission;
+    float opaqueWeight = 1.0f - transmissionWeight;
+
+    float E = SampleCookTorranceMicrofacetBRDFEnergyTexture( wo.z, intersection.alpha );
+    float EAvg = SampleCookTorranceMicrofacetBRDFAverageEnergyTexture( intersection.alpha );
+    float Fms = MultiscatteringFresnel( intersection.ior, EAvg );
     float cosThetaO = wo.z;
     float specularWeight = SpecularWeight( cosThetaO, intersection.alpha, intersection.ior );
-    float specularCompWeight = SpecularCompWeight( intersection.ior, E, EAvg );
+    float specularCompWeight = Fms * ( 1.0f - E ) * opaqueWeight;
     float diffuseWeight = 1.0f - specularWeight - specularCompWeight;
 
     float pdf = EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * specularWeight;
-    pdf += EvaluateCookTorranceCompPdf( wi, intersection.alpha, lightingContext ) * specularCompWeight;
+    pdf += EvaluateCookTorranceMultiscatteringBRDFPdf( wi, wo, intersection.alpha ) * specularCompWeight;
     pdf += EvaluateLambertBRDFPdf( wi, wo ) * diffuseWeight;
-
-    float transmissionWeight = intersection.transmission;
-    float opaqueWeight = 1.0f - transmissionWeight;
     pdf = pdf * opaqueWeight + EvaluateCookTorranceMicrofacetMultiscatteringBSDFPdf( wi, wo, intersection.alpha, etaI, etaT, lightingContext ) * transmissionWeight;
 
     return pdf;
@@ -120,10 +115,11 @@ void SampleBSDF( float3 wo
     float transmissionWeight = intersection.transmission;
     float opaqueWeight = 1.0f - transmissionWeight;
     float cosThetaO = wo.z;
-    float E = EvaluateCookTorranceCompE( cosThetaO, intersection.alpha );
-    float EAvg = EvaluateCookTorranceCompEAvg( intersection.alpha );
+    float E = SampleCookTorranceMicrofacetBRDFEnergyTexture( cosThetaO, intersection.alpha );
+    float EAvg = SampleCookTorranceMicrofacetBRDFAverageEnergyTexture( intersection.alpha );
+    float Fms = MultiscatteringFresnel( intersection.ior, EAvg );
     float specularWeight = SpecularWeight( cosThetaO, intersection.alpha, intersection.ior ) * opaqueWeight;
-    float specularCompWeight = SpecularCompWeight( intersection.ior, E, EAvg ) * opaqueWeight;
+    float specularCompWeight = Fms * ( 1.0f - E ) * opaqueWeight;
     float diffuseWeight = ( 1.0f - specularWeight - specularCompWeight ) * opaqueWeight;
     
     isDeltaBxdf = false;
@@ -133,15 +129,15 @@ void SampleBSDF( float3 wo
         value *= opaqueWeight;
         pdf *= specularWeight;
 
-        value += EvaluateCookTorranceCompBRDF( wi, wo, intersection.specular, intersection.alpha, intersection.ior, lightingContext ) * opaqueWeight;
-        pdf += EvaluateCookTorranceCompPdf( wi, intersection.alpha, lightingContext ) * specularCompWeight;
+        value += EvaluateCookTorranceMultiscatteringBRDF( wi, wo, intersection.specular, intersection.alpha, E, EAvg, Fms ) * opaqueWeight;
+        pdf += EvaluateCookTorranceMultiscatteringBRDFPdf( wi, wo, intersection.alpha ) * specularCompWeight;
 
         value += EvaluateLambertBRDF( wi, wo, intersection.albedo, intersection.backface ) * diffuseWeight;
         pdf += EvaluateLambertBRDFPdf( wi, wo ) * diffuseWeight;
     }
     else if ( BRDFSelectionSample < specularWeight + specularCompWeight )
     {
-        SampleCookTorranceCompBRDF( wo, BRDFSample, intersection.specular, intersection.alpha, intersection.ior, wi, value, pdf, lightingContext );
+        SampleCookTorranceMultiscatteringBRDF( wo, BRDFSample, intersection.specular, intersection.alpha, E, EAvg, Fms, wi, value, pdf, lightingContext );
         value *= opaqueWeight;
         pdf *= specularCompWeight;
 
@@ -160,8 +156,8 @@ void SampleBSDF( float3 wo
         value += EvaluateCookTorranceMircofacetBRDF( wi, wo, intersection.specular, intersection.alpha, etaI, etaT, lightingContext ) * opaqueWeight;
         pdf += EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * specularWeight;
 
-        value += EvaluateCookTorranceCompBRDF( wi, wo, intersection.specular, intersection.alpha, intersection.ior, lightingContext ) * opaqueWeight;
-        pdf += EvaluateCookTorranceCompPdf( wi, intersection.alpha, lightingContext ) * specularCompWeight;
+        value += EvaluateCookTorranceMultiscatteringBRDF( wi, wo, intersection.specular, intersection.alpha, E, EAvg, Fms ) * opaqueWeight;
+        pdf += EvaluateCookTorranceMultiscatteringBRDFPdf( wi, wo, intersection.alpha ) * specularCompWeight;
     }
     else
     {

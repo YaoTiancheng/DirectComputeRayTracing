@@ -38,6 +38,8 @@ float SampleTextureArrayLinear( Texture2DArray<float> tex, float3 uvw, uint3 dim
 #define BXDFTEX_COOKTORRANCE_E_FRESNEL_SIZE             float3( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z )
 #define BXDFTEX_COOKTORRANCE_BSDF_E_AVG_SIZE            float3( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z, 1 )
 #define BXDFTEX_COOKTORRANCE_BSDF_PDF_SCALE_SIZE        float3( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z, 1 )
+#define BXDFTEX_COOKTORRANCE_BRDF_INV_CDF_SIZE          float2( BXDFTEX_COOKTORRANCE_MULTISCATTERING_INV_CDF_X, BXDFTEX_COOKTORRANCE_MULTISCATTERING_INV_CDF_Y )
+#define BXDFTEX_COOKTORRANCE_BRDF_PDF_SCALE_SIZE        BXDFTEX_COOKTORRANCE_MULTISCATTERING_PDF_SCALE_X
 
 
 float SampleCookTorranceMicrofacetBRDFEnergyTexture( float cosThetaO, float alpha )
@@ -111,5 +113,17 @@ float SampleCookTorranceMicrofacetBSDFPDFScaleTexture( float alpha, float eta )
     float scale = SampleTextureArrayLinear( g_CookTorranceBSDFPDFScaleTexture, uvw, BXDFTEX_COOKTORRANCE_BSDF_PDF_SCALE_SIZE, sliceOffset );
     return scale * 2.0f;
 }
+
+float SampleCookTorranceMicrofacetBRDFInvCDFTexture( float x, float alpha )
+{
+    float2 uv = float2( x, alpha );
+    return SampleTexture2DLinear( g_CookTorranceCompInvCDFTexture, uv, BXDFTEX_COOKTORRANCE_BRDF_INV_CDF_SIZE );
+}
+
+float SampleCookTorranceMicrofacetBRDFPDFScaleTexture( float alpha )
+{
+    return SampleTexture1DLinear( g_CookTorranceCompPdfScaleTexture, alpha, BXDFTEX_COOKTORRANCE_BRDF_PDF_SCALE_SIZE ) * 2.0f;
+}
+
 
 #endif

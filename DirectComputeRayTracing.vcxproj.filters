@@ -227,7 +227,6 @@
     </None>
     <None Include="Shaders\RayTracing.hlsl" />
     <None Include="Shaders\LambertBRDF.inc.hlsl" />
-    <None Include="Shaders\CookTorranceCompensationBRDF.inc.hlsl" />
     <None Include="Shaders\Math.inc.hlsl" />
     <None Include="Shaders\BVHAccel.inc.hlsl" />
     <None Include="Shaders\Intersection.inc.hlsl" />

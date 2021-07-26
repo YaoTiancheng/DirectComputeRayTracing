@@ -100,8 +100,8 @@ float EvaluateCookTorranceCompFresnel( float ior, float EAvg )
 
 float3 EvaluateCookTorranceCompBRDF( float3 wi, float3 wo, float3 reflectance, float alpha, float ior, LightingContext lightingContext )
 {
-    float WIdotN = lightingContext.WIdotN;
-    float WOdotN = lightingContext.WOdotN;
+    float WIdotN = wi.z;
+    float WOdotN = wo.z;
     if ( WIdotN <= 0.0f || WOdotN <= 0.0f )
         return 0.0f;
 
@@ -115,7 +115,7 @@ float3 EvaluateCookTorranceCompBRDF( float3 wi, float3 wo, float3 reflectance, f
 float EvaluateCookTorranceCompPdf( float3 wi, float alpha, LightingContext lightingContext )
 {
     //return EvaluateLambertBRDFPdf(wi);
-    float cosTheta = lightingContext.WIdotN;
+    float cosTheta = wi.z;
     if ( cosTheta < 0.0f )
         return 0.0f;
 
@@ -127,7 +127,6 @@ void SampleCookTorranceCompBRDF( float3 wo, float2 sample, float3 reflectance, f
 {
     wi = CookTorranceCompSampleHemisphere( sample, alpha );
 
-    lightingContext.WIdotN = wi.z;
     LightingContextCalculateH( wo, wi, lightingContext );
 
     value = EvaluateCookTorranceCompBRDF( wi, wo, reflectance, alpha, ior, lightingContext );

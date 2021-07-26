@@ -21,15 +21,14 @@ void SampleSpecularBRDF( float3 wo, float3 reflectance, float etaI, float etaT, 
 
     wi = float3( -wo.x, -wo.y, wo.z );
 
-    if ( lightingContext.WOdotN == 0.0f )
+    if ( wo.z == 0.0f )
         return;
 
-    value = reflectance * EvaluateDielectricFresnel( lightingContext.WOdotN, etaI, etaT ) / wi.z;
+    value = reflectance * EvaluateDielectricFresnel( wo.z, etaI, etaT ) / wi.z;
     pdf   = 1.0f;
 
-    lightingContext.WIdotN = wi.z;
     lightingContext.H = float3( 0.0f, 0.0f, 1.0f );
-    lightingContext.WOdotH = lightingContext.WOdotN;
+    lightingContext.WOdotH = wo.z;
 }
 
 #endif

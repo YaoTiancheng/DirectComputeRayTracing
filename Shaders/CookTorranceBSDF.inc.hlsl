@@ -116,8 +116,8 @@ float3 EvaluateCookTorranceMircofacetBRDF( float3 wi, float3 wo, float3 reflecta
 {
     if ( alpha >= ALPHA_THRESHOLD )
     {
-        float WIdotN = lightingContext.WIdotN;
-        float WOdotN = lightingContext.WOdotN;
+        float WIdotN = wi.z;
+        float WOdotN = wo.z;
         float WOdotM = lightingContext.WOdotH;
         if ( WIdotN <= 0.0f || WOdotN <= 0.0f || WOdotM <= 0.0f )
             return 0.0f;
@@ -138,7 +138,7 @@ float EvaluateCookTorranceMicrofacetBRDFPdf( float3 wi, float3 wo, float alpha, 
 {
     if ( alpha >= ALPHA_THRESHOLD )
     {
-        float WIdotN = lightingContext.WIdotN;
+        float WIdotN = wi.z;
         if ( WIdotN <= 0.0f )
             return 0.0f;
 
@@ -164,7 +164,6 @@ void SampleCookTorranceMicrofacetBRDF( float3 wo, float2 sample, float3 reflecta
         LightingContextAssignH( wo, m, lightingContext );
 
         float WIdotN = wi.z;
-        lightingContext.WIdotN = WIdotN;
 
         value = EvaluateCookTorranceMircofacetBRDF( wi, wo, reflectance, alpha, etaI, etaT, lightingContext );
         pdf = EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, alpha, lightingContext );
@@ -196,8 +195,8 @@ float3 EvaluateCookTorranceMircofacetBTDF( float3 wi, float3 wo, float3 transmit
 {
     if ( alpha >= ALPHA_THRESHOLD )
     {
-        float WIdotN = lightingContext.WIdotN;
-        float WOdotN = lightingContext.WOdotN;
+        float WIdotN = wi.z;
+        float WOdotN = wo.z;
         if ( WIdotN == 0.0f || WOdotN == 0.0f )
             return 0.0f;
 
@@ -242,7 +241,7 @@ void SampleCookTorranceMicrofacetBTDF( float3 wo, float2 sample, float3 transmit
 
     if ( alpha >= ALPHA_THRESHOLD )
     {
-        float WOdotN = lightingContext.WOdotN;
+        float WOdotN = wo.z;
         if ( WOdotN == 0.0f )
             return;
 
@@ -255,7 +254,6 @@ void SampleCookTorranceMicrofacetBTDF( float3 wo, float2 sample, float3 transmit
         LightingContextAssignH( wo, m, lightingContext );
 
         float WIdotN = wi.z;
-        lightingContext.WIdotN = WIdotN;
 
         if ( WIdotN == 0.0f )
             return;
@@ -357,7 +355,6 @@ void SampleCookTorranceMicrofacetBSDF( float3 wo, float selectionSample, float2 
     {
         wi = -reflect( wo, m );
         
-        lightingContext.WIdotN = wi.z;
         if ( wi.z <= 0.0f )
             return;
 
@@ -368,7 +365,6 @@ void SampleCookTorranceMicrofacetBSDF( float3 wo, float selectionSample, float2 
     {
         wi = refract( -wo, m, etaI / etaT );
 
-        lightingContext.WIdotN = wi.z;
         if ( wi.z == 0.0f )
             return;
 
@@ -479,7 +475,6 @@ void SampleCookTorranceMicrofacetMultiscatteringBxDF( float3 wo, float2 sample, 
     wi    = CookTorranceBSDFMultiscatteringBxDFSampleHemisphere( sample, alpha, eta );
 
     LightingContextCalculateH( wo, wi, lightingContext );
-    lightingContext.WIdotN = wi.z;
 
     float cosThetaI = wi.z;
     if ( cosThetaI == 0.0f )
@@ -518,7 +513,6 @@ void SampleCookTorranceMultiscatteringBSDF( float3 wo, float selectionSample, fl
         wi.z = -wi.z;
 
     LightingContextCalculateH( wo, wi, lightingContext );
-    lightingContext.WIdotN = wi.z;
 
     float cosThetaI = abs( wi.z );
     if ( cosThetaI == 0.0f )

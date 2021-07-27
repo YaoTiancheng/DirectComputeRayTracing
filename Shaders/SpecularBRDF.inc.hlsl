@@ -21,7 +21,7 @@ void SampleSpecularBRDF( float3 wo, float3 reflectance, float etaI, float etaT, 
 
     wi = float3( -wo.x, -wo.y, wo.z );
 
-    if ( wo.z == 0.0f )
+    if ( wo.z == 0.0f || lightingContext.isInverted )
         return;
 
     value = reflectance * EvaluateDielectricFresnel( wo.z, etaI, etaT ) / wi.z;

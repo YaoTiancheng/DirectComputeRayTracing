@@ -73,12 +73,13 @@ namespace std
 
 struct STinyObjMeshMikkTSpaceContext
 {
-    STinyObjMeshMikkTSpaceContext( const tinyobj::attrib_t& attrib, const tinyobj::mesh_t& mesh, std::vector<XMFLOAT3>* tangents )
-        : m_Attrib( attrib ), m_Mesh( mesh ), m_Tangents( tangents )
+    STinyObjMeshMikkTSpaceContext( const tinyobj::attrib_t& attrib, const tinyobj::mesh_t& mesh, const std::vector<bool>& isTexcoordDegenerated, std::vector<XMFLOAT3>* tangents )
+        : m_Attrib( attrib ), m_Mesh( mesh ), m_IsTexcoordDegenerated( isTexcoordDegenerated ), m_Tangents( tangents )
     {}
     
     const tinyobj::attrib_t& m_Attrib;
     const tinyobj::mesh_t&   m_Mesh;
+    const std::vector<bool>& m_IsTexcoordDegenerated;
     std::vector<XMFLOAT3>*   m_Tangents;
 };
 
@@ -118,7 +119,8 @@ static void MikkTSpaceGetTexcoord( const SMikkTSpaceContext* pContext, float fvT
 {
     STinyObjMeshMikkTSpaceContext* meshContext = (STinyObjMeshMikkTSpaceContext*)pContext->m_pUserData;
     tinyobj::index_t idx = meshContext->m_Mesh.indices[ iFace * 3 + iVert ];
-    if ( idx.texcoord_index != -1 )
+    // Don't feed MikkTSpace with degenerated texcoord because otherwise it gives a tangent at (1,0,0). And when the normal vector is at (1,0,0) as well the tangent will be re-orthogonalized to be (0,0,0) in the shader.
+    if ( idx.texcoord_index != -1 && !meshContext->m_IsTexcoordDegenerated[ iFace ] )
     { 
         fvTexcOut[ 0 ] = meshContext->m_Attrib.texcoords[ idx.texcoord_index * 2 ];
         fvTexcOut[ 1 ] = meshContext->m_Attrib.texcoords[ idx.texcoord_index * 2 + 1 ];
@@ -140,10 +142,10 @@ static void MikkTSpaceSetTSpaceBasic( const SMikkTSpaceContext* pContext, const 
 }
 
 
-static bool GenerateTangentVectorsForMesh( const tinyobj::attrib_t& attrib, const tinyobj::mesh_t& mesh, SMikkTSpaceContext* context, std::vector<XMFLOAT3>* outTangents )
+static bool GenerateTangentVectorsForMesh( const tinyobj::attrib_t& attrib, const tinyobj::mesh_t& mesh, SMikkTSpaceContext* context, const std::vector<bool>& isTexcoordDegenerated, std::vector<XMFLOAT3>* outTangents )
 {
     outTangents->resize( mesh.num_face_vertices.size() * 3 );
-    STinyObjMeshMikkTSpaceContext meshContext( attrib, mesh, outTangents );
+    STinyObjMeshMikkTSpaceContext meshContext( attrib, mesh, isTexcoordDegenerated, outTangents );
     context->m_pUserData = &meshContext;
     return genTangSpaceDefault( context );
 }
@@ -185,6 +187,7 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
     mikkTSpaceInterface.m_setTSpaceBasic        = MikkTSpaceSetTSpaceBasic;
 
     std::vector<XMFLOAT3> tangents;
+    std::vector<bool> isTexcoordDegenerated;
 
     for ( size_t iShapes = 0; iShapes < shapes.size(); ++iShapes )
     {
@@ -192,7 +195,23 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
 
         assert( mesh.num_face_vertices.size() == mesh.material_ids.size() );
 
-        if ( !GenerateTangentVectorsForMesh( attrib, mesh, &mikkTSpaceContext, &tangents ) )
+        // Mark faces who has degenerated texcoords. ( The magnitude of the cross product from 2 edge vectors nears 0. )
+        isTexcoordDegenerated.resize( mesh.num_face_vertices.size() );
+        for ( size_t iFace = 0; iFace < mesh.num_face_vertices.size(); ++iFace )
+        {
+            tinyobj::index_t idx0 = mesh.indices[ iFace * 3 ];
+            tinyobj::index_t idx1 = mesh.indices[ iFace * 3 + 1 ];
+            tinyobj::index_t idx2 = mesh.indices[ iFace * 3 + 2 ];
+            XMFLOAT2 uv0 = idx0.texcoord_index != -1 ? XMFLOAT2( attrib.texcoords[ idx0.texcoord_index * 2 ], attrib.texcoords[ idx0.texcoord_index * 2 + 1 ] ) : XMFLOAT2( 0.0f, 0.0f );
+            XMFLOAT2 uv1 = idx1.texcoord_index != -1 ? XMFLOAT2( attrib.texcoords[ idx1.texcoord_index * 2 ], attrib.texcoords[ idx1.texcoord_index * 2 + 1 ] ) : XMFLOAT2( 0.0f, 0.0f );
+            XMFLOAT2 uv2 = idx2.texcoord_index != -1 ? XMFLOAT2( attrib.texcoords[ idx2.texcoord_index * 2 ], attrib.texcoords[ idx2.texcoord_index * 2 + 1 ] ) : XMFLOAT2( 0.0f, 0.0f );
+            XMFLOAT2 e0 = XMFLOAT2( uv1.x - uv0.x, uv1.y - uv0.y );
+            XMFLOAT2 e1 = XMFLOAT2( uv2.x - uv0.x, uv2.y - uv0.y );
+            float z = e0.x * e1.y - e0.y * e1.x; // The Z component of the cross product.
+            isTexcoordDegenerated[ iFace ] = fabsf( z ) < 0.000001f;
+        }
+
+        if ( !GenerateTangentVectorsForMesh( attrib, mesh, &mikkTSpaceContext, isTexcoordDegenerated, &tangents ) )
         {
             LOG_STRING_FORMAT( "Generating tangent failed for mesh %s. This mesh was not loaded.\n", shapes[ iShapes ].name.c_str() );
             continue;

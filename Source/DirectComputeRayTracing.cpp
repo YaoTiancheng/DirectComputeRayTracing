@@ -1048,10 +1048,12 @@ void SRenderer::OnImGUI()
             for ( size_t iMaterial = 0; iMaterial < m_Materials.size(); ++iMaterial )
             {
                 bool isSelected = ( iMaterial == m_SceneObjectSelection.m_MaterialSelectionIndex );
+                ImGui::PushID( (int)iMaterial );
                 if ( ImGui::Selectable( m_MaterialNames[ iMaterial ].c_str(), isSelected ) )
                 {
                     m_SceneObjectSelection.SelectMaterial( (int)iMaterial );
                 }
+                ImGui::PopID();
             }
         }
 

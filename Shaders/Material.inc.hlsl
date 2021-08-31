@@ -13,6 +13,8 @@ struct Material
     float3 emission;
     float  roughness;
     float  ior;
+    float3 k;
+    bool   isMetal;
     float  transmission;
     float2 texTiling;
     uint   flags;

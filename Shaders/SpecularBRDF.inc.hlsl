@@ -33,7 +33,7 @@ void SampleSpecularBRDF( float3 wo, float3 reflectance, float3 F, out float3 wi,
 
 void SampleSpecularBRDF_Dielectric( float3 wo, float3 reflectance, float etaI, float etaT, out float3 wi, out float3 value, out float pdf, inout LightingContext lightingContext )
 {
-    float F = EvaluateDielectricFresnel( wo.z, etaI, etaT );
+    float F = FresnelDielectric( wo.z, etaI, etaT );
     SampleSpecularBRDF( wo, reflectance, F, wi, value, pdf, lightingContext );
 }
 

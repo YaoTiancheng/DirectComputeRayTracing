@@ -132,7 +132,7 @@ float3 EvaluateCookTorranceMircofacetBRDF_Dielectric( float3 wi, float3 wo, floa
     if ( alpha >= ALPHA_THRESHOLD )
     {
         float WOdotM = lightingContext.WOdotH;
-        float F = EvaluateDielectricFresnel( WOdotM, etaI, etaT );
+        float F = FresnelDielectric( WOdotM, etaI, etaT );
         return EvaluateCookTorranceMircofacetBRDF( wi, wo, reflectance, alpha, F, lightingContext );
     }
     else
@@ -199,7 +199,7 @@ void SampleCookTorranceMicrofacetBRDF_Dielectric( float3 wo, float2 sample, floa
         LightingContextAssignH( wo, m, lightingContext );
 
         float WOdotM = lightingContext.WOdotH;
-        float F = EvaluateDielectricFresnel( WOdotM, etaI, etaT );
+        float F = FresnelDielectric( WOdotM, etaI, etaT );
 
         float WIdotN = wi.z;
 
@@ -276,7 +276,7 @@ void SampleCookTorranceMicrofacetBRDF_Schlick( float3 wo, float2 sample, float3 
 float CookTorranceMicrofacetBTDF( float3 wi, float3 wo, float3 m, float alpha, float etaI, float etaT, float WIdotN, float WOdotN, float WIdotM, float WOdotM, float sqrtDenom )
 {
     return sqrtDenom != 0 ? 
-        ( 1.0f - EvaluateDielectricFresnel( WIdotM, etaI, etaT ) ) * abs( EvaluateGGXMicrofacetDistribution( m, alpha ) * EvaluateGGXGeometricShadowing( wi, wo, m, alpha )
+        ( 1.0f - FresnelDielectric( WIdotM, etaI, etaT ) ) * abs( EvaluateGGXMicrofacetDistribution( m, alpha ) * EvaluateGGXGeometricShadowing( wi, wo, m, alpha )
         * abs( WIdotM ) * abs( WOdotM ) 
         * etaI * etaI // etaT * etaT * ( ( etaI * etaI ) / ( etaT * etaT ) )
         / ( WOdotN * WIdotN * sqrtDenom * sqrtDenom ) )
@@ -453,7 +453,7 @@ void SampleCookTorranceMicrofacetBSDF( float3 wo, float selectionSample, float2 
     if ( WOdotM <= 0.0f )
         return;
 
-    float F = EvaluateDielectricFresnel( WOdotM, etaI, etaT );
+    float F = FresnelDielectric( WOdotM, etaI, etaT );
     float Wr = F;
 
     float WIdotM;
@@ -476,7 +476,7 @@ void SampleCookTorranceMicrofacetBSDF( float3 wo, float selectionSample, float2 
             return;
 
         WIdotM = dot( wi, m );
-        F = EvaluateDielectricFresnel( WIdotM, etaI, etaT );
+        F = FresnelDielectric( WIdotM, etaI, etaT );
         pdf *= 1.0f - Wr;
     }
 

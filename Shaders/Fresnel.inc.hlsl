@@ -1,7 +1,7 @@
 #ifndef _FRESNEL_H_
 #define _FRESNEL_H_
 
-float EvaluateDielectricFresnel( float cosThetaI, float etaI, float etaT )
+float FresnelDielectric( float cosThetaI, float etaI, float etaT )
 {
     cosThetaI = clamp( cosThetaI, -1.0f, 1.0f );
 

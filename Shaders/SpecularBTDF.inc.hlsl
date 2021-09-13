@@ -26,7 +26,7 @@ void SampleSpecularBTDF( float3 wo, float3 reflectance, float etaI, float etaT, 
     if ( wi.z == 0.0f || wo.z == 0.0f )
         return;
 
-    value = reflectance * ( 1.0f - EvaluateDielectricFresnel( wi.z, etaI, etaT ) ) 
+    value = reflectance * ( 1.0f - FresnelDielectric( wi.z, etaI, etaT ) )
         * ( etaI * etaI ) / ( etaT * etaT ) 
         / abs( wi.z );
 

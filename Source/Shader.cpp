@@ -10,13 +10,13 @@ static ID3DBlob* CompileFromFile( LPCWSTR filename, LPCSTR entryPoint, LPCSTR ta
     UINT flags1 = CommandLineArgs::Singleton()->ShaderDebugEnabled() ? D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_PREFER_FLOW_CONTROL : D3DCOMPILE_OPTIMIZATION_LEVEL3;
          flags1 |= D3DCOMPILE_IEEE_STRICTNESS;
     HRESULT hr  = D3DCompileFromFile( filename, defines.data(), D3D_COMPILE_STANDARD_FILE_INCLUDE, entryPoint, target, flags1, 0, &shaderBlob, &errorBlob );
+    if ( errorBlob )
+    {
+        OutputDebugStringA( (char*)errorBlob->GetBufferPointer() );
+        errorBlob->Release();
+    }
     if ( FAILED( hr ) )
     {
-        if ( errorBlob )
-        {
-            OutputDebugStringA( ( char* ) errorBlob->GetBufferPointer() );
-            errorBlob->Release();
-        }
         if ( shaderBlob )
             shaderBlob->Release();
     }

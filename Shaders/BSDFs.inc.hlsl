@@ -6,6 +6,11 @@
 #include "Intersection.inc.hlsl"
 #include "LightingContext.inc.hlsl"
 
+float MaxChannel( float3 rgb )
+{
+    return max( rgb.b, max( rgb.r, rgb.g ) );
+}
+
 float SpecularWeight( float cosTheta, float alpha, float ior )
 {
     return SampleCookTorranceMicrofacetBRDFEnergyFresnelDielectricTexture( cosTheta, alpha, ior );
@@ -32,6 +37,7 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
 
     float etaI = invert ? intersection.ior : 1.0f;
     float etaT = invert ? 1.0f : intersection.ior;
+    float eta = etaT / etaI;
 
     bool isMetal = intersection.isMetal;
 
@@ -40,10 +46,11 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
 
     float E           = SampleCookTorranceMicrofacetBRDFEnergyTexture( wo.z, intersection.alpha );
     float EAvg        = SampleCookTorranceMicrofacetBRDFAverageEnergyTexture( intersection.alpha );
-    float Fms         = !isMetal ? MultiscatteringFresnel( intersection.ior, EAvg ) : 0.0f;
+    float3 Favg       = !isMetal ? MultiscatteringFavgDielectric( eta ) : MultiscatteringFavgConductor( eta, intersection.k );
+    float3 Fms        = MultiscatteringFresnel( EAvg, Favg );
     float cosThetaO   = wo.z;
     float Emicrofacet = SpecularWeight( cosThetaO, intersection.alpha, intersection.ior );
-    float Ems         = Fms * ( 1.0f - E );
+    float Ems         = MaxChannel( Fms ) * ( 1.0f - E );
     float Ediffuse    = !isMetal ? ( 1 - Emicrofacet - Ems ) : 0.0f;
     float Et          = transmission;
     float3 value = !isMetal ? EvaluateCookTorranceMircofacetBRDF_Dielectric( wi, wo, intersection.specular, intersection.alpha, etaI, etaT, lightingContext )
@@ -72,6 +79,7 @@ float EvaluateBSDFPdf( float3 wi, float3 wo, Intersection intersection )
 
     float etaI = invert ? intersection.ior : 1.0f;
     float etaT = invert ? 1.0f : intersection.ior;
+    float eta = etaT / etaI;
 
     bool isMetal = intersection.isMetal;
 
@@ -80,10 +88,11 @@ float EvaluateBSDFPdf( float3 wi, float3 wo, Intersection intersection )
 
     float E           = SampleCookTorranceMicrofacetBRDFEnergyTexture( wo.z, intersection.alpha );
     float EAvg        = SampleCookTorranceMicrofacetBRDFAverageEnergyTexture( intersection.alpha );
-    float Fms         = !isMetal ? MultiscatteringFresnel( intersection.ior, EAvg ) : 0.0f;
+    float3 Favg       = !isMetal ? MultiscatteringFavgDielectric( eta ) : MultiscatteringFavgConductor( eta, intersection.k );
+    float3 Fms        = MultiscatteringFresnel( EAvg, Favg );
     float cosThetaO   = wo.z;
     float Emicrofacet = SpecularWeight( cosThetaO, intersection.alpha, intersection.ior ) * opacity;
-    float Ems         = Fms * ( 1.0f - E ) * opacity;
+    float Ems         = MaxChannel( Fms ) * ( 1.0f - E ) * opacity;
     float Ediffuse    = !isMetal ? ( 1 - Emicrofacet - Ems ) * opacity : 0.0f;
     float Et          = transmission;
     float Etotal      = Emicrofacet + Ems + Ediffuse + Et;
@@ -123,6 +132,7 @@ void SampleBSDF( float3 wo
 
     float etaI = invert ? intersection.ior : 1.0f;
     float etaT = invert ? 1.0f : intersection.ior;
+    float eta = etaT / etaI;
 
     bool isMetal      = intersection.isMetal;
     float transmission = intersection.transmission;
@@ -130,9 +140,10 @@ void SampleBSDF( float3 wo
     float cosThetaO   = wo.z;
     float E           = SampleCookTorranceMicrofacetBRDFEnergyTexture( cosThetaO, intersection.alpha );
     float EAvg        = SampleCookTorranceMicrofacetBRDFAverageEnergyTexture( intersection.alpha );
-    float Fms         = !isMetal? MultiscatteringFresnel( intersection.ior, EAvg ) : 0.0f;
+    float3 Favg       = !isMetal ? MultiscatteringFavgDielectric( eta ) : MultiscatteringFavgConductor( eta, intersection.k );
+    float3 Fms        = MultiscatteringFresnel( EAvg, Favg );
     float Emicrofacet = SpecularWeight( cosThetaO, intersection.alpha, intersection.ior ) * opacity;
-    float Ems         = Fms * ( 1.0f - E ) * opacity;
+    float Ems         = MaxChannel( Fms ) * ( 1.0f - E ) * opacity;
     float Ediffuse    = !isMetal ? ( 1 - Emicrofacet - Ems ) * opacity : 0.0f;
     float Et          = transmission;
     float Etotal      = Emicrofacet + Ems + Ediffuse + Et;

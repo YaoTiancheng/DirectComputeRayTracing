@@ -530,9 +530,39 @@ float MultiscatteringFavgDielectric( float eta )
         : 0.997118f + 0.1014f * eta - 0.965241f * eta2 - 0.130607f * eta2 * eta;
 }
 
-float MultiscatteringFresnel( float eta, float Eavg )
+float3 MultiscatteringFavgConductor( float eta, float3 k )
 {
-    float Favg = MultiscatteringFavgDielectric( eta );
+    bool inverted = eta < 1.0f;
+    float a = inverted ? -3.6128759661233995E-01 :  1.0763689472730897E-01;
+    float b = inverted ?  5.6976345192125910E-01 : -2.0650405955495116E-01;
+    float c = inverted ?  2.4033861143029422E-01 :  3.7283476597976423E-01;
+    float d = inverted ? -1.5542095297540026E-02 :  1.4989904095045403E-01;
+    float f = inverted ?  1.7634798639250104E-01 :  5.3962649152329845E-03;
+    float g = inverted ? -9.7938770603064607E-03 : -1.9900529006203940E-02;
+    float h = inverted ? -3.5207291851450107E-02 : -7.8936303193975904E-03;
+    float i = inverted ? -4.2813238653964769E-01 : -1.5808125122638464E-01;
+    float j = inverted ?  4.2004665746286168E-02 :  6.1371079326111022E-03;
+    float k_ = inverted ? 3.8521674898567504E-02 :  1.9186529069727634E-02;
+    float eta2 = eta * eta;
+    float eta3 = eta2 * eta;
+    float3 k2 = k * k;
+    float3 k3 = k2 * k;
+    float3 temp = 0.f;
+    temp = a;
+    temp += b * eta;
+    temp += c * k;
+    temp += d * eta2;
+    temp += f * k2;
+    temp += g * eta3;
+    temp += h * k3;
+    temp += i * eta * k;
+    temp += j * eta2 * k;
+    temp += k_ * eta * k2;
+    return temp;
+}
+
+float3 MultiscatteringFresnel( float Eavg, float3 Favg )
+{
     return Favg * Favg * Eavg / ( 1.0f - Favg * ( 1.0f - Eavg ) );
 }
 
@@ -718,7 +748,7 @@ float3 CookTorranceMultiscatteringBRDFSampleHemisphere( float2 sample, float alp
     return float3( cos( phi ) * s, sin( phi ) * s, cosThetaI );
 }
 
-float EvaluateCookTorranceMultiscatteringBRDF( float3 wi, float3 wo, float3 color, float alpha, float Eo, float Eavg, float factor, LightingContext lightingContext )
+float3 EvaluateCookTorranceMultiscatteringBRDF( float3 wi, float3 wo, float3 color, float alpha, float Eo, float Eavg, float3 factor, LightingContext lightingContext )
 {
     float cosThetaI = wi.z;
     if ( cosThetaI <= 0.0f || wo.z == 0.0f || lightingContext.isInverted )
@@ -741,7 +771,7 @@ float EvaluateCookTorranceMultiscatteringBRDFPdf( float3 wi, float3 wo, float al
         : 0.0f;
 }
 
-void SampleCookTorranceMultiscatteringBRDF( float3 wo, float2 bxdfSample, float3 color, float alpha, float Eo, float Eavg, float Fms, out float3 wi, out float3 value, out float pdf, inout LightingContext lightingContext )
+void SampleCookTorranceMultiscatteringBRDF( float3 wo, float2 bxdfSample, float3 color, float alpha, float Eo, float Eavg, float3 Fms, out float3 wi, out float3 value, out float pdf, inout LightingContext lightingContext )
 {
     value = 0.0f;
     pdf = 0.0f;

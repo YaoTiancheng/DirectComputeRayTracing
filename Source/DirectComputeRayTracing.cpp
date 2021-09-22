@@ -1126,7 +1126,7 @@ void SRenderer::OnImGUI()
                 if ( selection->flags & MATERIAL_FLAG_IS_METAL )
                 {
                     ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
-                    if ( ImGui::ColorEdit3( "k", (float*)&selection->k ) )
+                    if ( ImGui::DragFloat3( "k", (float*)&selection->k, 0.01f, 0.0f, 4.0f ) )
                         m_IsMaterialBufferDirty = true;
                 }
                 if ( ImGui::DragFloat( "Transmission", &selection->transmission, 0.01f, 0.0f, 1.0f ) )

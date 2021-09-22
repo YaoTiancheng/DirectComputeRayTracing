@@ -1119,11 +1119,11 @@ void SRenderer::OnImGUI()
                     m_IsMaterialBufferDirty = true;
                 if ( ImGui::DragFloat( "Roughness", &selection->roughness, 0.01f, 0.0f, 1.0f ) )
                     m_IsMaterialBufferDirty = true;
-                if ( ImGui::Checkbox( "Is Metal", &selection->isMetal ) )
+                if ( ImGui::CheckboxFlags( "Is Metal", (int*)&selection->flags, MATERIAL_FLAG_IS_METAL ) )
                     m_IsMaterialBufferDirty = true;
                 if ( ImGui::DragFloat( "IOR", &selection->ior, 0.01f, 1.0f, 3.0f ) )
                     m_IsMaterialBufferDirty = true;
-                if ( selection->isMetal )
+                if ( selection->flags & MATERIAL_FLAG_IS_METAL )
                 {
                     ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
                     if ( ImGui::ColorEdit3( "k", (float*)&selection->k ) )

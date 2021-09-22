@@ -6,6 +6,7 @@
 #define MATERIAL_FLAG_ALBEDO_TEXTURE    0x1
 #define MATERIAL_FLAG_ROUGHNESS_TEXTURE 0x2
 #define MATERIAL_FLAG_EMISSION_TEXTURE  0x4
+#define MATERIAL_FLAG_IS_METAL          0x8
 
 struct Material
 {
@@ -14,7 +15,6 @@ struct Material
     float  roughness;
     float  ior;
     float3 k;
-    bool   isMetal;
     float  transmission;
     float2 texTiling;
     uint   flags;

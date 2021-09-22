@@ -282,7 +282,6 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
         dstMat.albedo    = DirectX::XMFLOAT3( iterSrcMat.diffuse[ 0 ], iterSrcMat.diffuse[ 1 ], iterSrcMat.diffuse[ 2 ] );
         dstMat.emission  = DirectX::XMFLOAT3( iterSrcMat.emission[ 0 ], iterSrcMat.emission[ 1 ], iterSrcMat.emission[ 2 ] );
         dstMat.roughness = iterSrcMat.roughness;
-        dstMat.isMetal   = iterSrcMat.metallic == 1.0f;
         dstMat.ior       = iterSrcMat.ior;
         dstMat.k         = XMFLOAT3( 1.0f, 1.0f, 1.0f );
         dstMat.transmission = 1.0f - iterSrcMat.dissolve;
@@ -298,7 +297,6 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
         defaultMat.albedo    = DirectX::XMFLOAT3( 1.0f, 0.0f, 1.0f );
         defaultMat.emission  = DirectX::XMFLOAT3( 0.0f, 0.0f, 0.0f );
         defaultMat.roughness = 1.0f;
-        defaultMat.isMetal   = false;
         defaultMat.ior       = 1.5f;
         defaultMat.k         = XMFLOAT3( 1.0f, 1.0f, 1.0f );
         defaultMat.transmission = 0.0f;

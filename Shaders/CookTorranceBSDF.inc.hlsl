@@ -533,6 +533,7 @@ float MultiscatteringFavgDielectric( float eta )
 float3 MultiscatteringFavgConductor( float eta, float3 k )
 {
     bool inverted = eta < 1.0f;
+    eta = inverted ? 1.f / eta : eta;
     float a = inverted ? -3.6128759661233995E-01 :  1.0763689472730897E-01;
     float b = inverted ?  5.6976345192125910E-01 : -2.0650405955495116E-01;
     float c = inverted ?  2.4033861143029422E-01 :  3.7283476597976423E-01;

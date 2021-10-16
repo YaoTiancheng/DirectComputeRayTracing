@@ -1120,13 +1120,20 @@ void SRenderer::OnImGUI()
                 if ( ImGui::DragFloat( "Roughness", &selection->roughness, 0.01f, 0.0f, 1.0f ) )
                     m_IsMaterialBufferDirty = true;
                 if ( ImGui::CheckboxFlags( "Is Metal", (int*)&selection->flags, MATERIAL_FLAG_IS_METAL ) )
-                    m_IsMaterialBufferDirty = true;
-                if ( ImGui::DragFloat( "IOR", &selection->ior, 0.01f, 1.0f, 3.0f ) )
-                    m_IsMaterialBufferDirty = true;
-                if ( selection->flags & MATERIAL_FLAG_IS_METAL )
                 {
-                    ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
-                    if ( ImGui::DragFloat3( "k", (float*)&selection->k, 0.01f, 0.0f, 4.0f ) )
+                    // Reclamp IOR to above 1.0 when material is not metal
+                    if ( ( selection->flags & MATERIAL_FLAG_IS_METAL ) == 0 )
+                    {
+                        selection->ior = std::max( 1.0f, selection->ior );
+                    }
+                    m_IsMaterialBufferDirty = true;
+                }
+                bool isMetal = selection->flags & MATERIAL_FLAG_IS_METAL;
+                if ( ImGui::DragFloat( "IOR", &selection->ior, 0.01f, isMetal ? 0.333333f : 1.0f, 3.0f ) )
+                    m_IsMaterialBufferDirty = true;
+                if ( isMetal )
+                {
+                    if ( ImGui::DragFloat3( "k", (float*)&selection->k, 0.01f, 0.001f, 4.0f ) )
                         m_IsMaterialBufferDirty = true;
                 }
                 if ( ImGui::DragFloat( "Transmission", &selection->transmission, 0.01f, 0.0f, 1.0f ) )

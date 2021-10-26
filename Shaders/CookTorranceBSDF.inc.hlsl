@@ -530,22 +530,22 @@ float MultiscatteringFavgDielectric( float eta )
         : 0.997118f + 0.1014f * eta - 0.965241f * eta2 - 0.130607f * eta2 * eta;
 }
 
-float3 MultiscatteringFavgConductor( float eta, float3 k )
+float3 MultiscatteringFavgConductor( float3 eta, float3 k )
 {
-    bool inverted = eta < 1.0f;
+    bool3 inverted = eta < 1.0f;
     eta = inverted ? 1.f / eta : eta;
-    float a = inverted ? -3.6128759661233995E-01 :  1.0763689472730897E-01;
-    float b = inverted ?  5.6976345192125910E-01 : -2.0650405955495116E-01;
-    float c = inverted ?  2.4033861143029422E-01 :  3.7283476597976423E-01;
-    float d = inverted ? -1.5542095297540026E-02 :  1.4989904095045403E-01;
-    float f = inverted ?  1.7634798639250104E-01 :  5.3962649152329845E-03;
-    float g = inverted ? -9.7938770603064607E-03 : -1.9900529006203940E-02;
-    float h = inverted ? -3.5207291851450107E-02 : -7.8936303193975904E-03;
-    float i = inverted ? -4.2813238653964769E-01 : -1.5808125122638464E-01;
-    float j = inverted ?  4.2004665746286168E-02 :  6.1371079326111022E-03;
-    float k_ = inverted ? 3.8521674898567504E-02 :  1.9186529069727634E-02;
-    float eta2 = eta * eta;
-    float eta3 = eta2 * eta;
+    float3 a = inverted ? -3.6128759661233995E-01 :  1.0763689472730897E-01;
+    float3 b = inverted ?  5.6976345192125910E-01 : -2.0650405955495116E-01;
+    float3 c = inverted ?  2.4033861143029422E-01 :  3.7283476597976423E-01;
+    float3 d = inverted ? -1.5542095297540026E-02 :  1.4989904095045403E-01;
+    float3 f = inverted ?  1.7634798639250104E-01 :  5.3962649152329845E-03;
+    float3 g = inverted ? -9.7938770603064607E-03 : -1.9900529006203940E-02;
+    float3 h = inverted ? -3.5207291851450107E-02 : -7.8936303193975904E-03;
+    float3 i = inverted ? -4.2813238653964769E-01 : -1.5808125122638464E-01;
+    float3 j = inverted ?  4.2004665746286168E-02 :  6.1371079326111022E-03;
+    float3 k_ = inverted ? 3.8521674898567504E-02 :  1.9186529069727634E-02;
+    float3 eta2 = eta * eta;
+    float3 eta3 = eta2 * eta;
     float3 k2 = k * k;
     float3 k3 = k2 * k;
     float3 temp = 0.f;

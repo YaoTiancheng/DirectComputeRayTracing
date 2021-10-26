@@ -1124,16 +1124,21 @@ void SRenderer::OnImGUI()
                     // Reclamp IOR to above 1.0 when material is not metal
                     if ( ( selection->flags & MATERIAL_FLAG_IS_METAL ) == 0 )
                     {
-                        selection->ior = std::max( 1.0f, selection->ior );
+                        selection->ior.x = std::max( 1.0f, selection->ior.x );
                     }
                     m_IsMaterialBufferDirty = true;
                 }
                 bool isMetal = selection->flags & MATERIAL_FLAG_IS_METAL;
-                if ( ImGui::DragFloat( "IOR", &selection->ior, 0.01f, isMetal ? 0.333333f : 1.0f, 3.0f ) )
-                    m_IsMaterialBufferDirty = true;
                 if ( isMetal )
                 {
+                    if ( ImGui::DragFloat3( "IOR", (float*)&selection->ior, 0.01f, 0.333333f, 3.0f ) )
+                        m_IsMaterialBufferDirty = true;
                     if ( ImGui::DragFloat3( "k", (float*)&selection->k, 0.01f, 0.001f, 4.0f ) )
+                        m_IsMaterialBufferDirty = true;
+                }
+                else
+                {
+                    if ( ImGui::DragFloat( "IOR", (float*)&selection->ior, 0.01f, 1.0f, 3.0f ) )
                         m_IsMaterialBufferDirty = true;
                 }
                 if ( ImGui::DragFloat( "Transmission", &selection->transmission, 0.01f, 0.0f, 1.0f ) )

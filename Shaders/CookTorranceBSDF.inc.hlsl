@@ -533,17 +533,16 @@ float MultiscatteringFavgDielectric( float eta )
 float3 MultiscatteringFavgConductor( float3 eta, float3 k )
 {
     bool3 inverted = eta < 1.0f;
-    eta = inverted ? 1.f / eta : eta;
-    float3 a = inverted ? -3.6128759661233995E-01 :  1.0763689472730897E-01;
-    float3 b = inverted ?  5.6976345192125910E-01 : -2.0650405955495116E-01;
-    float3 c = inverted ?  2.4033861143029422E-01 :  3.7283476597976423E-01;
-    float3 d = inverted ? -1.5542095297540026E-02 :  1.4989904095045403E-01;
-    float3 f = inverted ?  1.7634798639250104E-01 :  5.3962649152329845E-03;
-    float3 g = inverted ? -9.7938770603064607E-03 : -1.9900529006203940E-02;
-    float3 h = inverted ? -3.5207291851450107E-02 : -7.8936303193975904E-03;
-    float3 i = inverted ? -4.2813238653964769E-01 : -1.5808125122638464E-01;
-    float3 j = inverted ?  4.2004665746286168E-02 :  6.1371079326111022E-03;
-    float3 k_ = inverted ? 3.8521674898567504E-02 :  1.9186529069727634E-02;
+    float3 a = inverted ?  1.0730319483037318E+00 :  1.2906068840404181E-01;
+    float3 b = inverted ? -1.4424892386431563E+00 : -2.2502873421002770E-01;
+    float3 c = inverted ? -1.7880356839900174E-01 :  3.6355156689118834E-01;
+    float3 d = inverted ?  4.9941630717596613E-01 :  1.4509426507611925E-01;
+    float3 f = inverted ?  8.3747526332840494E-02 : -1.0842465045263060E-02;
+    float3 g = inverted ? -5.6799759243677271E-02 : -1.7227454032982224E-02;
+    float3 h = inverted ? -1.0434153756507136E-02 : -4.2914966507140717E-03;
+    float3 i = inverted ?  4.1168574863539992E-01 : -1.2299514363466055E-01;
+    float3 j = inverted ? -8.2763070813679118E-02 : -5.8190185274472478E-04;
+    float3 k_ = inverted ? -3.2613627035451204E-02 :  1.6831028995738198E-02;
     float3 eta2 = eta * eta;
     float3 eta3 = eta2 * eta;
     float3 k2 = k * k;

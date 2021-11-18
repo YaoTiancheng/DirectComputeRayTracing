@@ -1131,9 +1131,9 @@ void SRenderer::OnImGUI()
                 bool isMetal = selection->flags & MATERIAL_FLAG_IS_METAL;
                 if ( isMetal )
                 {
-                    if ( ImGui::DragFloat3( "IOR", (float*)&selection->ior, 0.01f, 0.333333f, 3.0f ) )
+                    if ( ImGui::DragFloat3( "IOR", (float*)&selection->ior, 0.01f, 0.01f, 3.0f ) )
                         m_IsMaterialBufferDirty = true;
-                    if ( ImGui::DragFloat3( "k", (float*)&selection->k, 0.01f, 0.001f, 4.0f ) )
+                    if ( ImGui::DragFloat3( "k", (float*)&selection->k, 0.01f, 0.001f, 5.0f ) )
                         m_IsMaterialBufferDirty = true;
                 }
                 else

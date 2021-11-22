@@ -249,7 +249,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 
             if ( !IntersectScene( OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi ), wi, threadId, intersection ) )
             {
-                l += pathThroughput * EnvironmentShader( wi ) * g_Background;
+                l += pathThroughput * EnvironmentShader( wi );
                 break;
             }
             else
@@ -262,7 +262,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     }
     else
     {
-        l = EnvironmentShader( wo ) * g_Background;
+        l = EnvironmentShader( wo );
     }
 
     AddSampleToFilm( l, pixelSample, pixelPos );

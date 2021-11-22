@@ -3,7 +3,11 @@
 
 float3 EnvironmentShader( float3 wi )
 {
-    return g_EnvTexture.SampleLevel( UVClampSampler, wi, 0 ).rgb;
+#if defined( NO_ENV_TEXTURE )
+    return g_Background;
+#else
+    return g_EnvTexture.SampleLevel( UVClampSampler, wi, 0 ).rgb * g_Background;
+#endif
 }
 
 #endif

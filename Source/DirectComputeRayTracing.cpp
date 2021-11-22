@@ -115,7 +115,7 @@ struct SRenderer
 
     void ResizeBackbuffer( uint32_t backbufferWidth, uint32_t backbufferHeight );
 
-    void CreateEnvironmentTextureFromCurrentFilepath();
+    void UpdateEnvironmentTextureFromCurrentFilepath();
 
     bool CompileAndCreateRayTracingKernel();
 
@@ -356,9 +356,7 @@ bool SRenderer::Init()
     if ( !m_CookTorranceBSDFPDFScaleTexture )
         return false;
 
-    CreateEnvironmentTextureFromCurrentFilepath();
-    if ( !m_EnvironmentTexture )
-        return false;
+    UpdateEnvironmentTextureFromCurrentFilepath();
 
     m_RayTracingConstantsBuffer.reset( GPUBuffer::Create(
           sizeof( RayTracingConstants )
@@ -763,7 +761,7 @@ void SRenderer::UpdateRayTracingJob()
         , m_BVHNodesBuffer ? m_BVHNodesBuffer->GetSRV() : nullptr
         , m_MaterialIdsBuffer->GetSRV()
         , m_MaterialsBuffer->GetSRV()
-        , m_EnvironmentTexture->GetSRV()
+        , m_EnvironmentTexture ? m_EnvironmentTexture->GetSRV() : nullptr
     };
 
     m_RayTracingJob.m_ConstantBuffers = { m_RayTracingConstantsBuffer->GetBuffer(), m_RayTracingFrameConstantBuffer->GetBuffer() };
@@ -803,10 +801,17 @@ void SRenderer::ResizeBackbuffer( uint32_t backbufferWidth, uint32_t backbufferH
     m_LinearBackbuffer.reset( GPUTexture::CreateFromSwapChain() );
 }
 
-void SRenderer::CreateEnvironmentTextureFromCurrentFilepath()
+void SRenderer::UpdateEnvironmentTextureFromCurrentFilepath()
 {
-    std::wstring filepath = StringConversion::UTF8StringToUTF16WString( m_EnvironmentImageFilepath );
-    m_EnvironmentTexture.reset( GPUTexture::CreateFromFile( filepath.c_str() ) );
+    if ( !m_EnvironmentImageFilepath.empty() )
+    {
+        std::wstring filepath = StringConversion::UTF8StringToUTF16WString( m_EnvironmentImageFilepath );
+        m_EnvironmentTexture.reset( GPUTexture::CreateFromFile( filepath.c_str() ) );
+    }
+    else
+    {
+        m_EnvironmentTexture.reset();
+    }
 }
 
 bool SRenderer::CompileAndCreateRayTracingKernel()
@@ -830,6 +835,10 @@ bool SRenderer::CompileAndCreateRayTracingKernel()
     if ( m_IsGGXVNDFSamplingEnabled )
     {
         rayTracingShaderDefines.push_back( { "GGX_SAMPLE_VNDF", "0" } );
+    }
+    if ( m_EnvironmentTexture.get() == nullptr )
+    {
+        rayTracingShaderDefines.push_back( { "NO_ENV_TEXTURE", "0" } );
     }
     static const char* s_RayTracingOutputDefines[s_RayTracingOutputCount] = { NULL, "OUTPUT_NORMAL", "OUTPUT_TANGENT", "OUTPUT_ALBEDO", "OUTPUT_NEGATIVE_NDOTV", "OUTPUT_BACKFACE" };
     if ( s_RayTracingOutputDefines[ m_RayTracingOutputIndex ] )
@@ -935,8 +944,22 @@ void SRenderer::OnImGUI()
                     if ( GetOpenFileNameA( &ofn ) == TRUE )
                     {
                         m_EnvironmentImageFilepath = filepath;
-                        CreateEnvironmentTextureFromCurrentFilepath();
+                        bool hasEnvTexturePreviously = m_EnvironmentTexture.get() != nullptr;
+                        UpdateEnvironmentTextureFromCurrentFilepath();
+                        bool hasEnvTextureCurrently = m_EnvironmentTexture.get() != nullptr;
                         m_IsRayTracingJobDirty = true;
+                        m_IsRayTracingShaderDirty = hasEnvTexturePreviously != hasEnvTextureCurrently;
+                    }
+                }
+                if ( m_EnvironmentTexture )
+                {
+                    ImGui::SameLine();
+                    if ( ImGui::Button( "Clear##ClearEnvImage" ) )
+                    {
+                        m_EnvironmentImageFilepath = "";
+                        UpdateEnvironmentTextureFromCurrentFilepath();
+                        m_IsRayTracingJobDirty = true;
+                        m_IsRayTracingShaderDirty = true;
                     }
                 }
             }

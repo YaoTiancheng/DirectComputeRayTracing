@@ -121,6 +121,10 @@ struct SRenderer
 
     void OnImGUI();
 
+    void AppendError( const char* error );
+
+    void AppendErrorFormat( const char* error, ... );
+
     HWND                                m_hWnd;
 
     Camera                              m_Camera;
@@ -194,6 +198,7 @@ struct SRenderer
     int                                 m_RayTracingOutputIndex = 0;
     SSceneObjectSelection               m_SceneObjectSelection;
     bool                                m_ShowUI = true;
+    std::vector<std::string>            m_ErrorStrings;
 };
 
 SRenderer* s_Renderer = nullptr;
@@ -420,6 +425,14 @@ bool SRenderer::ResetScene( const char* filePath )
 {
     m_IsFilmDirty = true; // Clear film in case scene reset failed and ray tracing being disabled.
 
+    m_RayTracingConstants.maxBounceCount = 2;
+    m_RayTracingConstants.filmSize = XMFLOAT2( 0.05333f, 0.03f );
+    m_RayTracingConstants.filmDistance = 0.04f;
+    m_RayTracingConstants.background = { 1.0f, 1.0f, 1.0f, 0.f };
+
+    if ( filePath == nullptr || filePath[ 0 ] == '\0' )
+        return false;
+
     const CommandLineArgs* commandLineArgs = CommandLineArgs::Singleton();
 
     Mesh mesh;
@@ -440,7 +453,10 @@ bool SRenderer::ResetScene( const char* filePath )
         LOG_STRING_FORMAT( "Loading mesh from: %s, MTL search path at: %s, BVH file path at: %s\n", filePath, MTLSearchPath, BVHFilePath );
 
         if ( !mesh.LoadFromOBJFile( filePath, MTLSearchPath, buildBVH, BVHFilePath ) )
+        {
+            AppendErrorFormat( "Failed to load mesh from %s.\n", filePath );
             return false;
+        }
 
         LOG_STRING_FORMAT( "Mesh loaded. Triangle count: %d, vertex count: %d, material count: %d\n", mesh.GetTriangleCount(), mesh.GetVertexCount(), mesh.GetMaterials().size() );
     }
@@ -466,7 +482,10 @@ bool SRenderer::ResetScene( const char* filePath )
         , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsStructureBuffer
         , mesh.GetVertices() ) );
     if ( !m_VerticesBuffer )
+    {
+        AppendError( "Failed to create vertices buffer.\n" );
         return false;
+    }
 
     m_TrianglesBuffer.reset( GPUBuffer::Create(
           sizeof( uint32_t ) * mesh.GetIndexCount()
@@ -474,7 +493,10 @@ bool SRenderer::ResetScene( const char* filePath )
         , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsStructureBuffer
         , mesh.GetIndices() ) );
     if ( !m_TrianglesBuffer )
+    {
+        AppendError( "Failed to create triangles buffer.\n" );
         return false;
+    }
 
     m_MaterialIdsBuffer.reset( GPUBuffer::Create(
           sizeof( uint32_t ) * mesh.GetTriangleCount()
@@ -482,7 +504,10 @@ bool SRenderer::ResetScene( const char* filePath )
         , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsStructureBuffer
         , mesh.GetMaterialIds() ) );
     if ( !m_MaterialIdsBuffer )
+    {
+        AppendError( "Failed to create material id buffer.\n" );
         return false;
+    }
 
     m_MaterialsBuffer.reset( GPUBuffer::Create(
           uint32_t( sizeof( Material ) * m_Materials.size() )
@@ -490,7 +515,10 @@ bool SRenderer::ResetScene( const char* filePath )
         , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer
         , m_Materials.data() ) );
     if ( !m_MaterialsBuffer )
+    {
+        AppendError( "Failed to create materials buffer.\n" );
         return false;
+    }
 
     if ( !commandLineArgs->GetNoBVHAccel() )
     {
@@ -500,7 +528,10 @@ bool SRenderer::ResetScene( const char* filePath )
             , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsStructureBuffer
             , mesh.GetBVHNodes() ) );
         if ( !m_BVHNodesBuffer )
+        {
+            AppendError( "Failed to create BVH nodes buffer.\n" );
             return false;
+        }
     }
 
     m_LightSettings.clear();
@@ -512,14 +543,13 @@ bool SRenderer::ResetScene( const char* filePath )
         , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer
         , nullptr ) );
     if ( !m_LightsBuffer )
+    {
+        AppendError( "Failed to create lights buffer.\n" );
         return false;
+    }
 
-    m_RayTracingConstants.maxBounceCount = 2;
     m_RayTracingConstants.primitiveCount = mesh.GetTriangleCount();
     m_RayTracingConstants.lightCount = (uint32_t)m_LightSettings.size();
-    m_RayTracingConstants.filmSize = XMFLOAT2( 0.05333f, 0.03f );
-    m_RayTracingConstants.filmDistance = 0.04f;
-    m_RayTracingConstants.background = { 1.0f, 1.0f, 1.0f, 0.f };
 
     m_IsConstantBufferDirty = true;
     m_IsMaterialBufferDirty = true;
@@ -548,7 +578,8 @@ void SRenderer::DispatchRayTracing()
     // Compile shader if it is dirty
     if ( m_IsRayTracingShaderDirty )
     {
-        m_HasValidScene = CompileAndCreateRayTracingKernel();
+        if ( m_HasValidScene )
+            CompileAndCreateRayTracingKernel();
         m_IsRayTracingShaderDirty = false;
     }
 
@@ -565,7 +596,7 @@ void SRenderer::DispatchRayTracing()
         m_SPP = 0;
     }
 
-    if ( m_HasValidScene )
+    if ( m_HasValidScene && m_RayTracingShader )
     {
         if ( m_IsRayTracingJobDirty )
         {
@@ -849,9 +880,31 @@ bool SRenderer::CompileAndCreateRayTracingKernel()
 
     m_RayTracingShader.reset( ComputeShader::CreateFromFile( L"Shaders\\RayTracing.hlsl", rayTracingShaderDefines ) );
     if ( !m_RayTracingShader )
+    {
+        AppendError( "Failed to compile ray tracing shader.\n" );
         return false;
+    }
 
     return true;
+}
+
+void SRenderer::AppendError( const char* error )
+{
+    m_ErrorStrings.emplace_back( error );
+    LOG_STRING( error );
+}
+
+void SRenderer::AppendErrorFormat( const char* format, ... )
+{
+    const uint32_t s_MaxBufferLength = 512;
+    char buffer[ s_MaxBufferLength ];
+
+    va_list argptr;
+    va_start( argptr, format );
+    vsprintf_s( buffer, s_MaxBufferLength, format, argptr );
+    va_end( argptr );
+
+    AppendError( buffer );
 }
 
 void SRenderer::OnImGUI()
@@ -999,7 +1052,7 @@ void SRenderer::OnImGUI()
                     m_HasValidScene = ResetScene( filepath );
                 }
             }
-            if ( ImGui::BeginMenu( "Edit" ) )
+            if ( ImGui::BeginMenu( "Edit", m_HasValidScene ) )
             {
                 if ( ImGui::BeginMenu( "Create" ) )
                 {
@@ -1189,15 +1242,16 @@ void SRenderer::OnImGUI()
 
         ImGui::Text( "MIS: %s", m_IsMultipleImportanceSamplingEnabled ? "On" : "Off" );
         ImGui::Text( "No BVH: %s", m_IsBVHDisabled ? "On" : "Off" );
-        ImGui::Text( "BVH traversal stack size: %d", m_BVHTraversalStackSize );
+        if ( m_HasValidScene )
+        {
+            ImGui::Text( "BVH traversal stack size: %d", m_BVHTraversalStackSize );
+            if ( !m_RayTracingShader && !m_IsRayTracingShaderDirty )
+            {
+                ImGui::TextColored( ImVec4( 1.0f, 0.0f, 0.0f, 1.0f ), "Shader Compiling Failure" );
+            }
+        }
         ImGui::Text( "Average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate );
         ImGui::Text( "SPP: %d", m_SPP );
-        if ( !m_HasValidScene )
-        {
-            static const ImVec4 s_WarningColor( 1.0f, 0.0f, 0.0f, 1.0f );
-            ImGui::TextColored( s_WarningColor, "Scene Error!!! Rendering disabled. Check the log for what happened." );
-        }
-
         ImGui::End();
     }
 
@@ -1210,6 +1264,27 @@ void SRenderer::OnImGUI()
             {
                 ImGui::Text( "Compiling Shader..." );
                 ImGui::End();
+            }
+        }
+    }
+
+    {
+        if ( !m_ErrorStrings.empty() )
+        {
+            ImVec2 center( ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f );
+            ImGui::SetNextWindowPos( center, ImGuiCond_Appearing, ImVec2( 0.5f, 0.5f ) );
+            ImGui::OpenPopup( "Error##ErrorPopup" );
+            if ( ImGui::BeginPopupModal( "Error##ErrorPopup", nullptr, ImGuiWindowFlags_AlwaysAutoResize ) )
+            {
+                for ( auto& error : m_ErrorStrings )
+                {
+                    ImGui::Text( error.c_str() );
+                }
+                if ( ImGui::Button( "OK##ErrorPopup" ) )
+                {
+                    m_ErrorStrings.clear();
+                }
+                ImGui::EndPopup();
             }
         }
     }

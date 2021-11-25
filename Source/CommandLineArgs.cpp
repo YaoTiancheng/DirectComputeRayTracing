@@ -9,7 +9,7 @@ CommandLineArgs::CommandLineArgs()
     , m_ShaderDebugEnabled( false )
     , m_UseDebugDevice( false )
     , m_NoBVHAccel( false )
-    , m_MultipleImportanceSamplingEnabled( false )
+    , m_MultipleImportanceSamplingEnabled( true )
 {
     assert( s_Singleton == nullptr );
     s_Singleton = this;
@@ -55,9 +55,9 @@ void CommandLineArgs::Parse( const wchar_t* cmdLine )
         {
             m_NoBVHAccel = true;
         }
-        else if ( wcscmp( argStr, L"-MIS" ) == 0 )
+        else if ( wcscmp( argStr, L"-DisableMIS" ) == 0 )
         {
-            m_MultipleImportanceSamplingEnabled = true;
+            m_MultipleImportanceSamplingEnabled = false;
         }
         else if ( iArg == numArgs - 1 )
         {

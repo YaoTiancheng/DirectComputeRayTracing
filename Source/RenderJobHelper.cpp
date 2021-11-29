@@ -76,6 +76,7 @@ void RenderJobHelper::DispatchDraw( GPUBuffer* vertexBuffer, GfxShader* shader, 
     }
     if ( constantBuffers.m_Count > 0 )
     {
+        deviceContext->VSSetConstantBuffers( 0, constantBuffers.m_Count, constantBuffers.m_Address );
         deviceContext->PSSetConstantBuffers( 0, constantBuffers.m_Count, constantBuffers.m_Address );
     }
 
@@ -87,6 +88,7 @@ void RenderJobHelper::DispatchDraw( GPUBuffer* vertexBuffer, GfxShader* shader, 
     }
     if ( constantBuffers.m_Count > 0 )
     {
+        deviceContext->VSSetConstantBuffers( 0, constantBuffers.m_Count, (ID3D11Buffer**)s_NullPointersList );
         deviceContext->PSSetConstantBuffers( 0, constantBuffers.m_Count, (ID3D11Buffer**)s_NullPointersList );
     }
 }

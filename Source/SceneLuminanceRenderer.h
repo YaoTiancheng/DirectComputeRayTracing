@@ -7,16 +7,13 @@ class SceneLuminanceRenderer
 public:
     bool Init( uint32_t resolutionWidth, uint32_t resolutionHeight, const GPUTexturePtr& filmTexture );
 
-    void Dispatch();
+    void Dispatch( uint32_t resolutionWidth, uint32_t resolutionHeight );
 
     const GPUBufferPtr& GetLuminanceResultBuffer() const { return m_SumLuminanceBuffer1; }
 
     void OnImGUI();
 
 private:
-    uint32_t            m_SumLuminanceBlockCountX;
-    uint32_t            m_SumLuminanceBlockCountY;
-
     ComputeShaderPtr    m_SumLuminanceTo1DShader;
     ComputeShaderPtr    m_SumLuminanceToSingleShader;
     GPUBufferPtr        m_SumLuminanceBuffer0;

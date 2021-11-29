@@ -9,7 +9,7 @@ public:
 
     bool Init( uint32_t renderWidth, uint32_t renderHeight, const GPUTexturePtr& filmTexture, const GPUTexturePtr& renderResultTexture, const GPUBufferPtr& luminanceBuffer );
 
-    void ExecutePostFX();
+    void ExecutePostFX( uint32_t resolutionWidth, uint32_t resolutionHeight, float rayTracingViewportRatio );
 
     void ExecuteCopy();
 
@@ -39,7 +39,6 @@ private:
     GraphicsJob                         m_CopyJob;
 
     DirectX::XMFLOAT4                   m_ConstantParams;
-    bool                                m_IsConstantBufferDirty;
     bool                                m_IsJobDirty;
     bool                                m_IsPostFXDisabled;
 };

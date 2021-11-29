@@ -24,8 +24,7 @@ D3D11_INPUT_ELEMENT_DESC s_ScreenQuadInputElementDesc[ 1 ]
 };
 
 PostProcessingRenderer::PostProcessingRenderer()
-    : m_IsConstantBufferDirty( false )
-    , m_IsPostFXDisabled( false )
+    : m_IsPostFXDisabled( false )
     , m_IsJobDirty( true )
 {
 }
@@ -52,7 +51,7 @@ bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, 
     if ( !m_CopyShader )
         return false;
 
-    m_ConstantParams = XMFLOAT4( 1.0f / ( renderWidth * renderHeight ), 0.7f, 0.0f, 0.0f );
+    m_ConstantParams = XMFLOAT4( 1.0f / ( renderWidth * renderHeight ), 0.7f, 1.0f, 0.0f );
     m_ConstantsBuffer.reset( GPUBuffer::Create(
           sizeof( XMFLOAT4 )
         , 0
@@ -101,6 +100,7 @@ bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, 
     m_PostFXJob.m_VertexStride = sizeof( XMFLOAT4 );
 
     m_CopyJob.m_SamplerStates.push_back( m_LinearSamplerState.Get() );
+    m_CopyJob.m_ConstantBuffers.push_back( m_ConstantsBuffer->GetBuffer() );
     m_CopyJob.m_SRVs.push_back( renderResultTexture->GetSRV() );
     m_CopyJob.m_VertexBuffer = m_ScreenQuadVerticesBuffer.get();
     m_CopyJob.m_InputLayout = m_ScreenQuadVertexInputLayout.Get();
@@ -113,16 +113,14 @@ bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, 
     return true;
 }
 
-void PostProcessingRenderer::ExecutePostFX()
+void PostProcessingRenderer::ExecutePostFX( uint32_t resolutionWidth, uint32_t resolutionHeight, float rayTracingViewportRatio )
 {
-    if ( m_IsConstantBufferDirty )
+    if ( void* address = m_ConstantsBuffer->Map() )
     {
-        if ( void* address = m_ConstantsBuffer->Map() )
-        {
-            memcpy( address, &m_ConstantParams, sizeof( m_ConstantParams ) );
-            m_ConstantsBuffer->Unmap();
-            m_IsConstantBufferDirty = false;
-        }
+        m_ConstantParams.x = 1.0f / ( resolutionWidth * resolutionHeight );
+        m_ConstantParams.z = rayTracingViewportRatio;
+        memcpy( address, &m_ConstantParams, sizeof( m_ConstantParams ) );
+        m_ConstantsBuffer->Unmap();
     }
 
     if ( m_IsJobDirty )
@@ -136,6 +134,13 @@ void PostProcessingRenderer::ExecutePostFX()
 
 void PostProcessingRenderer::ExecuteCopy()
 {
+    if ( void* address = m_ConstantsBuffer->Map() )
+    {
+        m_ConstantParams.z = 1.0f;
+        memcpy( address, &m_ConstantParams, sizeof( m_ConstantParams ) );
+        m_ConstantsBuffer->Unmap();
+    }
+
     m_CopyJob.Dispatch();
 }
 
@@ -147,8 +152,6 @@ bool PostProcessingRenderer::OnImGUI()
     {
         hasPropertyChanged = hasPropertyChanged || ImGui::DragFloat( "Luminance White(^2)", (float*)&m_ConstantParams.y, 0.01f, 0.001f, 1000.0f );
     }
-
-    m_IsConstantBufferDirty = hasPropertyChanged;
 
     return hasPropertyChanged;
 }

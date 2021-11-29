@@ -45,6 +45,7 @@ VertexOut MainVS( float4 pos : POSITION )
     VertexOut o = ( VertexOut ) 0.0f;
     o.position = pos;
     o.texcoord = ( float2( pos.x, -pos.y ) + 1.0f ) * 0.5f;
+    o.texcoord *= g_Params.z;
     return o;
 }
 

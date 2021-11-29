@@ -14,6 +14,7 @@ cbuffer RayTracingConstants : register( b0 )
 cbuffer RayTracingFrameConstants : register( b1 )
 {
     uint                g_FrameSeed;
+    uint2               g_TileOffset;
 }
 
 #include "Vertex.inc.hlsl"
@@ -203,6 +204,7 @@ float3 UniformSampleOneLight( SLightSamples samples, Intersection intersection, 
 [numthreads( GROUP_SIZE_X, GROUP_SIZE_Y, 1 )]
 void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 {
+    pixelPos += g_TileOffset;
     if ( any( pixelPos > g_Resolution ) )
         return;
 
@@ -273,6 +275,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 [ numthreads( GROUP_SIZE_X, GROUP_SIZE_Y, 1 ) ]
 void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 {
+    pixelPos += g_TileOffset;
     if ( any( pixelPos > g_Resolution ) )
         return;
 

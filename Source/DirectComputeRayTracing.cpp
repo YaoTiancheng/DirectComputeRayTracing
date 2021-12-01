@@ -151,7 +151,11 @@ struct SRenderer
     std::vector<Material>               m_Materials;
     std::vector<std::string>            m_MaterialNames;
 
-    RayTracingConstants                 m_RayTracingConstants;
+    DirectX::XMFLOAT2                   m_FilmSize;
+    float                               m_FilmDistance;
+    DirectX::XMFLOAT4                   m_BackgroundColor;
+    uint32_t                            m_MaxBounceCount;
+    uint32_t                            m_PrimitiveCount;
 
     uint32_t                            m_FrameSeed = 0;
 
@@ -451,10 +455,10 @@ bool SRenderer::ResetScene( const char* filePath )
 {
     m_IsFilmDirty = true; // Clear film in case scene reset failed and ray tracing being disabled.
 
-    m_RayTracingConstants.maxBounceCount = 2;
-    m_RayTracingConstants.filmSize = XMFLOAT2( 0.05333f, 0.03f );
-    m_RayTracingConstants.filmDistance = 0.04f;
-    m_RayTracingConstants.background = { 1.0f, 1.0f, 1.0f, 0.f };
+    m_MaxBounceCount = 2;
+    m_FilmSize = XMFLOAT2( 0.05333f, 0.03f );
+    m_FilmDistance = 0.04f;
+    m_BackgroundColor = { 1.0f, 1.0f, 1.0f, 0.f };
 
     if ( filePath == nullptr || filePath[ 0 ] == '\0' )
         return false;
@@ -574,8 +578,7 @@ bool SRenderer::ResetScene( const char* filePath )
         return false;
     }
 
-    m_RayTracingConstants.primitiveCount = mesh.GetTriangleCount();
-    m_RayTracingConstants.lightCount = (uint32_t)m_LightSettings.size();
+    m_PrimitiveCount = mesh.GetTriangleCount();
 
     m_IsConstantBufferDirty = true;
     m_IsMaterialBufferDirty = true;
@@ -593,7 +596,6 @@ void SRenderer::DispatchRayTracing( SRenderContext* renderContext )
 
     if ( m_Camera.IsDirty() )
     {
-        m_Camera.GetTransformMatrixAndClearDirty( &m_RayTracingConstants.cameraTransform );
         m_IsConstantBufferDirty = true;
     }
 
@@ -738,9 +740,16 @@ bool SRenderer::UpdateResources( SRenderContext* renderContext )
     {
         if ( void* address = m_RayTracingConstantsBuffer->Map() )
         {
-            m_RayTracingConstants.resolutionX = renderContext->m_CurrentResolutionWidth;
-            m_RayTracingConstants.resolutionY = renderContext->m_CurrentResolutionHeight;
-            memcpy( address, &m_RayTracingConstants, sizeof( m_RayTracingConstants ) );
+            RayTracingConstants* constants = (RayTracingConstants*)address;
+            constants->resolutionX = renderContext->m_CurrentResolutionWidth;
+            constants->resolutionY = renderContext->m_CurrentResolutionHeight;
+            constants->background = m_BackgroundColor;
+            m_Camera.GetTransformMatrixAndClearDirty( &constants->cameraTransform );
+            constants->filmDistance = m_FilmDistance;
+            constants->filmSize = m_FilmSize;
+            constants->lightCount = (uint32_t)m_LightSettings.size();
+            constants->maxBounceCount = m_MaxBounceCount;
+            constants->primitiveCount = m_PrimitiveCount;
             m_RayTracingConstantsBuffer->Unmap();
             m_IsConstantBufferDirty = false;
         }
@@ -1003,10 +1012,10 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
         if ( ImGui::CollapsingHeader( "Film" ) )
         {
-            if ( ImGui::InputFloat2( "Film Size", (float*)&m_RayTracingConstants.filmSize ) )
+            if ( ImGui::InputFloat2( "Film Size", (float*)&m_FilmSize ) )
                 m_IsConstantBufferDirty = true;
 
-            if ( ImGui::DragFloat( "Film Distance", (float*)&m_RayTracingConstants.filmDistance, 0.005f, 0.001f, 1000.0f ) )
+            if ( ImGui::DragFloat( "Film Distance", (float*)&m_FilmDistance, 0.005f, 0.001f, 1000.0f ) )
                 m_IsConstantBufferDirty = true;
 
             if ( ImGui::InputInt( "Render Tile Size", (int*)&m_TileSize, 16, 32, ImGuiInputTextFlags_EnterReturnsTrue ) )
@@ -1027,7 +1036,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
             }
             if ( m_RayTracingOutputIndex == 0 )
             {
-                if ( ImGui::DragInt( "Max Bounce Count", (int*)&m_RayTracingConstants.maxBounceCount, 0.5f, 0, s_MaxRayBounce ) )
+                if ( ImGui::DragInt( "Max Bounce Count", (int*)&m_MaxBounceCount, 0.5f, 0, s_MaxRayBounce ) )
                     m_IsConstantBufferDirty = true;
             }
         }
@@ -1059,7 +1068,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
             if ( ImGui::CollapsingHeader( "Environment" ) )
             {
                 ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
-                if ( ImGui::ColorEdit3( "Background Color", (float*)&m_RayTracingConstants.background ) )
+                if ( ImGui::ColorEdit3( "Background Color", (float*)&m_BackgroundColor ) )
                     m_IsConstantBufferDirty = true;
 
                 ImGui::InputText( "Image File", const_cast<char*>( m_EnvironmentImageFilepath.c_str() ), m_EnvironmentImageFilepath.size(), ImGuiInputTextFlags_ReadOnly );
@@ -1161,7 +1170,6 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                         m_LightSettings.back().rotation = XMFLOAT3( 0.0f, 0.0f, 0.0f );
                         m_LightSettings.back().size = XMFLOAT2( 1.0f, 1.0f );
                         m_LightSettings.back().lightType = lightType;
-                        m_RayTracingConstants.lightCount++;
                         m_IsConstantBufferDirty = true;
                         m_IsLightBufferDirty = true;
                     }
@@ -1172,7 +1180,6 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 {
                     m_LightSettings.erase( m_LightSettings.begin() + m_SceneObjectSelection.m_LightSelectionIndex );
                     m_SceneObjectSelection.m_LightSelectionIndex = -1;
-                    m_RayTracingConstants.lightCount--;
                     m_IsConstantBufferDirty = true;
                 }
                 ImGui::EndMenu();

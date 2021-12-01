@@ -35,6 +35,8 @@ struct SRenderContext
     float                           m_CurrentResolutionRatio;
     bool                            m_IsResolutionChanged;
     bool                            m_IsSmallResolutionEnabled;
+    uint32_t                        m_TileOffsetX;
+    uint32_t                        m_TileOffsetY;
 };
 
 struct RayTracingConstants
@@ -103,8 +105,6 @@ struct SRenderer
         : m_hWnd( hWnd )
         , m_TileSize( 512 )
         , m_CurrentTileIndex( 0 )
-        , m_TileOffsetX( 0 )
-        , m_TileOffsetY( 0 )
     {
     }
 
@@ -138,9 +138,9 @@ struct SRenderer
 
     void AppendErrorFormat( const char* error, ... );
 
-    void UpdateTile( SRenderContext* rayTracingViewport );
+    void UpdateTileIndex( uint32_t tileCountX, uint32_t tileCountY );
 
-    void ResetTile();
+    void ResetTileIndex();
 
     bool AreAllTilesRenderered();
 
@@ -210,8 +210,6 @@ struct SRenderer
 
     uint32_t                            m_TileSize;
     uint32_t                            m_CurrentTileIndex;
-    uint32_t                            m_TileOffsetX;
-    uint32_t                            m_TileOffsetY;
 
     FrameTimer                          m_FrameTimer;
 
@@ -634,10 +632,15 @@ void SRenderer::DispatchRayTracing( SRenderContext* renderContext )
 
         m_SPP = 0;
 
-        ResetTile();
+        ResetTileIndex();
 
         m_IsFilmDirty = false;
     }
+
+    uint32_t tileCountX = (uint32_t)std::ceilf( float( renderContext->m_CurrentResolutionWidth ) / float( m_TileSize ) );
+    uint32_t tileCountY = (uint32_t)std::ceilf( float( renderContext->m_CurrentResolutionHeight ) / float( m_TileSize ) );
+    renderContext->m_TileOffsetX = ( m_CurrentTileIndex % tileCountX ) * m_TileSize;
+    renderContext->m_TileOffsetY = ( m_CurrentTileIndex / tileCountX ) * m_TileSize;
 
     if ( m_HasValidScene && m_RayTracingShader )
     {
@@ -650,7 +653,7 @@ void SRenderer::DispatchRayTracing( SRenderContext* renderContext )
         
         if ( !renderContext->m_IsSmallResolutionEnabled )
         {
-            UpdateTile( renderContext );
+            UpdateTileIndex( tileCountX, tileCountY );
         }
 
         if ( AreAllTilesRenderered() || renderContext->m_IsSmallResolutionEnabled )
@@ -727,8 +730,8 @@ bool SRenderer::UpdateResources( SRenderContext* renderContext )
     {
         RayTracingFrameConstants* constants = (RayTracingFrameConstants*)address;
         constants->frameSeed = m_FrameSeed;
-        constants->tileOffsetX = m_TileOffsetX;
-        constants->tileOffsetY = m_TileOffsetY;
+        constants->tileOffsetX = renderContext->m_TileOffsetX;
+        constants->tileOffsetY = renderContext->m_TileOffsetY;
         m_RayTracingFrameConstantBuffer->Unmap();
     }
     else
@@ -974,21 +977,15 @@ void SRenderer::AppendErrorFormat( const char* format, ... )
     AppendError( buffer );
 }
 
-void SRenderer::UpdateTile( SRenderContext* renderContext )
+void SRenderer::UpdateTileIndex( uint32_t tileCountX, uint32_t tileCountY )
 {
-    uint32_t tileCountX = (uint32_t)std::ceilf( float( renderContext->m_CurrentResolutionWidth ) / float( m_TileSize ) );
-    uint32_t tileCountY = (uint32_t)std::ceilf( float( renderContext->m_CurrentResolutionHeight ) / float( m_TileSize ) );
     uint32_t tileCount = tileCountX * tileCountY;
     m_CurrentTileIndex = ( m_CurrentTileIndex + 1 ) % tileCount;
-    m_TileOffsetX = ( m_CurrentTileIndex % tileCountX ) * m_TileSize;
-    m_TileOffsetY = ( m_CurrentTileIndex / tileCountX ) * m_TileSize;
 }
 
-void SRenderer::ResetTile()
+void SRenderer::ResetTileIndex()
 {
     m_CurrentTileIndex = 0;
-    m_TileOffsetX = 0;
-    m_TileOffsetY = 0;
 }
 
 bool SRenderer::AreAllTilesRenderered()

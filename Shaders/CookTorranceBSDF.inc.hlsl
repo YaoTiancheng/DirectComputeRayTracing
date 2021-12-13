@@ -655,12 +655,9 @@ float ReciprocalFactor( float Favg, float Favg_inv, float Eavg, float Eavg_inv, 
         return 0.0f;
 
     float eta2 = eta * eta;
-    float factor = 1.0f - Favg_inv;
-    float factor1 = 1.0f - Eavg;
-    float factor2 = 1.0f - Favg;
-    float factor3 = 1.0f - Eavg_inv;
-    float denom = factor2 / factor3 + factor * eta2 / factor1;
-    float x = factor * eta2 / ( factor1 * denom );
+    float factor = ( 1.0f - Eavg_inv ) * ( 1.0f - Favg_inv ) * eta2;
+    float factor1 = ( 1.0f - Eavg ) * ( 1.0f - Favg );
+    float x = factor / ( factor + factor1 );
     return eta > 1 ? x : ( 1.0f - x );
 }
 

@@ -4,6 +4,7 @@
 #include "GPUTexture.h"
 #include "GPUBuffer.h"
 #include "Shader.h"
+#include "RenderContext.h"
 #include "imgui/imgui.h"
 
 using namespace DirectX;
@@ -24,8 +25,7 @@ D3D11_INPUT_ELEMENT_DESC s_ScreenQuadInputElementDesc[ 1 ]
 };
 
 PostProcessingRenderer::PostProcessingRenderer()
-    : m_IsPostFXDisabled( false )
-    , m_IsJobDirty( true )
+    : m_IsPostFXEnabled( true )
 {
 }
 
@@ -108,27 +108,21 @@ bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, 
     m_CopyJob.m_VertexStride = sizeof( XMFLOAT4 );
     m_CopyJob.m_Shader = m_CopyShader.get();
 
-    m_IsJobDirty = true;
-
     return true;
 }
 
-void PostProcessingRenderer::ExecutePostFX( uint32_t resolutionWidth, uint32_t resolutionHeight, float rayTracingViewportRatio )
+void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext )
 {
     if ( void* address = m_ConstantsBuffer->Map() )
     {
-        m_ConstantParams.x = 1.0f / ( resolutionWidth * resolutionHeight );
-        m_ConstantParams.z = rayTracingViewportRatio;
+        m_ConstantParams.x = 1.0f / ( renderContext.m_CurrentResolutionWidth * renderContext.m_CurrentResolutionHeight );
+        m_ConstantParams.z = renderContext.m_CurrentResolutionRatio;
         memcpy( address, &m_ConstantParams, sizeof( m_ConstantParams ) );
         m_ConstantsBuffer->Unmap();
     }
 
-    if ( m_IsJobDirty )
-    {
-        UpdateJob();
-        m_IsJobDirty = false;
-    }
-
+    UpdateJob( renderContext.m_EnablePostFX );
+        
     m_PostFXJob.Dispatch();
 }
 
@@ -150,13 +144,18 @@ bool PostProcessingRenderer::OnImGUI()
 
     if ( ImGui::CollapsingHeader( "Post Processing" ) )
     {
-        hasPropertyChanged = hasPropertyChanged || ImGui::DragFloat( "Luminance White(^2)", (float*)&m_ConstantParams.y, 0.01f, 0.001f, 1000.0f );
+        ImGui::Checkbox( "Enabled", &m_IsPostFXEnabled );
+
+        if ( m_IsPostFXEnabled )
+        {
+            hasPropertyChanged = hasPropertyChanged || ImGui::DragFloat( "Luminance White(^2)", (float*)&m_ConstantParams.y, 0.01f, 0.001f, 1000.0f );
+        }
     }
 
     return hasPropertyChanged;
 }
 
-void PostProcessingRenderer::UpdateJob()
+void PostProcessingRenderer::UpdateJob( bool enablePostFX )
 {
-    m_PostFXJob.m_Shader = m_IsPostFXDisabled ? m_PostFXDisabledShader.get() : m_PostFXShader.get();
+    m_PostFXJob.m_Shader = !m_IsPostFXEnabled || !enablePostFX ? m_PostFXDisabledShader.get() : m_PostFXShader.get();
 }

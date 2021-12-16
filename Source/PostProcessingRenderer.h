@@ -2,6 +2,8 @@
 
 #include "GraphicsJob.h"
 
+struct SRenderContext;
+
 class PostProcessingRenderer
 {
 public:
@@ -9,16 +11,14 @@ public:
 
     bool Init( uint32_t renderWidth, uint32_t renderHeight, const GPUTexturePtr& filmTexture, const GPUTexturePtr& renderResultTexture, const GPUBufferPtr& luminanceBuffer );
 
-    void ExecutePostFX( uint32_t resolutionWidth, uint32_t resolutionHeight, float rayTracingViewportRatio );
+    void ExecutePostFX( const SRenderContext& renderContext );
 
     void ExecuteCopy();
 
     bool OnImGUI();
 
-    void SetPostFXDisable( bool value ) { m_IsPostFXDisabled = value; m_IsJobDirty = true; }
-
 private:
-    void UpdateJob();
+    void UpdateJob( bool enablePostFX );
 
 private:
     template <typename T>
@@ -39,6 +39,5 @@ private:
     GraphicsJob                         m_CopyJob;
 
     DirectX::XMFLOAT4                   m_ConstantParams;
-    bool                                m_IsJobDirty;
-    bool                                m_IsPostFXDisabled;
+    bool                                m_IsPostFXEnabled;
 };

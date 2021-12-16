@@ -190,6 +190,7 @@
     <ClInclude Include="Source\PointerTypes.h" />
     <ClInclude Include="Source\PostProcessingRenderer.h" />
     <ClInclude Include="Source\Rectangle.h" />
+    <ClInclude Include="Source\RenderContext.h" />
     <ClInclude Include="Source\RenderJobHelper.h" />
     <ClInclude Include="Source\SceneLuminanceRenderer.h" />
     <ClInclude Include="Source\StringConversion.h" />

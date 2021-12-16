@@ -15,6 +15,7 @@
 #include "Timers.h"
 #include "Rectangle.h"
 #include "BxDFTexturesBuilder.h"
+#include "RenderContext.h"
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_dx11.h"
 #include "imgui/imgui_impl_win32.h"
@@ -27,17 +28,6 @@ using namespace DirectX;
 static const uint32_t s_MaxRayBounce = 20;
 static const uint32_t s_MaxLightsCount = 64;
 static const int s_RayTracingOutputCount = 6;
-
-struct SRenderContext
-{
-    uint32_t                        m_CurrentResolutionWidth;
-    uint32_t                        m_CurrentResolutionHeight;
-    float                           m_CurrentResolutionRatio;
-    bool                            m_IsResolutionChanged;
-    bool                            m_IsSmallResolutionEnabled;
-    uint32_t                        m_TileOffsetX;
-    uint32_t                        m_TileOffsetY;
-};
 
 struct RayTracingConstants
 {
@@ -671,6 +661,7 @@ void SRenderer::DispatchRayTracing( SRenderContext* renderContext )
 void SRenderer::RenderOneFrame()
 {
     SRenderContext renderContext;
+    renderContext.m_EnablePostFX = m_RayTracingOutputIndex == 0;
 
     m_FrameTimer.BeginFrame();
 
@@ -690,7 +681,7 @@ void SRenderer::RenderOneFrame()
         viewport = { 0.0f, 0.0f, (float)m_ResolutionWidth, (float)m_ResolutionHeight, 0.0f, 1.0f };
         deviceContext->RSSetViewports( 1, &viewport );
 
-        m_PostProcessing.ExecutePostFX( renderContext.m_CurrentResolutionWidth, renderContext.m_CurrentResolutionHeight, renderContext.m_CurrentResolutionRatio );
+        m_PostProcessing.ExecutePostFX( renderContext );
     }
 
     RTV = m_sRGBBackbuffer->GetRTV();
@@ -1028,8 +1019,6 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
             if ( ImGui::Combo( "Output", &m_RayTracingOutputIndex, s_OutputNames, IM_ARRAYSIZE( s_OutputNames ) ) )
             {
                 m_IsRayTracingShaderDirty = true;
-
-                m_PostProcessing.SetPostFXDisable( m_RayTracingOutputIndex != 0 );
             }
             if ( m_RayTracingOutputIndex == 0 )
             {

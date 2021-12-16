@@ -1082,6 +1082,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                         UpdateEnvironmentTextureFromCurrentFilepath();
                         bool hasEnvTextureCurrently = m_EnvironmentTexture.get() != nullptr;
                         m_IsRayTracingShaderDirty = hasEnvTexturePreviously != hasEnvTextureCurrently;
+                        m_IsFilmDirty = true;
                     }
                 }
                 if ( m_EnvironmentTexture )

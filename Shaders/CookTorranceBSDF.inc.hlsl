@@ -649,16 +649,27 @@ void SampleCookTorranceMultiscatteringBSDF( float3 wo, float selectionSample, fl
 // Microfacet Multiscattering BSDF
 //
 
-float ReciprocalFactor( float Favg, float Favg_inv, float Eavg, float Eavg_inv, float eta )
+float ReciprocalFactor( float Favg, float Favg_inv, float Eavg, float Eavg_inv, float eta, bool isInverted )
 {
     if ( Eavg == 1.0f || Eavg_inv == 1.0f )
         return 0.0f;
 
+    if ( isInverted )
+    {
+        float temp = Favg;
+        Favg = Favg_inv;
+        Favg_inv = temp;
+
+        temp = Eavg;
+        Eavg = Eavg_inv;
+        Eavg_inv = temp;
+    }
+
     float eta2 = eta * eta;
-    float factor = ( 1.0f - Eavg_inv ) * ( 1.0f - Favg_inv ) * eta2;
-    float factor1 = ( 1.0f - Eavg ) * ( 1.0f - Favg );
+    float factor = ( 1.0f - Eavg_inv ) * ( 1.0f - Favg_inv );
+    float factor1 = ( 1.0f - Eavg ) * ( 1.0f - Favg ) * eta2;
     float x = factor / ( factor + factor1 );
-    return eta > 1 ? x : ( 1.0f - x );
+    return isInverted ? ( 1.0f - x ) : x;
 }
 
 float3 EvaluateCookTorranceMicrofacetMultiscatteringBSDF( float3 wi, float3 wo, float3 color, float alpha, float etaI, float etaT, LightingContext lightingContext )
@@ -671,7 +682,7 @@ float3 EvaluateCookTorranceMicrofacetMultiscatteringBSDF( float3 wi, float3 wo, 
     float Eavg_inv   = SampleCookTorranceMicrofacetBSDFAverageEnergyTexture( alpha, invEta );
     float Favg_inv   = MultiscatteringFavgDielectric( invEta );
     float Eavg       = SampleCookTorranceMicrofacetBSDFAverageEnergyTexture( alpha, eta );
-    float reciprocalFactor = ReciprocalFactor( Favg, Favg_inv, Eavg, Eavg_inv, eta );
+    float reciprocalFactor = ReciprocalFactor( Favg, Favg_inv, Eavg, Eavg_inv, lightingContext.isInverted ? invEta : eta, lightingContext.isInverted );
 
     float3 value;
     if ( wi.z < 0.0f )
@@ -714,7 +725,7 @@ void SampleCookTorranceMicrofacetMultiscatteringBSDF( float3 wo, float selection
     float Eavg_inv   = SampleCookTorranceMicrofacetBSDFAverageEnergyTexture( alpha, invEta );
     float Favg_inv   = MultiscatteringFavgDielectric( invEta );
     float Eavg       = SampleCookTorranceMicrofacetBSDFAverageEnergyTexture( alpha, eta );
-    float reciprocalFactor = ReciprocalFactor( Favg, Favg_inv, Eavg, Eavg_inv, eta );
+    float reciprocalFactor = ReciprocalFactor( Favg, Favg_inv, Eavg, Eavg_inv, lightingContext.isInverted ? invEta : eta, lightingContext.isInverted );
     float Ems_r      = ( 1.0f - Ebsdf ) * Favg;
     float Ems_t      = ( 1.0f - Ebsdf ) * ( 1.0f - Favg ) * reciprocalFactor;
 

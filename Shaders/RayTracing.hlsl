@@ -8,6 +8,8 @@ cbuffer RayTracingConstants : register( b0 )
     uint                g_MaxBounceCount;
     uint                g_PrimitiveCount;
     uint                g_LightCount;
+    float               g_ApertureRadius;
+    float               g_FocalDistance;
     float               g_FilmDistance;
 }
 
@@ -67,17 +69,29 @@ float3 OffsetRayOrigin( float3 p, float3 n, float3 d )
     return abs( p ) < s_Origin ? p + s_FloatScale * n : p_i;
 }
 
-void GenerateRay( float2 sample
+void GenerateRay( float2 filmSample
+    , float2 apertureSample
 	, float2 filmSize
-	, float filmDistance
+    , float apertureRadius
+	, float focalDistance
+    , float filmDistance
 	, float4x4 cameraTransform
 	, out float3 origin
 	, out float3 direction )
 {
-    float2 filmSample = float2( sample.x - 0.5f, -sample.y + 0.5f ) * filmSize;
-    origin = float3( 0.0f, 0.0f, filmDistance );
-    direction = normalize( origin - float3( filmSample, 0.0f ) );
-    direction.xy = -direction.xy;
+    float3 filmPos = float3( -filmSample.x + 0.5f, filmSample.y - 0.5f, -filmDistance );
+    filmPos.xy *= filmSize;
+    
+    origin = float3( 0.0f, 0.0f, 0.0f );
+    direction = normalize( -filmPos );
+
+    if ( apertureRadius > 0.0f )
+    {
+        float3 aperturePos = float3( ConcentricSampleDisk( apertureSample ) * apertureRadius, 0.0f );
+        float3 focusPoint = direction * ( focalDistance / direction.z );
+        origin = aperturePos;
+        direction = normalize( focusPoint - origin );
+    }
 
     origin = mul( float4( origin, 1.0f ), cameraTransform ).xyz;
     direction = mul( float4( direction, 0.0f ), cameraTransform ).xyz;
@@ -217,7 +231,8 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 
     float2 pixelSample = GetNextSample2D( rng );
     float2 filmSample = ( pixelSample + pixelPos ) / g_Resolution;
-    GenerateRay( filmSample, g_FilmSize, g_FilmDistance, g_CameraTransform, intersection.position, wo );
+    float2 apertureSample = GetNextSample2D( rng );
+    GenerateRay( filmSample, apertureSample, g_FilmSize, g_ApertureRadius, g_FocalDistance, g_FilmDistance, g_CameraTransform, intersection.position, wo );
 
     if ( IntersectScene( intersection.position, wo, threadId, intersection ) )
     {
@@ -287,7 +302,8 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 
     float2 pixelSample = GetNextSample2D( rng );
     float2 filmSample = ( pixelSample + pixelPos ) / g_Resolution;
-    GenerateRay( filmSample, g_FilmSize, g_FilmDistance, g_CameraTransform, intersection.position, wo );
+    float2 apertureSample = GetNextSample2D( rng );
+    GenerateRay( filmSample, apertureSample, g_FilmSize, g_ApertureRadius, g_FocalDistance, g_FilmDistance, g_CameraTransform, intersection.position, wo );
 
     if ( IntersectScene( intersection.position, wo, threadId, intersection ) )
     {

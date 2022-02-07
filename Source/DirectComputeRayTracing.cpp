@@ -28,6 +28,7 @@ using namespace DirectX;
 static const uint32_t s_MaxRayBounce = 20;
 static const uint32_t s_MaxLightsCount = 64;
 static const int s_RayTracingOutputCount = 6;
+static const float s_MaxFocalDistance = 999999.0f;
 
 struct RayTracingConstants
 {
@@ -39,7 +40,10 @@ struct RayTracingConstants
     uint32_t                        maxBounceCount;
     uint32_t                        primitiveCount;
     uint32_t                        lightCount;
+    float                           apertureRadius;
+    float                           focalDistance;
     float                           filmDistance;
+    float                           padding[ 2 ];
 };
 
 enum class ELightType
@@ -134,6 +138,14 @@ struct SRenderer
 
     bool AreAllTilesRenderered();
 
+    float CalculateFocalDistance() const;
+
+    float CalculateFilmDistance() const;
+
+    float CalculateFilmDistanceNormalized() const;
+
+    float GetFilmDistance() const;
+
     HWND                                m_hWnd;
 
     Camera                              m_Camera;
@@ -142,7 +154,11 @@ struct SRenderer
     std::vector<std::string>            m_MaterialNames;
 
     DirectX::XMFLOAT2                   m_FilmSize;
-    float                               m_FilmDistance;
+    float                               m_FilmDistanceNormalized;
+    float                               m_FocalLength;
+    float                               m_FocalDistance;
+    float                               m_ApertureDiameter;
+    bool                                m_IsManualFilmDistanceEnabled = false;
     DirectX::XMFLOAT4                   m_BackgroundColor;
     uint32_t                            m_MaxBounceCount;
     uint32_t                            m_PrimitiveCount;
@@ -445,7 +461,10 @@ bool SRenderer::ResetScene( const char* filePath )
 
     m_MaxBounceCount = 2;
     m_FilmSize = XMFLOAT2( 0.05333f, 0.03f );
-    m_FilmDistance = 0.04f;
+    m_FocalLength = 0.05f;
+    m_FocalDistance = 2.0f;
+    m_FilmDistanceNormalized = CalculateFilmDistanceNormalized();
+    m_ApertureDiameter = m_FocalLength / 8.0f; // initialize to f/8
     m_BackgroundColor = { 1.0f, 1.0f, 1.0f, 0.f };
 
     if ( filePath == nullptr || filePath[ 0 ] == '\0' )
@@ -739,11 +758,13 @@ bool SRenderer::UpdateResources( SRenderContext* renderContext )
             constants->resolutionY = renderContext->m_CurrentResolutionHeight;
             constants->background = m_BackgroundColor;
             m_Camera.GetTransformMatrixAndClearDirty( &constants->cameraTransform );
-            constants->filmDistance = m_FilmDistance;
+            constants->filmDistance = GetFilmDistance();
             constants->filmSize = m_FilmSize;
             constants->lightCount = (uint32_t)m_LightSettings.size();
             constants->maxBounceCount = m_MaxBounceCount;
             constants->primitiveCount = m_PrimitiveCount;
+            constants->apertureRadius = m_ApertureDiameter * 0.5f;
+            constants->focalDistance = m_FocalDistance;
             m_RayTracingConstantsBuffer->Unmap();
             m_IsConstantBufferDirty = false;
         }
@@ -984,6 +1005,32 @@ bool SRenderer::AreAllTilesRenderered()
     return m_CurrentTileIndex == 0;
 }
 
+// Calculate focal distance from focal length and film distance.
+// Based on the Gaussian lens equation.
+float SRenderer::CalculateFocalDistance() const
+{
+    float filmDistance = GetFilmDistance();
+    float denom = std::fmaxf( 0.0f, m_FocalLength - filmDistance );
+    return std::fminf( s_MaxFocalDistance, ( m_FocalLength * filmDistance ) / denom ); // Clamp this value before it gets too large and make ray generation output invalid numbers.
+}
+
+// Calculate film distance from focal length and focal distance.
+// Based on the Gaussian lens equation.
+float SRenderer::CalculateFilmDistance() const
+{
+    return ( m_FocalLength * m_FocalDistance ) / ( m_FocalLength + m_FocalDistance );
+}
+
+float SRenderer::CalculateFilmDistanceNormalized() const
+{
+    return CalculateFilmDistance() / m_FocalLength;
+}
+
+float SRenderer::GetFilmDistance() const
+{
+    return m_FilmDistanceNormalized * m_FocalLength;
+}
+
 void SRenderer::OnImGUI( SRenderContext* renderContext )
 {
     if ( ImGui::GetIO().KeysDown[ VK_F1 ] && ImGui::GetIO().KeysDownDuration[ VK_F1 ] == 0.0f )
@@ -996,14 +1043,50 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
     {
         ImGui::Begin( "Settings" );
-        ImGui::PushItemWidth( ImGui::GetFontSize() * -12 );
+        ImGui::PushItemWidth( ImGui::GetFontSize() * -15 );
 
         if ( ImGui::CollapsingHeader( "Film" ) )
         {
             if ( ImGui::InputFloat2( "Film Size", (float*)&m_FilmSize ) )
                 m_IsConstantBufferDirty = true;
 
-            if ( ImGui::DragFloat( "Film Distance", (float*)&m_FilmDistance, 0.005f, 0.001f, 1000.0f ) )
+            if ( ImGui::DragFloat( "Focal Length", (float*)&m_FocalLength, 0.000001f, 0.000001f, 1000.0f, "%.5f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
+            {
+                m_IsConstantBufferDirty = true;
+                if ( m_IsManualFilmDistanceEnabled )
+                {
+                    m_FocalDistance = CalculateFocalDistance();
+                }
+                else
+                {
+                    m_FilmDistanceNormalized = CalculateFilmDistanceNormalized();
+                }
+            }
+
+            ImGui::Checkbox( "Manual Film Distance", &m_IsManualFilmDistanceEnabled );
+
+            if ( m_IsManualFilmDistanceEnabled )
+            {
+                ImGui::LabelText( "Focal Distance", "%.5f", m_FocalDistance );
+
+                if ( ImGui::DragFloat( "Film Distance Normalized", (float*)&m_FilmDistanceNormalized, 0.0001f, 0.000001f, 1.0f, "%.5f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
+                {
+                    m_IsConstantBufferDirty = true;
+                    m_FocalDistance = CalculateFocalDistance();
+                }
+            }
+            else
+            {
+                if ( ImGui::DragFloat( "Focal Distance", (float*)&m_FocalDistance, 0.005f, 0.000001f, s_MaxFocalDistance, "%.5f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
+                {
+                    m_IsConstantBufferDirty = true;
+                    m_FilmDistanceNormalized = CalculateFilmDistanceNormalized();
+                }
+
+                ImGui::LabelText( "Film Distance Normalized", "%.5f", m_FilmDistanceNormalized );
+            }
+
+            if ( ImGui::DragFloat( "Aperture Diameter", (float*)&m_ApertureDiameter, 0.001f, 0.0f, 1000.0f, "%.5f" ) )
                 m_IsConstantBufferDirty = true;
 
             if ( ImGui::InputInt( "Render Tile Size", (int*)&m_TileSize, 16, 32, ImGuiInputTextFlags_EnterReturnsTrue ) )

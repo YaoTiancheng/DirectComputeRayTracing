@@ -18,6 +18,15 @@ float2 GetNextSample2D( inout Xoshiro128StarStar rng )
     return sample;
 }
 
+float3 GetNextSample3D( inout Xoshiro128StarStar rng )
+{
+    float3 sample;
+    // Don't use the float3 initializer to ensure consistent order of evaluation.
+    sample.xy = GetNextSample2D( rng );
+    sample.z = GetNextSample1D( rng );
+    return sample;
+}
+
 uint Interleave_32bit( uint2 pixelPos )
 {
     uint x = pixelPos.x & 0x0000FFFF;           // x = ---- ---- ---- ---- fedc ba98 7654 3210

@@ -11,6 +11,9 @@ cbuffer RayTracingConstants : register( b0 )
     float               g_ApertureRadius;
     float               g_FocalDistance;
     float               g_FilmDistance;
+    float2              g_BladeVertexPos;
+    uint                g_BladeCount;
+    float               g_ApertureBaseAngle;
 }
 
 cbuffer RayTracingFrameConstants : register( b1 )
@@ -69,12 +72,34 @@ float3 OffsetRayOrigin( float3 p, float3 n, float3 d )
     return abs( p ) < s_Origin ? p + s_FloatScale * n : p_i;
 }
 
+float2 SampleAperture( float3 samples, float apertureRadius, uint bladeCount, float2 vertexPos, float bladeAngle, float baseAngle )
+{
+    if ( bladeCount <= 2 )
+    {
+        return ConcentricSampleDisk( samples.xy ) * apertureRadius;
+    }
+    else
+    {
+        // First sample the identity triangle, get the point p and then rotate it to the sampling blade.
+        float2 uv = SampleTriangle( samples.xy );
+        float2 p = float2( vertexPos.x * ( uv.x + uv.y ), vertexPos.y * uv.x - vertexPos.y * uv.y );
+        float n = floor( samples.z * bladeCount );
+        float theta = n * bladeAngle + baseAngle;
+        float2 pRotated = float2( p.x * cos( theta ) - p.y * sin( theta )
+                                , p.y * cos( theta ) + p.x * sin( theta ) );
+        return pRotated;
+    }
+}
+
 void GenerateRay( float2 filmSample
-    , float2 apertureSample
+    , float3 apertureSample
 	, float2 filmSize
     , float apertureRadius
 	, float focalDistance
     , float filmDistance
+    , uint bladeCount
+    , float2 bladeVertexPos
+    , float apertureBaseAngle
 	, float4x4 cameraTransform
 	, out float3 origin
 	, out float3 direction )
@@ -87,7 +112,7 @@ void GenerateRay( float2 filmSample
 
     if ( apertureRadius > 0.0f )
     {
-        float3 aperturePos = float3( ConcentricSampleDisk( apertureSample ) * apertureRadius, 0.0f );
+        float3 aperturePos = float3( SampleAperture( apertureSample, apertureRadius, bladeCount, bladeVertexPos, PI_MUL_2 / bladeCount, apertureBaseAngle ), 0.0f );
         float3 focusPoint = direction * ( focalDistance / direction.z );
         origin = aperturePos;
         direction = normalize( focusPoint - origin );
@@ -231,8 +256,8 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 
     float2 pixelSample = GetNextSample2D( rng );
     float2 filmSample = ( pixelSample + pixelPos ) / g_Resolution;
-    float2 apertureSample = GetNextSample2D( rng );
-    GenerateRay( filmSample, apertureSample, g_FilmSize, g_ApertureRadius, g_FocalDistance, g_FilmDistance, g_CameraTransform, intersection.position, wo );
+    float3 apertureSample = GetNextSample3D( rng );
+    GenerateRay( filmSample, apertureSample, g_FilmSize, g_ApertureRadius, g_FocalDistance, g_FilmDistance, g_BladeCount, g_BladeVertexPos, g_ApertureBaseAngle, g_CameraTransform, intersection.position, wo );
 
     if ( IntersectScene( intersection.position, wo, threadId, intersection ) )
     {
@@ -302,8 +327,8 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 
     float2 pixelSample = GetNextSample2D( rng );
     float2 filmSample = ( pixelSample + pixelPos ) / g_Resolution;
-    float2 apertureSample = GetNextSample2D( rng );
-    GenerateRay( filmSample, apertureSample, g_FilmSize, g_ApertureRadius, g_FocalDistance, g_FilmDistance, g_CameraTransform, intersection.position, wo );
+    float3 apertureSample = GetNextSample3D( rng );
+    GenerateRay( filmSample, apertureSample, g_FilmSize, g_ApertureRadius, g_FocalDistance, g_FilmDistance, g_BladeCount, g_BladeVertexPos, g_ApertureBaseAngle, g_CameraTransform, intersection.position, wo );
 
     if ( IntersectScene( intersection.position, wo, threadId, intersection ) )
     {

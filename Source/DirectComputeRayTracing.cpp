@@ -43,6 +43,9 @@ struct RayTracingConstants
     float                           apertureRadius;
     float                           focalDistance;
     float                           filmDistance;
+    DirectX::XMFLOAT2               bladeVertexPos;
+    uint32_t                        bladeCount;
+    float                           apertureBaseAngle;
     float                           padding[ 2 ];
 };
 
@@ -158,6 +161,8 @@ struct SRenderer
     float                               m_FocalLength;
     float                               m_FocalDistance;
     float                               m_ApertureDiameter;
+    uint32_t                            m_ApertureBladeCount;
+    float                               m_ApertureRotation;
     bool                                m_IsManualFilmDistanceEnabled = false;
     DirectX::XMFLOAT4                   m_BackgroundColor;
     uint32_t                            m_MaxBounceCount;
@@ -465,6 +470,8 @@ bool SRenderer::ResetScene( const char* filePath )
     m_FocalDistance = 2.0f;
     m_FilmDistanceNormalized = CalculateFilmDistanceNormalized();
     m_ApertureDiameter = m_FocalLength / 8.0f; // initialize to f/8
+    m_ApertureBladeCount = 7;
+    m_ApertureRotation = 0.0f;
     m_BackgroundColor = { 1.0f, 1.0f, 1.0f, 0.f };
 
     if ( filePath == nullptr || filePath[ 0 ] == '\0' )
@@ -765,6 +772,13 @@ bool SRenderer::UpdateResources( SRenderContext* renderContext )
             constants->primitiveCount = m_PrimitiveCount;
             constants->apertureRadius = m_ApertureDiameter * 0.5f;
             constants->focalDistance = m_FocalDistance;
+            constants->apertureBaseAngle = m_ApertureRotation;
+            constants->bladeCount = m_ApertureBladeCount;
+            
+            float halfBladeAngle = DirectX::XM_PI / m_ApertureBladeCount;
+            constants->bladeVertexPos.x = cosf( halfBladeAngle ) * constants->apertureRadius;
+            constants->bladeVertexPos.y = sinf( halfBladeAngle ) * constants->apertureRadius;
+
             m_RayTracingConstantsBuffer->Unmap();
             m_IsConstantBufferDirty = false;
         }
@@ -1086,8 +1100,18 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 ImGui::LabelText( "Film Distance Normalized", "%.5f", m_FilmDistanceNormalized );
             }
 
-            if ( ImGui::DragFloat( "Aperture Diameter", (float*)&m_ApertureDiameter, 0.001f, 0.0f, 1000.0f, "%.5f" ) )
+            if ( ImGui::DragFloat( "Aperture Diameter", (float*)&m_ApertureDiameter, 0.001f, 0.0f, 1000.0f, "%.5f", ImGuiSliderFlags_AlwaysClamp ) )
                 m_IsConstantBufferDirty = true;
+
+            if ( ImGui::DragInt( "Aperture Blade Count", (int*)&m_ApertureBladeCount, 1.0f, 2, 16, "%d", ImGuiSliderFlags_AlwaysClamp ) )
+                m_IsConstantBufferDirty = true;
+
+            float apertureRotationDeg = DirectX::XMConvertToDegrees( m_ApertureRotation );
+            if ( ImGui::DragFloat( "Aperture Rotation", &apertureRotationDeg, 1.0f, 0.0f, 360.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp ) )
+            {
+                m_ApertureRotation = DirectX::XMConvertToRadians( apertureRotationDeg );
+                m_IsConstantBufferDirty = true;
+            }
 
             if ( ImGui::InputInt( "Render Tile Size", (int*)&m_TileSize, 16, 32, ImGuiInputTextFlags_EnterReturnsTrue ) )
             {

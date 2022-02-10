@@ -46,6 +46,13 @@ float2 ConcentricSampleDisk( float2 sample )
     return r * float2( cos( theta ), sin( theta ) );
 }
 
+// Returns barycentric coordinate
+float2 SampleTriangle( float2 sample )
+{
+    float s = sqrt( sample.x );
+    return float2( 1.0f - s, sample.y * s );
+}
+
 float PowerHeuristic( uint nf, float fPdf, uint ng, float gPdf )
 {
     float f = nf * fPdf;

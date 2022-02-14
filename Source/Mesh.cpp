@@ -169,8 +169,6 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
     if ( normalCount == 0 )
         return false;
 
-    bool hasTexcoord = !attrib.texcoords.empty();
-
     std::vector<uint32_t> indices;
     std::vector<uint32_t> materialIds;
     bool needDefaultMaterial = false;
@@ -259,8 +257,8 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
                     vertex.position = XMFLOAT3( attrib.vertices[ idx.vertex_index * 3 ], attrib.vertices[ idx.vertex_index * 3 + 1 ], attrib.vertices[ idx.vertex_index * 3 + 2 ] );
                     vertex.normal   = XMFLOAT3( attrib.normals[ idx.normal_index * 3 ], attrib.normals[ idx.normal_index * 3 + 1 ], attrib.normals[ idx.normal_index * 3 + 2 ] );
                     vertex.tangent  = tangent;
-                    vertex.texcoord = hasTexcoord ? XMFLOAT2( attrib.texcoords[ idx.texcoord_index * 2 ], attrib.texcoords[ idx.texcoord_index * 2 + 1 ] ) : XMFLOAT2( 0.0f, 0.0f );
-
+                    vertex.texcoord = idx.texcoord_index != -1 ? XMFLOAT2( attrib.texcoords[ idx.texcoord_index * 2 ], attrib.texcoords[ idx.texcoord_index * 2 + 1 ] ) : XMFLOAT2( 0.0f, 0.0f );
+                    
                     vertex.position.x = -vertex.position.x;
                     vertex.normal.x   = -vertex.normal.x;
                     vertex.tangent.x  = -vertex.tangent.x;

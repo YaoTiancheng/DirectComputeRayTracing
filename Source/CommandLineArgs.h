@@ -20,6 +20,8 @@ public:
 
     const std::wstring& GetEnvironmentTextureFilename() const { return m_EnvironmentTextureFilename; }
 
+    bool GetOutputBVHToFile() const { return m_OutputBVHToFile; }
+
     static const CommandLineArgs* Singleton() { return s_Singleton; }
 
 private:
@@ -31,6 +33,7 @@ private:
     bool        m_MultipleImportanceSamplingEnabled;
     std::string m_Filename;
     std::wstring m_EnvironmentTextureFilename;
+    bool        m_OutputBVHToFile;
 
     static CommandLineArgs* s_Singleton;
 };

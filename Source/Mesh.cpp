@@ -311,7 +311,7 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
         std::vector<UnpackedBVHNode> BVHNodes;
         BuildBVH( m_Vertices.data(), indices.data(), m_Indices.data(), materialIds.data(), m_MaterialIds.data(), GetTriangleCount(), &BVHNodes, &m_BVHMaxDepth, &m_BVHMaxStackSize );
 
-        if ( BVHFilename )
+        if ( BVHFilename && BVHFilename[ 0 ] != '\0' )
         {
             FILE* file = fopen( BVHFilename, "w" );
             if ( file )

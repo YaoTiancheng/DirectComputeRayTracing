@@ -10,6 +10,7 @@ CommandLineArgs::CommandLineArgs()
     , m_UseDebugDevice( false )
     , m_NoBVHAccel( false )
     , m_MultipleImportanceSamplingEnabled( true )
+    , m_OutputBVHToFile( false )
 {
     assert( s_Singleton == nullptr );
     s_Singleton = this;
@@ -58,6 +59,10 @@ void CommandLineArgs::Parse( const wchar_t* cmdLine )
         else if ( wcscmp( argStr, L"-DisableMIS" ) == 0 )
         {
             m_MultipleImportanceSamplingEnabled = false;
+        }
+        else if ( wcscmp( argStr, L"-OutputBVH" ) == 0 )
+        {
+            m_OutputBVHToFile = true;
         }
         else if ( iArg == numArgs - 1 )
         {

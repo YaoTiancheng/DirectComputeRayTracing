@@ -489,9 +489,12 @@ bool SRenderer::ResetScene( const char* filePath )
         strcpy( fileDir, filePath );
         PathRemoveFileSpecA( fileDir );
 
-        char BVHFilePath[ MAX_PATH ];
+        char BVHFilePath[ MAX_PATH ] = "\0";
         const char* MTLSearchPath = fileDir;
-        sprintf_s( BVHFilePath, MAX_PATH, "%s\\%s.xml", fileDir, fileName );
+        if ( commandLineArgs->GetOutputBVHToFile() )
+        {
+            sprintf_s( BVHFilePath, MAX_PATH, "%s\\%s.xml", fileDir, fileName );
+        }
         bool buildBVH = !commandLineArgs->GetNoBVHAccel();
 
         LOG_STRING_FORMAT( "Loading mesh from: %s, MTL search path at: %s, BVH file path at: %s\n", filePath, MTLSearchPath, BVHFilePath );

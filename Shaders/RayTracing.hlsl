@@ -229,16 +229,244 @@ float3 EstimateDirect( SLight light, Intersection intersection, SLightSamples sa
 #endif
 }
 
+void EstimateDirectNoOcclusion( SLight light, Intersection intersection, SLightSamples samples, float3 wo, out float3 lightSamplingResult, out float3 bsdfSamplingResult )
+{
+    lightSamplingResult = 0.f;
+    bsdfSamplingResult = 0.f;
+
+#if defined( MULTIPLE_IMPORTANCE_SAMPLING )
+    float3 l, wi, result = 0.0f;
+    float distance, lightPdf;
+    bool isDeltaLight = false;
+    if ( light.flags & LIGHT_FLAGS_POINT_LIGHT )
+    {
+        SamplePointLight( light, samples.lightSample, intersection.position, l, wi, distance, lightPdf );
+        isDeltaLight = true;
+    }
+    else
+    {
+        SampleRectangleLight( light, samples.lightSample, intersection.position, l, wi, distance, lightPdf );
+    }
+
+    if ( any( l > 0.0f ) && lightPdf > 0.0f )
+    {
+        float3 bsdf = EvaluateBSDF( wi, wo, intersection );
+        float NdotWI = abs( dot( intersection.normal, wi ) );
+        float bsdfPdf = EvaluateBSDFPdf( wi, wo, intersection );
+        float weight = isDeltaLight ? 1.0f : PowerHeuristic( 1, lightPdf, 1, bsdfPdf );
+
+        lightSamplingResult = l * bsdf * NdotWI * weight / lightPdf;
+    }
+
+    if ( !isDeltaLight )
+    {
+        float3 bsdf;
+        float bsdfPdf;
+        bool isDeltaBxdf;
+        SampleBSDF( wo, samples.bsdfSample, samples.bsdfSelectionSample, intersection, wi, bsdf, bsdfPdf, isDeltaBxdf );
+
+        if ( all( bsdf == 0.0f ) || bsdfPdf == 0.0f )
+            return result;
+
+        lightPdf = EvaluateRectangleLightPdf( light, wi, intersection.position, distance );
+        if ( lightPdf == 0.0f )
+            return result;
+
+        float weight = !isDeltaBxdf ? PowerHeuristic( 1, bsdfPdf, 1, lightPdf ) : 1.0f;
+
+        l = light.color;
+
+        float NdotWI = abs( dot( intersection.normal, wi ) );
+        bsdfSamplingResult = l * bsdf * NdotWI * weight / bsdfPdf;
+    }
+#else
+    float3 l, wi;
+    float distance, pdf;
+    if ( light.flags & LIGHT_FLAGS_POINT_LIGHT )
+        SamplePointLight( light, samples.lightSample, intersection.position, l, wi, distance, pdf );
+    else
+        SampleRectangleLight( light, samples.lightSample, intersection.position, l, wi, distance, pdf );
+
+    if ( any( l > 0.0f ) && pdf > 0.0f && !IsOcculuded( OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi ), wi, distance, dispatchThreadIndex ) )
+    {
+        float3 brdf = EvaluateBSDF( wi, wo, intersection );
+        float NdotL = abs( dot( intersection.normal, wi ) );
+        lightSamplingResult = l * brdf * NdotL / pdf;
+    }
+#endif
+}
+
 float3 UniformSampleOneLight( SLightSamples samples, Intersection intersection, float3 wo, uint dispatchThreadIndex )
 {
     uint lightIndex = floor( samples.lightSelectionSample * g_LightCount );
     return g_LightCount != 0 ? EstimateDirect( g_Lights[ lightIndex ], intersection, samples, wo, dispatchThreadIndex ) * g_LightCount : 0.0f;
 }
 
+struct SRayQuery
+{
+    float3 origin;
+    float3 direction;
+    float  tMin;
+};
+
+struct SRayOcclusionQuery
+{
+    float3 origin;
+    float3 direction;
+    float  tMin;
+    float  tMax;
+};
+
+struct SRayHit
+{
+    float  t;
+    float2 uv;
+    uint   triangleId;
+};
+
+#if defined( EXTEND_RAY )
+
+cbuffer ExtendRayConstants : register( b0 )
+{
+    uint g_RayCount;
+}
+
+StructuredBuffer<Vertex>      g_Vertices      : register( t0 );
+StructuredBuffer<uint>        g_Triangles     : register( t1 );
+StructuredBuffer<BVHNode>     g_BVHNodes      : register( t2 );
+StructuredBuffer<SRayQuery>   g_RayQueries    : register( t3 );
+RWStructuredBuffer<SRayHit>   g_RayHits       : register( u0 );
+
+[numthreads( 256, 1, 1 )]
+void main( uint threadId : SV_GroupIndex )
+{
+    if ( threadId >= g_RayCount )
+        return;
+
+    SRayQuery rayQuery = g_RayQueries[ threadId ];
+    SRayHit rayHit;
+    bool hasHit = BVHIntersectNoInterp( rayQuery.origin
+        , rayQuery.direction
+        , rayQuery.tMin
+        , threadId
+        , rayHit.t
+        , rayHit.uv.x
+        , rayHit.uv.y
+        , rayHit.triangleId );
+    rayHit.t = hasHit ? rayHit.t : -1.0f;
+
+    g_RayHits[ threadId ] = rayHit;
+}
+
+#endif
+
+#if defined( HANDLE_HIT )
+
+cbuffer HandleHitConstants : register( b0 )
+{
+    uint g_RayCount;
+}
+
+StructuredBuffer<SRayHit>   g_RayHits : register( t0 );
+RWStructuredBuffer<uint>    g_RayMissIndirectArgs : register( u0 )
+RWStructuredBuffer<uint>    g_RayHitMaterialIndirectArgs : register( u1 )
+RWStructuredBuffer<uint>    g_RayMissIndices : register( u2 )
+RWStructuredBuffer<uint>    g_RayHitMaterialIndices : register( u3 )
+
+[numthreads( 256, 1, 1 )]
+void main( uint threadId : SV_GroupIndex )
+{
+    if ( threadId >= g_RayCount )
+        return;
+
+    SRayHit rayHit = g_RayHits[ threadId ];
+    bool hasHit = rayHit.t != -1.0f;
+    if ( !hasHit )
+    {
+        uint index = 0;
+        InterlockedAdd( g_RayMissIndirectArgs[ 0 ], 1, index );
+        g_RayMissIndices[ index ] = threadId;
+    }
+    else
+    {
+        uint index = 0;
+        InterlockedAdd( g_RayHitMaterialIndirectArgs[ 0 ], 1, index );
+        g_RayHitMaterialIndices[ index ] = threadId;
+    }
+}
+
+#endif
+
+#if defined( FILL_INDIRECT_ARGS )
+
+RWStructuredBuffer<uint>    g_RayMissIndirectArgs : register( u0 )
+RWStructuredBuffer<uint>    g_RayHitMaterialIndirectArgs : register( u1 )
+
+[numthreads( 1, 1, 1 )]
+void main()
+{
+    g_RayMissIndirectArgs[ 1 ] = g_RayMissIndirectArgs[ 0 ] / 32;
+    if ( ( g_RayMissIndirectArgs[ 0 ] % 32 ) > 0 )
+    {
+        g_RayMissIndirectArgs[ 1 ] += 1;
+    }
+    g_RayMissIndirectArgs[ 0 ] = 0;
+
+    g_RayHitMaterialIndirectArgs[ 1 ] = g_RayHitMaterialIndirectArgs[ 0 ] / 32;
+    if ( ( g_RayHitMaterialIndirectArgs[ 0 ] % 32 ) > 0 )
+    {
+        g_RayHitMaterialIndirectArgs[ 1 ] += 1;
+    }
+    g_RayHitMaterialIndirectArgs[ 0 ] = 0;
+}
+
+#endif
+
+#if defined( RAY_MISS )
+
+[numthreads( 32, 1, 1 )]
+void main( uint threadId : SV_GroupIndex )
+{
+
+}
+
+#endif
+
+#if defined( SHADOW_RAY )
+
+cbuffer ShadowRayConstants : register( b0 )
+{
+    uint g_RayCount;
+}
+
+StructuredBuffer<Vertex>                g_Vertices      : register( t0 );
+StructuredBuffer<uint>                  g_Triangles     : register( t1 );
+StructuredBuffer<BVHNode>               g_BVHNodes      : register( t2 );
+StructuredBuffer<SRayOcclusionQuery>    g_RayQueries    : register( t3 );
+RWStructuredBuffer<bool>                g_RayHits       : register( u0 );
+
+[numthreads( 256, 1, 1 )]
+void main( uint threadId : SV_GroupIndex )
+{
+    if ( threadId >= g_RayCount )
+        return;
+
+    SRayOcclusionQuery rayQuery = g_RayQueries[ threadId ];
+    bool hasHit = BVHIntersect( rayQuery.origin
+        , rayQuery.direction
+        , rayQuery.tMin
+        , rayQuery.tMax
+        , threadId );
+
+    g_RayHits[ threadId ] = hasHit;
+}
+
+#endif
+
+#if defined( MEGAKERNEL )
+
 #define GROUP_SIZE_X 16
 #define GROUP_SIZE_Y 16
-
-#if !defined( OUTPUT_NORMAL ) && !defined( OUTPUT_TANGENT ) && !defined( OUTPUT_ALBEDO ) && !defined( OUTPUT_NEGATIVE_NDOTV ) && !defined( OUTPUT_BACKFACE )
 
 [numthreads( GROUP_SIZE_X, GROUP_SIZE_Y, 1 )]
 void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
@@ -310,7 +538,12 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     AddSampleToFilm( l, pixelSample, pixelPos );
 }
 
-#else
+#endif
+
+#if defined( OUTPUT_NORMAL ) || defined( OUTPUT_TANGENT ) || defined( OUTPUT_ALBEDO ) || defined( OUTPUT_NEGATIVE_NDOTV ) || defined( OUTPUT_BACKFACE )
+
+#define GROUP_SIZE_X 16
+#define GROUP_SIZE_Y 16
 
 [ numthreads( GROUP_SIZE_X, GROUP_SIZE_Y, 1 ) ]
 void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )

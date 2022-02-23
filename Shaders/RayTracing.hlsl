@@ -324,6 +324,16 @@ struct SRayHit
     uint   triangleId;
 };
 
+struct SPathContext
+{
+    float3 throughput;
+    float3 l;
+    uint2  pixelPos;
+    float2 pixelSample;
+};
+
+uint2 
+
 #if defined( EXTEND_RAY )
 
 cbuffer ExtendRayConstants : register( b0 )
@@ -337,7 +347,7 @@ StructuredBuffer<BVHNode>     g_BVHNodes      : register( t2 );
 StructuredBuffer<SRayQuery>   g_RayQueries    : register( t3 );
 RWStructuredBuffer<SRayHit>   g_RayHits       : register( u0 );
 
-[numthreads( 256, 1, 1 )]
+[numthreads( 32, 1, 1 )]
 void main( uint threadId : SV_GroupIndex )
 {
     if ( threadId >= g_RayCount )
@@ -373,7 +383,7 @@ RWStructuredBuffer<uint>    g_RayHitMaterialIndirectArgs : register( u1 )
 RWStructuredBuffer<uint>    g_RayMissIndices : register( u2 )
 RWStructuredBuffer<uint>    g_RayHitMaterialIndices : register( u3 )
 
-[numthreads( 256, 1, 1 )]
+[numthreads( 32, 1, 1 )]
 void main( uint threadId : SV_GroupIndex )
 {
     if ( threadId >= g_RayCount )
@@ -405,18 +415,20 @@ RWStructuredBuffer<uint>    g_RayHitMaterialIndirectArgs : register( u1 )
 [numthreads( 1, 1, 1 )]
 void main()
 {
-    g_RayMissIndirectArgs[ 1 ] = g_RayMissIndirectArgs[ 0 ] / 32;
+    g_RayMissIndirectArgs[ 2 ] = g_RayMissIndirectArgs[ 0 ] / 32;
     if ( ( g_RayMissIndirectArgs[ 0 ] % 32 ) > 0 )
     {
-        g_RayMissIndirectArgs[ 1 ] += 1;
+        g_RayMissIndirectArgs[ 2 ] += 1;
     }
+    g_RayMissIndirectArgs[ 1 ] = g_RayMissIndirectArgs[ 0 ];
     g_RayMissIndirectArgs[ 0 ] = 0;
 
-    g_RayHitMaterialIndirectArgs[ 1 ] = g_RayHitMaterialIndirectArgs[ 0 ] / 32;
+    g_RayHitMaterialIndirectArgs[ 2 ] = g_RayHitMaterialIndirectArgs[ 0 ] / 32;
     if ( ( g_RayHitMaterialIndirectArgs[ 0 ] % 32 ) > 0 )
     {
-        g_RayHitMaterialIndirectArgs[ 1 ] += 1;
+        g_RayHitMaterialIndirectArgs[ 2 ] += 1;
     }
+    g_RayHitMaterialIndirectArgs[ 1 ] = g_RayHitMaterialIndirectArgs[ 0 ];
     g_RayHitMaterialIndirectArgs[ 0 ] = 0;
 }
 
@@ -424,10 +436,33 @@ void main()
 
 #if defined( RAY_MISS )
 
+cbuffer RayMissConstants : register( b0 )
+{
+    uint g_RayCount;
+}
+
+cbuffer FrameConstants : register( b0 )
+{
+    uint2 g_Resolution;
+}
+
+StructuredBuffer<SRayQuery>     g_RayQueries     : register( t0 );
+StructuredBuffer<uint>          g_RayMissIndices : register( t1 );
+RWStructuredBuffer<SPathContext>  g_PathContexts : register( u0 );
+RWTexture2D<float4>               g_FilmTexture  : register( u1 )
+
 [numthreads( 32, 1, 1 )]
 void main( uint threadId : SV_GroupIndex )
 {
+    if ( threadId >= g_RayCount )
+        return;
 
+    uint pathIndex = g_RayMissIndices[ threadId ];
+    SRayQuery rayQuery = g_RayQueries[ pathIndex ];
+    SPathContext pathContext = g_PathContexts[ pathIndex ];
+    pathContext.l += pathContext.throughput * EnvironmentShader( rayQuery.direction );
+
+    AddSampleToFilm( pathContext.l, pathContext.pixelSample, pathContext.pixelPos );
 }
 
 #endif

@@ -334,9 +334,9 @@ struct SPathContext
 
 uint2 
 
-#if defined( EXTEND_RAY )
+#if defined( EXTENSION_RAY_CAST )
 
-cbuffer ExtendRayConstants : register( b0 )
+cbuffer QueueConstants : register( b0 )
 {
     uint g_RayCount;
 }
@@ -344,7 +344,9 @@ cbuffer ExtendRayConstants : register( b0 )
 StructuredBuffer<Vertex>      g_Vertices      : register( t0 );
 StructuredBuffer<uint>        g_Triangles     : register( t1 );
 StructuredBuffer<BVHNode>     g_BVHNodes      : register( t2 );
-StructuredBuffer<SRayQuery>   g_RayQueries    : register( t3 );
+StructuredBuffer<float3>      g_RayDirections : register( t3 );
+StructuredBuffer<float3>      g_RayOrigins    : register( t4 );
+StructuredBuffer<uint>        g_PathIndices   : register( t5 );
 RWStructuredBuffer<SRayHit>   g_RayHits       : register( u0 );
 
 [numthreads( 32, 1, 1 )]
@@ -353,11 +355,13 @@ void main( uint threadId : SV_GroupIndex )
     if ( threadId >= g_RayCount )
         return;
 
-    SRayQuery rayQuery = g_RayQueries[ threadId ];
+    uint pathIndex = g_PathIndices[ threadId ];
+    float3 rayDirection = g_RayDirections[ pathIndex ];
+    float3 rayOrigin = g_RayOrigins[ pathIndex ];
     SRayHit rayHit;
-    bool hasHit = BVHIntersectNoInterp( rayQuery.origin
-        , rayQuery.direction
-        , rayQuery.tMin
+    bool hasHit = BVHIntersectNoInterp( rayOrigin
+        , rayDirection
+        , 0.f
         , threadId
         , rayHit.t
         , rayHit.uv.x
@@ -365,23 +369,25 @@ void main( uint threadId : SV_GroupIndex )
         , rayHit.triangleId );
     rayHit.t = hasHit ? rayHit.t : -1.0f;
 
-    g_RayHits[ threadId ] = rayHit;
+    g_RayHits[ pathIndex ] = rayHit;
 }
 
 #endif
 
-#if defined( HANDLE_HIT )
+#if defined( SHADOW_RAY_CAST )
 
-cbuffer HandleHitConstants : register( b0 )
+cbuffer QueueConstants : register( b0 )
 {
     uint g_RayCount;
 }
 
-StructuredBuffer<SRayHit>   g_RayHits : register( t0 );
-RWStructuredBuffer<uint>    g_RayMissIndirectArgs : register( u0 )
-RWStructuredBuffer<uint>    g_RayHitMaterialIndirectArgs : register( u1 )
-RWStructuredBuffer<uint>    g_RayMissIndices : register( u2 )
-RWStructuredBuffer<uint>    g_RayHitMaterialIndices : register( u3 )
+StructuredBuffer<Vertex>      g_Vertices      : register( t0 );
+StructuredBuffer<uint>        g_Triangles     : register( t1 );
+StructuredBuffer<BVHNode>     g_BVHNodes      : register( t2 );
+StructuredBuffer<float4>      g_RayDirections : register( t3 );
+StructuredBuffer<float3>      g_RayOrigins    : register( t4 );
+StructuredBuffer<uint>        g_PathIndices   : register( t5 );
+RWStructuredBuffer<bool>      g_HasHits       : register( u0 );
 
 [numthreads( 32, 1, 1 )]
 void main( uint threadId : SV_GroupIndex )
@@ -389,111 +395,69 @@ void main( uint threadId : SV_GroupIndex )
     if ( threadId >= g_RayCount )
         return;
 
-    SRayHit rayHit = g_RayHits[ threadId ];
-    bool hasHit = rayHit.t != -1.0f;
-    if ( !hasHit )
-    {
-        uint index = 0;
-        InterlockedAdd( g_RayMissIndirectArgs[ 0 ], 1, index );
-        g_RayMissIndices[ index ] = threadId;
-    }
-    else
-    {
-        uint index = 0;
-        InterlockedAdd( g_RayHitMaterialIndirectArgs[ 0 ], 1, index );
-        g_RayHitMaterialIndices[ index ] = threadId;
-    }
-}
-
-#endif
-
-#if defined( FILL_INDIRECT_ARGS )
-
-RWStructuredBuffer<uint>    g_RayMissIndirectArgs : register( u0 )
-RWStructuredBuffer<uint>    g_RayHitMaterialIndirectArgs : register( u1 )
-
-[numthreads( 1, 1, 1 )]
-void main()
-{
-    g_RayMissIndirectArgs[ 2 ] = g_RayMissIndirectArgs[ 0 ] / 32;
-    if ( ( g_RayMissIndirectArgs[ 0 ] % 32 ) > 0 )
-    {
-        g_RayMissIndirectArgs[ 2 ] += 1;
-    }
-    g_RayMissIndirectArgs[ 1 ] = g_RayMissIndirectArgs[ 0 ];
-    g_RayMissIndirectArgs[ 0 ] = 0;
-
-    g_RayHitMaterialIndirectArgs[ 2 ] = g_RayHitMaterialIndirectArgs[ 0 ] / 32;
-    if ( ( g_RayHitMaterialIndirectArgs[ 0 ] % 32 ) > 0 )
-    {
-        g_RayHitMaterialIndirectArgs[ 2 ] += 1;
-    }
-    g_RayHitMaterialIndirectArgs[ 1 ] = g_RayHitMaterialIndirectArgs[ 0 ];
-    g_RayHitMaterialIndirectArgs[ 0 ] = 0;
-}
-
-#endif
-
-#if defined( RAY_MISS )
-
-cbuffer RayMissConstants : register( b0 )
-{
-    uint g_RayCount;
-}
-
-cbuffer FrameConstants : register( b0 )
-{
-    uint2 g_Resolution;
-}
-
-StructuredBuffer<SRayQuery>     g_RayQueries     : register( t0 );
-StructuredBuffer<uint>          g_RayMissIndices : register( t1 );
-RWStructuredBuffer<SPathContext>  g_PathContexts : register( u0 );
-RWTexture2D<float4>               g_FilmTexture  : register( u1 )
-
-[numthreads( 32, 1, 1 )]
-void main( uint threadId : SV_GroupIndex )
-{
-    if ( threadId >= g_RayCount )
-        return;
-
-    uint pathIndex = g_RayMissIndices[ threadId ];
-    SRayQuery rayQuery = g_RayQueries[ pathIndex ];
-    SPathContext pathContext = g_PathContexts[ pathIndex ];
-    pathContext.l += pathContext.throughput * EnvironmentShader( rayQuery.direction );
-
-    AddSampleToFilm( pathContext.l, pathContext.pixelSample, pathContext.pixelPos );
-}
-
-#endif
-
-#if defined( SHADOW_RAY )
-
-cbuffer ShadowRayConstants : register( b0 )
-{
-    uint g_RayCount;
-}
-
-StructuredBuffer<Vertex>                g_Vertices      : register( t0 );
-StructuredBuffer<uint>                  g_Triangles     : register( t1 );
-StructuredBuffer<BVHNode>               g_BVHNodes      : register( t2 );
-StructuredBuffer<SRayOcclusionQuery>    g_RayQueries    : register( t3 );
-RWStructuredBuffer<bool>                g_RayHits       : register( u0 );
-
-[numthreads( 256, 1, 1 )]
-void main( uint threadId : SV_GroupIndex )
-{
-    if ( threadId >= g_RayCount )
-        return;
-
-    SRayOcclusionQuery rayQuery = g_RayQueries[ threadId ];
-    bool hasHit = BVHIntersect( rayQuery.origin
-        , rayQuery.direction
-        , rayQuery.tMin
-        , rayQuery.tMax
+    uint pathIndex = g_PathIndices[ threadId ];
+    float4 rayDirection = g_RayDirections[ pathIndex ];
+    float rayMaxT = rayDirection.w;
+    float3 rayOrigin = g_RayOrigins[ pathIndex ];
+    bool hasHit = BVHIntersect( rayOrigin
+        , rayDirection
+        , 0.f
+        , rayMaxT
         , threadId );
 
-    g_RayHits[ threadId ] = hasHit;
+    g_HasHits[ pathIndex ] = hasHit;
+}
+
+#endif
+
+#if defined( NEW_PATH )
+
+cbuffer QueueConstants : register( b0 )
+{
+    uint               g_RayCount;
+}
+
+cbuffer CameraConstants : register( b1 )
+{
+    row_major float4x4 g_CameraTransform;
+    uint2              g_Resolution;
+    float2             g_FilmSize;
+    uint               g_FrameSeed;
+    float              g_ApertureRadius;
+    float              g_FocalDistance;
+    float              g_FilmDistance;
+    uint               g_BladeCount;
+    float2             g_BladeVertexPos;
+    float              g_ApertureBaseAngle;
+}
+
+StructuredBuffer<uint>        g_PathIndices         : register( t0 );
+StructuredBuffer<uint2>       g_PixelPositions      : register( t1 );
+RWStructuredBuffer<float3>    g_RayDirections       : register( u0 );
+RWStructuredBuffer<float3>    g_RayOrigins          : register( u1 );
+RWStructuredBuffer<float2>    g_PixelSamples        : register( u2 );
+
+[numthreads( 32, 1, 1 )]
+void main( uint threadId : SV_GroupIndex )
+{
+    if ( threadId >= g_RayCount )
+        return;
+
+    uint pathIndex = g_PathIndices[ threadId ];
+    uint2 pixelPos = g_PixelPositions[ pathIndex ];
+
+    Xoshiro128StarStar rng = InitializeRandomNumberGenerator( pixelPos, g_FrameSeed );
+
+    float2 pixelSample = GetNextSample2D( rng );
+    float2 filmSample = ( pixelSample + pixelPos ) / g_Resolution;
+    float3 apertureSample = GetNextSample3D( rng );
+    float3 origin = 0.0f;
+    float3 direction = 0.0f;
+    GenerateRay( filmSample, apertureSample, g_FilmSize, g_ApertureRadius, g_FocalDistance, g_FilmDistance, g_BladeCount, g_BladeVertexPos, g_ApertureBaseAngle, g_CameraTransform, origin, direction );
+
+    g_RayOrigins[ pathIndex ] = origin;
+    g_RayDirections[ pathIndex ] = direction;
+    g_PixelSamples[ pathIndex ] = pixelSample;
 }
 
 #endif

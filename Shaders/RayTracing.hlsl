@@ -436,9 +436,10 @@ StructuredBuffer<uint2>       g_PixelPositions      : register( t1 );
 RWStructuredBuffer<float3>    g_RayDirections       : register( u0 );
 RWStructuredBuffer<float3>    g_RayOrigins          : register( u1 );
 RWStructuredBuffer<float2>    g_PixelSamples        : register( u2 );
+RWStructuredBuffer<uint>      g_ExtensionRayCounter : register( u3 );
 
 [numthreads( 32, 1, 1 )]
-void main( uint threadId : SV_GroupIndex )
+void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
 {
     if ( threadId >= g_RayCount )
         return;
@@ -454,10 +455,29 @@ void main( uint threadId : SV_GroupIndex )
     float3 origin = 0.0f;
     float3 direction = 0.0f;
     GenerateRay( filmSample, apertureSample, g_FilmSize, g_ApertureRadius, g_FocalDistance, g_FilmDistance, g_BladeCount, g_BladeVertexPos, g_ApertureBaseAngle, g_CameraTransform, origin, direction );
-
-    g_RayOrigins[ pathIndex ] = origin;
-    g_RayDirections[ pathIndex ] = direction;
+    
     g_PixelSamples[ pathIndex ] = pixelSample;
+
+    // Following code places extension rays from same wavefront into a batch to improve coherency.
+
+    uint lastGroupIndex = g_RayCount / 32 + ( g_RayCount % 32 != 0 ) ? 1 : 0;
+    bool isLastGroup = groupId.x == lastGroupIndex;
+    uint activeLaneCount = !isLastGroup ? 32 : g_RayCount % 32;
+    uint extensionRayIndexBase = 0;
+    if ( WaveIsFirstLane( threadId ) )
+    {
+        InterlockedAdd( g_ExtensionRayCounter[ 0 ], activeLaneCount, extensionRayIndexBase );
+    }
+
+    extensionRayIndexBase = WaveReadLaneFirst( extensionRayIndexBase );
+    for ( uint i = 0; i < activeLaneCount; ++i )
+    {
+        if ( i == WaveGetLaneIndex( threadId ) )
+        {
+            g_RayOrigins[ extensionRayIndexBase + i ] = origin;
+            g_RayDirections[ extensionRayIndexBase + i ] = direction;
+        }
+    }
 }
 
 #endif

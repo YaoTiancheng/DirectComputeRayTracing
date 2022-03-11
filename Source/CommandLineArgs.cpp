@@ -18,6 +18,9 @@ CommandLineArgs::CommandLineArgs()
 
 void CommandLineArgs::Parse( const wchar_t* cmdLine )
 {
+    if ( cmdLine == nullptr || cmdLine[ 0 ] == '\0' )
+        return;
+
     int numArgs = 0;
     wchar_t** argv = CommandLineToArgvW( cmdLine, &numArgs );
     if ( argv == nullptr )

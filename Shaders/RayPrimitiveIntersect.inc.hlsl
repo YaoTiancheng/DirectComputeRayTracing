@@ -14,13 +14,10 @@ bool RayTriangleIntersect( float3 origin
     , out float t
     , out float u
     , out float v
-    , out float3 geometryNormal
     , out bool backface )
 {
     float3 v0v1 = v1.position - v0.position; 
     float3 v0v2 = v2.position - v0.position;
-
-    geometryNormal = normalize( cross( v0v2, v0v1 ) );
 
     float3 pvec = cross( direction, v0v2 );
     float det = dot( v0v1, pvec );
@@ -38,40 +35,6 @@ bool RayTriangleIntersect( float3 origin
     backface = det > -1e-10;
 
     return abs( det ) >= 1e-10 && u >= 0 && u <= 1 && v >= 0 && u + v <= 1 && t >= tMin && t < tMax;
-}
-
-void HitShader( float3 rayOrigin
-    , float3 rayDirection
-    , Vertex v0
-    , Vertex v1
-    , Vertex v2
-    , float t
-    , float u
-    , float v
-    , uint triangleId
-    , float3 geometryNormal
-    , bool backface
-    , out Intersection intersection );
-
-bool RayTriangleIntersect( float3 origin
-    , float3 direction
-    , float tMin
-    , float tMax
-    , Vertex v0
-    , Vertex v1
-    , Vertex v2
-    , uint triangleId
-    , out float t
-    , inout Intersection intersection )
-{
-    bool intersect = false, backface = false;
-    float u, v;
-    float3 geometryNormal;
-    if ( intersect = RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, geometryNormal, backface ) )
-    {
-        HitShader( origin, direction, v0, v1, v2, t, u, v, triangleId, geometryNormal, backface, intersection );
-    }
-    return intersect;
 }
 
 bool RayAABBIntersect( float3 origin

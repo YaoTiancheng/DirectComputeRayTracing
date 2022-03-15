@@ -8,23 +8,36 @@ uint WaveGetLaneIndex( uint groupIndex )
     return groupIndex % WAVEFRONT_SIZE;
 }
 
-uint WaveActiveBallot( uint groupIndex, bool expr )
-{
-    uint result = 0;
-    uint laneIndex = WaveGetLaneIndex( groupIndex );
-    uint original = 0;
-    InterlockedOr( result, expr ? 1 << laneIndex : 0, original );
-    return result;
-}
-
 bool WaveIsFirstLane( uint groupIndex )
 {
     return WaveGetLaneIndex( groupIndex ) == 0;
 }
 
-uint WaveReadLaneFirst( uint expr )
+uint WavePrefixCountBits32( uint laneIndex, uint bitmask )
 {
-    return 0;
+    return countbits( shadowRayMask & ( 0xFFFFFFFF >> ( 32 - laneIndex ) ) );
+}
+
+// Following wave intrinsics emulation only works for group size equals to WAVEFRONT_SIZE, and it uses group shared memory
+
+groupshared uint gs_Ballot;
+uint WaveActiveBallot32( uint laneIndex, bool expr )
+{
+    uint original = 0;
+    InterlockedOr( gs_Ballot, expr ? 1 << laneIndex : 0, original );
+    GroupMemoryBarrierWithGroupSync();
+    return gs_Ballot;
+}
+
+groupshared uint gs_FirstLaneResult;
+uint WaveReadLaneFirst32( uint laneIndex, uint expr )
+{
+    if ( laneIndex == 0 )
+    {
+        gs_FirstLaneResult = expr;
+    }
+    GroupMemoryBarrierWithGroupSync();
+    return gs_FirstLaneResult;
 }
 
 #endif

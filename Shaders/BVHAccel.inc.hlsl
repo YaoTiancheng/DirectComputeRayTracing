@@ -33,84 +33,24 @@ void BVHTraversalStackReset( uint dispatchThreadIndex )
     gs_BVHTraversalStacks[ dispatchThreadIndex ].count = 0;
 }
 
-bool BVHIntersect( float3 origin
-    , float3 direction
-    , float tMin
-    , uint dispatchThreadIndex
-    , out Intersection intersection )
+struct SHitInfo
 {
-    float tMax = 1.0f / 0.0f;
     float t;
-
-#if !defined( NO_BVH_ACCEL )
-    float3 invDir = 1.0f / direction;
-
-    BVHTraversalStackReset( dispatchThreadIndex );
-
-    uint nodeIndex = 0;
-    while ( true )
-    {
-        if ( RayAABBIntersect( origin, invDir, tMin, tMax, g_BVHNodes[ nodeIndex ].bboxMin, g_BVHNodes[ nodeIndex ].bboxMax ) )
-        {
-            uint primCount = BVHNodeGetPrimitiveCount( g_BVHNodes[ nodeIndex ] );
-            if ( primCount == 0 )
-            {
-                BVHTraversalStackPushback( dispatchThreadIndex, g_BVHNodes[ nodeIndex ].childOrPrimIndex );
-                nodeIndex++;
-            }
-            else
-            {
-                uint primBegin = g_BVHNodes[ nodeIndex ].childOrPrimIndex;
-                uint primEnd = primBegin + primCount;
-                for ( uint iPrim = primBegin; iPrim < primEnd; ++iPrim )
-                {
-                    Vertex v0 = g_Vertices[ g_Triangles[ iPrim * 3 ] ];
-                    Vertex v1 = g_Vertices[ g_Triangles[ iPrim * 3 + 1 ] ];
-                    Vertex v2 = g_Vertices[ g_Triangles[ iPrim * 3 + 2 ] ];
-                    if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, iPrim, t, intersection ) )
-                    {
-                        tMax = t;
-                    }
-                }
-                if ( !BVHTraversalStackPopback( dispatchThreadIndex, nodeIndex ) )
-                    break;
-            }
-        }
-        else
-        {
-            if ( !BVHTraversalStackPopback( dispatchThreadIndex, nodeIndex ) )
-                break;
-        }
-    }
-#else
-    for ( uint iPrim = 0; iPrim < g_PrimitiveCount; ++iPrim )
-    {
-        Vertex v0 = g_Vertices[ g_Triangles[ iPrim * 3 ] ];
-        Vertex v1 = g_Vertices[ g_Triangles[ iPrim * 3 + 1 ] ];
-        Vertex v2 = g_Vertices[ g_Triangles[ iPrim * 3 + 2 ] ];
-        if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, iPrim, t, intersection ) )
-        {
-            tMax = t;
-        }
-    }
-#endif
-
-    return !isinf( tMax );
-}
+    float u;
+    float v;
+    uint triangleId;
+    bool backface;
+};
 
 bool BVHIntersectNoInterp( float3 origin
     , float3 direction
     , float tMin
     , uint dispatchThreadIndex
-    , out float t
-    , out float u
-    , out float v
-    , out uint triangleId )
+    , inout SHitInfo hitInfo )
 {
     float tMax = 1.0f / 0.0f;
-    float tTemp, uTemp, vTemp;
-    float3 geometryNormalTemp;
-    bool backfaceTemp;
+    float t, u, v;
+    bool backface;
 
 #if !defined( NO_BVH_ACCEL )
     float3 invDir = 1.0f / direction;
@@ -137,13 +77,14 @@ bool BVHIntersectNoInterp( float3 origin
                     Vertex v0 = g_Vertices[ g_Triangles[ iPrim * 3 ] ];
                     Vertex v1 = g_Vertices[ g_Triangles[ iPrim * 3 + 1 ] ];
                     Vertex v2 = g_Vertices[ g_Triangles[ iPrim * 3 + 2 ] ];
-                    if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, tTemp, uTemp, vTemp, geometryNormalTemp, backfaceTemp ) )
+                    if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
                     {
                         tMax = t;
-                        t = tTemp;
-                        u = uTemp;
-                        v = vTemp;
-                        triangleId = iPrim;
+                        hitInfo.t = t;
+                        hitInfo.u = u;
+                        hitInfo.v = v;
+                        hitInfo.backface = backface;
+                        hitInfo.triangleId = iPrim;
                     }
                 }
                 if ( !BVHTraversalStackPopback( dispatchThreadIndex, nodeIndex ) )
@@ -162,13 +103,14 @@ bool BVHIntersectNoInterp( float3 origin
         Vertex v0 = g_Vertices[ g_Triangles[ iPrim * 3 ] ];
         Vertex v1 = g_Vertices[ g_Triangles[ iPrim * 3 + 1 ] ];
         Vertex v2 = g_Vertices[ g_Triangles[ iPrim * 3 + 2 ] ];
-        if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, iPrim, t, intersection ) )
+        if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
         {
             tMax = t;
-            t = tTemp;
-            u = uTemp;
-            v = vTemp;
-            triangleId = iPrim;
+            hitInfo.t = t;
+            hitInfo.u = u;
+            hitInfo.v = v;
+            hitInfo.backface = backface;
+            hitInfo.triangleId = iPrim;
         }
     }
 #endif
@@ -208,9 +150,8 @@ bool BVHIntersect( float3 origin
                     Vertex v1 = g_Vertices[ g_Triangles[ iPrim * 3 + 1 ] ];
                     Vertex v2 = g_Vertices[ g_Triangles[ iPrim * 3 + 2 ] ];
                     float t, u, v;
-                    float3 geometryNormal;
                     bool backface;
-                    if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, geometryNormal, backface ) )
+                    if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
                     {
                         return true;
                     }
@@ -233,8 +174,7 @@ bool BVHIntersect( float3 origin
         Vertex v0 = g_Vertices[ g_Triangles[ iPrim * 3 ] ];
         Vertex v1 = g_Vertices[ g_Triangles[ iPrim * 3 + 1 ] ];
         Vertex v2 = g_Vertices[ g_Triangles[ iPrim * 3 + 2 ] ];
-        float3 geometryNormal;
-        if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, geometryNormal, backface ) )
+        if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
         {
             return true;
         }

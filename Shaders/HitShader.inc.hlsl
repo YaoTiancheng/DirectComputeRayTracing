@@ -39,7 +39,6 @@ void HitShader( float3 rayOrigin
     , float u
     , float v
     , uint triangleId
-    , float3 geometryNormal
     , bool backface
     , out Intersection intersection )
 {
@@ -47,7 +46,10 @@ void HitShader( float3 rayOrigin
     intersection.normal     = normalize( VectorBaryCentric3( v0.normal, v1.normal, v2.normal, u, v ) );
     intersection.tangent    = VectorBaryCentric3( v0.tangent, v1.tangent, v2.tangent, u, v );
     intersection.tangent    = normalize( intersection.tangent - dot( intersection.tangent, intersection.normal ) * intersection.normal ); // Orthogonalize tangent after interpolation
-    intersection.geometryNormal = geometryNormal;
+
+    float3 v0v1 = v1.position - v0.position;
+    float3 v0v2 = v2.position - v0.position;
+    intersection.geometryNormal = normalize( cross( v0v2, v0v1 ) );
 
     uint materialId = g_MaterialIds[ triangleId ];
 

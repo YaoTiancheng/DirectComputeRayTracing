@@ -970,7 +970,7 @@ bool SRenderer::CompileAndCreateRayTracingKernel()
     {
         rayTracingShaderDefines.push_back( { "NO_ENV_TEXTURE", "0" } );
     }
-    static const char* s_RayTracingOutputDefines[s_RayTracingOutputCount] = { NULL, "OUTPUT_NORMAL", "OUTPUT_TANGENT", "OUTPUT_ALBEDO", "OUTPUT_NEGATIVE_NDOTV", "OUTPUT_BACKFACE" };
+    static const char* s_RayTracingOutputDefines[ s_RayTracingOutputCount ] = { "MEGAKERNEL", "OUTPUT_NORMAL", "OUTPUT_TANGENT", "OUTPUT_ALBEDO", "OUTPUT_NEGATIVE_NDOTV", "OUTPUT_BACKFACE" };
     if ( s_RayTracingOutputDefines[ m_RayTracingOutputIndex ] )
     {
         rayTracingShaderDefines.push_back( { s_RayTracingOutputDefines[ m_RayTracingOutputIndex ], "0" } );

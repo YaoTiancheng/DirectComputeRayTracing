@@ -86,27 +86,27 @@ float2 SampleAperture( float3 samples, float apertureRadius, uint bladeCount, fl
         float n = floor( samples.z * bladeCount );
         float theta = n * bladeAngle + baseAngle;
         float2 pRotated = float2( p.x * cos( theta ) - p.y * sin( theta )
-                                , p.y * cos( theta ) + p.x * sin( theta ) );
+            , p.y * cos( theta ) + p.x * sin( theta ) );
         return pRotated;
     }
 }
 
 void GenerateRay( float2 filmSample
     , float3 apertureSample
-	, float2 filmSize
+    , float2 filmSize
     , float apertureRadius
-	, float focalDistance
+    , float focalDistance
     , float filmDistance
     , uint bladeCount
     , float2 bladeVertexPos
     , float apertureBaseAngle
-	, float4x4 cameraTransform
-	, out float3 origin
-	, out float3 direction )
+    , float4x4 cameraTransform
+    , out float3 origin
+    , out float3 direction )
 {
     float3 filmPos = float3( -filmSample.x + 0.5f, filmSample.y - 0.5f, -filmDistance );
     filmPos.xy *= filmSize;
-    
+
     origin = float3( 0.0f, 0.0f, 0.0f );
     direction = normalize( -filmPos );
 
@@ -122,12 +122,24 @@ void GenerateRay( float2 filmSample
     direction = mul( float4( direction, 0.0f ), cameraTransform ).xyz;
 }
 
-bool IntersectScene( float3 origin
-	, float3 direction
-    , uint dispatchThreadIndex
-	, out Intersection intersection )
+void HitInfoToIntersection( float3 origin, float3 direction, SHitInfo hitInfo, out Intersection intersection )
 {
-    return BVHIntersect( origin, direction, 0, dispatchThreadIndex, intersection );
+    Vertex v0 = g_Vertices[ g_Triangles[ hitInfo.triangleId * 3 ] ];
+    Vertex v1 = g_Vertices[ g_Triangles[ hitInfo.triangleId * 3 + 1 ] ];
+    Vertex v2 = g_Vertices[ g_Triangles[ hitInfo.triangleId * 3 + 2 ] ];
+    HitShader( origin, direction, v0, v1, v2, hitInfo.t, hitInfo.u, hitInfo.v, hitInfo.triangleId, hitInfo.backface, intersection );
+}
+
+bool IntersectScene( float3 origin, float3 direction, uint dispatchThreadIndex, inout Intersection intersection, inout float t )
+{
+    SHitInfo hitInfo = (SHitInfo)0;
+    bool hasIntersection = BVHIntersectNoInterp( origin, direction, 0, dispatchThreadIndex, hitInfo );
+    if ( hasIntersection )
+    {
+        t = hitInfo.t;
+        HitInfoToIntersection( origin, direction, hitInfo, intersection );
+    }
+    return hasIntersection;
 }
 
 bool IsOcculuded( float3 origin
@@ -147,159 +159,37 @@ void AddSampleToFilm( float3 l
     g_FilmTexture[ pixelPos ] = c;
 }
 
-struct SLightSamples
+struct SLightSampleResult
 {
-    float  lightSelectionSample;
-    float2 lightSample;
-#if defined( MULTIPLE_IMPORTANCE_SAMPLING )
-    float  bsdfSelectionSample;
-    float2 bsdfSample;
-#endif
+    float3 radiance;
+    float3 wi;
+    float pdf;
+    float distance;
+    bool isDeltaLight;
 };
 
-float3 EstimateDirect( SLight light, Intersection intersection, SLightSamples samples, float3 wo, uint dispatchThreadIndex )
+SLightSampleResult SampleLight( SLight light, Intersection intersection, float2 samples, float3 wo )
 {
-#if defined( MULTIPLE_IMPORTANCE_SAMPLING )
-    float3 l, wi, result = 0.0f;
-    float distance, lightPdf;
-    bool isDeltaLight = false;
+    SLightSampleResult result;
+
+    result.isDeltaLight = false;
     if ( light.flags & LIGHT_FLAGS_POINT_LIGHT )
     {
-        SamplePointLight( light, samples.lightSample, intersection.position, l, wi, distance, lightPdf );
-        isDeltaLight = true;
+        SamplePointLight( light, samples, intersection.position, result.radiance, result.wi, result.distance, result.pdf );
+        result.isDeltaLight = true;
     }
     else
     {
-        SampleRectangleLight( light, samples.lightSample, intersection.position, l, wi, distance, lightPdf );
-    }
-
-    if ( any( l > 0.0f ) && lightPdf > 0.0f && !IsOcculuded( OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi ), wi, distance, dispatchThreadIndex ) )
-    {
-        float3 bsdf = EvaluateBSDF( wi, wo, intersection );
-        float NdotWI = abs( dot( intersection.normal, wi ) );
-        float bsdfPdf = EvaluateBSDFPdf( wi, wo, intersection );
-        float weight = isDeltaLight ? 1.0f : PowerHeuristic( 1, lightPdf, 1, bsdfPdf );
-
-        result = l * bsdf * NdotWI * weight / lightPdf;
-    }
-
-    if ( !isDeltaLight )
-    {
-        float3 bsdf;
-        float bsdfPdf;
-        bool isDeltaBxdf;
-        SampleBSDF( wo, samples.bsdfSample, samples.bsdfSelectionSample, intersection, wi, bsdf, bsdfPdf, isDeltaBxdf );
-
-        if ( all( bsdf == 0.0f ) || bsdfPdf == 0.0f )
-            return result;
-
-        lightPdf = EvaluateRectangleLightPdf( light, wi, intersection.position, distance );
-        if ( lightPdf == 0.0f )
-            return result;
-
-        float weight = !isDeltaBxdf ? PowerHeuristic( 1, bsdfPdf, 1, lightPdf ) : 1.0f;
-
-        l = 0.0f;
-        if ( !IsOcculuded( OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi ), wi, distance, dispatchThreadIndex ) )
-        {
-            l = light.color;
-        }
-
-        float NdotWI = abs( dot( intersection.normal, wi ) );
-        result += l * bsdf * NdotWI * weight / bsdfPdf;
+        SampleRectangleLight( light, samples, intersection.position, result.radiance, result.wi, result.distance, result.pdf );
     }
 
     return result;
-#else
-    float3 l, wi;
-    float distance, pdf;
-    if ( light.flags & LIGHT_FLAGS_POINT_LIGHT )
-        SamplePointLight( light, samples.lightSample, intersection.position, l, wi, distance, pdf );
-    else
-        SampleRectangleLight( light, samples.lightSample, intersection.position, l, wi, distance, pdf );
-
-    if ( any( l > 0.0f ) && pdf > 0.0f && !IsOcculuded( OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi ), wi, distance, dispatchThreadIndex ) )
-    {
-        float3 brdf = EvaluateBSDF( wi, wo, intersection );
-        float NdotL = abs( dot( intersection.normal, wi ) );
-        return l * brdf * NdotL / pdf;
-    }
-
-    return 0.0f;
-#endif
 }
 
-void EstimateDirectNoOcclusion( SLight light, Intersection intersection, SLightSamples samples, float3 wo, out float3 lightSamplingResult, out float3 bsdfSamplingResult )
+void EvaluateLight( SLight light, float3 origin, float3 direction, out float distance, out float3 radiance, out float pdf )
 {
-    lightSamplingResult = 0.f;
-    bsdfSamplingResult = 0.f;
-
-#if defined( MULTIPLE_IMPORTANCE_SAMPLING )
-    float3 l, wi, result = 0.0f;
-    float distance, lightPdf;
-    bool isDeltaLight = false;
-    if ( light.flags & LIGHT_FLAGS_POINT_LIGHT )
-    {
-        SamplePointLight( light, samples.lightSample, intersection.position, l, wi, distance, lightPdf );
-        isDeltaLight = true;
-    }
-    else
-    {
-        SampleRectangleLight( light, samples.lightSample, intersection.position, l, wi, distance, lightPdf );
-    }
-
-    if ( any( l > 0.0f ) && lightPdf > 0.0f )
-    {
-        float3 bsdf = EvaluateBSDF( wi, wo, intersection );
-        float NdotWI = abs( dot( intersection.normal, wi ) );
-        float bsdfPdf = EvaluateBSDFPdf( wi, wo, intersection );
-        float weight = isDeltaLight ? 1.0f : PowerHeuristic( 1, lightPdf, 1, bsdfPdf );
-
-        lightSamplingResult = l * bsdf * NdotWI * weight / lightPdf;
-    }
-
-    if ( !isDeltaLight )
-    {
-        float3 bsdf;
-        float bsdfPdf;
-        bool isDeltaBxdf;
-        SampleBSDF( wo, samples.bsdfSample, samples.bsdfSelectionSample, intersection, wi, bsdf, bsdfPdf, isDeltaBxdf );
-
-        if ( all( bsdf == 0.0f ) || bsdfPdf == 0.0f )
-            return result;
-
-        lightPdf = EvaluateRectangleLightPdf( light, wi, intersection.position, distance );
-        if ( lightPdf == 0.0f )
-            return result;
-
-        float weight = !isDeltaBxdf ? PowerHeuristic( 1, bsdfPdf, 1, lightPdf ) : 1.0f;
-
-        l = light.color;
-
-        float NdotWI = abs( dot( intersection.normal, wi ) );
-        bsdfSamplingResult = l * bsdf * NdotWI * weight / bsdfPdf;
-    }
-#else
-    float3 l, wi;
-    float distance, pdf;
-    if ( light.flags & LIGHT_FLAGS_POINT_LIGHT )
-        SamplePointLight( light, samples.lightSample, intersection.position, l, wi, distance, pdf );
-    else
-        SampleRectangleLight( light, samples.lightSample, intersection.position, l, wi, distance, pdf );
-
-    if ( any( l > 0.0f ) && pdf > 0.0f && !IsOcculuded( OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi ), wi, distance, dispatchThreadIndex ) )
-    {
-        float3 brdf = EvaluateBSDF( wi, wo, intersection );
-        float NdotL = abs( dot( intersection.normal, wi ) );
-        lightSamplingResult = l * brdf * NdotL / pdf;
-    }
-#endif
-}
-
-float3 UniformSampleOneLight( SLightSamples samples, Intersection intersection, float3 wo, uint dispatchThreadIndex )
-{
-    uint lightIndex = floor( samples.lightSelectionSample * g_LightCount );
-    return g_LightCount != 0 ? EstimateDirect( g_Lights[ lightIndex ], intersection, samples, wo, dispatchThreadIndex ) * g_LightCount : 0.0f;
+    radiance = light.color;
+    pdf = EvaluateRectangleLightPdf( light, direction, origin, distance );
 }
 
 struct SRayQuery
@@ -332,8 +222,6 @@ struct SPathContext
     float2 pixelSample;
 };
 
-uint2 
-
 #if defined( EXTENSION_RAY_CAST )
 
 cbuffer QueueConstants : register( b0 )
@@ -359,15 +247,15 @@ void main( uint threadId : SV_GroupIndex )
     float3 rayDirection = g_RayDirections[ pathIndex ];
     float3 rayOrigin = g_RayOrigins[ pathIndex ];
     SRayHit rayHit;
+    SHitInfo hitInfo;
     bool hasHit = BVHIntersectNoInterp( rayOrigin
         , rayDirection
         , 0.f
         , threadId
-        , rayHit.t
-        , rayHit.uv.x
-        , rayHit.uv.y
-        , rayHit.triangleId );
+        , hitInfo );
     rayHit.t = hasHit ? rayHit.t : -1.0f;
+    rayHit.uv = float2( hitInfo.u, hitInfo.v );
+    rayHit.triangleId = ( hitInfo.triangleId & 0x7FFFFFFF ) | ( hitInfo.backface ? 1 << 31 : 0 );
 
     g_RayHits[ pathIndex ] = rayHit;
 }
@@ -397,8 +285,8 @@ void main( uint threadId : SV_GroupIndex )
 
     uint pathIndex = g_PathIndices[ threadId ];
     float4 rayDirection = g_RayDirections[ pathIndex ];
-    float rayMaxT = rayDirection.w;
     float3 rayOrigin = g_RayOrigins[ pathIndex ];
+    float rayMaxT = rayDirection.w;
     bool hasHit = BVHIntersect( rayOrigin
         , rayDirection
         , 0.f
@@ -431,12 +319,14 @@ cbuffer CameraConstants : register( b1 )
     float              g_ApertureBaseAngle;
 }
 
-StructuredBuffer<uint>        g_PathIndices         : register( t0 );
-StructuredBuffer<uint2>       g_PixelPositions      : register( t1 );
-RWStructuredBuffer<float3>    g_RayDirections       : register( u0 );
-RWStructuredBuffer<float3>    g_RayOrigins          : register( u1 );
-RWStructuredBuffer<float2>    g_PixelSamples        : register( u2 );
-RWStructuredBuffer<uint>      g_ExtensionRayCounter : register( u3 );
+StructuredBuffer<uint>                      g_PathIndices         : register( t0 );
+StructuredBuffer<uint2>                     g_PixelPositions      : register( t1 );
+RWStructuredBuffer<float3>                  g_RayDirections       : register( u0 );
+RWStructuredBuffer<float3>                  g_RayOrigins          : register( u1 );
+RWStructuredBuffer<float2>                  g_PixelSamples        : register( u2 );
+RWStructuredBuffer<Xoshiro128StarStar>      g_Rngs                : register( u3 );
+RWStructuredBuffer<uint>                    g_OutputPathIndices   : register( u4 );
+RWStructuredBuffer<uint>                    g_ExtensionRayCounter : register( u5 );
 
 [numthreads( 32, 1, 1 )]
 void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
@@ -455,29 +345,222 @@ void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
     float3 origin = 0.0f;
     float3 direction = 0.0f;
     GenerateRay( filmSample, apertureSample, g_FilmSize, g_ApertureRadius, g_FocalDistance, g_FilmDistance, g_BladeCount, g_BladeVertexPos, g_ApertureBaseAngle, g_CameraTransform, origin, direction );
-    
-    g_PixelSamples[ pathIndex ] = pixelSample;
 
-    // Following code places extension rays from same wavefront into a batch to improve coherency.
+    g_PixelSamples[ pathIndex ] = pixelSample;
+    g_RayDirections[ pathIndex ] = direction;
+    g_RayOrigins[ pathIndex ] = origin;
+    g_Rngs[ pathIndex ] = rng;
 
     uint lastGroupIndex = g_RayCount / 32 + ( g_RayCount % 32 != 0 ) ? 1 : 0;
-    bool isLastGroup = groupId.x == lastGroupIndex;
-    uint activeLaneCount = !isLastGroup ? 32 : g_RayCount % 32;
-    uint extensionRayIndexBase = 0;
+    uint activeLaneCount = groupId.x != lastGroupIndex ? 32 : g_RayCount % 32;
+    uint rayIndexBase = 0;
     if ( WaveIsFirstLane( threadId ) )
     {
-        InterlockedAdd( g_ExtensionRayCounter[ 0 ], activeLaneCount, extensionRayIndexBase );
+        InterlockedAdd( g_ExtensionRayCounter[ 0 ], activeLaneCount, rayIndexBase );
     }
 
-    extensionRayIndexBase = WaveReadLaneFirst( extensionRayIndexBase );
-    for ( uint i = 0; i < activeLaneCount; ++i )
+    rayIndexBase = WaveReadLaneFirst32( rayIndexBase );
+    uint laneIndex = WaveGetLaneIndex( threadId );
+    g_OutputPathIndices[ rayIndexBase + laneIndex ] = pathIndex;
+}
+
+#endif
+
+#if defined( MATERIAL )
+
+cbuffer QueueConstants : register( b0 )
+{
+    uint               g_RayCount;
+}
+
+cbuffer MaterialConstants : register( b1 )
+{
+    uint               g_LightCount;
+}
+
+StructuredBuffer<uint>                      g_PathIndices                       : register( t0 );
+StructuredBuffer<SRayHit>                   g_RayHits                           : register( t1 );
+StructuredBuffer<Vertex>                    g_Vertices                          : register( t2 );
+StructuredBuffer<uint>                      g_Triangles                         : register( t3 );
+StructuredBuffer<SLight>                    g_Lights                            : register( t4 );
+Texture2D<float>                            g_CookTorranceCompETexture          : register( t5 );
+Texture2D<float>                            g_CookTorranceCompEAvgTexture       : register( t6 );
+Texture2D<float>                            g_CookTorranceCompInvCDFTexture     : register( t7 );
+Texture2D<float>                            g_CookTorranceCompPdfScaleTexture   : register( t8 );
+Texture2DArray<float>                       g_CookTorranceCompEFresnelTexture   : register( t9 );
+Texture2DArray<float>                       g_CookTorranceBSDFETexture          : register( t10 );
+Texture2DArray<float>                       g_CookTorranceBSDFAvgETexture       : register( t11 );
+Texture2DArray<float>                       g_CookTorranceBTDFETexture          : register( t12 );
+Texture2DArray<float>                       g_CookTorranceBSDFInvCDFTexture     : register( t13 );
+Texture2DArray<float>                       g_CookTorranceBSDFPDFScaleTexture   : register( t14 );
+StructuredBuffer<uint>                      g_MaterialIds                       : register( t15 );
+StructuredBuffer<Material>                  g_Materials                         : register( t16 );
+RWStructuredBuffer<float3>                  g_RayDirections                     : register( u0 );
+RWStructuredBuffer<float3>                  g_RayOrigins                        : register( u1 );
+RWStructuredBuffer<float4>                  g_ShadowRayDirections               : register( u2 );
+RWStructuredBuffer<float3>                  g_ShadowRayOrigins                  : register( u3 );
+RWStructuredBuffer<Xoshiro128StarStar>      g_Rngs                              : register( u4 );
+RWStructuredBuffer<float3>                  g_LightResult                       : register( u5 );
+RWStructuredBuffer<float3>                  g_BsdfResult                        : register( u6 );
+RWStructuredBuffer<float3>                  g_PathThroughput                    : register( u7 );
+RWStructuredBuffer<float3>                  g_Li                                : register( u8 );
+RWStructuredBuffer<float>                   g_LightDistance                     : register( u9 );
+RWStructuredBuffer<uint>                    g_RayCounters                       : register( u10 );
+RWStructuredBuffer<uint>                    g_OutputPathIndices                 : register( u11 );
+RWStructuredBuffer<uint>                    g_OutputShadowPathIndices           : register( u12 );
+
+[numthreads( 32, 1, 1 )]
+void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
+{
+    if ( threadId >= g_RayCount )
+        return;
+
+    uint pathIndex = g_PathIndices[ threadId ];
+
+    SRayHit rayHit = g_RayHits[ pathIndex ];
+    SHitInfo hitInfo;
+    hitInfo.t = rayHit.t;
+    hitInfo.u = rayHit.uv.x;
+    hitInfo.v = rayHit.uv.y;
+    hitInfo.triangleId = rayHit.triangleId & 0x7FFFFFFF;
+    hitInfo.backface = ( rayHit.triangleId >> 31 ) != 0;
+
+    float3 origin = g_RayOrigins[ pathIndex ];
+    float3 direction = g_RayDirections[ pathIndex ];
+    Intersection intersection;
+    HitInfoToIntersection( origin, direction, hitInfo, intersection );
+
+    Xoshiro128StarStar rng = g_Rngs[ pathIndex ];
+
+    float3 pathThroughput = g_PathThroughput[ pathIndex ];
+
+    float3 Li = g_Li[ pathIndex ];
+    Li += pathThroughput * intersection.emission;
+    g_Li[ pathIndex ] = Li;
+
+    float3 wo = -direction;
+
+    // Sample light
+    bool isDeltaLight = false;
+    uint lightIndex = 0;
+    float3 lightResult = 0.0f;
+    bool hasShadowRay = false;
+    if ( g_LightCount != 0 )
     {
-        if ( i == WaveGetLaneIndex( threadId ) )
+        float lightSelectionSample = GetNextSample1D( rng );
+        float2 lightSamples = GetNextSample2D( rng );
+
+        lightIndex = floor( lightSelectionSample * g_LightCount );
+        SLightSampleResult sampleResult = SampleLight( g_Lights[ lightIndex ], intersection, lightSamples, wo );
+        isDeltaLight = sampleResult.isDeltaLight;
+
+        if ( any( sampleResult.radiance > 0.0f ) && sampleResult.pdf > 0.0f )
         {
-            g_RayOrigins[ extensionRayIndexBase + i ] = origin;
-            g_RayDirections[ extensionRayIndexBase + i ] = direction;
+            float3 bsdf = EvaluateBSDF( sampleResult.wi, wo, intersection );
+            float NdotWI = abs( dot( intersection.normal, sampleResult.wi ) );
+            float bsdfPdf = EvaluateBSDFPdf( sampleResult.wi, wo, intersection );
+            float weight = isDeltaLight ? 1.0f : PowerHeuristic( 1, sampleResult.pdf, 1, bsdfPdf );
+            lightResult = pathThroughput * sampleResult.radiance * bsdf * NdotWI * weight * g_LightCount / sampleResult.pdf;
+
+            g_ShadowRayDirections[ pathIndex ] = float4( sampleResult.wi, sampleResult.distance );
+            g_ShadowRayOrigins[ pathIndex ] = OffsetRayOrigin( intersection.position, intersection.geometryNormal, sampleResult.wi );
+            hasShadowRay = true;
         }
     }
+
+    // Sample BSDF
+    float3 bsdfResult = 0.0f;
+    float3 wi;
+    float lightDistance = 0.0f;
+    bool hasExtensionRay = false;
+    {
+        float bsdfSelectionSample = GetNextSample1D( rng );
+        float2 bsdfSample = GetNextSample2D( rng );
+
+        float3 bsdf;
+        float bsdfPdf;
+        bool isDeltaBxdf;
+        SampleBSDF( wo, bsdfSample, bsdfSelectionSample, intersection, wi, bsdf, bsdfPdf, isDeltaBxdf );
+
+        if ( any( bsdf != 0.0f ) && bsdfPdf != 0.0f )
+        {
+            float NdotWI = abs( dot( intersection.normal, wi ) );
+            pathThroughput = pathThroughput * bsdf * NdotWI / bsdfPdf;
+
+            g_RayDirections[ pathIndex ] = wi;
+            g_RayOrigins[ pathIndex ] = OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi );
+            hasExtensionRay = true;
+
+            if ( g_LightCount != 0 && !isDeltaLight )
+            {
+                float3 radiance;
+                float lightPdf;
+                EvaluateLight( g_Lights[ lightIndex ], intersection.position, wi, lightDistance, radiance, lightPdf );
+                if ( lightPdf > 0.0f )
+                {
+                    float weight = !isDeltaBxdf ? PowerHeuristic( 1, bsdfPdf, 1, lightPdf ) : 1.0f;
+                    bsdfResult = pathThroughput * radiance * weight * g_LightCount;
+                }
+            }
+        }
+    }
+
+    g_LightResult[ pathIndex ] = lightResult;
+    g_LightDistance[ pathIndex ] = lightDistance;
+    g_BsdfResult[ pathIndex ] = bsdfResult;
+    g_Rngs[ pathIndex ] = rng;
+    g_PathThroughput[ pathIndex ] = pathThroughput;
+
+    uint laneIndex = WaveGetLaneIndex( threadId );
+    // Write extension ray indices
+    {
+        uint rayMask = WaveActiveBallot32( laneIndex, hasExtensionRay );
+        uint rayCount = countbits( rayMask );
+        uint rayIndexBase = 0;
+        if ( laneIndex == 0 )
+        {
+            InterlockedAdd( g_RayCounters[ 0 ], rayCount, rayIndexBase );
+        }
+
+        rayIndexBase = WaveReadLaneFirst32( rayIndexBase );
+        uint rayIndexOffset = WavePrefixCountBits32( laneIndex, rayMask );
+        if ( hasExtensionRay )
+        {
+            g_OutputPathIndices[ rayIndexBase + rayIndexOffset ] = pathIndex;
+        }
+    }
+    // Write shadow ray indices
+    {
+        uint rayMask = WaveActiveBallot32( laneIndex, hasShadowRay );
+        uint rayCount = countbits( rayMask );
+        uint rayIndexBase = 0;
+        if ( laneIndex == 0 )
+        {
+            InterlockedAdd( g_RayCounters[ 1 ], rayCount, rayIndexBase );
+        }
+
+        rayIndexBase = WaveReadLaneFirst32( rayIndexBase );
+        uint rayIndexOffset = WavePrefixCountBits32( laneIndex, rayMask );
+        if ( hasShadowRay )
+        {
+            g_OutputShadowPathIndices[ rayIndexBase + rayIndexOffset ] = pathIndex;
+        }
+    }
+}
+
+#endif
+
+#if defined( CONTROL )
+
+cbuffer QueueConstants : register( b0 )
+{
+    uint               g_RayCount;
+}
+
+[numthreads( 32, 1, 1 )]
+void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
+{
+
 }
 
 #endif
@@ -487,7 +570,7 @@ void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
 #define GROUP_SIZE_X 16
 #define GROUP_SIZE_Y 16
 
-[numthreads( GROUP_SIZE_X, GROUP_SIZE_Y, 1 )]
+[ numthreads( GROUP_SIZE_X, GROUP_SIZE_Y, 1 ) ]
 void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 {
     pixelPos += g_TileOffset;
@@ -504,54 +587,81 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     float2 pixelSample = GetNextSample2D( rng );
     float2 filmSample = ( pixelSample + pixelPos ) / g_Resolution;
     float3 apertureSample = GetNextSample3D( rng );
-    GenerateRay( filmSample, apertureSample, g_FilmSize, g_ApertureRadius, g_FocalDistance, g_FilmDistance, g_BladeCount, g_BladeVertexPos, g_ApertureBaseAngle, g_CameraTransform, intersection.position, wo );
+    GenerateRay( filmSample, apertureSample, g_FilmSize, g_ApertureRadius, g_FocalDistance, g_FilmDistance, g_BladeCount, g_BladeVertexPos, g_ApertureBaseAngle, g_CameraTransform, intersection.position, wi );
 
-    if ( IntersectScene( intersection.position, wo, threadId, intersection ) )
+    float hitDistance = 0.0f;
+    bool hasHit = IntersectScene( intersection.position, wi, threadId, intersection, hitDistance );
+
+    uint iBounce = 0;
+    while ( iBounce <= g_MaxBounceCount )
     {
-        uint iBounce = 0;
-        while ( 1 )
+        if ( !hasHit )
         {
-            wo = -wo;
-
-            SLightSamples lightSamples;
-            lightSamples.lightSelectionSample = GetNextSample1D( rng );
-            lightSamples.lightSample          = GetNextSample2D( rng );
-#if defined( MULTIPLE_IMPORTANCE_SAMPLING )
-            lightSamples.bsdfSelectionSample  = GetNextSample1D( rng );
-            lightSamples.bsdfSample           = GetNextSample2D( rng );
-#endif
-            l += pathThroughput * ( UniformSampleOneLight( lightSamples, intersection, wo, threadId ) + intersection.emission );
-
-            if ( iBounce == g_MaxBounceCount )
-                break;
-
-            float3 brdf;
-            float pdf;
-            bool isDeltaBxdf;
-            SampleBSDF( wo, GetNextSample2D( rng ), GetNextSample1D( rng ), intersection, wi, brdf, pdf, isDeltaBxdf );
-
-            if ( all( brdf == 0.0f ) || pdf == 0.0f )
-                break;
-
-            float NdotL = abs( dot( wi, intersection.normal ) );
-            pathThroughput = pathThroughput * brdf * NdotL / pdf;
-
-            if ( !IntersectScene( OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi ), wi, threadId, intersection ) )
-            {
-                l += pathThroughput * EnvironmentShader( wi );
-                break;
-            }
-            else
-            {
-                wo = wi;
-            }
-
-            ++iBounce;
+            l += pathThroughput * EnvironmentShader( wi );
+            break;
         }
-    }
-    else
-    {
-        l = EnvironmentShader( wo );
+
+        wo = -wi;
+
+        // Sample light
+        bool isDeltaLight = false;
+        uint lightIndex = 0;
+        if ( g_LightCount != 0 )
+        {
+            float lightSelectionSample = GetNextSample1D( rng );
+            float2 lightSamples = GetNextSample2D( rng );
+
+            lightIndex = floor( lightSelectionSample * g_LightCount );
+            SLightSampleResult sampleResult = SampleLight( g_Lights[ lightIndex ], intersection, lightSamples, wo );
+            isDeltaLight = sampleResult.isDeltaLight;
+
+            if ( any( sampleResult.radiance > 0.0f ) && sampleResult.pdf > 0.0f
+                && !IsOcculuded( OffsetRayOrigin( intersection.position, intersection.geometryNormal, sampleResult.wi ), sampleResult.wi, sampleResult.distance, threadId ) )
+            {
+                float3 bsdf = EvaluateBSDF( sampleResult.wi, wo, intersection );
+                float NdotWI = abs( dot( intersection.normal, sampleResult.wi ) );
+                float bsdfPdf = EvaluateBSDFPdf( sampleResult.wi, wo, intersection );
+                float weight = isDeltaLight ? 1.0f : PowerHeuristic( 1, sampleResult.pdf, 1, bsdfPdf );
+                l += pathThroughput * sampleResult.radiance * bsdf * NdotWI * weight * g_LightCount / sampleResult.pdf;
+            }
+        }
+
+        l += pathThroughput * intersection.emission;
+
+        // Sample BSDF
+        {
+            float bsdfSelectionSample = GetNextSample1D( rng );
+            float2 bsdfSample = GetNextSample2D( rng );
+
+            float3 bsdf;
+            float bsdfPdf;
+            bool isDeltaBxdf;
+            SampleBSDF( wo, bsdfSample, bsdfSelectionSample, intersection, wi, bsdf, bsdfPdf, isDeltaBxdf );
+
+            if ( all( bsdf == 0.0f ) || bsdfPdf == 0.0f )
+                break;
+
+            float NdotWI = abs( dot( intersection.normal, wi ) );
+            pathThroughput = pathThroughput * bsdf * NdotWI / bsdfPdf;
+
+            float3 lastHitPosition = intersection.position;
+            hasHit = IntersectScene( OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi ), wi, threadId, intersection, hitDistance );
+
+            if ( g_LightCount != 0 && !isDeltaLight )
+            {
+                float3 radiance;
+                float lightPdf;
+                float lightDistance = 0.0f;
+                EvaluateLight( g_Lights[ lightIndex ], lastHitPosition, wi, lightDistance, radiance, lightPdf );
+                if ( lightPdf > 0.0f && ( !hasHit || ( hasHit && ( lightDistance < hitDistance ) ) ) )
+                {
+                    float weight = !isDeltaBxdf ? PowerHeuristic( 1, bsdfPdf, 1, lightPdf ) : 1.0f;
+                    l += pathThroughput * radiance * weight * g_LightCount;
+                }
+            }
+        }
+
+        ++iBounce;
     }
 
     AddSampleToFilm( l, pixelSample, pixelPos );
@@ -582,7 +692,8 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     float3 apertureSample = GetNextSample3D( rng );
     GenerateRay( filmSample, apertureSample, g_FilmSize, g_ApertureRadius, g_FocalDistance, g_FilmDistance, g_BladeCount, g_BladeVertexPos, g_ApertureBaseAngle, g_CameraTransform, intersection.position, wo );
 
-    if ( IntersectScene( intersection.position, wo, threadId, intersection ) )
+    float hitDistance = 0.0f;
+    if ( IntersectScene( intersection.position, wo, threadId, intersection, hitDistance ) )
     {
 #if defined( OUTPUT_NORMAL )
         l = intersection.normal * 0.5f + 0.5f;

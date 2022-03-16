@@ -1,4 +1,6 @@
 
+#define FLT_INF asfloat( 0x7f800000 )
+
 cbuffer RayTracingConstants : register( b0 )
 {
     row_major float4x4  g_CameraTransform;
@@ -130,9 +132,10 @@ void HitInfoToIntersection( float3 origin, float3 direction, SHitInfo hitInfo, o
     HitShader( origin, direction, v0, v1, v2, hitInfo.t, hitInfo.u, hitInfo.v, hitInfo.triangleId, hitInfo.backface, intersection );
 }
 
-bool IntersectScene( float3 origin, float3 direction, uint dispatchThreadIndex, inout Intersection intersection, inout float t )
+bool IntersectScene( float3 origin, float3 direction, uint dispatchThreadIndex, inout Intersection intersection, out float t )
 {
     SHitInfo hitInfo = (SHitInfo)0;
+    t = FLT_INF;
     bool hasIntersection = BVHIntersectNoInterp( origin, direction, 0, dispatchThreadIndex, hitInfo );
     if ( hasIntersection )
     {
@@ -253,7 +256,7 @@ void main( uint threadId : SV_GroupIndex )
         , 0.f
         , threadId
         , hitInfo );
-    rayHit.t = hasHit ? rayHit.t : -1.0f;
+    rayHit.t = hasHit ? hitInfo.t : FLT_INF;
     rayHit.uv = float2( hitInfo.u, hitInfo.v );
     rayHit.triangleId = ( hitInfo.triangleId & 0x7FFFFFFF ) | ( hitInfo.backface ? 1 << 31 : 0 );
 
@@ -552,15 +555,138 @@ void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
 
 #if defined( CONTROL )
 
-cbuffer QueueConstants : register( b0 )
+cbuffer ControlConstants : register( b1 )
 {
-    uint               g_RayCount;
+    uint               g_PathCount;
+    uint               g_MaxBounceCount;
+    float4             g_Background;
+    uint2              g_BlockCounts;
+    uint2              g_BlockDimension;
+    uint2              g_FilmDimension;
 }
+
+StructuredBuffer<SRayHit>   g_RayHits : register( t1 );
+StructuredBuffer<float3>    g_RayDirections : register( t2 );
+StructuredBuffer<float3>    g_PathThroughput : register( t3 );
+StructuredBuffer<float2>    g_PixelSamples : register( t4 );
+RWStructuredBuffer<uint2>     g_PixelPositions : register( t5 );
+TextureCube<float3>         g_EnvTexture : register( t4 );
+StructuredBuffer<bool>      g_HasShadowRayHits       : register( u0 );
+StructuredBuffer<float3>    g_LightResults;
+StructuredBuffer<float3>    g_BsdfResults;
+StructuredBuffer<float>     g_LightDistances;
+RWStructuredBuffer<float>   g_Li : register( u0 );
+RWStructuredBuffer<uint>    g_Bounces : register( u1 );
+RWTexture2D<float4>         g_FilmTexture : register( u2 );
+RWStructuredBuffer<uint>    g_QueueCounters;
+RWStructuredBuffer<uint>    g_MaterialQueue;
+RWStructuredBuffer<uint>    g_NewPathQueue;
+RWBuffer<uint>              g_NextBlockIndex;
+
 
 [numthreads( 32, 1, 1 )]
 void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
 {
+    uint iBounce = g_Bounces[ threadId ];
+    bool isIdle = ( iBounce & 0x80000000 ) != 0 || threadId >= g_PathCount;
+    if ( !isIdle )
+    {
+        iBounce = iBounce & 0x7FFFFFFF;
+        if ( iBounce <= g_MaxBounceCount )
+        {
+            float3 wi = g_RayDirections[ threadId ];
+            float3 Li = g_Li[ threadId ];
+            float3 pathThroughput = g_PathThroughput[ threadId ];
+            SRayHit rayHit = g_RayHits[ threadId ];
+            bool hasShadowRayHit = g_HasShadowRayHits[ threadId ];
+            float lightDistance = g_LightDistances[ threadId ];
 
+            float3 lightResult = g_LightResults[ threadId ];
+            Li += !hasShadowRayHit ? lightResult : 0.0f;
+
+            float3 bsdfResult = g_BsdfResults[ threadId ];
+            Li += lightDistance < rayHit.t ? bsdfResult : 0.0f;
+
+            bool hasHit = rayHit.t != FLT_INF;
+            if ( !hasHit )
+            {
+                Li += pathThroughput * EnvironmentShader( wi );
+            }
+            else
+            {
+                ++iBounce;
+                g_Bounces[ threadId ] = iBounce & 0x7FFFFFFF;
+
+                return;
+            }
+        }
+
+        uint2 pixelPosition = g_PixelPositions[ threadId ];
+        float2 pixelSample = g_PixelSamples[ threadId ];
+        AddSampleToFilm( Li, pixelSample, pixelPos );
+
+        isIdle = true;
+    }
+
+    uint laneIndex = WaveGetLaneIndex( threadId );
+    uint nonIdleLaneMask = WaveActiveBallot32( laneIndex, !isIdle );
+    uint nonIdleLaneCount = countbits( nonIdleLaneMask );
+    // Write material queue
+    if ( nonIdleLaneCount > 0 )
+    {
+        uint rayIndexBase = 0;
+        if ( laneIndex == 0 )
+        {
+            InterlockedAdd( g_QueueCounters[ 0 ], nonIdleLaneCount, rayIndexBase );
+        }
+
+        rayIndexBase = WaveReadLaneFirst32( rayIndexBase );
+        uint rayIndexOffset = WavePrefixCountBits32( laneIndex, nonIdleLaneMask );
+        if ( !isIdle )
+        {
+            g_MaterialQueue[ rayIndexBase + rayIndexOffset ] = threadId;
+        }
+    }
+    else // Generate new paths when the entire wavefront is idle
+    {
+        uint nextBlockIndex = 0;
+        if ( laneIndex == 0 )
+        {
+            InterlockedAdd( g_NextBlockIndex[ 0 ], 1, nextBlockIndex );
+        }
+
+        uint totalBlockCount = g_BlockCounts.x * g_BlockCounts.y;
+        nextBlockIndex = WaveReadLaneFirst32( nextBlockIndex );
+        if ( nextBlockIndex < totalBlockCount )
+        {
+            uint blockPosX = nextBlockIndex % g_BlockCounts.x;
+            uint blockPosY = nextBlockIndex / g_BlockCounts.x;
+            uint lanePosX = laneIndex % g_BlockDimension.x;
+            uint lanePosY = laneIndex / g_BlockDimension.x;
+            uint pixelPosX = blockPosX * g_BlockDimension.x + lanePosX;
+            uint pixelPosY = blockPosY * g_BlockDimension.y + lanePosY;
+            bool isClipped = pixelPosX >= g_FilmDimension.x || pixelPosY >= g_FilmDimension.y;
+
+            uint nonClipedLaneMask = WaveActiveBallot32( laneIndex, !isClipped );
+            uint nonClipedLaneCount = countbits( nonClipedLaneMask );
+            uint rayIndexBase = 0;
+            if ( laneIndex == 0 )
+            {
+                InterlockedAdd( g_QueueCounters[ 1 ], nonClipedLaneCount, rayIndexBase );
+            }
+
+            rayIndexBase = WaveReadLaneFirst32( rayIndexBase );
+            uint rayIndexOffset = WavePrefixCountBits32( laneIndex, nonClipedLaneMask );
+            if ( !isClipped )
+            {
+                g_PixelPositions[ threadId ] = uint2( pixelPosX, pixelPosY );
+                g_NewPathQueue[ rayIndexBase + rayIndexOffset ] = threadId;
+                isIdle = false;
+            }
+        }
+    }
+
+    g_Bounces[ threadId ] = isIdle ? 0x80000000 : 0;
 }
 
 #endif
@@ -589,7 +715,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     float3 apertureSample = GetNextSample3D( rng );
     GenerateRay( filmSample, apertureSample, g_FilmSize, g_ApertureRadius, g_FocalDistance, g_FilmDistance, g_BladeCount, g_BladeVertexPos, g_ApertureBaseAngle, g_CameraTransform, intersection.position, wi );
 
-    float hitDistance = 0.0f;
+    float hitDistance;
     bool hasHit = IntersectScene( intersection.position, wi, threadId, intersection, hitDistance );
 
     uint iBounce = 0;
@@ -653,7 +779,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
                 float lightPdf;
                 float lightDistance = 0.0f;
                 EvaluateLight( g_Lights[ lightIndex ], lastHitPosition, wi, lightDistance, radiance, lightPdf );
-                if ( lightPdf > 0.0f && ( !hasHit || ( hasHit && ( lightDistance < hitDistance ) ) ) )
+                if ( lightPdf > 0.0f && lightDistance < hitDistance ) // hitDistance is inf if there is no hit
                 {
                     float weight = !isDeltaBxdf ? PowerHeuristic( 1, bsdfPdf, 1, lightPdf ) : 1.0f;
                     l += pathThroughput * radiance * weight * g_LightCount;

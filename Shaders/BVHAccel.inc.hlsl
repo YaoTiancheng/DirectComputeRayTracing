@@ -48,7 +48,7 @@ bool BVHIntersectNoInterp( float3 origin
     , uint dispatchThreadIndex
     , inout SHitInfo hitInfo )
 {
-    float tMax = 1.0f / 0.0f;
+    float tMax = FLT_INF;
     float t, u, v;
     bool backface;
 

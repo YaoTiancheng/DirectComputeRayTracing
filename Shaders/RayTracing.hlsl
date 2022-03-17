@@ -195,19 +195,12 @@ void EvaluateLight( SLight light, float3 origin, float3 direction, out float dis
     pdf = EvaluateRectangleLightPdf( light, direction, origin, distance );
 }
 
-struct SRayQuery
+struct SRay
 {
     float3 origin;
     float3 direction;
-    float  tMin;
-};
-
-struct SRayOcclusionQuery
-{
-    float3 origin;
-    float3 direction;
-    float  tMin;
     float  tMax;
+    float  tMin;
 };
 
 struct SRayHit
@@ -217,12 +210,11 @@ struct SRayHit
     uint   triangleId;
 };
 
-struct SPathContext
+struct SMISResults
 {
-    float3 throughput;
-    float3 l;
-    uint2  pixelPos;
-    float2 pixelSample;
+    float3 lightResult;
+    float3 bsdfResult;
+    float lightDistance;
 };
 
 #if defined( EXTENSION_RAY_CAST )
@@ -235,9 +227,8 @@ cbuffer QueueConstants : register( b0 )
 StructuredBuffer<Vertex>      g_Vertices      : register( t0 );
 StructuredBuffer<uint>        g_Triangles     : register( t1 );
 StructuredBuffer<BVHNode>     g_BVHNodes      : register( t2 );
-StructuredBuffer<float3>      g_RayDirections : register( t3 );
-StructuredBuffer<float3>      g_RayOrigins    : register( t4 );
-StructuredBuffer<uint>        g_PathIndices   : register( t5 );
+StructuredBuffer<SRay>        g_Rays          : register( t3 );
+StructuredBuffer<uint>        g_PathIndices   : register( t4 );
 RWStructuredBuffer<SRayHit>   g_RayHits       : register( u0 );
 
 [numthreads( 32, 1, 1 )]
@@ -247,12 +238,11 @@ void main( uint threadId : SV_GroupIndex )
         return;
 
     uint pathIndex = g_PathIndices[ threadId ];
-    float3 rayDirection = g_RayDirections[ pathIndex ];
-    float3 rayOrigin = g_RayOrigins[ pathIndex ];
+    SRay ray = g_Rays[ pathIndex ];
     SRayHit rayHit;
     SHitInfo hitInfo;
-    bool hasHit = BVHIntersectNoInterp( rayOrigin
-        , rayDirection
+    bool hasHit = BVHIntersectNoInterp( ray.origin
+        , ray.direction
         , 0.f
         , threadId
         , hitInfo );
@@ -275,9 +265,8 @@ cbuffer QueueConstants : register( b0 )
 StructuredBuffer<Vertex>      g_Vertices      : register( t0 );
 StructuredBuffer<uint>        g_Triangles     : register( t1 );
 StructuredBuffer<BVHNode>     g_BVHNodes      : register( t2 );
-StructuredBuffer<float4>      g_RayDirections : register( t3 );
-StructuredBuffer<float3>      g_RayOrigins    : register( t4 );
-StructuredBuffer<uint>        g_PathIndices   : register( t5 );
+StructuredBuffer<SRay>        g_Rays          : register( t3 );
+StructuredBuffer<uint>        g_PathIndices   : register( t4 );
 RWStructuredBuffer<bool>      g_HasHits       : register( u0 );
 
 [numthreads( 32, 1, 1 )]
@@ -287,13 +276,11 @@ void main( uint threadId : SV_GroupIndex )
         return;
 
     uint pathIndex = g_PathIndices[ threadId ];
-    float4 rayDirection = g_RayDirections[ pathIndex ];
-    float3 rayOrigin = g_RayOrigins[ pathIndex ];
-    float rayMaxT = rayDirection.w;
-    bool hasHit = BVHIntersect( rayOrigin
-        , rayDirection
+    SRay ray = g_Rays[ pathIndex ];
+    bool hasHit = BVHIntersect( ray.origin
+        , ray.direction
         , 0.f
-        , rayMaxT
+        , ray.tMax
         , threadId );
 
     g_HasHits[ pathIndex ] = hasHit;
@@ -324,12 +311,11 @@ cbuffer CameraConstants : register( b1 )
 
 StructuredBuffer<uint>                      g_PathIndices         : register( t0 );
 StructuredBuffer<uint2>                     g_PixelPositions      : register( t1 );
-RWStructuredBuffer<float3>                  g_RayDirections       : register( u0 );
-RWStructuredBuffer<float3>                  g_RayOrigins          : register( u1 );
-RWStructuredBuffer<float2>                  g_PixelSamples        : register( u2 );
-RWStructuredBuffer<Xoshiro128StarStar>      g_Rngs                : register( u3 );
-RWStructuredBuffer<uint>                    g_OutputPathIndices   : register( u4 );
-RWStructuredBuffer<uint>                    g_ExtensionRayCounter : register( u5 );
+RWStructuredBuffer<SRay>                    g_Rays                : register( u0 );
+RWStructuredBuffer<float2>                  g_PixelSamples        : register( u1 );
+RWStructuredBuffer<Xoshiro128StarStar>      g_Rngs                : register( u2 );
+RWStructuredBuffer<uint>                    g_ExtensionRayQueue   : register( u3 );
+RWStructuredBuffer<uint>                    g_RayCounter          : register( u4 );
 
 [numthreads( 32, 1, 1 )]
 void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
@@ -350,21 +336,26 @@ void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
     GenerateRay( filmSample, apertureSample, g_FilmSize, g_ApertureRadius, g_FocalDistance, g_FilmDistance, g_BladeCount, g_BladeVertexPos, g_ApertureBaseAngle, g_CameraTransform, origin, direction );
 
     g_PixelSamples[ pathIndex ] = pixelSample;
-    g_RayDirections[ pathIndex ] = direction;
-    g_RayOrigins[ pathIndex ] = origin;
     g_Rngs[ pathIndex ] = rng;
+
+    SRay ray;
+    ray.origin = origin;
+    ray.direction = direction;
+    ray.tMin = 0.0f;
+    ray.tMax = FLT_INF;
+    g_Rays[ pathIndex ] = ray;
 
     uint lastGroupIndex = g_RayCount / 32 + ( g_RayCount % 32 != 0 ) ? 1 : 0;
     uint activeLaneCount = groupId.x != lastGroupIndex ? 32 : g_RayCount % 32;
     uint rayIndexBase = 0;
     if ( WaveIsFirstLane( threadId ) )
     {
-        InterlockedAdd( g_ExtensionRayCounter[ 0 ], activeLaneCount, rayIndexBase );
+        InterlockedAdd( g_RayCounter[ 0 ], activeLaneCount, rayIndexBase );
     }
 
     rayIndexBase = WaveReadLaneFirst32( rayIndexBase );
     uint laneIndex = WaveGetLaneIndex( threadId );
-    g_OutputPathIndices[ rayIndexBase + laneIndex ] = pathIndex;
+    g_ExtensionRayQueue[ rayIndexBase + laneIndex ] = pathIndex;
 }
 
 #endif
@@ -386,31 +377,28 @@ StructuredBuffer<SRayHit>                   g_RayHits                           
 StructuredBuffer<Vertex>                    g_Vertices                          : register( t2 );
 StructuredBuffer<uint>                      g_Triangles                         : register( t3 );
 StructuredBuffer<SLight>                    g_Lights                            : register( t4 );
-Texture2D<float>                            g_CookTorranceCompETexture          : register( t5 );
-Texture2D<float>                            g_CookTorranceCompEAvgTexture       : register( t6 );
-Texture2D<float>                            g_CookTorranceCompInvCDFTexture     : register( t7 );
-Texture2D<float>                            g_CookTorranceCompPdfScaleTexture   : register( t8 );
-Texture2DArray<float>                       g_CookTorranceCompEFresnelTexture   : register( t9 );
-Texture2DArray<float>                       g_CookTorranceBSDFETexture          : register( t10 );
-Texture2DArray<float>                       g_CookTorranceBSDFAvgETexture       : register( t11 );
-Texture2DArray<float>                       g_CookTorranceBTDFETexture          : register( t12 );
-Texture2DArray<float>                       g_CookTorranceBSDFInvCDFTexture     : register( t13 );
-Texture2DArray<float>                       g_CookTorranceBSDFPDFScaleTexture   : register( t14 );
-StructuredBuffer<uint>                      g_MaterialIds                       : register( t15 );
-StructuredBuffer<Material>                  g_Materials                         : register( t16 );
-RWStructuredBuffer<float3>                  g_RayDirections                     : register( u0 );
-RWStructuredBuffer<float3>                  g_RayOrigins                        : register( u1 );
-RWStructuredBuffer<float4>                  g_ShadowRayDirections               : register( u2 );
-RWStructuredBuffer<float3>                  g_ShadowRayOrigins                  : register( u3 );
-RWStructuredBuffer<Xoshiro128StarStar>      g_Rngs                              : register( u4 );
-RWStructuredBuffer<float3>                  g_LightResult                       : register( u5 );
-RWStructuredBuffer<float3>                  g_BsdfResult                        : register( u6 );
-RWStructuredBuffer<float3>                  g_PathThroughput                    : register( u7 );
-RWStructuredBuffer<float3>                  g_Li                                : register( u8 );
-RWStructuredBuffer<float>                   g_LightDistance                     : register( u9 );
-RWStructuredBuffer<uint>                    g_RayCounters                       : register( u10 );
-RWStructuredBuffer<uint>                    g_OutputPathIndices                 : register( u11 );
-RWStructuredBuffer<uint>                    g_OutputShadowPathIndices           : register( u12 );
+StructuredBuffer<uint>                      g_MaterialIds                       : register( t5 );
+StructuredBuffer<Material>                  g_Materials                         : register( t6 );
+Texture2D<float>                            g_CookTorranceCompETexture          : register( t7 );
+Texture2D<float>                            g_CookTorranceCompEAvgTexture       : register( t8 );
+Texture2D<float>                            g_CookTorranceCompInvCDFTexture     : register( t9 );
+Texture2D<float>                            g_CookTorranceCompPdfScaleTexture   : register( t10 );
+Texture2DArray<float>                       g_CookTorranceCompEFresnelTexture   : register( t11 );
+Texture2DArray<float>                       g_CookTorranceBSDFETexture          : register( t12 );
+Texture2DArray<float>                       g_CookTorranceBSDFAvgETexture       : register( t13 );
+Texture2DArray<float>                       g_CookTorranceBTDFETexture          : register( t14 );
+Texture2DArray<float>                       g_CookTorranceBSDFInvCDFTexture     : register( t15 );
+Texture2DArray<float>                       g_CookTorranceBSDFPDFScaleTexture   : register( t16 );
+
+RWStructuredBuffer<SRay>                    g_Rays                              : register( u0 );
+RWStructuredBuffer<SRay>                    g_ShadowRays                        : register( u1 );
+RWStructuredBuffer<Xoshiro128StarStar>      g_Rngs                              : register( u2 );
+RWStructuredBuffer<SMISResults>             g_MISResults                        : register( u3 );
+RWStructuredBuffer<float3>                  g_PathThroughput                    : register( u4 );
+RWStructuredBuffer<float3>                  g_Li                                : register( u5 );
+RWStructuredBuffer<uint>                    g_RayCounters                       : register( u6 );
+RWStructuredBuffer<uint>                    g_ExtensionRayQueue                 : register( u7 );
+RWStructuredBuffer<uint>                    g_ShadowRayQueue                    : register( u8 );
 
 [numthreads( 32, 1, 1 )]
 void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
@@ -428,8 +416,9 @@ void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
     hitInfo.triangleId = rayHit.triangleId & 0x7FFFFFFF;
     hitInfo.backface = ( rayHit.triangleId >> 31 ) != 0;
 
-    float3 origin = g_RayOrigins[ pathIndex ];
-    float3 direction = g_RayDirections[ pathIndex ];
+    SRay ray = g_Rays[ pathIndex ];
+    float3 origin = ray.origin;
+    float3 direction = ray.direction;
     Intersection intersection;
     HitInfoToIntersection( origin, direction, hitInfo, intersection );
 
@@ -465,8 +454,13 @@ void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
             float weight = isDeltaLight ? 1.0f : PowerHeuristic( 1, sampleResult.pdf, 1, bsdfPdf );
             lightResult = pathThroughput * sampleResult.radiance * bsdf * NdotWI * weight * g_LightCount / sampleResult.pdf;
 
-            g_ShadowRayDirections[ pathIndex ] = float4( sampleResult.wi, sampleResult.distance );
-            g_ShadowRayOrigins[ pathIndex ] = OffsetRayOrigin( intersection.position, intersection.geometryNormal, sampleResult.wi );
+            SRay shadowRay;
+            shadowRay.direction = sampleResult.wi;
+            shadowRay.origin = OffsetRayOrigin( intersection.position, intersection.geometryNormal, sampleResult.wi );
+            shadowRay.tMin = 0.0f;
+            shadowRay.tMax = sampleResult.distance;
+            g_ShadowRays[ pathIndex ] = shadowRay;
+            
             hasShadowRay = true;
         }
     }
@@ -490,8 +484,11 @@ void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
             float NdotWI = abs( dot( intersection.normal, wi ) );
             pathThroughput = pathThroughput * bsdf * NdotWI / bsdfPdf;
 
-            g_RayDirections[ pathIndex ] = wi;
-            g_RayOrigins[ pathIndex ] = OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi );
+            ray.direction = wi;
+            ray.origin = OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi );
+            ray.tMin = 0.0f;
+            ray.tMax = FLT_INF;
+            g_Rays[ pathIndex ] = ray;
             hasExtensionRay = true;
 
             if ( g_LightCount != 0 && !isDeltaLight )
@@ -508,9 +505,11 @@ void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
         }
     }
 
-    g_LightResult[ pathIndex ] = lightResult;
-    g_LightDistance[ pathIndex ] = lightDistance;
-    g_BsdfResult[ pathIndex ] = bsdfResult;
+    SMISResults misResults;
+    misResults.lightResult = lightResult;
+    misResults.bsdfResult = bsdfResult;
+    misResults.lightDistance = lightDistance;
+    g_MISResults[ pathIndex ] = misResults;
     g_Rngs[ pathIndex ] = rng;
     g_PathThroughput[ pathIndex ] = pathThroughput;
 
@@ -529,7 +528,7 @@ void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
         uint rayIndexOffset = WavePrefixCountBits32( laneIndex, rayMask );
         if ( hasExtensionRay )
         {
-            g_OutputPathIndices[ rayIndexBase + rayIndexOffset ] = pathIndex;
+            g_ExtensionRayQueue[ rayIndexBase + rayIndexOffset ] = pathIndex;
         }
     }
     // Write shadow ray indices
@@ -546,7 +545,7 @@ void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
         uint rayIndexOffset = WavePrefixCountBits32( laneIndex, rayMask );
         if ( hasShadowRay )
         {
-            g_OutputShadowPathIndices[ rayIndexBase + rayIndexOffset ] = pathIndex;
+            g_ShadowRayQueue[ rayIndexBase + rayIndexOffset ] = pathIndex;
         }
     }
 }
@@ -555,34 +554,32 @@ void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
 
 #if defined( CONTROL )
 
-cbuffer ControlConstants : register( b1 )
+cbuffer ControlConstants : register( b0 )
 {
+    float4             g_Background;
     uint               g_PathCount;
     uint               g_MaxBounceCount;
-    float4             g_Background;
     uint2              g_BlockCounts;
     uint2              g_BlockDimension;
     uint2              g_FilmDimension;
 }
 
-StructuredBuffer<SRayHit>   g_RayHits : register( t1 );
-StructuredBuffer<float3>    g_RayDirections : register( t2 );
-StructuredBuffer<float3>    g_PathThroughput : register( t3 );
-StructuredBuffer<float2>    g_PixelSamples : register( t4 );
-RWStructuredBuffer<uint2>     g_PixelPositions : register( t5 );
-TextureCube<float3>         g_EnvTexture : register( t4 );
-StructuredBuffer<bool>      g_HasShadowRayHits       : register( u0 );
-StructuredBuffer<float3>    g_LightResults;
-StructuredBuffer<float3>    g_BsdfResults;
-StructuredBuffer<float>     g_LightDistances;
-RWStructuredBuffer<float>   g_Li : register( u0 );
-RWStructuredBuffer<uint>    g_Bounces : register( u1 );
-RWTexture2D<float4>         g_FilmTexture : register( u2 );
-RWStructuredBuffer<uint>    g_QueueCounters;
-RWStructuredBuffer<uint>    g_MaterialQueue;
-RWStructuredBuffer<uint>    g_NewPathQueue;
-RWBuffer<uint>              g_NextBlockIndex;
+StructuredBuffer<SRayHit>       g_RayHits           : register( t0 );
+StructuredBuffer<SRay>          g_Rays              : register( t1 );
+StructuredBuffer<float2>        g_PixelSamples      : register( t2 );
+StructuredBuffer<bool>          g_HasShadowRayHits  : register( t3 );
+StructuredBuffer<SMISResults>   g_MISResults        : register( t4 )
+TextureCube<float3>             g_EnvTexture        : register( t5 );
 
+RWStructuredBuffer<uint2>       g_PixelPositions    : register( u0 );
+RWStructuredBuffer<float3>      g_Li                : register( u1 );
+RWStructuredBuffer<float3>      g_PathThroughput    : register( u2 );
+RWStructuredBuffer<uint>        g_Bounces           : register( u3 );
+RWStructuredBuffer<uint>        g_QueueCounters     : register( u4 );
+RWStructuredBuffer<uint>        g_MaterialQueue     : register( u5 );
+RWStructuredBuffer<uint>        g_NewPathQueue      : register( u6 );
+RWBuffer<uint>                  g_NextBlockIndex    : register( u7 );
+RWTexture2D<float4>             g_FilmTexture       : register( u8 );
 
 [numthreads( 32, 1, 1 )]
 void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
@@ -594,38 +591,43 @@ void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
         iBounce = iBounce & 0x7FFFFFFF;
         if ( iBounce <= g_MaxBounceCount )
         {
-            float3 wi = g_RayDirections[ threadId ];
+            float3 wi = g_Rays[ threadId ].direction;
             float3 Li = g_Li[ threadId ];
             float3 pathThroughput = g_PathThroughput[ threadId ];
             SRayHit rayHit = g_RayHits[ threadId ];
             bool hasShadowRayHit = g_HasShadowRayHits[ threadId ];
-            float lightDistance = g_LightDistances[ threadId ];
 
-            float3 lightResult = g_LightResults[ threadId ];
+            SMISResults misResults = g_MISResults[ threadId ];
+
+            float3 lightResult = misResults.lightResult;
             Li += !hasShadowRayHit ? lightResult : 0.0f;
 
-            float3 bsdfResult = g_BsdfResults[ threadId ];
+            float3 bsdfResult = misResults.bsdfResult;
+            float lightDistance = misResults.lightDistance;
             Li += lightDistance < rayHit.t ? bsdfResult : 0.0f;
 
             bool hasHit = rayHit.t != FLT_INF;
             if ( !hasHit )
             {
                 Li += pathThroughput * EnvironmentShader( wi );
+                isIdle = true;
             }
             else
             {
                 ++iBounce;
-                g_Bounces[ threadId ] = iBounce & 0x7FFFFFFF;
-
-                return;
             }
         }
+        else
+        {
+            isIdle = true;
+        }
 
-        uint2 pixelPosition = g_PixelPositions[ threadId ];
-        float2 pixelSample = g_PixelSamples[ threadId ];
-        AddSampleToFilm( Li, pixelSample, pixelPos );
-
-        isIdle = true;
+        if ( isIdle )
+        {
+            uint2 pixelPosition = g_PixelPositions[ threadId ];
+            float2 pixelSample = g_PixelSamples[ threadId ];
+            AddSampleToFilm( Li, pixelSample, pixelPos );
+        }
     }
 
     uint laneIndex = WaveGetLaneIndex( threadId );
@@ -680,13 +682,31 @@ void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
             if ( !isClipped )
             {
                 g_PixelPositions[ threadId ] = uint2( pixelPosX, pixelPosY );
+                g_Li[ threadId ] = 0.0f;
+                g_PathThroughput[ threadId ] = 1.0f;
                 g_NewPathQueue[ rayIndexBase + rayIndexOffset ] = threadId;
                 isIdle = false;
+                iBounce = 0;
             }
         }
     }
 
-    g_Bounces[ threadId ] = isIdle ? 0x80000000 : 0;
+    g_Bounces[ threadId ] = ( iBounce & 0x7FFFFFFF ) | ( isIdle ? 0x80000000 : 0 );
+}
+
+#endif
+
+#if defined( FILL_INDIRECT_ARGUMENTS )
+
+Buffer<uint>   g_Counter      : register( t0 );
+RWBuffer<uint> g_IndirectArgs : register( t1 );
+
+[numthreads( 1, 1, 1 )]
+void main()
+{
+    g_IndirectArgs[ 0 ] = g_Counter / 32 + ( g_Counter % 32 ) != 0 ? 1 : 0;
+    g_IndirectArgs[ 1 ] = 1;
+    g_IndirectArgs[ 2 ] = 1;
 }
 
 #endif

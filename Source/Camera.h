@@ -13,6 +13,8 @@ public:
 
     void SetDirty() { m_IsDirty = true; }
 
+    void ClearDirty() { m_IsDirty = false; }
+
     void GetTransformMatrix( DirectX::XMFLOAT4X4* m ) const;
 
     void GetTransformMatrixAndClearDirty( DirectX::XMFLOAT4X4* m );

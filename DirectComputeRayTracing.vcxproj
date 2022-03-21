@@ -187,11 +187,16 @@
     <ClInclude Include="Source\imgui\imstb_textedit.h" />
     <ClInclude Include="Source\imgui\imstb_truetype.h" />
     <ClInclude Include="Source\Logging.h" />
+    <ClInclude Include="Source\MessageBox.h" />
+    <ClInclude Include="Source\MegakernelPathTracer.h" />
+    <ClInclude Include="Source\PathTracer.h" />
     <ClInclude Include="Source\PointerTypes.h" />
     <ClInclude Include="Source\PostProcessingRenderer.h" />
     <ClInclude Include="Source\Rectangle.h" />
     <ClInclude Include="Source\RenderContext.h" />
+    <ClInclude Include="Source\RenderData.h" />
     <ClInclude Include="Source\RenderJobHelper.h" />
+    <ClInclude Include="Source\Scene.h" />
     <ClInclude Include="Source\SceneLuminanceRenderer.h" />
     <ClInclude Include="Source\StringConversion.h" />
     <ClInclude Include="Source\Timers.h" />
@@ -252,8 +257,11 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="Source\MessageBox.cpp" />
+    <ClCompile Include="Source\MegakernelPathTracer.cpp" />
     <ClCompile Include="Source\PostProcessingRenderer.cpp" />
     <ClCompile Include="Source\RenderJobHelper.cpp" />
+    <ClCompile Include="Source\Scene.cpp" />
     <ClCompile Include="Source\SceneLuminanceRenderer.cpp" />
     <ClCompile Include="Source\Shader.cpp" />
     <ClCompile Include="Source\GPUBuffer.cpp" />

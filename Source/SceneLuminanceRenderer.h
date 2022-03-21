@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ComputeJob.h"
+#include "Shader.h"
 
 class SceneLuminanceRenderer
 {

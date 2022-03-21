@@ -16,12 +16,12 @@ cbuffer RayTracingConstants : register( b0 )
     float2              g_BladeVertexPos;
     uint                g_BladeCount;
     float               g_ApertureBaseAngle;
+    uint2               g_TileOffset;
 }
 
 cbuffer RayTracingFrameConstants : register( b1 )
 {
     uint                g_FrameSeed;
-    uint2               g_TileOffset;
 }
 
 #include "Vertex.inc.hlsl"

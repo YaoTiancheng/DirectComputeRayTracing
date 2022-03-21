@@ -129,6 +129,21 @@
     <ClInclude Include="Source\RenderContext.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Source\MegakernelPathTracer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\PathTracer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Scene.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\RenderData.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\MessageBox.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\Application.cpp">
@@ -206,6 +221,15 @@
     <ClCompile Include="Source\BxDFTexturesBuilder.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Source\MegakernelPathTracer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Scene.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\MessageBox.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Image Include="Resources\small.ico">
@@ -254,13 +278,11 @@
     <None Include="Shaders\SpecularBTDF.inc.hlsl" />
     <None Include="Shaders\CookTorranceBSDF.inc.hlsl" />
     <None Include="Shaders\BxDFTextures.inc.hlsl" />
+    <None Include="Shaders\Intrinsics.inc.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resources\DirectComputeRayTracing.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="Shaders\Intrinsics.inc.hlsl" />
   </ItemGroup>
 </Project>

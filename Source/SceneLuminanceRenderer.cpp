@@ -26,16 +26,18 @@ bool SceneLuminanceRenderer::Init( uint32_t resolutionWidth, uint32_t resolution
         sumLuminanceBlockCountX = uint32_t( std::ceilf( sumLuminanceBlockCountX / 2.0f ) );
         uint32_t sumLuminanceBlockCountY = uint32_t( std::ceilf( resolutionHeight / float( SL_BLOCKSIZEY ) ) );
         sumLuminanceBlockCountY = uint32_t( std::ceilf( sumLuminanceBlockCountY / 2.0f ) );
-        m_SumLuminanceBuffer0.reset( GPUBuffer::Create(
+        m_SumLuminanceBuffer0.reset( GPUBuffer::CreateStructured(
               sizeof( float ) * sumLuminanceBlockCountX * sumLuminanceBlockCountY
             , sizeof( float )
-            , GPUResourceCreationFlags_IsStructureBuffer | GPUResourceCreationFlags_HasUAV ) );
+            , D3D11_USAGE_DEFAULT
+            , D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_SHADER_RESOURCE ) );
         if ( !m_SumLuminanceBuffer0 )
             return false;
-        m_SumLuminanceBuffer1.reset( GPUBuffer::Create(
+        m_SumLuminanceBuffer1.reset( GPUBuffer::CreateStructured(
               sizeof( float ) * sumLuminanceBlockCountX * sumLuminanceBlockCountY
             , sizeof( float )
-            , GPUResourceCreationFlags_IsStructureBuffer | GPUResourceCreationFlags_HasUAV ) );
+            , D3D11_USAGE_DEFAULT
+            , D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_SHADER_RESOURCE ) );
         if ( !m_SumLuminanceBuffer1 )
             return false;
     }
@@ -44,14 +46,20 @@ bool SceneLuminanceRenderer::Init( uint32_t resolutionWidth, uint32_t resolution
         m_SumLuminanceConstantsBuffer0.reset( GPUBuffer::Create(
               sizeof( uint32_t ) * 4
             , 0
-            , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsConstantBuffer ) );
+            , DXGI_FORMAT_UNKNOWN
+            , D3D11_USAGE_DYNAMIC
+            , D3D11_BIND_CONSTANT_BUFFER
+            , GPUResourceCreationFlags_CPUWriteable ) );
         if ( !m_SumLuminanceConstantsBuffer0 )
             return false;
 
         m_SumLuminanceConstantsBuffer1.reset( GPUBuffer::Create(
               sizeof( uint32_t ) * 4
             , 0
-            , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsConstantBuffer ) );
+            , DXGI_FORMAT_UNKNOWN
+            , D3D11_USAGE_DYNAMIC
+            , D3D11_BIND_CONSTANT_BUFFER
+            , GPUResourceCreationFlags_CPUWriteable ) );
         if ( !m_SumLuminanceConstantsBuffer1 )
             return false;
     }

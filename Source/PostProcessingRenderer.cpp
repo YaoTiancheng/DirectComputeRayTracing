@@ -55,7 +55,10 @@ bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, 
     m_ConstantsBuffer.reset( GPUBuffer::Create(
           sizeof( XMFLOAT4 )
         , 0
-        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsConstantBuffer
+        , DXGI_FORMAT_UNKNOWN
+        , D3D11_USAGE_DYNAMIC
+        , D3D11_BIND_CONSTANT_BUFFER
+        , GPUResourceCreationFlags_CPUWriteable
         , &m_ConstantParams ) );
     if ( !m_ConstantsBuffer )
         return false;
@@ -63,7 +66,10 @@ bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, 
     m_ScreenQuadVerticesBuffer.reset( GPUBuffer::Create(
           sizeof( s_ScreenQuadVertices )
         , sizeof( XMFLOAT4 )
-        , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsVertexBuffer
+        , DXGI_FORMAT_UNKNOWN
+        , D3D11_USAGE_IMMUTABLE
+        , D3D11_BIND_VERTEX_BUFFER
+        , 0
         , &s_ScreenQuadVertices ) );
     if ( !m_ScreenQuadVerticesBuffer )
         return false;

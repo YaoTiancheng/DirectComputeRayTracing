@@ -43,37 +43,20 @@ GPUBuffer::~GPUBuffer()
     }
 }
 
-GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, uint32_t flags, const void* initialData )
+GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORMAT format, D3D11_USAGE usage, uint32_t bindFlags, bool isStructured, uint32_t flags, const void* initialData )
 {
-    bool isCBuffer          = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_IsConstantBuffer ) != 0;
-    bool isImmutable        = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_IsImmutable ) != 0;
-    bool CPUWriteable       = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_CPUWriteable ) != 0;
-    bool isStructureBuffer  = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_IsStructureBuffer ) != 0;
-    bool isVertexBuffer     = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_IsVertexBuffer ) != 0;
-    bool hasUAV             = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_HasUAV ) != 0;
+    bool CPUWriteable = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_CPUWriteable ) != 0;
+    bool hasUAV = ( bindFlags & D3D11_BIND_UNORDERED_ACCESS ) != 0;
+    bool hasSRV = ( bindFlags & D3D11_BIND_SHADER_RESOURCE ) != 0;
 
     D3D11_BUFFER_DESC bufferDesc;
     ZeroMemory( &bufferDesc, sizeof( bufferDesc ) );
-    bufferDesc.ByteWidth            = byteWidth;
-    if ( isImmutable )
-        bufferDesc.Usage            = D3D11_USAGE_IMMUTABLE;
-    else if ( CPUWriteable )
-        bufferDesc.Usage            = D3D11_USAGE_DYNAMIC;
-    else 
-        bufferDesc.Usage            = D3D11_USAGE_DEFAULT;
-    uint32_t bindFlags              = 0;
-    if ( isCBuffer )
-        bindFlags = D3D11_BIND_CONSTANT_BUFFER;
-    else if ( isVertexBuffer )
-        bindFlags = D3D11_BIND_VERTEX_BUFFER;
-    else 
-        bindFlags = D3D11_BIND_SHADER_RESOURCE;
-    if ( hasUAV )
-        bindFlags |= D3D11_BIND_UNORDERED_ACCESS;
-    bufferDesc.BindFlags            = bindFlags;
-    bufferDesc.CPUAccessFlags       = CPUWriteable ? D3D11_CPU_ACCESS_WRITE : 0;
-    bufferDesc.StructureByteStride  = byteStride;
-    bufferDesc.MiscFlags            = isStructureBuffer ? D3D11_RESOURCE_MISC_BUFFER_STRUCTURED : 0;
+    bufferDesc.ByteWidth = byteWidth;
+    bufferDesc.Usage = usage;
+    bufferDesc.BindFlags = bindFlags;
+    bufferDesc.CPUAccessFlags = CPUWriteable ? D3D11_CPU_ACCESS_WRITE : 0;
+    bufferDesc.StructureByteStride = byteStride;
+    bufferDesc.MiscFlags = isStructured ? D3D11_RESOURCE_MISC_BUFFER_STRUCTURED : 0;
 
     D3D11_SUBRESOURCE_DATA subresourceData;
     subresourceData.pSysMem = initialData;
@@ -89,15 +72,15 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, uint32_t 
     }
 
     ID3D11ShaderResourceView* SRV = nullptr;
-    if ( !isCBuffer && !isVertexBuffer )
+    if ( hasSRV )
     {
         D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc;
-        SRVDesc.Format = DXGI_FORMAT_UNKNOWN;
+        SRVDesc.Format = isStructured ? DXGI_FORMAT_UNKNOWN : format;
         SRVDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
         SRVDesc.Buffer.ElementOffset = 0;
         SRVDesc.Buffer.NumElements = byteWidth / byteStride;
         hr = GetDevice()->CreateShaderResourceView( buffer, &SRVDesc, &SRV );
-        if (FAILED( hr ))
+        if ( FAILED( hr ) )
         {
             buffer->Release();
             return nullptr;
@@ -107,10 +90,16 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, uint32_t 
     ID3D11UnorderedAccessView* UAV = nullptr;
     if ( hasUAV )
     {
-        hr = GetDevice()->CreateUnorderedAccessView( buffer, nullptr, &UAV );
+        D3D11_UNORDERED_ACCESS_VIEW_DESC UAVDesc;
+        UAVDesc.Format = isStructured ? DXGI_FORMAT_UNKNOWN : format;
+        UAVDesc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+        UAVDesc.Buffer.FirstElement = 0;
+        UAVDesc.Buffer.NumElements = byteWidth / byteStride;
+        UAVDesc.Buffer.Flags = 0;
+        hr = GetDevice()->CreateUnorderedAccessView( buffer, &UAVDesc, &UAV );
         if ( FAILED( hr ) )
         {
-            SRV->Release();
+            UAV->Release();
             buffer->Release();
             return nullptr;
         }
@@ -122,4 +111,14 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, uint32_t 
     gpuBuffer->m_UAV = UAV;
 
     return gpuBuffer;
+}
+
+GPUBuffer* GPUBuffer::CreateStructured( uint32_t byteWidth, uint32_t byteStride, D3D11_USAGE usage, uint32_t bindFlags, uint32_t flags, const void* initialData )
+{
+    return Create( byteWidth, byteStride, DXGI_FORMAT_UNKNOWN, usage, bindFlags, true, flags, initialData );
+}
+
+GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORMAT format, D3D11_USAGE usage, uint32_t bindFlags, uint32_t flags, const void* initialData )
+{
+    return Create( byteWidth, byteStride, format, usage, bindFlags, false, flags, initialData );
 }

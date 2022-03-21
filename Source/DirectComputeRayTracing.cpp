@@ -261,7 +261,10 @@ bool SRenderer::Init()
     m_RenderData.m_RayTracingFrameConstantBuffer.reset( GPUBuffer::Create(
           sizeof( RayTracingFrameConstants )
         , 0
-        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsConstantBuffer ) );
+        , DXGI_FORMAT_UNKNOWN
+        , D3D11_USAGE_DYNAMIC
+        , D3D11_BIND_CONSTANT_BUFFER
+        , GPUResourceCreationFlags_CPUWriteable ) );
     if ( !m_RenderData.m_RayTracingFrameConstantBuffer )
         return false;
 

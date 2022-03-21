@@ -37,7 +37,10 @@ bool CMegakernelPathTracer::Create()
     m_RayTracingConstantsBuffer.reset( GPUBuffer::Create(
           sizeof( SRayTracingConstants )
         , 0
-        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsConstantBuffer ) );
+        , DXGI_FORMAT_UNKNOWN
+        , D3D11_USAGE_DYNAMIC
+        , D3D11_BIND_CONSTANT_BUFFER
+        , GPUResourceCreationFlags_CPUWriteable ) );
     if ( !m_RayTracingConstantsBuffer )
         return false;
 

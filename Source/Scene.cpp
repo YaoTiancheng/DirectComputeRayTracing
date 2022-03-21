@@ -69,10 +69,12 @@ bool CScene::LoadFromFile( const char* filepath )
     m_Materials = mesh.GetMaterials();
     m_MaterialNames = mesh.GetMaterialNames();
 
-    m_VerticesBuffer.reset( GPUBuffer::Create(
+    m_VerticesBuffer.reset( GPUBuffer::CreateStructured(
           sizeof( Vertex ) * mesh.GetVertexCount()
         , sizeof( Vertex )
-        , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsStructureBuffer
+        , D3D11_USAGE_IMMUTABLE
+        , D3D11_BIND_SHADER_RESOURCE
+        , 0
         , mesh.GetVertices() ) );
     if ( !m_VerticesBuffer )
     {
@@ -80,10 +82,12 @@ bool CScene::LoadFromFile( const char* filepath )
         return false;
     }
 
-    m_TrianglesBuffer.reset( GPUBuffer::Create(
+    m_TrianglesBuffer.reset( GPUBuffer::CreateStructured(
           sizeof( uint32_t ) * mesh.GetIndexCount()
         , sizeof( uint32_t )
-        , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsStructureBuffer
+        , D3D11_USAGE_IMMUTABLE
+        , D3D11_BIND_SHADER_RESOURCE
+        , 0
         , mesh.GetIndices() ) );
     if ( !m_TrianglesBuffer )
     {
@@ -91,10 +95,12 @@ bool CScene::LoadFromFile( const char* filepath )
         return false;
     }
 
-    m_MaterialIdsBuffer.reset( GPUBuffer::Create(
+    m_MaterialIdsBuffer.reset( GPUBuffer::CreateStructured(
           sizeof( uint32_t ) * mesh.GetTriangleCount()
         , sizeof( uint32_t )
-        , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsStructureBuffer
+        , D3D11_USAGE_IMMUTABLE
+        , D3D11_BIND_SHADER_RESOURCE
+        , 0
         , mesh.GetMaterialIds() ) );
     if ( !m_MaterialIdsBuffer )
     {
@@ -102,10 +108,12 @@ bool CScene::LoadFromFile( const char* filepath )
         return false;
     }
 
-    m_MaterialsBuffer.reset( GPUBuffer::Create(
+    m_MaterialsBuffer.reset( GPUBuffer::CreateStructured(
           uint32_t( sizeof( Material ) * m_Materials.size() )
         , sizeof( Material )
-        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer
+        , D3D11_USAGE_DYNAMIC
+        , D3D11_BIND_SHADER_RESOURCE
+        , GPUResourceCreationFlags_CPUWriteable
         , m_Materials.data() ) );
     if ( !m_MaterialsBuffer )
     {
@@ -115,10 +123,12 @@ bool CScene::LoadFromFile( const char* filepath )
 
     if ( !commandLineArgs->GetNoBVHAccel() )
     {
-        m_BVHNodesBuffer.reset( GPUBuffer::Create(
+        m_BVHNodesBuffer.reset( GPUBuffer::CreateStructured(
               sizeof( BVHNode ) * mesh.GetBVHNodeCount()
             , sizeof( BVHNode )
-            , GPUResourceCreationFlags_IsImmutable | GPUResourceCreationFlags_IsStructureBuffer
+            , D3D11_USAGE_IMMUTABLE
+            , D3D11_BIND_SHADER_RESOURCE
+            , 0
             , mesh.GetBVHNodes() ) );
         if ( !m_BVHNodesBuffer )
         {
@@ -130,10 +140,12 @@ bool CScene::LoadFromFile( const char* filepath )
     m_LightSettings.clear();
     m_LightSettings.reserve( s_MaxLightsCount );
 
-    m_LightsBuffer.reset( GPUBuffer::Create(
+    m_LightsBuffer.reset( GPUBuffer::CreateStructured(
           sizeof( SLight ) * s_MaxLightsCount
         , sizeof( SLight )
-        , GPUResourceCreationFlags_CPUWriteable | GPUResourceCreationFlags_IsStructureBuffer
+        , D3D11_USAGE_DYNAMIC
+        , D3D11_BIND_SHADER_RESOURCE
+        , GPUResourceCreationFlags_CPUWriteable
         , nullptr ) );
     if ( !m_LightsBuffer )
     {

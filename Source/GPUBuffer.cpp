@@ -48,6 +48,7 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
     bool CPUWriteable = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_CPUWriteable ) != 0;
     bool hasUAV = ( bindFlags & D3D11_BIND_UNORDERED_ACCESS ) != 0;
     bool hasSRV = ( bindFlags & D3D11_BIND_SHADER_RESOURCE ) != 0;
+    bool indirectArgs = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_IndirectArgs ) != 0;
 
     D3D11_BUFFER_DESC bufferDesc;
     ZeroMemory( &bufferDesc, sizeof( bufferDesc ) );
@@ -57,6 +58,7 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
     bufferDesc.CPUAccessFlags = CPUWriteable ? D3D11_CPU_ACCESS_WRITE : 0;
     bufferDesc.StructureByteStride = byteStride;
     bufferDesc.MiscFlags = isStructured ? D3D11_RESOURCE_MISC_BUFFER_STRUCTURED : 0;
+    bufferDesc.MiscFlags |= indirectArgs ? D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS : 0;
 
     D3D11_SUBRESOURCE_DATA subresourceData;
     subresourceData.pSysMem = initialData;

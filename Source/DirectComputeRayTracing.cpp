@@ -15,6 +15,7 @@
 #include "RenderContext.h"
 #include "RenderData.h"
 #include "MegakernelPathTracer.h"
+#include "WavefrontPathTracer.h"
 #include "Scene.h"
 #include "MessageBox.h"
 #include "imgui/imgui.h"

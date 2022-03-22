@@ -10,4 +10,5 @@ enum GPUResourceCreationFlags : uint32_t
     , GPUResourceCreationFlags_CPUWriteable         = 0x10
     , GPUResourceCreationFlags_HasUAV               = 0x20
     , GPUResourceCreationFlags_IsRenderTarget       = 0x40
+    , GPUResourceCreationFlags_IndirectArgs         = 0x80
 };

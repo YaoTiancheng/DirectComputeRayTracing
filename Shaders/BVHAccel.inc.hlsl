@@ -46,6 +46,10 @@ bool BVHIntersectNoInterp( float3 origin
     , float3 direction
     , float tMin
     , uint dispatchThreadIndex
+    , StructuredBuffer<Vertex> vertices
+    , StructuredBuffer<uint> triangles
+    , StructuredBuffer<BVHNode> BVHNodes
+    , uint primitiveCount
     , inout SHitInfo hitInfo )
 {
     float tMax = FLT_INF;
@@ -60,23 +64,23 @@ bool BVHIntersectNoInterp( float3 origin
     uint nodeIndex = 0;
     while ( true )
     {
-        if ( RayAABBIntersect( origin, invDir, tMin, tMax, g_BVHNodes[ nodeIndex ].bboxMin, g_BVHNodes[ nodeIndex ].bboxMax ) )
+        if ( RayAABBIntersect( origin, invDir, tMin, tMax, BVHNodes[ nodeIndex ].bboxMin, BVHNodes[ nodeIndex ].bboxMax ) )
         {
-            uint primCount = BVHNodeGetPrimitiveCount( g_BVHNodes[ nodeIndex ] );
+            uint primCount = BVHNodeGetPrimitiveCount( BVHNodes[ nodeIndex ] );
             if ( primCount == 0 )
             {
-                BVHTraversalStackPushback( dispatchThreadIndex, g_BVHNodes[ nodeIndex ].childOrPrimIndex );
+                BVHTraversalStackPushback( dispatchThreadIndex, BVHNodes[ nodeIndex ].childOrPrimIndex );
                 nodeIndex++;
             }
             else
             {
-                uint primBegin = g_BVHNodes[ nodeIndex ].childOrPrimIndex;
+                uint primBegin = BVHNodes[ nodeIndex ].childOrPrimIndex;
                 uint primEnd = primBegin + primCount;
                 for ( uint iPrim = primBegin; iPrim < primEnd; ++iPrim )
                 {
-                    Vertex v0 = g_Vertices[ g_Triangles[ iPrim * 3 ] ];
-                    Vertex v1 = g_Vertices[ g_Triangles[ iPrim * 3 + 1 ] ];
-                    Vertex v2 = g_Vertices[ g_Triangles[ iPrim * 3 + 2 ] ];
+                    Vertex v0 = vertices[ triangles[ iPrim * 3 ] ];
+                    Vertex v1 = vertices[ triangles[ iPrim * 3 + 1 ] ];
+                    Vertex v2 = vertices[ triangles[ iPrim * 3 + 2 ] ];
                     if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
                     {
                         tMax = t;
@@ -98,11 +102,11 @@ bool BVHIntersectNoInterp( float3 origin
         }
     }
 #else
-    for ( uint iPrim = 0; iPrim < g_PrimitiveCount; ++iPrim )
+    for ( uint iPrim = 0; iPrim < primitiveCount; ++iPrim )
     {
-        Vertex v0 = g_Vertices[ g_Triangles[ iPrim * 3 ] ];
-        Vertex v1 = g_Vertices[ g_Triangles[ iPrim * 3 + 1 ] ];
-        Vertex v2 = g_Vertices[ g_Triangles[ iPrim * 3 + 2 ] ];
+        Vertex v0 = vertices[ triangles[ iPrim * 3 ] ];
+        Vertex v1 = vertices[ triangles[ iPrim * 3 + 1 ] ];
+        Vertex v2 = vertices[ triangles[ iPrim * 3 + 2 ] ];
         if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
         {
             tMax = t;
@@ -122,7 +126,11 @@ bool BVHIntersect( float3 origin
     , float3 direction
     , float tMin
     , float tMax
-    , uint dispatchThreadIndex )
+    , uint dispatchThreadIndex
+    , StructuredBuffer<Vertex> vertices
+    , StructuredBuffer<uint> triangles
+    , StructuredBuffer<BVHNode> BVHNodes
+    , uint primitiveCount )
 {
 #if !defined( NO_BVH_ACCEL )
     float3 invDir = 1.0f / direction;
@@ -132,23 +140,23 @@ bool BVHIntersect( float3 origin
     uint nodeIndex = 0;
     while ( true )
     {
-        if ( RayAABBIntersect( origin, invDir, tMin, tMax, g_BVHNodes[ nodeIndex ].bboxMin, g_BVHNodes[ nodeIndex ].bboxMax ) )
+        if ( RayAABBIntersect( origin, invDir, tMin, tMax, BVHNodes[ nodeIndex ].bboxMin, BVHNodes[ nodeIndex ].bboxMax ) )
         {
-            uint primCount = BVHNodeGetPrimitiveCount( g_BVHNodes[ nodeIndex ] );
+            uint primCount = BVHNodeGetPrimitiveCount( BVHNodes[ nodeIndex ] );
             if ( primCount == 0 )
             {
-                BVHTraversalStackPushback( dispatchThreadIndex, g_BVHNodes[ nodeIndex ].childOrPrimIndex );
+                BVHTraversalStackPushback( dispatchThreadIndex, BVHNodes[ nodeIndex ].childOrPrimIndex );
                 nodeIndex++;
             }
             else
             {
-                uint primBegin = g_BVHNodes[ nodeIndex ].childOrPrimIndex;
+                uint primBegin = BVHNodes[ nodeIndex ].childOrPrimIndex;
                 uint primEnd = primBegin + primCount;
                 for ( uint iPrim = primBegin; iPrim < primEnd; ++iPrim )
                 {
-                    Vertex v0 = g_Vertices[ g_Triangles[ iPrim * 3 ] ];
-                    Vertex v1 = g_Vertices[ g_Triangles[ iPrim * 3 + 1 ] ];
-                    Vertex v2 = g_Vertices[ g_Triangles[ iPrim * 3 + 2 ] ];
+                    Vertex v0 = vertices[ triangles[ iPrim * 3 ] ];
+                    Vertex v1 = vertices[ triangles[ iPrim * 3 + 1 ] ];
+                    Vertex v2 = vertices[ triangles[ iPrim * 3 + 2 ] ];
                     float t, u, v;
                     bool backface;
                     if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
@@ -169,11 +177,11 @@ bool BVHIntersect( float3 origin
 #else
     float t, u, v;
     bool backface;
-    for ( uint iPrim = 0; iPrim < g_PrimitiveCount; ++iPrim )
+    for ( uint iPrim = 0; iPrim < primitiveCount; ++iPrim )
     {
-        Vertex v0 = g_Vertices[ g_Triangles[ iPrim * 3 ] ];
-        Vertex v1 = g_Vertices[ g_Triangles[ iPrim * 3 + 1 ] ];
-        Vertex v2 = g_Vertices[ g_Triangles[ iPrim * 3 + 2 ] ];
+        Vertex v0 = vertices[ triangles[ iPrim * 3 ] ];
+        Vertex v1 = vertices[ triangles[ iPrim * 3 + 1 ] ];
+        Vertex v2 = vertices[ triangles[ iPrim * 3 + 2 ] ];
         if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
         {
             return true;

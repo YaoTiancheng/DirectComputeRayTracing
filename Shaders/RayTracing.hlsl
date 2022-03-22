@@ -1,62 +1,25 @@
 
 #define FLT_INF asfloat( 0x7f800000 )
 
-cbuffer RayTracingConstants : register( b0 )
-{
-    row_major float4x4  g_CameraTransform;
-    float2              g_FilmSize;
-    uint2               g_Resolution;
-    float4              g_Background;
-    uint                g_MaxBounceCount;
-    uint                g_PrimitiveCount;
-    uint                g_LightCount;
-    float               g_ApertureRadius;
-    float               g_FocalDistance;
-    float               g_FilmDistance;
-    float2              g_BladeVertexPos;
-    uint                g_BladeCount;
-    float               g_ApertureBaseAngle;
-    uint2               g_TileOffset;
-}
-
-cbuffer RayTracingFrameConstants : register( b1 )
-{
-    uint                g_FrameSeed;
-}
-
 #include "Vertex.inc.hlsl"
 #include "Light.inc.hlsl"
 #include "Material.inc.hlsl"
 #include "BVHNode.inc.hlsl"
 #include "Xoshiro.inc.hlsl"
 
-StructuredBuffer<Vertex>                g_Vertices                          : register( t0 );
-StructuredBuffer<uint>                  g_Triangles                         : register( t1 );
-StructuredBuffer<SLight>                g_Lights                            : register( t2 );
-Texture2D<float>                        g_CookTorranceCompETexture          : register( t3 );
-Texture2D<float>                        g_CookTorranceCompEAvgTexture       : register( t4 );
-Texture2D<float>                        g_CookTorranceCompInvCDFTexture     : register( t5 );
-Texture2D<float>                        g_CookTorranceCompPdfScaleTexture   : register( t6 );
-Texture2DArray<float>                   g_CookTorranceCompEFresnelTexture   : register( t7 );
-Texture2DArray<float>                   g_CookTorranceBSDFETexture          : register( t8 );
-Texture2DArray<float>                   g_CookTorranceBSDFAvgETexture       : register( t9 );
-Texture2DArray<float>                   g_CookTorranceBTDFETexture          : register( t10 );
-Texture2DArray<float>                   g_CookTorranceBSDFInvCDFTexture     : register( t11 );
-Texture2DArray<float>                   g_CookTorranceBSDFPDFScaleTexture   : register( t12 );
-StructuredBuffer<BVHNode>               g_BVHNodes                          : register( t13 );
-StructuredBuffer<uint>                  g_MaterialIds                       : register( t14 );
-StructuredBuffer<Material>              g_Materials                         : register( t15 );
-TextureCube<float3>                     g_EnvTexture                        : register( t16 );
-RWTexture2D<float4>                     g_FilmTexture                       : register( u0 );
-
-SamplerState UVClampSampler;
-
 #include "Samples.inc.hlsl"
-#include "BSDFs.inc.hlsl"
 #include "BVHAccel.inc.hlsl"
 #include "HitShader.inc.hlsl"
 #include "EnvironmentShader.inc.hlsl"
 #include "LightSampling.inc.hlsl"
+#include "MonteCarlo.inc.hlsl"
+
+SamplerState UVClampSampler;
+
+cbuffer RayTracingFrameConstants : register( b1 )
+{
+    uint g_FrameSeed;
+}
 
 // Based on "A Fast and Robust Method for Avoiding Self Intersection" by Carsten Wächter and Nikolaus Binder
 float3 OffsetRayOrigin( float3 p, float3 n, float3 d )
@@ -124,23 +87,40 @@ void GenerateRay( float2 filmSample
     direction = mul( float4( direction, 0.0f ), cameraTransform ).xyz;
 }
 
-void HitInfoToIntersection( float3 origin, float3 direction, SHitInfo hitInfo, out Intersection intersection )
+void HitInfoToIntersection( float3 origin
+    , float3 direction
+    , SHitInfo hitInfo
+    , StructuredBuffer<Vertex> vertices
+    , StructuredBuffer<uint> triangles
+    , StructuredBuffer<uint> materialIds
+    , StructuredBuffer<Material> materials
+    , out Intersection intersection )
 {
-    Vertex v0 = g_Vertices[ g_Triangles[ hitInfo.triangleId * 3 ] ];
-    Vertex v1 = g_Vertices[ g_Triangles[ hitInfo.triangleId * 3 + 1 ] ];
-    Vertex v2 = g_Vertices[ g_Triangles[ hitInfo.triangleId * 3 + 2 ] ];
-    HitShader( origin, direction, v0, v1, v2, hitInfo.t, hitInfo.u, hitInfo.v, hitInfo.triangleId, hitInfo.backface, intersection );
+    Vertex v0 = vertices[ triangles[ hitInfo.triangleId * 3 ] ];
+    Vertex v1 = vertices[ triangles[ hitInfo.triangleId * 3 + 1 ] ];
+    Vertex v2 = vertices[ triangles[ hitInfo.triangleId * 3 + 2 ] ];
+    HitShader( origin, direction, v0, v1, v2, hitInfo.t, hitInfo.u, hitInfo.v, hitInfo.triangleId, hitInfo.backface, materialIds, materials, intersection );
 }
 
-bool IntersectScene( float3 origin, float3 direction, uint dispatchThreadIndex, inout Intersection intersection, out float t )
+bool IntersectScene( float3 origin
+    , float3 direction
+    , uint dispatchThreadIndex
+    , StructuredBuffer<Vertex> vertices
+    , StructuredBuffer<uint> triangles
+    , StructuredBuffer<BVHNode> BVHNodes
+    , StructuredBuffer<uint> materialIds
+    , StructuredBuffer<Material> materials
+    , uint primitiveCount
+    , inout Intersection intersection
+    , out float t )
 {
     SHitInfo hitInfo = (SHitInfo)0;
     t = FLT_INF;
-    bool hasIntersection = BVHIntersectNoInterp( origin, direction, 0, dispatchThreadIndex, hitInfo );
+    bool hasIntersection = BVHIntersectNoInterp( origin, direction, 0, dispatchThreadIndex, vertices, triangles, BVHNodes, primitiveCount, hitInfo );
     if ( hasIntersection )
     {
         t = hitInfo.t;
-        HitInfoToIntersection( origin, direction, hitInfo, intersection );
+        HitInfoToIntersection( origin, direction, hitInfo, vertices, triangles, materialIds, materials, intersection );
     }
     return hasIntersection;
 }
@@ -148,18 +128,23 @@ bool IntersectScene( float3 origin, float3 direction, uint dispatchThreadIndex, 
 bool IsOcculuded( float3 origin
     , float3 direction
     , float distance
-    , uint dispatchThreadIndex )
+    , uint dispatchThreadIndex
+    , StructuredBuffer<Vertex> vertices
+    , StructuredBuffer<uint> triangles
+    , StructuredBuffer<BVHNode> BVHNodes
+    , uint primitiveCount )
 {
-    return BVHIntersect( origin, direction, 0, distance, dispatchThreadIndex );
+    return BVHIntersect( origin, direction, 0, distance, dispatchThreadIndex, vertices, triangles, BVHNodes, primitiveCount );
 }
 
 void AddSampleToFilm( float3 l
     , float2 sample
-    , uint2 pixelPos )
+    , uint2 pixelPos
+    , RWTexture2D<float4> filmTexture )
 {
-    float4 c = g_FilmTexture[ pixelPos ];
+    float4 c = filmTexture[ pixelPos ];
     c += float4( l, 1.0f );
-    g_FilmTexture[ pixelPos ] = c;
+    filmTexture[ pixelPos ] = c;
 }
 
 struct SLightSampleResult
@@ -222,13 +207,14 @@ struct SMISResults
 cbuffer QueueConstants : register( b0 )
 {
     uint g_RayCount;
+    uint g_ShadowRayCount;
 }
 
 StructuredBuffer<Vertex>      g_Vertices      : register( t0 );
 StructuredBuffer<uint>        g_Triangles     : register( t1 );
 StructuredBuffer<BVHNode>     g_BVHNodes      : register( t2 );
 StructuredBuffer<SRay>        g_Rays          : register( t3 );
-StructuredBuffer<uint>        g_PathIndices   : register( t4 );
+Buffer<uint>                  g_PathIndices   : register( t4 );
 RWStructuredBuffer<SRayHit>   g_RayHits       : register( u0 );
 
 [numthreads( 32, 1, 1 )]
@@ -245,6 +231,10 @@ void main( uint threadId : SV_GroupIndex )
         , ray.direction
         , 0.f
         , threadId
+        , g_Vertices
+        , g_Triangles
+        , g_BVHNodes
+        , g_PrimitiveCount
         , hitInfo );
     rayHit.t = hasHit ? hitInfo.t : FLT_INF;
     rayHit.uv = float2( hitInfo.u, hitInfo.v );
@@ -260,19 +250,20 @@ void main( uint threadId : SV_GroupIndex )
 cbuffer QueueConstants : register( b0 )
 {
     uint g_RayCount;
+    uint g_ShadowRayCount;
 }
 
 StructuredBuffer<Vertex>      g_Vertices      : register( t0 );
 StructuredBuffer<uint>        g_Triangles     : register( t1 );
 StructuredBuffer<BVHNode>     g_BVHNodes      : register( t2 );
 StructuredBuffer<SRay>        g_Rays          : register( t3 );
-StructuredBuffer<uint>        g_PathIndices   : register( t4 );
+Buffer<uint>                  g_PathIndices   : register( t4 );
 RWStructuredBuffer<bool>      g_HasHits       : register( u0 );
 
 [numthreads( 32, 1, 1 )]
 void main( uint threadId : SV_GroupIndex )
 {
-    if ( threadId >= g_RayCount )
+    if ( threadId >= g_ShadowRayCount )
         return;
 
     uint pathIndex = g_PathIndices[ threadId ];
@@ -281,7 +272,11 @@ void main( uint threadId : SV_GroupIndex )
         , ray.direction
         , 0.f
         , ray.tMax
-        , threadId );
+        , threadId
+        , g_Vertices
+        , g_Triangles
+        , g_BVHNodes
+        , g_PrimitiveCount );
 
     g_HasHits[ pathIndex ] = hasHit;
 }
@@ -292,7 +287,8 @@ void main( uint threadId : SV_GroupIndex )
 
 cbuffer QueueConstants : register( b0 )
 {
-    uint               g_RayCount;
+    uint               g_MaterialRayCount;
+    uint               g_NewPathRayCount;
 }
 
 cbuffer CameraConstants : register( b1 )
@@ -309,18 +305,18 @@ cbuffer CameraConstants : register( b1 )
     float              g_ApertureBaseAngle;
 }
 
-StructuredBuffer<uint>                      g_PathIndices         : register( t0 );
+Buffer<uint>                                g_PathIndices         : register( t0 );
 StructuredBuffer<uint2>                     g_PixelPositions      : register( t1 );
 RWStructuredBuffer<SRay>                    g_Rays                : register( u0 );
 RWStructuredBuffer<float2>                  g_PixelSamples        : register( u1 );
 RWStructuredBuffer<Xoshiro128StarStar>      g_Rngs                : register( u2 );
-RWStructuredBuffer<uint>                    g_ExtensionRayQueue   : register( u3 );
-RWStructuredBuffer<uint>                    g_RayCounter          : register( u4 );
+RWBuffer<uint>                              g_ExtensionRayQueue   : register( u3 );
+RWBuffer<uint>                              g_RayCounter          : register( u4 );
 
 [numthreads( 32, 1, 1 )]
 void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
 {
-    if ( threadId >= g_RayCount )
+    if ( threadId >= g_NewPathRayCount )
         return;
 
     uint pathIndex = g_PathIndices[ threadId ];
@@ -345,8 +341,8 @@ void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
     ray.tMax = FLT_INF;
     g_Rays[ pathIndex ] = ray;
 
-    uint lastGroupIndex = g_RayCount / 32 + ( g_RayCount % 32 != 0 ) ? 1 : 0;
-    uint activeLaneCount = groupId.x != lastGroupIndex ? 32 : g_RayCount % 32;
+    uint lastGroupIndex = g_NewPathRayCount / 32 + ( g_NewPathRayCount % 32 != 0 ) ? 1 : 0;
+    uint activeLaneCount = groupId.x != lastGroupIndex ? 32 : g_NewPathRayCount % 32;
     uint rayIndexBase = 0;
     if ( WaveIsFirstLane( threadId ) )
     {
@@ -364,7 +360,8 @@ void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
 
 cbuffer QueueConstants : register( b0 )
 {
-    uint               g_RayCount;
+    uint               g_MaterialRayCount;
+    uint               g_NewPathRayCount;
 }
 
 cbuffer MaterialConstants : register( b1 )
@@ -372,7 +369,7 @@ cbuffer MaterialConstants : register( b1 )
     uint               g_LightCount;
 }
 
-StructuredBuffer<uint>                      g_PathIndices                       : register( t0 );
+Buffer<uint>                                g_PathIndices                       : register( t0 );
 StructuredBuffer<SRayHit>                   g_RayHits                           : register( t1 );
 StructuredBuffer<Vertex>                    g_Vertices                          : register( t2 );
 StructuredBuffer<uint>                      g_Triangles                         : register( t3 );
@@ -396,14 +393,14 @@ RWStructuredBuffer<Xoshiro128StarStar>      g_Rngs                              
 RWStructuredBuffer<SMISResults>             g_MISResults                        : register( u3 );
 RWStructuredBuffer<float3>                  g_PathThroughput                    : register( u4 );
 RWStructuredBuffer<float3>                  g_Li                                : register( u5 );
-RWStructuredBuffer<uint>                    g_RayCounters                       : register( u6 );
-RWStructuredBuffer<uint>                    g_ExtensionRayQueue                 : register( u7 );
-RWStructuredBuffer<uint>                    g_ShadowRayQueue                    : register( u8 );
+RWBuffer<uint>                              g_RayCounters                       : register( u6 );
+RWBuffer<uint>                              g_ExtensionRayQueue                 : register( u7 );
+RWBuffer<uint>                              g_ShadowRayQueue                    : register( u8 );
 
 [numthreads( 32, 1, 1 )]
 void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
 {
-    if ( threadId >= g_RayCount )
+    if ( threadId >= g_MaterialRayCount )
         return;
 
     uint pathIndex = g_PathIndices[ threadId ];
@@ -420,7 +417,7 @@ void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
     float3 origin = ray.origin;
     float3 direction = ray.direction;
     Intersection intersection;
-    HitInfoToIntersection( origin, direction, hitInfo, intersection );
+    HitInfoToIntersection( origin, direction, hitInfo, g_Vertices, g_Triangles, g_MaterialIds, g_Materials, intersection );
 
     Xoshiro128StarStar rng = g_Rngs[ pathIndex ];
 
@@ -575,9 +572,9 @@ RWStructuredBuffer<uint2>       g_PixelPositions    : register( u0 );
 RWStructuredBuffer<float3>      g_Li                : register( u1 );
 RWStructuredBuffer<float3>      g_PathThroughput    : register( u2 );
 RWStructuredBuffer<uint>        g_Bounces           : register( u3 );
-RWStructuredBuffer<uint>        g_QueueCounters     : register( u4 );
-RWStructuredBuffer<uint>        g_MaterialQueue     : register( u5 );
-RWStructuredBuffer<uint>        g_NewPathQueue      : register( u6 );
+RWBuffer<uint>                  g_QueueCounters     : register( u4 );
+RWBuffer<uint>                  g_MaterialQueue     : register( u5 );
+RWBuffer<uint>                  g_NewPathQueue      : register( u6 );
 RWBuffer<uint>                  g_NextBlockIndex    : register( u7 );
 RWTexture2D<float4>             g_FilmTexture       : register( u8 );
 
@@ -609,7 +606,7 @@ void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
             bool hasHit = rayHit.t != FLT_INF;
             if ( !hasHit )
             {
-                Li += pathThroughput * EnvironmentShader( wi );
+                Li += pathThroughput * EnvironmentShader( wi, g_Background.xyz, g_EnvTexture, UVClampSampler );
                 isIdle = true;
             }
             else
@@ -626,7 +623,7 @@ void main( uint threadId : SV_GroupIndex, uint3 groupId : SV_GroupID )
         {
             uint2 pixelPosition = g_PixelPositions[ threadId ];
             float2 pixelSample = g_PixelSamples[ threadId ];
-            AddSampleToFilm( Li, pixelSample, pixelPos );
+            AddSampleToFilm( Li, pixelSample, pixelPos, g_FilmTexture );
         }
     }
 
@@ -711,7 +708,71 @@ void main()
 
 #endif
 
+#if defined( SET_IDLE )
+
+cbuffer ControlConstants : register( b0 )
+{
+    float4             g_Background;
+    uint               g_PathCount;
+    uint               g_MaxBounceCount;
+    uint2              g_BlockCounts;
+    uint2              g_BlockDimension;
+    uint2              g_FilmDimension;
+}
+
+RWStructuredBuffer<uint> g_Bounces : register( u0 );
+
+[numthreads( 32, 1, 1 )]
+void main( uint threadId : SV_GroupIndex )
+{
+    if ( threadId >= g_PathCount )
+        return;
+
+    g_Bounces[ threadId ] = 0x80000000;
+}
+
+#endif
+
 #if defined( MEGAKERNEL )
+
+cbuffer RayTracingConstants : register( b0 )
+{
+    row_major float4x4 g_CameraTransform;
+    float2 g_FilmSize;
+    uint2 g_Resolution;
+    float4 g_Background;
+    uint g_MaxBounceCount;
+    uint g_PrimitiveCount;
+    uint g_LightCount;
+    float g_ApertureRadius;
+    float g_FocalDistance;
+    float g_FilmDistance;
+    float2 g_BladeVertexPos;
+    uint g_BladeCount;
+    float g_ApertureBaseAngle;
+    uint2 g_TileOffset;
+}
+
+StructuredBuffer<Vertex> g_Vertices                     : register( t0 );
+StructuredBuffer<uint> g_Triangles                      : register( t1 );
+StructuredBuffer<SLight> g_Lights                       : register( t2 );
+Texture2D<float> g_CookTorranceCompETexture             : register( t3 );
+Texture2D<float> g_CookTorranceCompEAvgTexture          : register( t4 );
+Texture2D<float> g_CookTorranceCompInvCDFTexture        : register( t5 );
+Texture2D<float> g_CookTorranceCompPdfScaleTexture      : register( t6 );
+Texture2DArray<float> g_CookTorranceCompEFresnelTexture : register( t7 );
+Texture2DArray<float> g_CookTorranceBSDFETexture        : register( t8 );
+Texture2DArray<float> g_CookTorranceBSDFAvgETexture     : register( t9 );
+Texture2DArray<float> g_CookTorranceBTDFETexture        : register( t10 );
+Texture2DArray<float> g_CookTorranceBSDFInvCDFTexture   : register( t11 );
+Texture2DArray<float> g_CookTorranceBSDFPDFScaleTexture : register( t12 );
+StructuredBuffer<BVHNode> g_BVHNodes                    : register( t13 );
+StructuredBuffer<uint> g_MaterialIds                    : register( t14 );
+StructuredBuffer<Material> g_Materials                  : register( t15 );
+TextureCube<float3> g_EnvTexture                        : register( t16 );
+RWTexture2D<float4> g_FilmTexture                       : register( u0 );
+
+#include "BSDFs.inc.hlsl"
 
 #define GROUP_SIZE_X 16
 #define GROUP_SIZE_Y 16
@@ -736,14 +797,14 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     GenerateRay( filmSample, apertureSample, g_FilmSize, g_ApertureRadius, g_FocalDistance, g_FilmDistance, g_BladeCount, g_BladeVertexPos, g_ApertureBaseAngle, g_CameraTransform, intersection.position, wi );
 
     float hitDistance;
-    bool hasHit = IntersectScene( intersection.position, wi, threadId, intersection, hitDistance );
+    bool hasHit = IntersectScene( intersection.position, wi, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_MaterialIds, g_Materials, g_PrimitiveCount, intersection, hitDistance );
 
     uint iBounce = 0;
     while ( iBounce <= g_MaxBounceCount )
     {
         if ( !hasHit )
         {
-            l += pathThroughput * EnvironmentShader( wi );
+            l += pathThroughput * EnvironmentShader( wi, g_Background.xyz, g_EnvTexture, UVClampSampler );
             break;
         }
 
@@ -762,7 +823,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
             isDeltaLight = sampleResult.isDeltaLight;
 
             if ( any( sampleResult.radiance > 0.0f ) && sampleResult.pdf > 0.0f
-                && !IsOcculuded( OffsetRayOrigin( intersection.position, intersection.geometryNormal, sampleResult.wi ), sampleResult.wi, sampleResult.distance, threadId ) )
+                && !IsOcculuded( OffsetRayOrigin( intersection.position, intersection.geometryNormal, sampleResult.wi ), sampleResult.wi, sampleResult.distance, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_PrimitiveCount ) )
             {
                 float3 bsdf = EvaluateBSDF( sampleResult.wi, wo, intersection );
                 float NdotWI = abs( dot( intersection.normal, sampleResult.wi ) );
@@ -791,7 +852,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
             pathThroughput = pathThroughput * bsdf * NdotWI / bsdfPdf;
 
             float3 lastHitPosition = intersection.position;
-            hasHit = IntersectScene( OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi ), wi, threadId, intersection, hitDistance );
+            hasHit = IntersectScene( OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi ), wi, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_MaterialIds, g_Materials, g_PrimitiveCount, intersection, hitDistance );
 
             if ( g_LightCount != 0 && !isDeltaLight )
             {
@@ -810,12 +871,37 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
         ++iBounce;
     }
 
-    AddSampleToFilm( l, pixelSample, pixelPos );
+    AddSampleToFilm( l, pixelSample, pixelPos, g_FilmTexture );
 }
 
 #endif
 
 #if defined( OUTPUT_NORMAL ) || defined( OUTPUT_TANGENT ) || defined( OUTPUT_ALBEDO ) || defined( OUTPUT_NEGATIVE_NDOTV ) || defined( OUTPUT_BACKFACE )
+
+cbuffer RayTracingConstants : register( b0 )
+{
+    row_major float4x4 g_CameraTransform;
+    float2 g_FilmSize;
+    uint2 g_Resolution;
+    float4 g_Background;
+    uint g_MaxBounceCount;
+    uint g_PrimitiveCount;
+    uint g_LightCount;
+    float g_ApertureRadius;
+    float g_FocalDistance;
+    float g_FilmDistance;
+    float2 g_BladeVertexPos;
+    uint g_BladeCount;
+    float g_ApertureBaseAngle;
+    uint2 g_TileOffset;
+}
+
+StructuredBuffer<Vertex> g_Vertices     : register( t0 );
+StructuredBuffer<uint> g_Triangles      : register( t1 );
+StructuredBuffer<BVHNode> g_BVHNodes    : register( t13 );
+StructuredBuffer<uint> g_MaterialIds    : register( t14 );
+StructuredBuffer<Material> g_Materials  : register( t15 );
+RWTexture2D<float4> g_FilmTexture       : register( u0 );
 
 #define GROUP_SIZE_X 16
 #define GROUP_SIZE_Y 16
@@ -839,7 +925,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     GenerateRay( filmSample, apertureSample, g_FilmSize, g_ApertureRadius, g_FocalDistance, g_FilmDistance, g_BladeCount, g_BladeVertexPos, g_ApertureBaseAngle, g_CameraTransform, intersection.position, wo );
 
     float hitDistance = 0.0f;
-    if ( IntersectScene( intersection.position, wo, threadId, intersection, hitDistance ) )
+    if ( IntersectScene( intersection.position, wo, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_MaterialIds, g_Materials, g_PrimitiveCount, intersection, hitDistance ) )
     {
 #if defined( OUTPUT_NORMAL )
         l = intersection.normal * 0.5f + 0.5f;
@@ -854,7 +940,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 #endif
     }
 
-    AddSampleToFilm( l, pixelSample, pixelPos );
+    AddSampleToFilm( l, pixelSample, pixelPos, g_FilmTexture );
 }
 
 #endif

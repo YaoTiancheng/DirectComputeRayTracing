@@ -40,6 +40,8 @@ void HitShader( float3 rayOrigin
     , float v
     , uint triangleId
     , bool backface
+    , StructuredBuffer<uint> materialIds
+    , StructuredBuffer<Material> materials
     , out Intersection intersection )
 {
     intersection.position   = VectorBaryCentric3( v0.position, v1.position, v2.position, u, v );
@@ -51,28 +53,28 @@ void HitShader( float3 rayOrigin
     float3 v0v2 = v2.position - v0.position;
     intersection.geometryNormal = normalize( cross( v0v2, v0v1 ) );
 
-    uint materialId = g_MaterialIds[ triangleId ];
+    uint materialId = materialIds[ triangleId ];
 
     float2 texcoord = VectorBaryCentric2( v0.texcoord, v1.texcoord, v2.texcoord, u, v );
-           texcoord *= g_Materials[ materialId ].texTiling;
+           texcoord *= materials[ materialId ].texTiling;
 
     float checkerboard = CheckerboardTexture( texcoord );
 
-    uint materialFlags = g_Materials[ materialId ].flags;
-    float3 albedo = g_Materials[ materialId ].albedo;
+    uint materialFlags = materials[ materialId ].flags;
+    float3 albedo = materials[ materialId ].albedo;
            albedo *= ( materialFlags & MATERIAL_FLAG_ALBEDO_TEXTURE ) != 0 ? checkerboard : 1.0f;
-    float  roughness = g_Materials[ materialId ].roughness;
+    float  roughness = materials[ materialId ].roughness;
            roughness *= ( materialFlags & MATERIAL_FLAG_ROUGHNESS_TEXTURE ) != 0 ? checkerboard : 1.0f;
-    float3 emission = g_Materials[ materialId ].emission;
+    float3 emission = materials[ materialId ].emission;
            emission *= ( materialFlags & MATERIAL_FLAG_EMISSION_TEXTURE ) != 0 ? checkerboard : 1.0f;
 
     intersection.albedo     = albedo;
     intersection.specular   = 1.0f;
     intersection.emission   = emission;
     intersection.alpha      = roughness * roughness;
-    intersection.ior        = g_Materials[ materialId ].ior;
-    intersection.transmission = g_Materials[ materialId ].transmission;
-    intersection.k          = g_Materials[ materialId ].k;
+    intersection.ior        = materials[ materialId ].ior;
+    intersection.transmission = materials[ materialId ].transmission;
+    intersection.k          = materials[ materialId ].k;
     intersection.isMetal    = ( materialFlags & MATERIAL_FLAG_IS_METAL ) != 0;
 
     intersection.backface   = backface;

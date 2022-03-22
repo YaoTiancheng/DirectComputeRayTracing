@@ -1,12 +1,12 @@
 #ifndef _ENVIRONMENTSHADER_H_
 #define _ENVIRONMENTSHADER_H_
 
-float3 EnvironmentShader( float3 wi )
+float3 EnvironmentShader( float3 wi, float3 background, TextureCube<float3> envTexture, SamplerState UVClampSampler )
 {
 #if defined( NO_ENV_TEXTURE )
-    return g_Background;
+    return background;
 #else
-    return g_EnvTexture.SampleLevel( UVClampSampler, wi, 0 ).rgb * g_Background;
+    return envTexture.SampleLevel( UVClampSampler, wi, 0 ).rgb * background;
 #endif
 }
 

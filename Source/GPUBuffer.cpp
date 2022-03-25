@@ -2,11 +2,51 @@
 #include "GPUBuffer.h"
 #include "D3D11RenderSystem.h"
 
+ID3D11ShaderResourceView* GPUBuffer::GetSRV( uint32_t elementOffset, uint32_t numElement )
+{
+    ID3D11ShaderResourceView* SRV = nullptr;
+    auto it = m_SRVs.find( { elementOffset, numElement } );
+    if ( it == m_SRVs.end() )
+    {
+        D3D11_SHADER_RESOURCE_VIEW_DESC defaultSRVDesc;
+        assert( m_SRV != nullptr );
+        m_SRV->GetDesc( &defaultSRVDesc );
+
+        D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc;
+        SRVDesc.Format = defaultSRVDesc.Format;
+        SRVDesc.ViewDimension = defaultSRVDesc.ViewDimension;
+        SRVDesc.Buffer.ElementOffset = elementOffset;
+        SRVDesc.Buffer.NumElements = numElement;
+        GetDevice()->CreateShaderResourceView( m_Buffer, &SRVDesc, &SRV );
+
+        if ( SRV )
+        {
+            m_SRVs.insert( { { elementOffset, numElement }, SRV } );
+        }
+    }
+    else 
+    {
+        SRV = it->second;
+    }
+    assert( SRV != nullptr );
+    return SRV;
+}
+
 void* GPUBuffer::Map()
 {
     D3D11_MAPPED_SUBRESOURCE mappedSubresource;
     ZeroMemory( &mappedSubresource, sizeof( D3D11_MAPPED_SUBRESOURCE ) );
     HRESULT hr = GetDeviceContext()->Map( m_Buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource );
+    if ( FAILED( hr ) )
+        return nullptr;
+    return mappedSubresource.pData;
+}
+
+void* GPUBuffer::Map( D3D11_MAP mapType, uint32_t flags )
+{
+    D3D11_MAPPED_SUBRESOURCE mappedSubresource;
+    ZeroMemory( &mappedSubresource, sizeof( D3D11_MAPPED_SUBRESOURCE ) );
+    HRESULT hr = GetDeviceContext()->Map( m_Buffer, 0, mapType, flags, &mappedSubresource );
     if ( FAILED( hr ) )
         return nullptr;
     return mappedSubresource.pData;
@@ -26,10 +66,9 @@ GPUBuffer::GPUBuffer()
 
 GPUBuffer::~GPUBuffer()
 {
-    if ( m_SRV )
+    for ( auto& it : m_SRVs )
     {
-        m_SRV->Release();
-        m_SRV = nullptr;
+        it.second->Release();
     }
     if ( m_UAV )
     {
@@ -46,6 +85,7 @@ GPUBuffer::~GPUBuffer()
 GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORMAT format, D3D11_USAGE usage, uint32_t bindFlags, bool isStructured, uint32_t flags, const void* initialData )
 {
     bool CPUWriteable = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_CPUWriteable ) != 0;
+    bool CPUReadable = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_CPUReadable ) != 0;
     bool hasUAV = ( bindFlags & D3D11_BIND_UNORDERED_ACCESS ) != 0;
     bool hasSRV = ( bindFlags & D3D11_BIND_SHADER_RESOURCE ) != 0;
     bool indirectArgs = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_IndirectArgs ) != 0;
@@ -56,6 +96,7 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
     bufferDesc.Usage = usage;
     bufferDesc.BindFlags = bindFlags;
     bufferDesc.CPUAccessFlags = CPUWriteable ? D3D11_CPU_ACCESS_WRITE : 0;
+    bufferDesc.CPUAccessFlags |= CPUReadable ? D3D11_CPU_ACCESS_READ : 0;
     bufferDesc.StructureByteStride = byteStride;
     bufferDesc.MiscFlags = isStructured ? D3D11_RESOURCE_MISC_BUFFER_STRUCTURED : 0;
     bufferDesc.MiscFlags |= indirectArgs ? D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS : 0;
@@ -111,6 +152,11 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
     gpuBuffer->m_Buffer = buffer;
     gpuBuffer->m_SRV = SRV;
     gpuBuffer->m_UAV = UAV;
+
+    if ( SRV )
+    {
+        gpuBuffer->m_SRVs.insert( { { 0, byteWidth / byteStride }, SRV } );
+    }
 
     return gpuBuffer;
 }

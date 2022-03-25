@@ -150,6 +150,8 @@ bool CMegakernelPathTracer::CompileAndCreateRayTracingKernel()
 
     rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_STACK_SIZE", buffer_TraversalStackSize } );
 
+    rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_GROUP_SIZE", "256" } );
+
     if ( m_Scene->m_IsBVHDisabled )
     {
         rayTracingShaderDefines.push_back( { "NO_BVH_ACCEL", "0" } );

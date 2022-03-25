@@ -67,7 +67,8 @@ struct SRenderer
 
     SRenderData m_RenderData;
     CScene m_Scene;
-    CPathTracer* m_PathTracer = nullptr;
+    CPathTracer* m_PathTracer[ 2 ] = { nullptr, nullptr };
+    uint32_t m_ActivePathTracerIndex = 0;
     PostProcessingRenderer m_PostProcessing;
     SceneLuminanceRenderer m_SceneLuminance;
 
@@ -187,8 +188,11 @@ bool CDirectComputeRayTracing::OnWndMessage( UINT message, WPARAM wParam, LPARAM
 
 SRenderer::~SRenderer()
 {
-    m_PathTracer->Destroy();
-    delete m_PathTracer;
+    m_PathTracer[ m_ActivePathTracerIndex ]->Destroy();
+    for ( auto& it : m_PathTracer )
+    {
+        delete it;
+    }
 }
 
 bool SRenderer::OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam )
@@ -198,8 +202,10 @@ bool SRenderer::OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam )
 
 bool SRenderer::Init()
 {
-    m_PathTracer = new CMegakernelPathTracer( &m_Scene );
-    if ( !m_PathTracer->Create() )
+    m_PathTracer[ 0 ] = new CMegakernelPathTracer( &m_Scene );
+    m_PathTracer[ 1 ] = new CWavefrontPathTracer( &m_Scene );
+
+    if ( !m_PathTracer[ m_ActivePathTracerIndex ]->Create() )
     {
         return false;
     }
@@ -317,14 +323,14 @@ bool SRenderer::ResetScene( const char* filePath )
         return false;
     }
 
-    m_PathTracer->OnSceneLoaded();
+    m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
 
     return true;
 }
 
 void SRenderer::DispatchRayTracing( SRenderContext* renderContext )
 {
-    m_IsFilmDirty = m_IsFilmDirty || m_IsLightGPUBufferDirty || m_IsMaterialGPUBufferDirty || m_Scene.m_Camera.IsDirty() || m_PathTracer->AcquireFilmClearTrigger();
+    m_IsFilmDirty = m_IsFilmDirty || m_IsLightGPUBufferDirty || m_IsMaterialGPUBufferDirty || m_Scene.m_Camera.IsDirty() || m_PathTracer[ m_ActivePathTracerIndex ]->AcquireFilmClearTrigger();
 
     renderContext->m_IsResolutionChanged = ( m_IsFilmDirty != m_IsLastFrameFilmDirty );
     renderContext->m_IsSmallResolutionEnabled = m_IsFilmDirty;
@@ -346,7 +352,7 @@ void SRenderer::DispatchRayTracing( SRenderContext* renderContext )
 
         m_SPP = 0;
 
-        m_PathTracer->ResetFrame();
+        m_PathTracer[ m_ActivePathTracerIndex ]->ResetFrame();
     }
 
     if ( m_Scene.m_HasValidScene )
@@ -363,9 +369,9 @@ void SRenderer::DispatchRayTracing( SRenderContext* renderContext )
 
         UpdateGPUData();
 
-        m_PathTracer->Render( *renderContext, m_RenderData );
+        m_PathTracer[ m_ActivePathTracerIndex ]->Render( *renderContext, m_RenderData );
 
-        if ( m_PathTracer->IsFrameComplete() )
+        if ( m_PathTracer[ m_ActivePathTracerIndex ]->IsFrameComplete() )
         {
             if ( m_FrameSeedType != EFrameSeedType::Fixed )
             {
@@ -397,7 +403,7 @@ void SRenderer::RenderOneFrame()
     D3D11_VIEWPORT viewport;
     ID3D11DeviceContext* deviceContext = GetDeviceContext();
 
-    if ( m_PathTracer->IsFrameComplete() || renderContext.m_IsSmallResolutionEnabled )
+    if ( m_PathTracer[ m_ActivePathTracerIndex ]->IsFrameComplete() || renderContext.m_IsSmallResolutionEnabled )
     {
         m_SceneLuminance.Dispatch( renderContext.m_CurrentResolutionWidth, renderContext.m_CurrentResolutionHeight );
 
@@ -518,6 +524,20 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
             ImGui::DragInt( "Small Resolution Width", (int*)&m_SmallResolutionWidth, 16, 16, m_ResolutionWidth, "%d", ImGuiSliderFlags_AlwaysClamp );
             ImGui::DragInt( "Small Resolution Height", (int*)&m_SmallResolutionHeight, 16, 16, m_ResolutionHeight, "%d", ImGuiSliderFlags_AlwaysClamp );
+
+            uint32_t lastActivePathTracerIndex = m_ActivePathTracerIndex;
+            static const char* s_PathTracerNames[] = { "Megakernel Path Tracer", "Wavefront Path Tracer" };
+            if ( ImGui::Combo( "Path Tracer", (int*)&m_ActivePathTracerIndex, s_PathTracerNames, IM_ARRAYSIZE( s_PathTracerNames ) ) )
+            {
+                m_PathTracer[ lastActivePathTracerIndex ]->Destroy();
+                m_PathTracer[ m_ActivePathTracerIndex ]->Create();
+                m_PathTracer[ m_ActivePathTracerIndex ]->ResetFrame();
+                if ( m_Scene.m_HasValidScene )
+                {
+                    m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
+                }
+                m_IsFilmDirty = true;
+            }
         }
 
         if ( ImGui::CollapsingHeader( "Scene" ) )
@@ -529,7 +549,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
             if ( ImGui::Checkbox( "GGX VNDF Sampling", &m_Scene.m_IsGGXVNDFSamplingEnabled ) )
             {
-                m_PathTracer->OnSceneLoaded();
+                m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
                 m_IsFilmDirty = true;
             }
         }
@@ -567,7 +587,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                     bool hasEnvTextureCurrently = m_Scene.m_EnvironmentTexture.get() != nullptr;
                     if ( hasEnvTexturePreviously != hasEnvTextureCurrently )
                     {
-                        m_PathTracer->OnSceneLoaded();
+                        m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
                     }
                     m_IsFilmDirty = true;
                 }
@@ -579,13 +599,13 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 {
                     m_Scene.m_EnvironmentImageFilepath = "";
                     m_Scene.m_EnvironmentTexture.reset();
-                    m_PathTracer->OnSceneLoaded();
+                    m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
                     m_IsFilmDirty = true;
                 }
             }
         }
 
-        m_PathTracer->OnImGUI();
+        m_PathTracer[ m_ActivePathTracerIndex ]->OnImGUI();
 
         m_SceneLuminance.OnImGUI();
         m_PostProcessing.OnImGUI();

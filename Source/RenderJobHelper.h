@@ -26,5 +26,7 @@ namespace RenderJobHelper
 
     void DispatchCompute( uint32_t dispatchSizeX, uint32_t dispatchSizeY, uint32_t dispatchSizeZ, ComputeShader* shader, const ResourceViewList& SRVs, const UnorderedAccessViewList& UAVs, const SamplerStateList& samplers, const BufferList& constantBuffers );
 
+    void DispatchComputeIndirect( ID3D11Buffer* indirectBuffer, ComputeShader* shader, const ResourceViewList& SRVs, const UnorderedAccessViewList& UAVs, const SamplerStateList& samplers, const BufferList& constantBuffers );
+
     void DispatchDraw( GPUBuffer* vertexBuffer, GfxShader* shader, ID3D11InputLayout* inputLayout, const ResourceViewList& SRVs, const SamplerStateList& samplers, const BufferList& constantBuffers, uint32_t vertexCount, uint32_t vertexStride );
 }

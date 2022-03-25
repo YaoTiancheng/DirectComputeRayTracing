@@ -8,6 +8,8 @@ struct ComputeJob
 
     void Dispatch();
 
+    void DispatchIndirect( ID3D11Buffer* buffer );
+
     uint32_t                                m_DispatchSizeX;
     uint32_t                                m_DispatchSizeY;
     uint32_t                                m_DispatchSizeZ;

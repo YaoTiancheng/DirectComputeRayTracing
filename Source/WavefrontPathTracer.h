@@ -37,7 +37,7 @@ private:
     enum class EShaderKernel
     {
           ExtensionRayCast
-        , ShaderRayCast
+        , ShadowRayCast
         , NewPath
         , Material
         , Control
@@ -62,8 +62,7 @@ private:
     GPUBufferPtr m_PixelSampleBuffer;
     GPUBufferPtr m_RngBuffer;
     GPUBufferPtr m_MISResultBuffer;
-    GPUBufferPtr m_PathThroughputBuffer;
-    GPUBufferPtr m_LiBuffer;
+    GPUBufferPtr m_PathAccumulationBuffer;
     GPUBufferPtr m_BounceBuffer;
     GPUBufferPtr m_NextBlockIndexBuffer;
     GPUBufferPtr m_IndirectArgumentBuffer[ 4 ];
@@ -71,6 +70,13 @@ private:
     GPUBufferPtr m_QueueCounterBuffers[ 2 ];
     GPUBufferPtr m_QueueConstantsBuffers[ 2 ];
     GPUBufferPtr m_ControlConstantBuffer;
+    GPUBufferPtr m_NewPathConstantBuffer;
+    GPUBufferPtr m_MaterialConstantBuffer;
+    GPUBufferPtr m_RayCastConstantBuffer;
+
+    static const uint32_t s_QueueCounterStagingBufferCount = 2;
+    GPUBufferPtr m_QueueCounterStagingBuffer[ s_QueueCounterStagingBufferCount ];
+    uint32_t m_QueueCounterStagingBufferIndex = 0;
 
     bool m_NewFrame = true;
 };

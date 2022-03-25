@@ -3,15 +3,17 @@
 #include "Scene.h"
 #include "Shader.h"
 #include "GPUBuffer.h"
+#include "GPUTexture.h"
 #include "MessageBox.h"
 #include "D3D11RenderSystem.h"
 #include "ComputeJob.h"
 #include "RenderContext.h"
+#include "RenderData.h"
 
 using namespace DirectX;
 
 static const uint32_t s_WavefrontSize = 32;
-static const uint32_t s_PathPoolSize = 512;
+static const uint32_t s_PathPoolSize = 8192;
 static const uint32_t s_PathPoolLaneCount = s_PathPoolSize * s_WavefrontSize;
 static const uint32_t s_KernelGroupSize = 32;
 
@@ -23,6 +25,32 @@ struct SControlConstants
     uint32_t g_BlockCounts[ 2 ];
     uint32_t g_BlockDimension[ 2 ];
     uint32_t g_FilmDimension[ 2 ];
+};
+
+struct SNewPathConstants
+{
+    XMFLOAT4X4 g_CameraTransform;
+    uint32_t g_Resolution[ 2 ];
+    XMFLOAT2 g_FilmSize;
+    float g_ApertureRadius;
+    float g_FocalDistance;
+    float g_FilmDistance;
+    uint32_t g_BladeCount;
+    XMFLOAT2 g_BladeVertexPos;
+    float g_ApertureBaseAngle;
+    uint32_t padding;
+};
+
+struct SMaterialConstants
+{
+    uint32_t g_LightCount;
+    uint32_t padding[ 3 ];
+};
+
+struct SRayCastConstants
+{
+    uint32_t g_PrimitiveCount;
+    uint32_t padding[ 3 ];
 };
 
 bool CWavefrontPathTracer::Create()
@@ -91,20 +119,12 @@ bool CWavefrontPathTracer::Create()
     if ( !m_MISResultBuffer )
         return false;
 
-    m_PathThroughputBuffer.reset( GPUBuffer::CreateStructured(
-          s_PathPoolLaneCount * 12
-        , 12
+    m_PathAccumulationBuffer.reset( GPUBuffer::CreateStructured(
+          s_PathPoolLaneCount * 24
+        , 24
         , D3D11_USAGE_DEFAULT
         , D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS ) );
-    if ( !m_PathThroughputBuffer )
-        return false;
-
-    m_LiBuffer.reset( GPUBuffer::CreateStructured(
-          s_PathPoolLaneCount * 12
-        , 12
-        , D3D11_USAGE_DEFAULT
-        , D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS ) );
-    if ( !m_LiBuffer )
+    if ( !m_PathAccumulationBuffer )
         return false;
 
     m_BounceBuffer.reset( GPUBuffer::CreateStructured(
@@ -153,7 +173,7 @@ bool CWavefrontPathTracer::Create()
             , 4
             , DXGI_FORMAT_R32_UINT
             , D3D11_USAGE_DEFAULT
-            , D3D11_BIND_UNORDERED_ACCESS ) );
+            , D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS ) );
         if ( !m_QueueCounterBuffers[ i ] )
             return false;
 
@@ -167,6 +187,19 @@ bool CWavefrontPathTracer::Create()
             return false;
     }
 
+    for ( uint32_t i = 0; i < s_QueueCounterStagingBufferCount; ++i )
+    {
+        m_QueueCounterStagingBuffer[ i ].reset( GPUBuffer::Create(
+              16
+            , 4
+            , DXGI_FORMAT_R32_UINT
+            , D3D11_USAGE_STAGING
+            , 0
+            , GPUResourceCreationFlags_CPUReadable ) );
+        if ( !m_QueueCounterStagingBuffer[ i ] )
+            return false;
+    }
+
     m_ControlConstantBuffer.reset( GPUBuffer::Create(
           sizeof( SControlConstants )
         , 0
@@ -175,6 +208,36 @@ bool CWavefrontPathTracer::Create()
         , D3D11_BIND_CONSTANT_BUFFER
         , GPUResourceCreationFlags_CPUWriteable ) );
     if ( !m_ControlConstantBuffer )
+        return false;
+
+    m_NewPathConstantBuffer.reset( GPUBuffer::Create(
+          sizeof( SNewPathConstants )
+        , 0
+        , DXGI_FORMAT_UNKNOWN
+        , D3D11_USAGE_DYNAMIC
+        , D3D11_BIND_CONSTANT_BUFFER
+        , GPUResourceCreationFlags_CPUWriteable ) );
+    if ( !m_NewPathConstantBuffer )
+        return false;
+
+    m_MaterialConstantBuffer.reset( GPUBuffer::Create(
+          sizeof( SMaterialConstants )
+        , 0
+        , DXGI_FORMAT_UNKNOWN
+        , D3D11_USAGE_DYNAMIC
+        , D3D11_BIND_CONSTANT_BUFFER
+        , GPUResourceCreationFlags_CPUWriteable ) );
+    if ( !m_MaterialConstantBuffer )
+        return false;
+
+    m_RayCastConstantBuffer.reset( GPUBuffer::Create(
+          sizeof( SRayCastConstants )
+        , 0
+        , DXGI_FORMAT_UNKNOWN
+        , D3D11_USAGE_DYNAMIC
+        , D3D11_BIND_CONSTANT_BUFFER
+        , GPUResourceCreationFlags_CPUWriteable ) );
+    if ( !m_RayCastConstantBuffer )
         return false;
 
     return true;
@@ -190,8 +253,7 @@ void CWavefrontPathTracer::Destroy()
     m_PixelSampleBuffer.reset();
     m_RngBuffer.reset();
     m_MISResultBuffer.reset();
-    m_PathThroughputBuffer.reset();
-    m_LiBuffer.reset();
+    m_PathAccumulationBuffer.reset();
     m_BounceBuffer.reset();
     m_NextBlockIndexBuffer.reset();
 
@@ -207,7 +269,15 @@ void CWavefrontPathTracer::Destroy()
         m_QueueConstantsBuffers[ i ].reset();
     }
 
+    for ( uint32_t i = 0; i < s_QueueCounterStagingBufferCount; ++i )
+    {
+        m_QueueCounterStagingBuffer[ i ].reset();
+    }
+
     m_ControlConstantBuffer.reset();
+    m_NewPathConstantBuffer.reset();
+    m_MaterialConstantBuffer.reset();
+    m_RayCastConstantBuffer.reset();
 }
 
 void CWavefrontPathTracer::OnSceneLoaded()
@@ -236,6 +306,7 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SR
     uint32_t blockWidth, blockHeight;
     GetBlockDimension( &blockWidth, &blockHeight );
 
+    // Fill control constants buffer
     if ( void* address = m_ControlConstantBuffer->Map() )
     {
         SControlConstants* constants = (SControlConstants*)address;
@@ -271,6 +342,263 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SR
         job.m_DispatchSizeZ = 1;
         job.Dispatch();
     }
+
+    // Clear the new path & material queue counters
+    {
+        uint32_t value[ 4 ] = { 0 };
+        deviceContext->ClearUnorderedAccessViewUint( m_QueueCounterBuffers[ 1 ]->GetUAV(), value );
+    }
+
+    // Control
+    {
+        ComputeJob job;
+        job.m_ConstantBuffers.push_back( m_ControlConstantBuffer->GetBuffer() );
+        job.m_Shader = m_Shaders[ (int)EShaderKernel::Control ].get();
+        job.m_SRVs =
+        {
+              m_RayHitBuffer->GetSRV()
+            , m_RayBuffer->GetSRV()
+            , m_PixelSampleBuffer->GetSRV()
+            , m_ShadowRayHitBuffer->GetSRV()
+            , m_MISResultBuffer->GetSRV()
+            , m_Scene->m_EnvironmentTexture ? m_Scene->m_EnvironmentTexture->GetSRV() : nullptr
+        };
+        job.m_UAVs =
+        {
+              m_PixelPositionBuffer->GetUAV()
+            , m_PathAccumulationBuffer->GetUAV()
+            , m_BounceBuffer->GetUAV()
+            , m_QueueCounterBuffers[ 1 ]->GetUAV()
+            , m_QueueBuffers[ (int)EShaderKernel::Material ]->GetUAV()
+            , m_QueueBuffers[ (int)EShaderKernel::NewPath ]->GetUAV()
+            , m_NextBlockIndexBuffer->GetUAV()
+            , renderData.m_FilmTexture->GetUAV()
+        };
+        job.m_SamplerStates.push_back( renderData.m_UVClampSamplerState.Get() );
+        job.m_DispatchSizeX = CalculateDispatchGroupCount( s_PathPoolLaneCount );
+        job.m_DispatchSizeY = 1;
+        job.m_DispatchSizeZ = 1;
+        job.Dispatch();
+    }
+
+    // Copy the new path & material queue counters to constant buffers
+    {
+        deviceContext->CopyResource( m_QueueConstantsBuffers[ 1 ]->GetBuffer(), m_QueueCounterBuffers[ 1 ]->GetBuffer() );
+    }
+
+    // Clear ray counters
+    {
+        uint32_t value[ 4 ] = { 0 };
+        deviceContext->ClearUnorderedAccessViewUint( m_QueueCounterBuffers[ 0 ]->GetUAV(), value );
+    }
+
+    // Fill indirect args for new path
+    {
+        ComputeJob job;
+        job.m_SRVs.push_back( m_QueueCounterBuffers[ 1 ]->GetSRV( 1, 1 ) );
+        job.m_UAVs.push_back( m_IndirectArgumentBuffer[ (int)EShaderKernel::NewPath ]->GetUAV() );
+        job.m_Shader = m_Shaders[ (int)EShaderKernel::FillIndirectArguments ].get();
+        job.m_DispatchSizeX = 1;
+        job.m_DispatchSizeY = 1;
+        job.m_DispatchSizeZ = 1;
+        job.Dispatch();
+    }
+
+    // New Path
+    {
+        if ( void* address = m_NewPathConstantBuffer->Map() )
+        {
+            SNewPathConstants* constants = (SNewPathConstants*)address;
+            m_Scene->m_Camera.GetTransformMatrix( &constants->g_CameraTransform );
+            constants->g_Resolution[ 0 ] = renderContext.m_CurrentResolutionWidth;
+            constants->g_Resolution[ 1 ] = renderContext.m_CurrentResolutionHeight;
+            constants->g_FilmSize = m_Scene->m_FilmSize;
+            constants->g_ApertureRadius = m_Scene->m_ApertureDiameter * 0.5f;
+            constants->g_FocalDistance = m_Scene->m_FocalDistance;
+            constants->g_FilmDistance = m_Scene->GetFilmDistance();
+            constants->g_BladeCount = m_Scene->m_ApertureBladeCount;
+            float halfBladeAngle = DirectX::XM_PI / m_Scene->m_ApertureBladeCount;
+            constants->g_BladeVertexPos.x = cosf( halfBladeAngle ) * constants->g_ApertureRadius;
+            constants->g_BladeVertexPos.y = sinf( halfBladeAngle ) * constants->g_ApertureRadius;
+            constants->g_ApertureBaseAngle = m_Scene->m_ApertureRotation;
+            m_NewPathConstantBuffer->Unmap();
+        }
+
+        ComputeJob job;
+        job.m_ConstantBuffers =
+        {
+              m_QueueConstantsBuffers[ 1 ]->GetBuffer()
+            , renderData.m_RayTracingFrameConstantBuffer->GetBuffer()
+            , m_NewPathConstantBuffer->GetBuffer()
+        };
+        job.m_Shader = m_Shaders[ (int)EShaderKernel::NewPath ].get();
+        job.m_SRVs =
+        {
+              m_QueueBuffers[ (int)EShaderKernel::NewPath ]->GetSRV()
+            , m_PixelPositionBuffer->GetSRV()
+        };
+        job.m_UAVs =
+        {
+              m_RayBuffer->GetUAV()
+            , m_PixelSampleBuffer->GetUAV()
+            , m_MISResultBuffer->GetUAV()
+            , m_RngBuffer->GetUAV()
+            , m_QueueBuffers[ (int)EShaderKernel::ExtensionRayCast ]->GetUAV()
+            , m_QueueCounterBuffers[ 0 ]->GetUAV()
+        };
+        job.DispatchIndirect( m_IndirectArgumentBuffer[ (int)EShaderKernel::NewPath ]->GetBuffer() );
+    }
+
+    // Fill indirect args for material
+    {
+        ComputeJob job;
+        job.m_SRVs.push_back( m_QueueCounterBuffers[ 1 ]->GetSRV( 0, 1 ) );
+        job.m_UAVs.push_back( m_IndirectArgumentBuffer[ (int)EShaderKernel::Material ]->GetUAV() );
+        job.m_Shader = m_Shaders[ (int)EShaderKernel::FillIndirectArguments ].get();
+        job.m_DispatchSizeX = 1;
+        job.m_DispatchSizeY = 1;
+        job.m_DispatchSizeZ = 1;
+        job.Dispatch();
+    }
+
+    // Material
+    {
+        if ( void* address = m_MaterialConstantBuffer->Map() )
+        {
+            SMaterialConstants* constants = (SMaterialConstants*)address;
+            constants->g_LightCount = (uint32_t)m_Scene->m_LightSettings.size();
+            m_MaterialConstantBuffer->Unmap();
+        }
+
+        ComputeJob job;
+        job.m_ConstantBuffers =
+        {
+              m_QueueConstantsBuffers[ 1 ]->GetBuffer()
+            , m_MaterialConstantBuffer->GetBuffer()
+        };
+        job.m_Shader = m_Shaders[ (int)EShaderKernel::Material ].get();
+        job.m_SRVs =
+        {
+              m_QueueBuffers[ (int)EShaderKernel::Material ]->GetSRV()
+            , m_RayHitBuffer->GetSRV()
+            , m_Scene->m_VerticesBuffer->GetSRV()
+            , m_Scene->m_TrianglesBuffer->GetSRV()
+            , m_Scene->m_LightsBuffer->GetSRV()
+            , m_Scene->m_MaterialIdsBuffer->GetSRV()
+            , m_Scene->m_MaterialsBuffer->GetSRV()
+            , renderData.m_CookTorranceCompETexture->GetSRV()
+            , renderData.m_CookTorranceCompEAvgTexture->GetSRV()
+            , renderData.m_CookTorranceCompInvCDFTexture->GetSRV()
+            , renderData.m_CookTorranceCompPdfScaleTexture->GetSRV()
+            , renderData.m_CookTorranceCompEFresnelTexture->GetSRV()
+            , renderData.m_CookTorranceBSDFETexture->GetSRV()
+            , renderData.m_CookTorranceBSDFAvgETexture->GetSRV()
+            , renderData.m_CookTorranceBTDFETexture->GetSRV()
+            , renderData.m_CookTorranceBSDFInvCDFTexture->GetSRV()
+            , renderData.m_CookTorranceBSDFPDFScaleTexture->GetSRV()
+        };
+        job.m_UAVs =
+        {
+              m_RayBuffer->GetUAV()
+            , m_ShadowRayBuffer->GetUAV()
+            , m_RngBuffer->GetUAV()
+            , m_MISResultBuffer->GetUAV()
+            , m_PathAccumulationBuffer->GetUAV()
+            , m_QueueCounterBuffers[ 0 ]->GetUAV()
+            , m_QueueBuffers[ (int)EShaderKernel::ExtensionRayCast ]->GetUAV()
+            , m_QueueBuffers[ (int)EShaderKernel::ShadowRayCast ]->GetUAV()
+        };
+        job.DispatchIndirect( m_IndirectArgumentBuffer[ (int)EShaderKernel::Material ]->GetBuffer() );
+    }
+
+    // Copy the extension ray & shadow ray queue counters to constant buffers
+    {
+        deviceContext->CopyResource( m_QueueConstantsBuffers[ 0 ]->GetBuffer(), m_QueueCounterBuffers[ 0 ]->GetBuffer() );
+    }
+
+    // Fill raycast constant buffer
+    if ( void* address = m_RayCastConstantBuffer->Map() )
+    {
+        SRayCastConstants* constants = (SRayCastConstants*)address;
+        constants->g_PrimitiveCount = (uint32_t)m_Scene->m_PrimitiveCount;
+        m_RayCastConstantBuffer->Unmap();
+    }
+
+    // Fill indirect args for extension raycast
+    {
+        ComputeJob job;
+        job.m_SRVs.push_back( m_QueueCounterBuffers[ 0 ]->GetSRV( 0, 1 ) );
+        job.m_UAVs.push_back( m_IndirectArgumentBuffer[ (int)EShaderKernel::ExtensionRayCast ]->GetUAV() );
+        job.m_Shader = m_Shaders[ (int)EShaderKernel::FillIndirectArguments ].get();
+        job.m_DispatchSizeX = 1;
+        job.m_DispatchSizeY = 1;
+        job.m_DispatchSizeZ = 1;
+        job.Dispatch();
+    }
+
+    // Extension raycast
+    {
+        ComputeJob job;
+        job.m_ConstantBuffers = { m_QueueConstantsBuffers[ 0 ]->GetBuffer(), m_RayCastConstantBuffer->GetBuffer() };
+        job.m_SRVs =
+        {
+              m_Scene->m_VerticesBuffer->GetSRV()
+            , m_Scene->m_TrianglesBuffer->GetSRV()
+            , m_Scene->m_BVHNodesBuffer->GetSRV()
+            , m_RayBuffer->GetSRV()
+            , m_QueueBuffers[ (int)EShaderKernel::ExtensionRayCast ]->GetSRV()
+        };
+        job.m_UAVs.push_back( m_RayHitBuffer->GetUAV() );
+        job.m_Shader = m_Shaders[ (int)EShaderKernel::ExtensionRayCast ].get();
+        job.DispatchIndirect( m_IndirectArgumentBuffer[ (int)EShaderKernel::ExtensionRayCast ]->GetBuffer() );
+    }
+
+    // Fill indirect args for shadow raycast
+    {
+        ComputeJob job;
+        job.m_SRVs.push_back( m_QueueCounterBuffers[ 0 ]->GetSRV( 1, 1 ) );
+        job.m_UAVs.push_back( m_IndirectArgumentBuffer[ (int)EShaderKernel::ShadowRayCast ]->GetUAV() );
+        job.m_Shader = m_Shaders[ (int)EShaderKernel::FillIndirectArguments ].get();
+        job.m_DispatchSizeX = 1;
+        job.m_DispatchSizeY = 1;
+        job.m_DispatchSizeZ = 1;
+        job.Dispatch();
+    }
+
+    // Shadow raycast
+    {
+        ComputeJob job;
+        job.m_ConstantBuffers = { m_QueueConstantsBuffers[ 0 ]->GetBuffer(), m_RayCastConstantBuffer->GetBuffer() };
+        job.m_SRVs =
+        {
+              m_Scene->m_VerticesBuffer->GetSRV()
+            , m_Scene->m_TrianglesBuffer->GetSRV()
+            , m_Scene->m_BVHNodesBuffer->GetSRV()
+            , m_ShadowRayBuffer->GetSRV()
+            , m_QueueBuffers[ (int)EShaderKernel::ShadowRayCast ]->GetSRV()
+        };
+        job.m_UAVs.push_back( m_ShadowRayHitBuffer->GetUAV() );
+        job.m_Shader = m_Shaders[ (int)EShaderKernel::ShadowRayCast ].get();
+        job.DispatchIndirect( m_IndirectArgumentBuffer[ (int)EShaderKernel::ShadowRayCast ]->GetBuffer() );
+    }
+
+    // Copy ray counter to the staging buffer
+    if ( m_NewFrame )
+    {
+        // For new frame, initialize all staging buffer
+        for ( uint32_t i = 0; i < s_QueueCounterStagingBufferCount; ++i )
+        {
+            deviceContext->CopyResource( m_QueueCounterStagingBuffer[ i ]->GetBuffer(), m_QueueCounterBuffers[ 0 ]->GetBuffer() );
+            m_QueueCounterStagingBufferIndex = 0;
+        }
+    }
+    else 
+    {
+        deviceContext->CopyResource( m_QueueCounterStagingBuffer[ m_QueueCounterStagingBufferIndex ]->GetBuffer(), m_QueueCounterBuffers[ 0 ]->GetBuffer() );
+        m_QueueCounterStagingBufferIndex = ( m_QueueCounterStagingBufferIndex + 1 ) % s_QueueCounterStagingBufferCount;
+    }
+
+    m_NewFrame = IsFrameComplete();
 }
 
 void CWavefrontPathTracer::ResetFrame()
@@ -280,6 +608,12 @@ void CWavefrontPathTracer::ResetFrame()
 
 bool CWavefrontPathTracer::IsFrameComplete()
 {
+    if ( void* address = m_QueueCounterStagingBuffer[ m_QueueCounterStagingBufferIndex ]->Map( D3D11_MAP_READ, 0 ) )
+    {
+        uint32_t extensionRayCount = *(uint32_t*)address;
+        m_QueueCounterStagingBuffer[ m_QueueCounterStagingBufferIndex ]->Unmap();
+        return extensionRayCount == 0;
+    }
     return false;
 }
 
@@ -301,6 +635,8 @@ bool CWavefrontPathTracer::CompileAndCreateShader( EShaderKernel kernel )
     _itoa( m_Scene->m_BVHTraversalStackSize, buffer_TraversalStackSize, 10 );
 
     rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_STACK_SIZE", buffer_TraversalStackSize } );
+
+    rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_GROUP_SIZE", "32" } );
 
     if ( m_Scene->m_IsBVHDisabled )
     {

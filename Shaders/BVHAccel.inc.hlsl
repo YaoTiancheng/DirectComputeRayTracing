@@ -14,7 +14,7 @@ struct BVHTraversalStack
     int count;
 };
 
-groupshared BVHTraversalStack gs_BVHTraversalStacks[ 256 ]; // Should match group size
+groupshared BVHTraversalStack gs_BVHTraversalStacks[ RT_BVH_TRAVERSAL_GROUP_SIZE ]; // Should match group size
 
 bool BVHTraversalStackPopback( uint dispatchThreadIndex, out uint nodeIndex )
 {

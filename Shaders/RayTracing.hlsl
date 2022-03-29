@@ -446,9 +446,7 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
     SPathAccumulation pathAccumulation = g_PathAccumulation[ pathIndex ];
     float3 pathThroughput = pathAccumulation.pathThroughput;
 
-    float3 Li = pathAccumulation.Li;
-    Li += pathThroughput * intersection.emission;
-    pathAccumulation.Li = Li;
+    pathAccumulation.Li += pathThroughput * intersection.emission;
 
     float3 wo = -direction;
 
@@ -488,7 +486,7 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
     // Sample BSDF
     float3 bsdfResult = 0.0f;
     float3 wi;
-    float lightDistance = 0.0f;
+    float lightDistance = FLT_INF;
     bool hasExtensionRay = false;
     {
         float bsdfSelectionSample = GetNextSample1D( rng );
@@ -522,6 +520,10 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
                     bsdfResult = pathThroughput * radiance * weight * g_LightCount;
                 }
             }
+        }
+        else
+        {
+            pathThroughput = 0.0f;
         }
     }
 
@@ -608,47 +610,41 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
     bool isIdle = ( iBounce & 0x80000000 ) != 0 || threadId >= g_PathCount;
     if ( !isIdle )
     {
-        float3 Li = 0.0f;
         iBounce = iBounce & 0x7FFFFFFF;
-        if ( iBounce <= g_MaxBounceCount + 1 )
+
+        float3 wi = g_Rays[ threadId ].direction;
+        SPathAccumulation pathAccumulation = g_PathAccumulation[ threadId ];
+        SRayHit rayHit = g_RayHits[ threadId ];
+        bool hasShadowRayHit = g_HasShadowRayHits[ threadId ];
+        SMISResults misResults = g_MISResults[ threadId ];
+
+        float3 lightResult = misResults.lightResult;
+        pathAccumulation.Li += !hasShadowRayHit ? lightResult : 0.0f;
+
+        float3 bsdfResult = misResults.bsdfResult;
+        float lightDistance = misResults.lightDistance;
+        pathAccumulation.Li += lightDistance < rayHit.t ? bsdfResult : 0.0f;
+
+        if ( iBounce > g_MaxBounceCount || all( pathAccumulation.pathThroughput == 0.0f ) )
         {
-            float3 wi = g_Rays[ threadId ].direction;
-            SPathAccumulation pathAccumulation = g_PathAccumulation[ threadId ];
-            Li = pathAccumulation.Li;
-            float3 pathThroughput = pathAccumulation.pathThroughput;
-            SRayHit rayHit = g_RayHits[ threadId ];
-            bool hasShadowRayHit = g_HasShadowRayHits[ threadId ];
-
-            SMISResults misResults = g_MISResults[ threadId ];
-
-            float3 lightResult = misResults.lightResult;
-            Li += !hasShadowRayHit ? lightResult : 0.0f;
-
-            float3 bsdfResult = misResults.bsdfResult;
-            float lightDistance = misResults.lightDistance;
-            Li += lightDistance < rayHit.t ? bsdfResult : 0.0f;
-
-            bool hasHit = rayHit.t != FLT_INF;
-            if ( !hasHit )
-            {
-                Li += pathThroughput * EnvironmentShader( wi, g_Background.xyz, g_EnvTexture, UVClampSampler );
-                isIdle = true;
-            }
-            else
-            {
-                ++iBounce;
-            }
+            isIdle = true;
+        }
+        else if ( rayHit.t == FLT_INF )
+        {
+            pathAccumulation.Li += pathAccumulation.pathThroughput * EnvironmentShader( wi, g_Background.xyz, g_EnvTexture, UVClampSampler );
+            isIdle = true;
         }
         else
         {
-            isIdle = true;
+            g_PathAccumulation[ threadId ] = pathAccumulation;
+            ++iBounce;
         }
 
         if ( isIdle )
         {
             uint2 pixelPosition = g_PixelPositions[ threadId ];
             float2 pixelSample = g_PixelSamples[ threadId ];
-            AddSampleToFilm( Li, pixelSample, pixelPosition, g_FilmTexture );
+            AddSampleToFilm( pathAccumulation.Li, pixelSample, pixelPosition, g_FilmTexture );
         }
     }
 

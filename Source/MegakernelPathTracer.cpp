@@ -130,12 +130,12 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
     m_CurrentTileIndex = ( m_CurrentTileIndex + 1 ) % tileCount;
 }
 
-void CMegakernelPathTracer::ResetFrame()
+void CMegakernelPathTracer::ResetImage()
 {
     ResetTileIndex();
 }
 
-bool CMegakernelPathTracer::IsFrameComplete()
+bool CMegakernelPathTracer::IsImageComplete()
 {
     return AreAllTilesRendered();
 }

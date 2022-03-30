@@ -352,7 +352,7 @@ void SRenderer::DispatchRayTracing( SRenderContext* renderContext )
 
         m_SPP = 0;
 
-        m_PathTracer[ m_ActivePathTracerIndex ]->ResetFrame();
+        m_PathTracer[ m_ActivePathTracerIndex ]->ResetImage();
     }
 
     if ( m_Scene.m_HasValidScene )
@@ -371,7 +371,7 @@ void SRenderer::DispatchRayTracing( SRenderContext* renderContext )
 
         m_PathTracer[ m_ActivePathTracerIndex ]->Render( *renderContext, m_RenderData );
 
-        if ( m_PathTracer[ m_ActivePathTracerIndex ]->IsFrameComplete() )
+        if ( m_PathTracer[ m_ActivePathTracerIndex ]->IsImageComplete() )
         {
             if ( m_FrameSeedType != EFrameSeedType::Fixed )
             {
@@ -403,7 +403,7 @@ void SRenderer::RenderOneFrame()
     D3D11_VIEWPORT viewport;
     ID3D11DeviceContext* deviceContext = GetDeviceContext();
 
-    if ( m_PathTracer[ m_ActivePathTracerIndex ]->IsFrameComplete() || renderContext.m_IsSmallResolutionEnabled )
+    if ( m_PathTracer[ m_ActivePathTracerIndex ]->IsImageComplete() || renderContext.m_IsSmallResolutionEnabled )
     {
         m_SceneLuminance.Dispatch( renderContext.m_CurrentResolutionWidth, renderContext.m_CurrentResolutionHeight );
 
@@ -531,7 +531,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
             {
                 m_PathTracer[ lastActivePathTracerIndex ]->Destroy();
                 m_PathTracer[ m_ActivePathTracerIndex ]->Create();
-                m_PathTracer[ m_ActivePathTracerIndex ]->ResetFrame();
+                m_PathTracer[ m_ActivePathTracerIndex ]->ResetImage();
                 if ( m_Scene.m_HasValidScene )
                 {
                     m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();

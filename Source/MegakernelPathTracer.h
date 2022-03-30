@@ -26,9 +26,9 @@ public:
 
     virtual void Render( const SRenderContext& renderContext, const SRenderData& renderData ) override;
 
-    virtual void ResetFrame() override;
+    virtual void ResetImage() override;
 
-    virtual bool IsFrameComplete() override;
+    virtual bool IsImageComplete() override;
 
     virtual void OnImGUI();
 

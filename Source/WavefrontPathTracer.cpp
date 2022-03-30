@@ -9,6 +9,7 @@
 #include "ComputeJob.h"
 #include "RenderContext.h"
 #include "RenderData.h"
+#include "imgui/imgui.h"
 
 using namespace DirectX;
 
@@ -16,6 +17,8 @@ static const uint32_t s_WavefrontSize = 32;
 static const uint32_t s_PathPoolSize = 8192;
 static const uint32_t s_PathPoolLaneCount = s_PathPoolSize * s_WavefrontSize;
 static const uint32_t s_KernelGroupSize = 32;
+
+static const uint32_t s_BlockDimensionCount = 2;
 
 struct SControlConstants
 {
@@ -326,7 +329,42 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SR
         m_ControlConstantBuffer->Unmap();
     }
 
-    if ( m_NewFrame )
+    // Fill new path constants buffer
+    if ( void* address = m_NewPathConstantBuffer->Map() )
+    {
+        SNewPathConstants* constants = (SNewPathConstants*)address;
+        m_Scene->m_Camera.GetTransformMatrix( &constants->g_CameraTransform );
+        constants->g_Resolution[ 0 ] = renderContext.m_CurrentResolutionWidth;
+        constants->g_Resolution[ 1 ] = renderContext.m_CurrentResolutionHeight;
+        constants->g_FilmSize = m_Scene->m_FilmSize;
+        constants->g_ApertureRadius = m_Scene->m_ApertureDiameter * 0.5f;
+        constants->g_FocalDistance = m_Scene->m_FocalDistance;
+        constants->g_FilmDistance = m_Scene->GetFilmDistance();
+        constants->g_BladeCount = m_Scene->m_ApertureBladeCount;
+        float halfBladeAngle = DirectX::XM_PI / m_Scene->m_ApertureBladeCount;
+        constants->g_BladeVertexPos.x = cosf( halfBladeAngle ) * constants->g_ApertureRadius;
+        constants->g_BladeVertexPos.y = sinf( halfBladeAngle ) * constants->g_ApertureRadius;
+        constants->g_ApertureBaseAngle = m_Scene->m_ApertureRotation;
+        m_NewPathConstantBuffer->Unmap();
+    }
+
+    // Fill material constants buffer
+    if ( void* address = m_MaterialConstantBuffer->Map() )
+    {
+        SMaterialConstants* constants = (SMaterialConstants*)address;
+        constants->g_LightCount = (uint32_t)m_Scene->m_LightSettings.size();
+        m_MaterialConstantBuffer->Unmap();
+    }
+
+    // Fill raycast constant buffer
+    if ( void* address = m_RayCastConstantBuffer->Map() )
+    {
+        SRayCastConstants* constants = (SRayCastConstants*)address;
+        constants->g_PrimitiveCount = (uint32_t)m_Scene->m_PrimitiveCount;
+        m_RayCastConstantBuffer->Unmap();
+    }
+
+    if ( m_NewImage )
     {
         // Clear the nextblockindex
         uint32_t value[ 4 ] = { 0 };
@@ -342,6 +380,122 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SR
         job.m_DispatchSizeZ = 1;
         job.Dispatch();
     }
+
+    for ( uint32_t i = 0; i < m_IterationPerFrame; ++i )
+    {
+        RenderOneIteration( renderContext, renderData );
+    }
+
+    // Copy ray counter to the staging buffer
+    if ( m_NewImage )
+    {
+        // For new image, initialize all staging buffer
+        for ( uint32_t i = 0; i < s_QueueCounterStagingBufferCount; ++i )
+        {
+            deviceContext->CopyResource( m_QueueCounterStagingBuffer[ i ]->GetBuffer(), m_QueueCounterBuffers[ 0 ]->GetBuffer() );
+            m_QueueCounterStagingBufferIndex = 0;
+        }
+    }
+    else
+    {
+        deviceContext->CopyResource( m_QueueCounterStagingBuffer[ m_QueueCounterStagingBufferIndex ]->GetBuffer(), m_QueueCounterBuffers[ 0 ]->GetBuffer() );
+        m_QueueCounterStagingBufferIndex = ( m_QueueCounterStagingBufferIndex + 1 ) % s_QueueCounterStagingBufferCount;
+    }
+
+    m_NewImage = IsImageComplete();
+}
+
+void CWavefrontPathTracer::ResetImage()
+{
+    m_NewImage = true;
+}
+
+bool CWavefrontPathTracer::IsImageComplete()
+{
+    if ( void* address = m_QueueCounterStagingBuffer[ m_QueueCounterStagingBufferIndex ]->Map( D3D11_MAP_READ, 0 ) )
+    {
+        uint32_t extensionRayCount = *(uint32_t*)address;
+        m_QueueCounterStagingBuffer[ m_QueueCounterStagingBufferIndex ]->Unmap();
+        return extensionRayCount == 0;
+    }
+    return false;
+}
+
+void CWavefrontPathTracer::OnImGUI()
+{
+    if ( ImGui::CollapsingHeader( "Wavefront Path Tracer" ) )
+    {
+        ImGui::DragInt( "Iteration Per-frame", (int*)&m_IterationPerFrame, 1.0f, 1, 999, "%d", ImGuiSliderFlags_AlwaysClamp );
+
+        const char* blockDimensionNames[] = { "8x4", "4x8" };
+        if ( ImGui::Combo( "Block Dimension", (int*)&m_BlockDimensionIndex, blockDimensionNames, IM_ARRAYSIZE( blockDimensionNames ) ) )
+        {
+            m_FilmClearTrigger = true;
+        }
+    }
+}
+
+bool CWavefrontPathTracer::AcquireFilmClearTrigger()
+{
+    bool value = m_FilmClearTrigger;
+    m_FilmClearTrigger = false;
+    return value;
+}
+
+bool CWavefrontPathTracer::CompileAndCreateShader( EShaderKernel kernel )
+{
+    std::vector<D3D_SHADER_MACRO> rayTracingShaderDefines;
+
+    static const uint32_t s_MaxRadix10IntegerBufferLengh = 12;
+    char buffer_TraversalStackSize[ s_MaxRadix10IntegerBufferLengh ];
+    _itoa( m_Scene->m_BVHTraversalStackSize, buffer_TraversalStackSize, 10 );
+
+    rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_STACK_SIZE", buffer_TraversalStackSize } );
+
+    rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_GROUP_SIZE", "32" } );
+
+    if ( m_Scene->m_IsBVHDisabled )
+    {
+        rayTracingShaderDefines.push_back( { "NO_BVH_ACCEL", "0" } );
+    }
+    if ( m_Scene->m_IsMultipleImportanceSamplingEnabled )
+    {
+        rayTracingShaderDefines.push_back( { "MULTIPLE_IMPORTANCE_SAMPLING", "0" } );
+    }
+    if ( m_Scene->m_IsGGXVNDFSamplingEnabled )
+    {
+        rayTracingShaderDefines.push_back( { "GGX_SAMPLE_VNDF", "0" } );
+    }
+    if ( m_Scene->m_EnvironmentTexture.get() == nullptr )
+    {
+        rayTracingShaderDefines.push_back( { "NO_ENV_TEXTURE", "0" } );
+    }
+    rayTracingShaderDefines.push_back( { NULL, NULL } );
+
+    const char* s_KernelDefines[] = { "EXTENSION_RAY_CAST", "SHADOW_RAY_CAST", "NEW_PATH", "MATERIAL", "CONTROL", "FILL_INDIRECT_ARGUMENTS", "SET_IDLE" };
+    rayTracingShaderDefines.insert( rayTracingShaderDefines.begin(), { s_KernelDefines[ (int)kernel ], "0" } );
+
+    m_Shaders[ (int)kernel ].reset( ComputeShader::CreateFromFile( L"Shaders\\RayTracing.hlsl", rayTracingShaderDefines ) );
+    if ( !m_Shaders[ (int)kernel ] )
+    {
+        CMessagebox::GetSingleton().AppendFormat( "Failed to compile ray tracing shader kernel \"%s\".\n", s_KernelDefines[ (int)kernel ] );
+        return false;
+    }
+
+    return true;
+}
+
+void CWavefrontPathTracer::GetBlockDimension( uint32_t* width, uint32_t* height )
+{
+    uint32_t blockSizeWidth[ s_BlockDimensionCount ] = { 8, 4 };
+    uint32_t blockSizeHeight[ s_BlockDimensionCount ] = { 4, 8 };
+    *width = blockSizeWidth[ m_BlockDimensionIndex ];
+    *height = blockSizeHeight[ m_BlockDimensionIndex ];
+}
+
+void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderContext, const SRenderData& renderData )
+{
+    ID3D11DeviceContext* deviceContext = GetDeviceContext();
 
     // Clear the new path & material queue counters
     {
@@ -406,24 +560,6 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SR
 
     // New Path
     {
-        if ( void* address = m_NewPathConstantBuffer->Map() )
-        {
-            SNewPathConstants* constants = (SNewPathConstants*)address;
-            m_Scene->m_Camera.GetTransformMatrix( &constants->g_CameraTransform );
-            constants->g_Resolution[ 0 ] = renderContext.m_CurrentResolutionWidth;
-            constants->g_Resolution[ 1 ] = renderContext.m_CurrentResolutionHeight;
-            constants->g_FilmSize = m_Scene->m_FilmSize;
-            constants->g_ApertureRadius = m_Scene->m_ApertureDiameter * 0.5f;
-            constants->g_FocalDistance = m_Scene->m_FocalDistance;
-            constants->g_FilmDistance = m_Scene->GetFilmDistance();
-            constants->g_BladeCount = m_Scene->m_ApertureBladeCount;
-            float halfBladeAngle = DirectX::XM_PI / m_Scene->m_ApertureBladeCount;
-            constants->g_BladeVertexPos.x = cosf( halfBladeAngle ) * constants->g_ApertureRadius;
-            constants->g_BladeVertexPos.y = sinf( halfBladeAngle ) * constants->g_ApertureRadius;
-            constants->g_ApertureBaseAngle = m_Scene->m_ApertureRotation;
-            m_NewPathConstantBuffer->Unmap();
-        }
-
         ComputeJob job;
         job.m_ConstantBuffers =
         {
@@ -463,13 +599,6 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SR
 
     // Material
     {
-        if ( void* address = m_MaterialConstantBuffer->Map() )
-        {
-            SMaterialConstants* constants = (SMaterialConstants*)address;
-            constants->g_LightCount = (uint32_t)m_Scene->m_LightSettings.size();
-            m_MaterialConstantBuffer->Unmap();
-        }
-
         ComputeJob job;
         job.m_ConstantBuffers =
         {
@@ -514,14 +643,6 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SR
     // Copy the extension ray & shadow ray queue counters to constant buffers
     {
         deviceContext->CopyResource( m_QueueConstantsBuffers[ 0 ]->GetBuffer(), m_QueueCounterBuffers[ 0 ]->GetBuffer() );
-    }
-
-    // Fill raycast constant buffer
-    if ( void* address = m_RayCastConstantBuffer->Map() )
-    {
-        SRayCastConstants* constants = (SRayCastConstants*)address;
-        constants->g_PrimitiveCount = (uint32_t)m_Scene->m_PrimitiveCount;
-        m_RayCastConstantBuffer->Unmap();
     }
 
     // Fill indirect args for extension raycast
@@ -581,96 +702,4 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SR
         job.m_Shader = m_Shaders[ (int)EShaderKernel::ShadowRayCast ].get();
         job.DispatchIndirect( m_IndirectArgumentBuffer[ (int)EShaderKernel::ShadowRayCast ]->GetBuffer() );
     }
-
-    // Copy ray counter to the staging buffer
-    if ( m_NewFrame )
-    {
-        // For new frame, initialize all staging buffer
-        for ( uint32_t i = 0; i < s_QueueCounterStagingBufferCount; ++i )
-        {
-            deviceContext->CopyResource( m_QueueCounterStagingBuffer[ i ]->GetBuffer(), m_QueueCounterBuffers[ 0 ]->GetBuffer() );
-            m_QueueCounterStagingBufferIndex = 0;
-        }
-    }
-    else 
-    {
-        deviceContext->CopyResource( m_QueueCounterStagingBuffer[ m_QueueCounterStagingBufferIndex ]->GetBuffer(), m_QueueCounterBuffers[ 0 ]->GetBuffer() );
-        m_QueueCounterStagingBufferIndex = ( m_QueueCounterStagingBufferIndex + 1 ) % s_QueueCounterStagingBufferCount;
-    }
-
-    m_NewFrame = IsFrameComplete();
-}
-
-void CWavefrontPathTracer::ResetFrame()
-{
-    m_NewFrame = true;
-}
-
-bool CWavefrontPathTracer::IsFrameComplete()
-{
-    if ( void* address = m_QueueCounterStagingBuffer[ m_QueueCounterStagingBufferIndex ]->Map( D3D11_MAP_READ, 0 ) )
-    {
-        uint32_t extensionRayCount = *(uint32_t*)address;
-        m_QueueCounterStagingBuffer[ m_QueueCounterStagingBufferIndex ]->Unmap();
-        return extensionRayCount == 0;
-    }
-    return false;
-}
-
-void CWavefrontPathTracer::OnImGUI()
-{
-}
-
-bool CWavefrontPathTracer::AcquireFilmClearTrigger()
-{
-    return false;
-}
-
-bool CWavefrontPathTracer::CompileAndCreateShader( EShaderKernel kernel )
-{
-    std::vector<D3D_SHADER_MACRO> rayTracingShaderDefines;
-
-    static const uint32_t s_MaxRadix10IntegerBufferLengh = 12;
-    char buffer_TraversalStackSize[ s_MaxRadix10IntegerBufferLengh ];
-    _itoa( m_Scene->m_BVHTraversalStackSize, buffer_TraversalStackSize, 10 );
-
-    rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_STACK_SIZE", buffer_TraversalStackSize } );
-
-    rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_GROUP_SIZE", "32" } );
-
-    if ( m_Scene->m_IsBVHDisabled )
-    {
-        rayTracingShaderDefines.push_back( { "NO_BVH_ACCEL", "0" } );
-    }
-    if ( m_Scene->m_IsMultipleImportanceSamplingEnabled )
-    {
-        rayTracingShaderDefines.push_back( { "MULTIPLE_IMPORTANCE_SAMPLING", "0" } );
-    }
-    if ( m_Scene->m_IsGGXVNDFSamplingEnabled )
-    {
-        rayTracingShaderDefines.push_back( { "GGX_SAMPLE_VNDF", "0" } );
-    }
-    if ( m_Scene->m_EnvironmentTexture.get() == nullptr )
-    {
-        rayTracingShaderDefines.push_back( { "NO_ENV_TEXTURE", "0" } );
-    }
-    rayTracingShaderDefines.push_back( { NULL, NULL } );
-
-    const char* s_KernelDefines[] = { "EXTENSION_RAY_CAST", "SHADOW_RAY_CAST", "NEW_PATH", "MATERIAL", "CONTROL", "FILL_INDIRECT_ARGUMENTS", "SET_IDLE" };
-    rayTracingShaderDefines.insert( rayTracingShaderDefines.begin(), { s_KernelDefines[ (int)kernel ], "0" } );
-
-    m_Shaders[ (int)kernel ].reset( ComputeShader::CreateFromFile( L"Shaders\\RayTracing.hlsl", rayTracingShaderDefines ) );
-    if ( !m_Shaders[ (int)kernel ] )
-    {
-        CMessagebox::GetSingleton().AppendFormat( "Failed to compile ray tracing shader kernel \"%s\".\n", s_KernelDefines[ (int)kernel ] );
-        return false;
-    }
-
-    return true;
-}
-
-void CWavefrontPathTracer::GetBlockDimension( uint32_t* width, uint32_t* height )
-{
-    *width = 8;
-    *height = 4;
 }

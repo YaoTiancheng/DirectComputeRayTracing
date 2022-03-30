@@ -24,9 +24,9 @@ public:
 
     virtual void Render( const SRenderContext& renderContext, const SRenderData& renderData ) override;
 
-    virtual void ResetFrame() override;
+    virtual void ResetImage() override;
 
-    virtual bool IsFrameComplete() override;
+    virtual bool IsImageComplete() override;
 
     virtual void OnImGUI();
 
@@ -49,6 +49,8 @@ private:
     bool CompileAndCreateShader( EShaderKernel kernel );
 
     void GetBlockDimension( uint32_t* width, uint32_t* height );
+
+    void RenderOneIteration( const SRenderContext& renderContext, const SRenderData& renderData );
 
     CScene* m_Scene;
 
@@ -78,5 +80,9 @@ private:
     GPUBufferPtr m_QueueCounterStagingBuffer[ s_QueueCounterStagingBufferCount ];
     uint32_t m_QueueCounterStagingBufferIndex = 0;
 
-    bool m_NewFrame = true;
+    bool m_NewImage = true;
+    bool m_FilmClearTrigger = false;
+
+    uint32_t m_IterationPerFrame = 2;
+    uint32_t m_BlockDimensionIndex = 0;
 };

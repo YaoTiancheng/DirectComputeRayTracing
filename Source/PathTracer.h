@@ -16,9 +16,9 @@ public:
 
     virtual void Render( const SRenderContext& renderContext, const SRenderData& renderData ) {}
 
-    virtual void ResetFrame() {}
+    virtual void ResetImage() {}
 
-    virtual bool IsFrameComplete() = 0;
+    virtual bool IsImageComplete() = 0;
 
     virtual void OnImGUI() {}
 

@@ -12,7 +12,7 @@ WIP Mega-kernel unidirectional Monte Carlo progressive path tracer based on D3D1
 - Energy conserving microfacet BRDF and BSDF
 
 ## Build
-- Visual Studio 2019
+- Visual Studio 2017 (v141)
 - Windows SDK version 10.0.19041.0
 
 ## Example Renderings

@@ -7,6 +7,7 @@
 ID3D11Device*           g_Device = nullptr;
 ID3D11DeviceContext*    g_DeviceContext = nullptr;
 IDXGISwapChain*         g_SwapChain = nullptr;
+ID3DUserDefinedAnnotation* g_Annotation = nullptr;
 
 ID3D11Device* GetDevice()
 {
@@ -21,6 +22,11 @@ ID3D11DeviceContext* GetDeviceContext()
 IDXGISwapChain* GetSwapChain()
 {
     return g_SwapChain;
+}
+
+ID3DUserDefinedAnnotation* GetAnnotation()
+{
+    return g_Annotation;
 }
 
 bool InitRenderSystem( HWND hWnd )
@@ -56,11 +62,16 @@ bool InitRenderSystem( HWND hWnd )
     if ( FAILED( hr ) )
         return false;
 
+    hr = g_DeviceContext->QueryInterface( __uuidof( ID3DUserDefinedAnnotation ), (void**)&g_Annotation );
+    if ( FAILED( hr ) )
+        return false;
+
     return true;
 }
 
 void FiniRenderSystem()
 {
+    SAFE_RELEASE( g_Annotation );
     SAFE_RELEASE( g_SwapChain );
     SAFE_RELEASE( g_DeviceContext );
 

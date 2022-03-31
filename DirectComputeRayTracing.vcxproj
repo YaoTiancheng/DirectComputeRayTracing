@@ -177,6 +177,7 @@
     <ClInclude Include="Source\Application.h" />
     <ClInclude Include="Source\DDSTextureLoader.h" />
     <ClInclude Include="Resources\Resource.h" />
+    <ClInclude Include="Source\ScopedRenderAnnotation.h" />
     <ClInclude Include="Source\GraphicsJob.h" />
     <ClInclude Include="Source\imgui\imconfig.h" />
     <ClInclude Include="Source\imgui\imgui.h" />

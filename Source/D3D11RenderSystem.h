@@ -6,6 +6,8 @@ ID3D11DeviceContext*    GetDeviceContext();
 
 IDXGISwapChain*         GetSwapChain();
 
+ID3DUserDefinedAnnotation* GetAnnotation();
+
 bool                    InitRenderSystem( HWND hWnd );
 
 void                    FiniRenderSystem();

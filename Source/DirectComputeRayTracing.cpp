@@ -18,6 +18,7 @@
 #include "WavefrontPathTracer.h"
 #include "Scene.h"
 #include "MessageBox.h"
+#include "ScopedRenderAnnotation.h"
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_dx11.h"
 #include "imgui/imgui_impl_win32.h"
@@ -439,7 +440,10 @@ void SRenderer::RenderOneFrame()
     RTV = m_RenderData.m_LinearBackbuffer->GetRTV();
     GetDeviceContext()->OMSetRenderTargets( 1, &RTV, nullptr );
 
-    ImGui_ImplDX11_RenderDrawData( ImGui::GetDrawData() );
+    {
+        SCOPED_RENDER_ANNOTATION( L"ImGUI" );
+        ImGui_ImplDX11_RenderDrawData( ImGui::GetDrawData() );
+    }
 
     RTV = nullptr;
     GetDeviceContext()->OMSetRenderTargets( 1, &RTV, nullptr );

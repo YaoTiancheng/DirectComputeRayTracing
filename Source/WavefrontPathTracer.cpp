@@ -9,6 +9,7 @@
 #include "ComputeJob.h"
 #include "RenderContext.h"
 #include "RenderData.h"
+#include "ScopedRenderAnnotation.h"
 #include "imgui/imgui.h"
 
 using namespace DirectX;
@@ -366,6 +367,8 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SR
 
     if ( m_NewImage )
     {
+        SCOPED_RENDER_ANNOTATION( L"Reset" );
+
         // Clear the nextblockindex
         uint32_t value[ 4 ] = { 0 };
         deviceContext->ClearUnorderedAccessViewUint( m_NextBlockIndexBuffer->GetUAV(), value );
@@ -384,22 +387,26 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SR
     for ( uint32_t i = 0; i < m_IterationPerFrame; ++i )
     {
         RenderOneIteration( renderContext, renderData );
-    }
+    }    
 
     // Copy ray counter to the staging buffer
-    if ( m_NewImage )
     {
-        // For new image, initialize all staging buffer
-        for ( uint32_t i = 0; i < s_QueueCounterStagingBufferCount; ++i )
+        SCOPED_RENDER_ANNOTATION( L"Copy ray counter to staging buffer" );
+
+        if ( m_NewImage )
         {
-            deviceContext->CopyResource( m_QueueCounterStagingBuffer[ i ]->GetBuffer(), m_QueueCounterBuffers[ 0 ]->GetBuffer() );
-            m_QueueCounterStagingBufferIndex = 0;
+            // For new image, initialize all staging buffer
+            for ( uint32_t i = 0; i < s_QueueCounterStagingBufferCount; ++i )
+            {
+                deviceContext->CopyResource( m_QueueCounterStagingBuffer[ i ]->GetBuffer(), m_QueueCounterBuffers[ 0 ]->GetBuffer() );
+                m_QueueCounterStagingBufferIndex = 0;
+            }
         }
-    }
-    else
-    {
-        deviceContext->CopyResource( m_QueueCounterStagingBuffer[ m_QueueCounterStagingBufferIndex ]->GetBuffer(), m_QueueCounterBuffers[ 0 ]->GetBuffer() );
-        m_QueueCounterStagingBufferIndex = ( m_QueueCounterStagingBufferIndex + 1 ) % s_QueueCounterStagingBufferCount;
+        else
+        {
+            deviceContext->CopyResource( m_QueueCounterStagingBuffer[ m_QueueCounterStagingBufferIndex ]->GetBuffer(), m_QueueCounterBuffers[ 0 ]->GetBuffer() );
+            m_QueueCounterStagingBufferIndex = ( m_QueueCounterStagingBufferIndex + 1 ) % s_QueueCounterStagingBufferCount;
+        }
     }
 
     m_NewImage = IsImageComplete();
@@ -495,16 +502,22 @@ void CWavefrontPathTracer::GetBlockDimension( uint32_t* width, uint32_t* height 
 
 void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderContext, const SRenderData& renderData )
 {
+    SCOPED_RENDER_ANNOTATION( L"Iteration" );
+
     ID3D11DeviceContext* deviceContext = GetDeviceContext();
 
     // Clear the new path & material queue counters
     {
+        SCOPED_RENDER_ANNOTATION( L"Clear new path & material queues" );
+
         uint32_t value[ 4 ] = { 0 };
         deviceContext->ClearUnorderedAccessViewUint( m_QueueCounterBuffers[ 1 ]->GetUAV(), value );
     }
 
     // Control
     {
+        SCOPED_RENDER_ANNOTATION( L"Control" );
+
         ComputeJob job;
         job.m_ConstantBuffers.push_back( m_ControlConstantBuffer->GetBuffer() );
         job.m_Shader = m_Shaders[ (int)EShaderKernel::Control ].get();
@@ -537,17 +550,23 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
     // Copy the new path & material queue counters to constant buffers
     {
+        SCOPED_RENDER_ANNOTATION( L"Copy new path & material queue counter" );
+
         deviceContext->CopyResource( m_QueueConstantsBuffers[ 1 ]->GetBuffer(), m_QueueCounterBuffers[ 1 ]->GetBuffer() );
     }
 
     // Clear ray counters
     {
+        SCOPED_RENDER_ANNOTATION( L"Clear extension & shadow raycast queues" );
+
         uint32_t value[ 4 ] = { 0 };
         deviceContext->ClearUnorderedAccessViewUint( m_QueueCounterBuffers[ 0 ]->GetUAV(), value );
     }
 
     // Fill indirect args for new path
     {
+        SCOPED_RENDER_ANNOTATION( L"Fill new path indirect arg" );
+
         ComputeJob job;
         job.m_SRVs.push_back( m_QueueCounterBuffers[ 1 ]->GetSRV( 1, 1 ) );
         job.m_UAVs.push_back( m_IndirectArgumentBuffer[ (int)EShaderKernel::NewPath ]->GetUAV() );
@@ -560,6 +579,8 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
     // New Path
     {
+        SCOPED_RENDER_ANNOTATION( L"New path" );
+
         ComputeJob job;
         job.m_ConstantBuffers =
         {
@@ -587,6 +608,8 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
     // Fill indirect args for material
     {
+        SCOPED_RENDER_ANNOTATION( L"Fill material indirect arg" );
+
         ComputeJob job;
         job.m_SRVs.push_back( m_QueueCounterBuffers[ 1 ]->GetSRV( 0, 1 ) );
         job.m_UAVs.push_back( m_IndirectArgumentBuffer[ (int)EShaderKernel::Material ]->GetUAV() );
@@ -599,6 +622,8 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
     // Material
     {
+        SCOPED_RENDER_ANNOTATION( L"Material" );
+
         ComputeJob job;
         job.m_ConstantBuffers =
         {
@@ -642,11 +667,15 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
     // Copy the extension ray & shadow ray queue counters to constant buffers
     {
+        SCOPED_RENDER_ANNOTATION( L"Copy extension & shadow raycast queue counters" );
+
         deviceContext->CopyResource( m_QueueConstantsBuffers[ 0 ]->GetBuffer(), m_QueueCounterBuffers[ 0 ]->GetBuffer() );
     }
 
     // Fill indirect args for extension raycast
     {
+        SCOPED_RENDER_ANNOTATION( L"Fill extension raycast indirect arg" );
+
         ComputeJob job;
         job.m_SRVs.push_back( m_QueueCounterBuffers[ 0 ]->GetSRV( 0, 1 ) );
         job.m_UAVs.push_back( m_IndirectArgumentBuffer[ (int)EShaderKernel::ExtensionRayCast ]->GetUAV() );
@@ -659,6 +688,8 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
     // Extension raycast
     {
+        SCOPED_RENDER_ANNOTATION( L"Extension raycast" );
+
         ComputeJob job;
         job.m_ConstantBuffers = { m_QueueConstantsBuffers[ 0 ]->GetBuffer(), m_RayCastConstantBuffer->GetBuffer() };
         job.m_SRVs =
@@ -676,6 +707,8 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
     // Fill indirect args for shadow raycast
     {
+        SCOPED_RENDER_ANNOTATION( L"Fill shadow raycast indirect arg" );
+
         ComputeJob job;
         job.m_SRVs.push_back( m_QueueCounterBuffers[ 0 ]->GetSRV( 1, 1 ) );
         job.m_UAVs.push_back( m_IndirectArgumentBuffer[ (int)EShaderKernel::ShadowRayCast ]->GetUAV() );
@@ -688,6 +721,8 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
     // Shadow raycast
     {
+        SCOPED_RENDER_ANNOTATION( L"Shadow raycast" );
+
         ComputeJob job;
         job.m_ConstantBuffers = { m_QueueConstantsBuffers[ 0 ]->GetBuffer(), m_RayCastConstantBuffer->GetBuffer() };
         job.m_SRVs =

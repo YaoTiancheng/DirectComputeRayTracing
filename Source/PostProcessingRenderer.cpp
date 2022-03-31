@@ -5,6 +5,7 @@
 #include "GPUBuffer.h"
 #include "Shader.h"
 #include "RenderContext.h"
+#include "ScopedRenderAnnotation.h"
 #include "imgui/imgui.h"
 
 using namespace DirectX;
@@ -119,6 +120,8 @@ bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, 
 
 void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext )
 {
+    SCOPED_RENDER_ANNOTATION( L"PostFX" );
+
     if ( void* address = m_ConstantsBuffer->Map() )
     {
         m_ConstantParams.x = 1.0f / ( renderContext.m_CurrentResolutionWidth * renderContext.m_CurrentResolutionHeight );
@@ -134,6 +137,8 @@ void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext 
 
 void PostProcessingRenderer::ExecuteCopy()
 {
+    SCOPED_RENDER_ANNOTATION( L"Copy" );
+
     if ( void* address = m_ConstantsBuffer->Map() )
     {
         m_ConstantParams.z = 1.0f;

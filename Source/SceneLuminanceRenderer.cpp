@@ -3,6 +3,7 @@
 #include "Shader.h"
 #include "GPUBuffer.h"
 #include "GPUTexture.h"
+#include "ScopedRenderAnnotation.h"
 #include "imgui/imgui.h"
 #include "../Shaders/SumLuminanceDef.inc.hlsl"
 
@@ -84,6 +85,8 @@ bool SceneLuminanceRenderer::Init( uint32_t resolutionWidth, uint32_t resolution
 
 void SceneLuminanceRenderer::Dispatch( uint32_t resolutionWidth, uint32_t resolutionHeight )
 {
+    SCOPED_RENDER_ANNOTATION( L"Calculate scene luminance" );
+
     uint32_t sumLuminanceBlockCountX = uint32_t( std::ceilf( resolutionWidth / float( SL_BLOCKSIZE ) ) );
     sumLuminanceBlockCountX = uint32_t( std::ceilf( sumLuminanceBlockCountX / 2.0f ) );
     uint32_t sumLuminanceBlockCountY = uint32_t( std::ceilf( resolutionHeight / float( SL_BLOCKSIZEY ) ) );

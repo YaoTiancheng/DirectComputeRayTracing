@@ -8,6 +8,7 @@
 #include "RenderContext.h"
 #include "RenderData.h"
 #include "MessageBox.h"
+#include "ScopedRenderAnnotation.h"
 #include "imgui/imgui.h"
 
 using namespace DirectX;
@@ -61,6 +62,8 @@ void CMegakernelPathTracer::OnSceneLoaded()
 
 void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const SRenderData& renderData )
 {
+    SCOPED_RENDER_ANNOTATION( L"Dispatch rays" );
+
     uint32_t tileCountX = (uint32_t)std::ceilf( float( renderContext.m_CurrentResolutionWidth ) / float( m_TileSize ) );
     uint32_t tileCountY = (uint32_t)std::ceilf( float( renderContext.m_CurrentResolutionHeight ) / float( m_TileSize ) );
 

@@ -282,6 +282,11 @@ void CWavefrontPathTracer::Destroy()
     m_NewPathConstantBuffer.reset();
     m_MaterialConstantBuffer.reset();
     m_RayCastConstantBuffer.reset();
+
+    for ( uint32_t i = 0; i < (uint32_t)EShaderKernel::_Count; ++i )
+    {
+        m_Shaders[ i ].reset();
+    }
 }
 
 void CWavefrontPathTracer::OnSceneLoaded()

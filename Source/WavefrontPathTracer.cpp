@@ -83,14 +83,6 @@ bool CWavefrontPathTracer::Create()
     if ( !m_ShadowRayBuffer )
         return false;
 
-    m_ShadowRayHitBuffer.reset( GPUBuffer::CreateStructured(
-          s_PathPoolLaneCount * 4
-        , 4
-        , D3D11_USAGE_DEFAULT
-        , D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS ) );
-    if ( !m_ShadowRayHitBuffer )
-        return false;
-
     m_PixelPositionBuffer.reset( GPUBuffer::CreateStructured(
           s_PathPoolLaneCount * 8
         , 8
@@ -131,12 +123,13 @@ bool CWavefrontPathTracer::Create()
     if ( !m_PathAccumulationBuffer )
         return false;
 
-    m_BounceBuffer.reset( GPUBuffer::CreateStructured(
+    m_FlagsBuffer.reset( GPUBuffer::Create(
           s_PathPoolLaneCount * 4
         , 4
+        , DXGI_FORMAT_R32_UINT
         , D3D11_USAGE_DEFAULT
         , D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS ) );
-    if ( !m_BounceBuffer )
+    if ( !m_FlagsBuffer )
         return false;
 
     m_NextBlockIndexBuffer.reset( GPUBuffer::Create(
@@ -252,13 +245,12 @@ void CWavefrontPathTracer::Destroy()
     m_RayBuffer.reset();
     m_RayHitBuffer.reset();
     m_ShadowRayBuffer.reset();
-    m_ShadowRayHitBuffer.reset();
     m_PixelPositionBuffer.reset();
     m_PixelSampleBuffer.reset();
     m_RngBuffer.reset();
     m_MISResultBuffer.reset();
     m_PathAccumulationBuffer.reset();
-    m_BounceBuffer.reset();
+    m_FlagsBuffer.reset();
     m_NextBlockIndexBuffer.reset();
 
     for ( uint32_t i = 0; i < 4; ++i )
@@ -382,7 +374,7 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SR
         ComputeJob job;
         job.m_ConstantBuffers.push_back( m_ControlConstantBuffer->GetBuffer() );
         job.m_Shader = m_Shaders[ (int)EShaderKernel::SetIdle ].get();
-        job.m_UAVs.push_back( m_BounceBuffer->GetUAV() );
+        job.m_UAVs.push_back( m_FlagsBuffer->GetUAV() );
         job.m_DispatchSizeX = CalculateDispatchGroupCount( s_PathPoolLaneCount );
         job.m_DispatchSizeY = 1;
         job.m_DispatchSizeZ = 1;
@@ -531,7 +523,6 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
               m_RayHitBuffer->GetSRV()
             , m_RayBuffer->GetSRV()
             , m_PixelSampleBuffer->GetSRV()
-            , m_ShadowRayHitBuffer->GetSRV()
             , m_MISResultBuffer->GetSRV()
             , m_Scene->m_EnvironmentTexture ? m_Scene->m_EnvironmentTexture->GetSRV() : nullptr
         };
@@ -539,7 +530,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
         {
               m_PixelPositionBuffer->GetUAV()
             , m_PathAccumulationBuffer->GetUAV()
-            , m_BounceBuffer->GetUAV()
+            , m_FlagsBuffer->GetUAV()
             , m_QueueCounterBuffers[ 1 ]->GetUAV()
             , m_QueueBuffers[ (int)EShaderKernel::Material ]->GetUAV()
             , m_QueueBuffers[ (int)EShaderKernel::NewPath ]->GetUAV()
@@ -738,7 +729,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
             , m_ShadowRayBuffer->GetSRV()
             , m_QueueBuffers[ (int)EShaderKernel::ShadowRayCast ]->GetSRV()
         };
-        job.m_UAVs.push_back( m_ShadowRayHitBuffer->GetUAV() );
+        job.m_UAVs.push_back( m_FlagsBuffer->GetUAV() );
         job.m_Shader = m_Shaders[ (int)EShaderKernel::ShadowRayCast ].get();
         job.DispatchIndirect( m_IndirectArgumentBuffer[ (int)EShaderKernel::ShadowRayCast ]->GetBuffer() );
     }

@@ -209,6 +209,27 @@ struct SPathAccumulation
     float3 Li;
 };
 
+void UnpackPathFlags( uint flags, out bool isIdle, out bool hasShadowRayHit, out uint bounce )
+{
+    isIdle = ( flags & 0x80000000 ) != 0;
+    hasShadowRayHit = ( flags & 0x40000000 ) != 0;
+    bounce = flags & 0xFF;
+}
+
+uint PackPathFlags( bool isIdle, bool hasShadowRayHit, uint bounce )
+{
+    uint flags = isIdle ? 0x80000000 : 0;
+    flags |= hasShadowRayHit ? 0x40000000 : 0;
+    flags |= bounce & 0xFF;
+    return flags;
+}
+
+uint SetPathFlagsBit_HasShadowRayHit( uint flags, bool value )
+{
+    flags = ( value ? 0x40000000 : 0 ) | ( flags & 0xBFFFFFFF );
+    return flags;
+}
+
 #if defined( EXTENSION_RAY_CAST )
 
 cbuffer QueueConstants : register( b0 )
@@ -275,7 +296,7 @@ StructuredBuffer<uint>        g_Triangles     : register( t1 );
 StructuredBuffer<BVHNode>     g_BVHNodes      : register( t2 );
 StructuredBuffer<SRay>        g_Rays          : register( t3 );
 Buffer<uint>                  g_PathIndices   : register( t4 );
-RWStructuredBuffer<bool>      g_HasHits       : register( u0 );
+RWBuffer<uint>                g_Flags         : register( u0 );
 
 [numthreads( 32, 1, 1 )]
 void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
@@ -295,7 +316,8 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
         , g_BVHNodes
         , g_PrimitiveCount );
 
-    g_HasHits[ pathIndex ] = hasHit;
+    uint flags = SetPathFlagsBit_HasShadowRayHit( g_Flags[ pathIndex ], hasHit );
+    g_Flags[ pathIndex ] = flags;
 }
 
 #endif
@@ -590,13 +612,12 @@ cbuffer ControlConstants : register( b0 )
 StructuredBuffer<SRayHit>       g_RayHits           : register( t0 );
 StructuredBuffer<SRay>          g_Rays              : register( t1 );
 StructuredBuffer<float2>        g_PixelSamples      : register( t2 );
-StructuredBuffer<bool>          g_HasShadowRayHits  : register( t3 );
-StructuredBuffer<SMISResults>   g_MISResults        : register( t4 );
-TextureCube<float3>             g_EnvTexture        : register( t5 );
+StructuredBuffer<SMISResults>   g_MISResults        : register( t3 );
+TextureCube<float3>             g_EnvTexture        : register( t4 );
 
 RWStructuredBuffer<uint2>       g_PixelPositions    : register( u0 );
 RWStructuredBuffer<SPathAccumulation> g_PathAccumulation : register( u1 );
-RWStructuredBuffer<uint>        g_Bounces           : register( u2 );
+RWBuffer<uint>                  g_Flags             : register( u2 );
 RWBuffer<uint>                  g_QueueCounters     : register( u3 );
 RWBuffer<uint>                  g_MaterialQueue     : register( u4 );
 RWBuffer<uint>                  g_NewPathQueue      : register( u5 );
@@ -606,16 +627,17 @@ RWTexture2D<float4>             g_FilmTexture       : register( u7 );
 [numthreads( 32, 1, 1 )]
 void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
 {
-    uint iBounce = g_Bounces[ threadId ];
-    bool isIdle = ( iBounce & 0x80000000 ) != 0 || threadId >= g_PathCount;
+    uint iBounce = 0;
+    bool isIdle = false;
+    bool hasShadowRayHit = false;
+    UnpackPathFlags( g_Flags[ threadId ], isIdle, hasShadowRayHit, iBounce );
+    isIdle = isIdle || threadId >= g_PathCount;
+
     if ( !isIdle )
     {
-        iBounce = iBounce & 0x7FFFFFFF;
-
         float3 wi = g_Rays[ threadId ].direction;
         SPathAccumulation pathAccumulation = g_PathAccumulation[ threadId ];
         SRayHit rayHit = g_RayHits[ threadId ];
-        bool hasShadowRayHit = g_HasShadowRayHits[ threadId ];
         SMISResults misResults = g_MISResults[ threadId ];
 
         float3 lightResult = misResults.lightResult;
@@ -711,7 +733,7 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
         }
     }
 
-    g_Bounces[ threadId ] = ( iBounce & 0x7FFFFFFF ) | ( isIdle ? 0x80000000 : 0 );
+    g_Flags[ threadId ] = PackPathFlags( isIdle, false, iBounce );
 }
 
 #endif
@@ -747,7 +769,7 @@ cbuffer ControlConstants : register( b0 )
     uint2 g_FilmDimension;
 }
 
-RWStructuredBuffer<uint> g_Bounces : register( u0 );
+RWBuffer<uint> g_Flags : register( u0 );
 
 [numthreads( 32, 1, 1 )]
 void main( uint3 threadId : SV_DispatchThreadID )
@@ -755,7 +777,7 @@ void main( uint3 threadId : SV_DispatchThreadID )
     if ( threadId.x >= g_PathCount )
         return;
 
-    g_Bounces[ threadId.x ] = 0x80000000;
+    g_Flags[ threadId.x ] = PackPathFlags( true, false, 0 );
 }
 
 #endif

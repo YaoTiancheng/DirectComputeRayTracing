@@ -59,13 +59,12 @@ private:
     GPUBufferPtr m_RayBuffer;
     GPUBufferPtr m_RayHitBuffer;
     GPUBufferPtr m_ShadowRayBuffer;
-    GPUBufferPtr m_ShadowRayHitBuffer;
     GPUBufferPtr m_PixelPositionBuffer;
     GPUBufferPtr m_PixelSampleBuffer;
     GPUBufferPtr m_RngBuffer;
     GPUBufferPtr m_MISResultBuffer;
     GPUBufferPtr m_PathAccumulationBuffer;
-    GPUBufferPtr m_BounceBuffer;
+    GPUBufferPtr m_FlagsBuffer;
     GPUBufferPtr m_NextBlockIndexBuffer;
     GPUBufferPtr m_IndirectArgumentBuffer[ 4 ];
     GPUBufferPtr m_QueueBuffers[ 4 ];

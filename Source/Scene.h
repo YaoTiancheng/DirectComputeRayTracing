@@ -88,7 +88,6 @@ public:
     uint32_t m_PrimitiveCount;
 
     bool m_HasValidScene = false;
-    bool m_IsMultipleImportanceSamplingEnabled;
     bool m_IsBVHDisabled;
     bool m_IsGGXVNDFSamplingEnabled = true;
     uint32_t m_BVHTraversalStackSize;

@@ -159,10 +159,6 @@ bool CMegakernelPathTracer::CompileAndCreateRayTracingKernel()
     {
         rayTracingShaderDefines.push_back( { "NO_BVH_ACCEL", "0" } );
     }
-    if ( m_Scene->m_IsMultipleImportanceSamplingEnabled )
-    {
-        rayTracingShaderDefines.push_back( { "MULTIPLE_IMPORTANCE_SAMPLING", "0" } );
-    }
     if ( m_Scene->m_IsGGXVNDFSamplingEnabled )
     {
         rayTracingShaderDefines.push_back( { "GGX_SAMPLE_VNDF", "0" } );

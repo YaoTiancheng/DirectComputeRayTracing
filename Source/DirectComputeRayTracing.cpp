@@ -884,7 +884,6 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
     {
         ImGui::Begin( "Render Stats." );
 
-        ImGui::Text( "MIS: %s", m_Scene.m_IsMultipleImportanceSamplingEnabled ? "On" : "Off" );
         ImGui::Text( "No BVH: %s", m_Scene.m_IsBVHDisabled ? "On" : "Off" );
         if ( m_Scene.m_HasValidScene )
         {

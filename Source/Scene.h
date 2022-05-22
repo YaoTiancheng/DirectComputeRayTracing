@@ -69,6 +69,8 @@ public:
 
     float CalculateFilmDistanceNormalized() const;
 
+    float CalculateApertureDiameter() const { return m_FocalLength / m_RelativeAperture; }
+
     const uint32_t s_MaxRayBounce = 20;
     const uint32_t s_MaxLightsCount = 64;
     const float s_MaxFocalDistance = 999999.0f;
@@ -79,9 +81,11 @@ public:
     float m_FilmDistanceNormalized;
     float m_FocalLength;
     float m_FocalDistance;
-    float m_ApertureDiameter;
+    float m_RelativeAperture;
     uint32_t m_ApertureBladeCount;
     float m_ApertureRotation;
+    float m_ShutterTime;
+    float m_ISO;
     bool m_IsManualFilmDistanceEnabled = false;
     DirectX::XMFLOAT4 m_BackgroundColor;
     uint32_t m_MaxBounceCount;

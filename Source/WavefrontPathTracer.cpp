@@ -335,7 +335,7 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SR
         constants->g_Resolution[ 0 ] = renderContext.m_CurrentResolutionWidth;
         constants->g_Resolution[ 1 ] = renderContext.m_CurrentResolutionHeight;
         constants->g_FilmSize = m_Scene->m_FilmSize;
-        constants->g_ApertureRadius = m_Scene->m_ApertureDiameter * 0.5f;
+        constants->g_ApertureRadius = m_Scene->CalculateApertureDiameter() * 0.5f;
         constants->g_FocalDistance = m_Scene->m_FocalDistance;
         constants->g_FilmDistance = m_Scene->GetFilmDistance();
         constants->g_BladeCount = m_Scene->m_ApertureBladeCount;

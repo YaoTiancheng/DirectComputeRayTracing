@@ -414,7 +414,7 @@ void SRenderer::RenderOneFrame()
         viewport = { 0.0f, 0.0f, (float)m_ResolutionWidth, (float)m_ResolutionHeight, 0.0f, 1.0f };
         deviceContext->RSSetViewports( 1, &viewport );
 
-        m_PostProcessing.ExecutePostFX( renderContext );
+        m_PostProcessing.ExecutePostFX( renderContext, m_Scene );
     }
 
     RTV = m_RenderData.m_sRGBBackbuffer->GetRTV();
@@ -864,7 +864,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 ImGui::LabelText( "Film Distance Normalized", "%.5f", m_Scene.m_FilmDistanceNormalized );
             }
 
-            if ( ImGui::DragFloat( "Aperture Diameter", (float*)&m_Scene.m_ApertureDiameter, 0.001f, 0.0f, 1000.0f, "%.5f", ImGuiSliderFlags_AlwaysClamp ) )
+            if ( ImGui::DragFloat( "Aperture(f-number)", &m_Scene.m_RelativeAperture, 0.1f, 0.01f, 1000.0f, "%.1f", ImGuiSliderFlags_AlwaysClamp ) )
                 m_IsFilmDirty = true;
 
             if ( ImGui::DragInt( "Aperture Blade Count", (int*)&m_Scene.m_ApertureBladeCount, 1.0f, 2, 16, "%d", ImGuiSliderFlags_AlwaysClamp ) )
@@ -876,6 +876,9 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 m_Scene.m_ApertureRotation = DirectX::XMConvertToRadians( apertureRotationDeg );
                 m_IsFilmDirty = true;
             }
+
+            ImGui::DragFloat( "Shutter Time", &m_Scene.m_ShutterTime, 0.001f, 0.001f, 100000.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp );
+            ImGui::DragFloat( "ISO", &m_Scene.m_ISO, 50.f, 50.f, 100000.0f, "%.0f", ImGuiSliderFlags_AlwaysClamp );
         }
 
         ImGui::End();

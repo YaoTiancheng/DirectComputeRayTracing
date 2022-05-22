@@ -79,7 +79,7 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
         constants->lightCount = (uint32_t)m_Scene->m_LightSettings.size();
         constants->maxBounceCount = m_Scene->m_MaxBounceCount;
         constants->primitiveCount = m_Scene->m_PrimitiveCount;
-        constants->apertureRadius = m_Scene->m_ApertureDiameter * 0.5f;
+        constants->apertureRadius = m_Scene->CalculateApertureDiameter() * 0.5f;
         constants->focalDistance = m_Scene->m_FocalDistance;
         constants->apertureBaseAngle = m_Scene->m_ApertureRotation;
         constants->bladeCount = m_Scene->m_ApertureBladeCount;

@@ -1,7 +1,10 @@
 
 cbuffer PostProcessingConstants : register( b0 )
 {
-    float4 g_Params;
+    float g_ReciprocalPixelCount;
+    float g_MaxWhiteSqr;
+    float g_TexcoordScale;
+    float g_EV100;
 }
 
 struct VertexOut
@@ -27,17 +30,9 @@ float ConvertEV100ToExposure( float EV100 )
     return 1.0f / maxLuminance;
 }
 
-// See Automatic Exposure Using a Luminance Histogram, https://bruop.github.io/exposure/
-// Also see Lagard and de Rousiers, 2014 (pg. 85), https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/course-notes-moving-frostbite-to-pbr-v2.pdf
-float ComputeExposure( float avgLum )
-{
-    float EV100 = ComputeEV100FromAverageLuminance( avgLum );
-    return ConvertEV100ToExposure( EV100 );
-}
-
 float3 ReinhardTonemap( float3 color )
 {
-    return color * ( 1.0f + color / g_Params.y ) / ( 1.0f + color );
+    return color * ( 1.0f + color / g_MaxWhiteSqr ) / ( 1.0f + color );
 }
 
 VertexOut MainVS( float4 pos : POSITION )
@@ -45,7 +40,7 @@ VertexOut MainVS( float4 pos : POSITION )
     VertexOut o = ( VertexOut ) 0.0f;
     o.position = pos;
     o.texcoord = ( float2( pos.x, -pos.y ) + 1.0f ) * 0.5f;
-    o.texcoord *= g_Params.z;
+    o.texcoord *= g_TexcoordScale;
     return o;
 }
 
@@ -56,8 +51,14 @@ float4 MainPS( VertexOut i ) : SV_TARGET
     c.xyz /= c.w;
 
 #if !defined( DISABLE_POST_FX )
-    float avgLum = exp( g_LuminanceBuffer[ 0 ] * g_Params.x );
-    float exposure = ComputeExposure( avgLum );
+    float EV100;
+#if defined( AUTO_EXPOSURE )
+    float avgLum = exp( g_LuminanceBuffer[ 0 ] * g_ReciprocalPixelCount );
+    EV100 = ComputeEV100FromAverageLuminance( avgLum );
+#else
+    EV100 = g_EV100;
+#endif
+    float exposure = ConvertEV100ToExposure( EV100 );
     c.xyz *= exposure;
     c.xyz = ReinhardTonemap( c.xyz );
 #endif

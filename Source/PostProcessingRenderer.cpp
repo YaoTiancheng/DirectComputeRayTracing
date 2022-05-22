@@ -6,6 +6,7 @@
 #include "Shader.h"
 #include "RenderContext.h"
 #include "ScopedRenderAnnotation.h"
+#include "Scene.h"
 #include "imgui/imgui.h"
 
 using namespace DirectX;
@@ -25,8 +26,28 @@ D3D11_INPUT_ELEMENT_DESC s_ScreenQuadInputElementDesc[ 1 ]
     { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 };
 
+struct SConstant
+{
+    float m_ReciprocalPixelCount;
+    float m_MaxWhiteSqr;
+    float m_TexcoordScale;
+    float m_EV100;
+};
+
+namespace
+{
+    float CalculateEV100( float relativeAperture, float shutterTime, float ISO )
+    {
+        return std::log2( relativeAperture * relativeAperture / shutterTime * 100 / ISO );
+    }
+}
+
 PostProcessingRenderer::PostProcessingRenderer()
     : m_IsPostFXEnabled( true )
+    , m_IsAutoExposureEnabled( true )
+    , m_LuminanceWhite( 1.0f )
+    , m_CalculateEV100FromCamera( true )
+    , m_ManualEV100( 15.f )
 {
 }
 
@@ -46,21 +67,26 @@ bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, 
         return false;
 
     shaderDefines.clear();
+    shaderDefines.push_back( { "AUTO_EXPOSURE", "0" } );
+    shaderDefines.push_back( { NULL, NULL } );
+    m_PostFXAutoExposureShader.reset( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
+    if ( !m_PostFXAutoExposureShader )
+        return false;
+
+    shaderDefines.clear();
     shaderDefines.push_back( { "COPY", "0" } );
     shaderDefines.push_back( { NULL, NULL } );
     m_CopyShader.reset( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
     if ( !m_CopyShader )
         return false;
 
-    m_ConstantParams = XMFLOAT4( 1.0f / ( renderWidth * renderHeight ), 0.7f, 1.0f, 0.0f );
     m_ConstantsBuffer.reset( GPUBuffer::Create(
-          sizeof( XMFLOAT4 )
+          sizeof( SConstant )
         , 0
         , DXGI_FORMAT_UNKNOWN
         , D3D11_USAGE_DYNAMIC
         , D3D11_BIND_CONSTANT_BUFFER
-        , GPUResourceCreationFlags_CPUWriteable
-        , &m_ConstantParams ) );
+        , GPUResourceCreationFlags_CPUWriteable ) );
     if ( !m_ConstantsBuffer )
         return false;
 
@@ -118,15 +144,17 @@ bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, 
     return true;
 }
 
-void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext )
+void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext, const CScene& scene )
 {
     SCOPED_RENDER_ANNOTATION( L"PostFX" );
 
     if ( void* address = m_ConstantsBuffer->Map() )
     {
-        m_ConstantParams.x = 1.0f / ( renderContext.m_CurrentResolutionWidth * renderContext.m_CurrentResolutionHeight );
-        m_ConstantParams.z = renderContext.m_CurrentResolutionRatio;
-        memcpy( address, &m_ConstantParams, sizeof( m_ConstantParams ) );
+        SConstant* constants = (SConstant*)address;
+        constants->m_ReciprocalPixelCount = 1.0f / ( renderContext.m_CurrentResolutionWidth * renderContext.m_CurrentResolutionHeight );
+        constants->m_MaxWhiteSqr = m_LuminanceWhite * m_LuminanceWhite;
+        constants->m_TexcoordScale = renderContext.m_CurrentResolutionRatio;
+        constants->m_EV100 = m_CalculateEV100FromCamera ? CalculateEV100( scene.m_RelativeAperture, scene.m_ShutterTime, scene.m_ISO ) : m_ManualEV100;
         m_ConstantsBuffer->Unmap();
     }
 
@@ -141,8 +169,8 @@ void PostProcessingRenderer::ExecuteCopy()
 
     if ( void* address = m_ConstantsBuffer->Map() )
     {
-        m_ConstantParams.z = 1.0f;
-        memcpy( address, &m_ConstantParams, sizeof( m_ConstantParams ) );
+        SConstant* constants = (SConstant*)address;
+        constants->m_TexcoordScale = 1.0f;
         m_ConstantsBuffer->Unmap();
     }
 
@@ -151,22 +179,29 @@ void PostProcessingRenderer::ExecuteCopy()
 
 bool PostProcessingRenderer::OnImGUI()
 {
-    bool hasPropertyChanged = false;
 
     if ( ImGui::CollapsingHeader( "Post Processing" ) )
     {
         ImGui::Checkbox( "Enabled", &m_IsPostFXEnabled );
-
         if ( m_IsPostFXEnabled )
         {
-            hasPropertyChanged = hasPropertyChanged || ImGui::DragFloat( "Luminance White(^2)", (float*)&m_ConstantParams.y, 0.01f, 0.001f, 1000.0f );
+            ImGui::Checkbox( "Auto Exposure", &m_IsAutoExposureEnabled );
+            if ( !m_IsAutoExposureEnabled )
+            {
+                ImGui::Checkbox( "EV100 From Camera Setting", &m_CalculateEV100FromCamera );
+                if ( !m_CalculateEV100FromCamera )
+                {
+                    ImGui::DragFloat( "EV100", &m_ManualEV100, 1.0f, -100.0f, 100.0f, "%.0f", ImGuiSliderFlags_AlwaysClamp );
+                }
+            }
+            ImGui::DragFloat( "Luminance White", &m_LuminanceWhite, 0.01f, 0.001f, 1000.0f );
         }
     }
 
-    return hasPropertyChanged;
+    return false;
 }
 
 void PostProcessingRenderer::UpdateJob( bool enablePostFX )
 {
-    m_PostFXJob.m_Shader = !m_IsPostFXEnabled || !enablePostFX ? m_PostFXDisabledShader.get() : m_PostFXShader.get();
+    m_PostFXJob.m_Shader = !m_IsPostFXEnabled || !enablePostFX ? m_PostFXDisabledShader.get() : ( m_IsAutoExposureEnabled ? m_PostFXAutoExposureShader.get() : m_PostFXShader.get() );
 }

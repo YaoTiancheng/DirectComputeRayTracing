@@ -18,9 +18,11 @@ bool CScene::LoadFromFile( const char* filepath )
     m_FocalLength = 0.05f;
     m_FocalDistance = 2.0f;
     m_FilmDistanceNormalized = CalculateFilmDistanceNormalized();
-    m_ApertureDiameter = m_FocalLength / 8.0f; // initialize to f/8
+    m_RelativeAperture = 8.0f; // initialize to f/8
     m_ApertureBladeCount = 7;
     m_ApertureRotation = 0.0f;
+    m_ShutterTime = 1.0f;
+    m_ISO = 100;
     m_BackgroundColor = { 1.0f, 1.0f, 1.0f, 0.f };
 
     if ( filepath == nullptr || filepath[ 0 ] == '\0' )

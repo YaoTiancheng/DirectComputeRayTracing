@@ -51,8 +51,13 @@ PostProcessingRenderer::PostProcessingRenderer()
 {
 }
 
-bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, const GPUTexturePtr& filmTexture, const GPUTexturePtr& renderResultTexture, const GPUBufferPtr& luminanceBuffer )
+bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, const GPUTexturePtr& filmTexture, const GPUTexturePtr& renderResultTexture )
 {
+    if ( !m_LuminanceRenderer.Init( renderWidth, renderHeight, filmTexture ) )
+    {
+        return false;
+    }
+
     std::vector<D3D_SHADER_MACRO> shaderDefines;
     shaderDefines.push_back( { NULL, NULL } );
     m_PostFXShader.reset( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
@@ -126,7 +131,7 @@ bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, 
     m_PostFXJob.m_SamplerStates.push_back( m_PointSamplerState.Get() );
     m_PostFXJob.m_ConstantBuffers.push_back( m_ConstantsBuffer->GetBuffer() );
     m_PostFXJob.m_SRVs.push_back( filmTexture->GetSRV() );
-    m_PostFXJob.m_SRVs.push_back( luminanceBuffer->GetSRV() );
+    m_PostFXJob.m_SRVs.push_back( m_LuminanceRenderer.GetLuminanceResultBuffer()->GetSRV() );
     m_PostFXJob.m_VertexBuffer = m_ScreenQuadVerticesBuffer.get();
     m_PostFXJob.m_InputLayout = m_ScreenQuadVertexInputLayout.Get();
     m_PostFXJob.m_VertexCount = 6;
@@ -142,6 +147,14 @@ bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, 
     m_CopyJob.m_Shader = m_CopyShader.get();
 
     return true;
+}
+
+void PostProcessingRenderer::ExecuteLuminanceCompute( const SRenderContext& renderContext )
+{
+    if ( m_IsAutoExposureEnabled && m_IsPostFXEnabled && renderContext.m_EnablePostFX )
+    {
+        m_LuminanceRenderer.Dispatch( renderContext.m_CurrentResolutionWidth, renderContext.m_CurrentResolutionHeight );
+    }
 }
 
 void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext, const CScene& scene )
@@ -179,7 +192,6 @@ void PostProcessingRenderer::ExecuteCopy()
 
 bool PostProcessingRenderer::OnImGUI()
 {
-
     if ( ImGui::CollapsingHeader( "Post Processing" ) )
     {
         ImGui::Checkbox( "Enabled", &m_IsPostFXEnabled );

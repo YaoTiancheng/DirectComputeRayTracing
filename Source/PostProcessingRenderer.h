@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GraphicsJob.h"
+#include "SceneLuminanceRenderer.h"
 
 struct SRenderContext;
 class CScene;
@@ -10,7 +11,9 @@ class PostProcessingRenderer
 public:
     PostProcessingRenderer();
 
-    bool Init( uint32_t renderWidth, uint32_t renderHeight, const GPUTexturePtr& filmTexture, const GPUTexturePtr& renderResultTexture, const GPUBufferPtr& luminanceBuffer );
+    bool Init( uint32_t renderWidth, uint32_t renderHeight, const GPUTexturePtr& filmTexture, const GPUTexturePtr& renderResultTexture );
+
+    void ExecuteLuminanceCompute( const SRenderContext& renderContext );
 
     void ExecutePostFX( const SRenderContext& renderContext, const CScene& scene );
 
@@ -22,6 +25,8 @@ private:
     void UpdateJob( bool enablePostFX );
 
 private:
+    SceneLuminanceRenderer m_LuminanceRenderer;
+
     template <typename T>
     using ComPtr = Microsoft::WRL::ComPtr<T>;
 

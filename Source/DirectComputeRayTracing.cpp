@@ -8,7 +8,6 @@
 #include "StringConversion.h"
 #include "Camera.h"
 #include "PostProcessingRenderer.h"
-#include "SceneLuminanceRenderer.h"
 #include "Timers.h"
 #include "Rectangle.h"
 #include "BxDFTexturesBuilder.h"
@@ -71,7 +70,6 @@ struct SRenderer
     CPathTracer* m_PathTracer[ 2 ] = { nullptr, nullptr };
     uint32_t m_ActivePathTracerIndex = 0;
     PostProcessingRenderer m_PostProcessing;
-    SceneLuminanceRenderer m_SceneLuminance;
 
     enum class EFrameSeedType { FrameIndex = 0, SampleCount = 1, Fixed = 2, _Count = 3 };
     EFrameSeedType m_FrameSeedType = EFrameSeedType::SampleCount;
@@ -301,10 +299,7 @@ bool SRenderer::Init()
     if ( FAILED( hr ) )
         return false;
 
-    if ( !m_SceneLuminance.Init( m_ResolutionWidth, m_ResolutionHeight, m_RenderData.m_FilmTexture ) )
-        return false;
-
-    if ( !m_PostProcessing.Init( m_ResolutionWidth, m_ResolutionHeight, m_RenderData.m_FilmTexture, m_RenderData.m_RenderResultTexture, m_SceneLuminance.GetLuminanceResultBuffer() ) )
+    if ( !m_PostProcessing.Init( m_ResolutionWidth, m_ResolutionHeight, m_RenderData.m_FilmTexture, m_RenderData.m_RenderResultTexture ) )
         return false;
 
     UpdateRenderViewport( m_ResolutionWidth, m_ResolutionHeight );
@@ -406,7 +401,7 @@ void SRenderer::RenderOneFrame()
 
     if ( m_PathTracer[ m_ActivePathTracerIndex ]->IsImageComplete() || renderContext.m_IsSmallResolutionEnabled )
     {
-        m_SceneLuminance.Dispatch( renderContext.m_CurrentResolutionWidth, renderContext.m_CurrentResolutionHeight );
+        m_PostProcessing.ExecuteLuminanceCompute( renderContext );
 
         RTV = m_RenderData.m_RenderResultTexture->GetRTV();
         deviceContext->OMSetRenderTargets( 1, &RTV, nullptr );
@@ -611,7 +606,6 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
         m_PathTracer[ m_ActivePathTracerIndex ]->OnImGUI();
 
-        m_SceneLuminance.OnImGUI();
         m_PostProcessing.OnImGUI();
 
         ImGui::PopItemWidth();

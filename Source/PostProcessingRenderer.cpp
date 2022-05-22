@@ -131,7 +131,7 @@ bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, 
     m_PostFXJob.m_SamplerStates.push_back( m_PointSamplerState.Get() );
     m_PostFXJob.m_ConstantBuffers.push_back( m_ConstantsBuffer->GetBuffer() );
     m_PostFXJob.m_SRVs.push_back( filmTexture->GetSRV() );
-    m_PostFXJob.m_SRVs.push_back( m_LuminanceRenderer.GetLuminanceResultBuffer()->GetSRV() );
+    m_PostFXJob.m_SRVs.push_back( nullptr );
     m_PostFXJob.m_VertexBuffer = m_ScreenQuadVerticesBuffer.get();
     m_PostFXJob.m_InputLayout = m_ScreenQuadVertexInputLayout.Get();
     m_PostFXJob.m_VertexCount = 6;
@@ -216,4 +216,5 @@ bool PostProcessingRenderer::OnImGUI()
 void PostProcessingRenderer::UpdateJob( bool enablePostFX )
 {
     m_PostFXJob.m_Shader = !m_IsPostFXEnabled || !enablePostFX ? m_PostFXDisabledShader.get() : ( m_IsAutoExposureEnabled ? m_PostFXAutoExposureShader.get() : m_PostFXShader.get() );
+    m_PostFXJob.m_SRVs[ 1 ] = m_LuminanceRenderer.GetLuminanceResultBuffer()->GetSRV();
 }

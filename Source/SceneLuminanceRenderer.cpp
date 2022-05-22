@@ -133,6 +133,8 @@ void SceneLuminanceRenderer::Dispatch( uint32_t resolutionWidth, uint32_t resolu
 
         std::swap( sumLuminanceBuffer0, sumLuminanceBuffer1 );
     }
+
+    m_LuminanceResultBuffer = sumLuminanceBuffer1;
 }
 
 void SceneLuminanceRenderer::OnImGUI()

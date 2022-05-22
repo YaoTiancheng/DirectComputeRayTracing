@@ -10,7 +10,7 @@ public:
 
     void Dispatch( uint32_t resolutionWidth, uint32_t resolutionHeight );
 
-    const GPUBufferPtr& GetLuminanceResultBuffer() const { return m_SumLuminanceBuffer1; }
+    const GPUBuffer* GetLuminanceResultBuffer() const { return m_LuminanceResultBuffer; }
 
     void OnImGUI();
 
@@ -21,6 +21,7 @@ private:
     GPUBufferPtr        m_SumLuminanceBuffer1;
     GPUBufferPtr        m_SumLuminanceConstantsBuffer0;
     GPUBufferPtr        m_SumLuminanceConstantsBuffer1;
+    GPUBuffer*          m_LuminanceResultBuffer = nullptr;
 
     ComputeJob          m_SumLuminanceTo1DJob;
     ComputeJob          m_SumLuminanceToSingleJob;

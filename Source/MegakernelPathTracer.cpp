@@ -96,7 +96,7 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
 
     ComputeJob computeJob;
     computeJob.m_SamplerStates = { renderData.m_UVClampSamplerState.Get() };
-    computeJob.m_UAVs = { renderData.m_FilmTexture->GetUAV() };
+    computeJob.m_UAVs = { renderData.m_SamplePositionTexture->GetUAV(), renderData.m_SampleValueTexture->GetUAV() };
 
     computeJob.m_SRVs = {
           m_Scene->m_VerticesBuffer->GetSRV()

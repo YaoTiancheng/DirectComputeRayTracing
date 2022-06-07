@@ -24,6 +24,7 @@ bool CScene::LoadFromFile( const char* filepath )
     m_ShutterTime = 1.0f;
     m_ISO = 100;
     m_BackgroundColor = { 1.0f, 1.0f, 1.0f, 0.f };
+    m_FilterRadius = 1.0f;
 
     if ( filepath == nullptr || filepath[ 0 ] == '\0' )
         return false;

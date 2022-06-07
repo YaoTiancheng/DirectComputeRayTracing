@@ -46,12 +46,13 @@ bool InitRenderSystem( HWND hWnd )
     UINT flags = D3D11_CREATE_DEVICE_SINGLETHREADED;
     if ( CommandLineArgs::Singleton()->UseDebugDevice() )
         flags |= D3D11_CREATE_DEVICE_DEBUG;
+    const D3D_FEATURE_LEVEL featureLevels[] = { D3D_FEATURE_LEVEL_11_1 };
     HRESULT hr = D3D11CreateDeviceAndSwapChain( NULL
         , D3D_DRIVER_TYPE_HARDWARE
         , NULL
         , flags
-        , NULL
-        , 0
+        , featureLevels
+        , (uint32_t)std::size( featureLevels )
         , D3D11_SDK_VERSION
         , &swapChainDesc
         , &g_SwapChain

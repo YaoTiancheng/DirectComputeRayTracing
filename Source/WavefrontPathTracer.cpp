@@ -531,7 +531,8 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
             , m_QueueBuffers[ (int)EShaderKernel::Material ]->GetUAV()
             , m_QueueBuffers[ (int)EShaderKernel::NewPath ]->GetUAV()
             , m_NextBlockIndexBuffer->GetUAV()
-            , renderData.m_FilmTexture->GetUAV()
+            , renderData.m_SamplePositionTexture->GetUAV()
+            , renderData.m_SampleValueTexture->GetUAV()
         };
         job.m_SamplerStates.push_back( renderData.m_UVClampSamplerState.Get() );
         job.m_DispatchSizeX = CalculateDispatchGroupCount( s_PathPoolLaneCount );

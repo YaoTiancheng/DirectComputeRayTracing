@@ -138,14 +138,10 @@ bool IsOcculuded( float3 origin
     return BVHIntersect( origin, direction, 0, distance, dispatchThreadIndex, vertices, triangles, BVHNodes, primitiveCount );
 }
 
-void AddSampleToFilm( float3 l
-    , float2 sample
-    , uint2 pixelPos
-    , RWTexture2D<float4> filmTexture )
+void WriteSample( float3 l, float2 sample, uint2 pixelPos, RWTexture2D<float2> samplePositionTexture, RWTexture2D<float3> sampleValueTexture )
 {
-    float4 c = filmTexture[ pixelPos ];
-    c += float4( l, 1.0f );
-    filmTexture[ pixelPos ] = c;
+    samplePositionTexture[ pixelPos ] = sample;
+    sampleValueTexture[ pixelPos ] = l;
 }
 
 struct SLightSampleResult
@@ -622,7 +618,8 @@ RWBuffer<uint>                  g_QueueCounters     : register( u3 );
 RWBuffer<uint>                  g_MaterialQueue     : register( u4 );
 RWBuffer<uint>                  g_NewPathQueue      : register( u5 );
 RWBuffer<uint>                  g_NextBlockIndex    : register( u6 );
-RWTexture2D<float4>             g_FilmTexture       : register( u7 );
+RWTexture2D<float2>             g_SamplePositionTexture : register( u7 );
+RWTexture2D<float3>             g_SampleValueTexture : register( u8 );
 
 [numthreads( 32, 1, 1 )]
 void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
@@ -666,7 +663,7 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
         {
             uint2 pixelPosition = g_PixelPositions[ threadId ];
             float2 pixelSample = g_PixelSamples[ threadId ];
-            AddSampleToFilm( pathAccumulation.Li, pixelSample, pixelPosition, g_FilmTexture );
+            WriteSample( pathAccumulation.Li, pixelSample, pixelPosition, g_SamplePositionTexture, g_SampleValueTexture );
         }
     }
 
@@ -819,7 +816,8 @@ StructuredBuffer<BVHNode> g_BVHNodes                    : register( t13 );
 StructuredBuffer<uint> g_MaterialIds                    : register( t14 );
 StructuredBuffer<Material> g_Materials                  : register( t15 );
 TextureCube<float3> g_EnvTexture                        : register( t16 );
-RWTexture2D<float4> g_FilmTexture                       : register( u0 );
+RWTexture2D<float2> g_SamplePositionTexture             : register( u0 );
+RWTexture2D<float3> g_SampleValueTexture                : register( u1 );
 
 #include "BSDFs.inc.hlsl"
 
@@ -920,7 +918,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
         ++iBounce;
     }
 
-    AddSampleToFilm( l, pixelSample, pixelPos, g_FilmTexture );
+    WriteSample( l, pixelSample, pixelPos, g_SamplePositionTexture, g_SampleValueTexture );
 }
 
 #endif
@@ -950,7 +948,8 @@ StructuredBuffer<uint> g_Triangles      : register( t1 );
 StructuredBuffer<BVHNode> g_BVHNodes    : register( t13 );
 StructuredBuffer<uint> g_MaterialIds    : register( t14 );
 StructuredBuffer<Material> g_Materials  : register( t15 );
-RWTexture2D<float4> g_FilmTexture       : register( u0 );
+RWTexture2D<float2> g_SamplePositionTexture : register( u0 );
+RWTexture2D<float3> g_SampleValueTexture    : register( u1 );
 
 #define GROUP_SIZE_X 16
 #define GROUP_SIZE_Y 16
@@ -989,7 +988,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 #endif
     }
 
-    AddSampleToFilm( l, pixelSample, pixelPos, g_FilmTexture );
+    WriteSample( l, pixelSample, pixelPos, g_SamplePositionTexture, g_SampleValueTexture );
 }
 
 #endif

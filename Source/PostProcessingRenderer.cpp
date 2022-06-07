@@ -26,7 +26,7 @@ D3D11_INPUT_ELEMENT_DESC s_ScreenQuadInputElementDesc[ 1 ]
     { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 };
 
-struct SConstant
+struct SConvolutionConstant
 {
     float m_ReciprocalPixelCount;
     float m_MaxWhiteSqr;
@@ -86,7 +86,7 @@ bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, 
         return false;
 
     m_ConstantsBuffer.reset( GPUBuffer::Create(
-          sizeof( SConstant )
+          sizeof( SConvolutionConstant )
         , 0
         , DXGI_FORMAT_UNKNOWN
         , D3D11_USAGE_DYNAMIC
@@ -163,7 +163,7 @@ void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext,
 
     if ( void* address = m_ConstantsBuffer->Map() )
     {
-        SConstant* constants = (SConstant*)address;
+        SConvolutionConstant* constants = (SConvolutionConstant*)address;
         constants->m_ReciprocalPixelCount = 1.0f / ( renderContext.m_CurrentResolutionWidth * renderContext.m_CurrentResolutionHeight );
         constants->m_MaxWhiteSqr = m_LuminanceWhite * m_LuminanceWhite;
         constants->m_TexcoordScale = renderContext.m_CurrentResolutionRatio;
@@ -182,7 +182,7 @@ void PostProcessingRenderer::ExecuteCopy()
 
     if ( void* address = m_ConstantsBuffer->Map() )
     {
-        SConstant* constants = (SConstant*)address;
+        SConvolutionConstant* constants = (SConvolutionConstant*)address;
         constants->m_TexcoordScale = 1.0f;
         m_ConstantsBuffer->Unmap();
     }

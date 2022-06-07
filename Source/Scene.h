@@ -9,6 +9,15 @@ enum class ELightType
     Rectangle = 1,
 };
 
+enum class EFilter
+{
+    Box = 0,
+    Triangle = 1,
+    Gaussian = 2,
+    Mitchell = 3,
+    LanczosSinc = 4,
+};
+
 struct SLightSetting
 {
     DirectX::XMFLOAT3 position;
@@ -90,6 +99,12 @@ public:
     DirectX::XMFLOAT4 m_BackgroundColor;
     uint32_t m_MaxBounceCount;
     uint32_t m_PrimitiveCount;
+    float m_FilterRadius = 1.0f;
+    EFilter m_Filter = EFilter::Box;
+    float m_GaussianFilterAlpha = 1.5f;
+    float m_MitchellB = 1.f / 3.f;
+    float m_MitchellC = 1.f / 3.f;
+    uint32_t m_LanczosSincTau = 3;
 
     bool m_HasValidScene = false;
     bool m_IsBVHDisabled;

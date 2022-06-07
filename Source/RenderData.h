@@ -3,6 +3,8 @@
 struct SRenderData
 {
     GPUTexturePtr                       m_FilmTexture;
+    GPUTexturePtr                       m_SamplePositionTexture;
+    GPUTexturePtr                       m_SampleValueTexture;
     GPUTexturePtr                       m_RenderResultTexture;
     GPUTexturePtr                       m_sRGBBackbuffer;
     GPUTexturePtr                       m_LinearBackbuffer;

@@ -18,6 +18,7 @@
 #include "Scene.h"
 #include "MessageBox.h"
 #include "ScopedRenderAnnotation.h"
+#include "SampleConvolutionRenderer.h"
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_dx11.h"
 #include "imgui/imgui_impl_win32.h"
@@ -69,6 +70,7 @@ struct SRenderer
     CScene m_Scene;
     CPathTracer* m_PathTracer[ 2 ] = { nullptr, nullptr };
     uint32_t m_ActivePathTracerIndex = 0;
+    CSampleConvolutionRenderer m_SampleConvolutionRenderer;
     PostProcessingRenderer m_PostProcessing;
 
     enum class EFrameSeedType { FrameIndex = 0, SampleCount = 1, Fixed = 2, _Count = 3 };
@@ -224,6 +226,22 @@ bool SRenderer::Init()
     if ( !m_RenderData.m_FilmTexture )
         return false;
 
+    m_RenderData.m_SamplePositionTexture.reset( GPUTexture::Create(
+          m_ResolutionWidth
+        , m_ResolutionHeight
+        , DXGI_FORMAT_R32G32_FLOAT
+        , GPUResourceCreationFlags_HasUAV ) );
+    if ( !m_RenderData.m_SamplePositionTexture )
+        return false;
+
+    m_RenderData.m_SampleValueTexture.reset( GPUTexture::Create(
+          m_ResolutionWidth
+        , m_ResolutionHeight
+        , DXGI_FORMAT_R32G32B32A32_FLOAT
+        , GPUResourceCreationFlags_HasUAV ) );
+    if ( !m_RenderData.m_SampleValueTexture )
+        return false;
+
     m_RenderData.m_CookTorranceCompETexture.reset( BxDFTexturesBuilder::CreateCoorkTorranceBRDFEnergyTexture() );
     if ( !m_RenderData.m_CookTorranceCompETexture )
         return false;
@@ -297,6 +315,9 @@ bool SRenderer::Init()
     samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
     HRESULT hr = device->CreateSamplerState( &samplerDesc, &m_RenderData.m_UVClampSamplerState );
     if ( FAILED( hr ) )
+        return false;
+
+    if ( !m_SampleConvolutionRenderer.Init() )
         return false;
 
     if ( !m_PostProcessing.Init( m_ResolutionWidth, m_ResolutionHeight, m_RenderData.m_FilmTexture, m_RenderData.m_RenderResultTexture ) )
@@ -401,6 +422,8 @@ void SRenderer::RenderOneFrame()
 
     if ( m_PathTracer[ m_ActivePathTracerIndex ]->IsImageComplete() || renderContext.m_IsSmallResolutionEnabled )
     {
+        m_SampleConvolutionRenderer.Execute( renderContext, m_Scene, m_RenderData );
+
         m_PostProcessing.ExecuteLuminanceCompute( renderContext );
 
         RTV = m_RenderData.m_RenderResultTexture->GetRTV();
@@ -544,6 +567,43 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
             if ( ImGui::DragInt( "Max Bounce Count", (int*)&m_Scene.m_MaxBounceCount, 0.5f, 0, m_Scene.s_MaxRayBounce ) )
             {
                 m_IsFilmDirty = true;
+            }
+
+            static const char* s_FilterNames[] = { "Box", "Triangle", "Gaussian", "Mitchell", "Lanczos Sinc" };
+            if ( ImGui::Combo( "Filter", (int*)&m_Scene.m_Filter, s_FilterNames, IM_ARRAYSIZE( s_FilterNames ) ) )
+            {
+                m_IsFilmDirty = true;
+            }
+
+            if ( ImGui::DragFloat( "Filter Radius", &m_Scene.m_FilterRadius, 0.1f, 0.001f, 16.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp ) )
+            {
+                m_IsFilmDirty = true;
+            }
+
+            if ( m_Scene.m_Filter == EFilter::Gaussian )
+            {
+                if ( ImGui::DragFloat( "Alpha", &m_Scene.m_GaussianFilterAlpha, 0.005f, 0.0f, 100.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp ) )
+                {
+                    m_IsFilmDirty = true;
+                }
+            }
+            else if ( m_Scene.m_Filter == EFilter::Mitchell )
+            {
+                if ( ImGui::DragFloat( "B", &m_Scene.m_MitchellB, 0.01f, 0.0f, 100.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp ) )
+                {
+                    m_IsFilmDirty = true;
+                }
+                if ( ImGui::DragFloat( "C", &m_Scene.m_MitchellC, 0.01f, 0.0f, 100.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp ) )
+                {
+                    m_IsFilmDirty = true;
+                }
+            }
+            else if ( m_Scene.m_Filter == EFilter::LanczosSinc )
+            {
+                if ( ImGui::DragInt( "Tau", (int*)&m_Scene.m_LanczosSincTau, 1, 1, 100, "%d", ImGuiSliderFlags_AlwaysClamp ) )
+                {
+                    m_IsFilmDirty = true;
+                }
             }
 
             if ( ImGui::Checkbox( "GGX VNDF Sampling", &m_Scene.m_IsGGXVNDFSamplingEnabled ) )

@@ -150,6 +150,9 @@
     <ClInclude Include="Source\ScopedRenderAnnotation.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Source\SampleConvolutionRenderer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\Application.cpp">
@@ -239,6 +242,9 @@
     <ClCompile Include="Source\WavefrontPathTracer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Source\SampleConvolutionRenderer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Image Include="Resources\small.ico">
@@ -288,6 +294,7 @@
     <None Include="Shaders\CookTorranceBSDF.inc.hlsl" />
     <None Include="Shaders\BxDFTextures.inc.hlsl" />
     <None Include="Shaders\Intrinsics.inc.hlsl" />
+    <None Include="Shaders\SampleConvolution.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resources\DirectComputeRayTracing.rc">

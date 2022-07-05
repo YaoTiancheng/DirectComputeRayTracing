@@ -358,7 +358,7 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SR
     if ( void* address = m_RayCastConstantBuffer->Map() )
     {
         SRayCastConstants* constants = (SRayCastConstants*)address;
-        constants->g_PrimitiveCount = (uint32_t)m_Scene->m_PrimitiveCount;
+        constants->g_PrimitiveCount = (uint32_t)m_Scene->m_Mesh.GetTriangleCount();
         m_RayCastConstantBuffer->Unmap();
     }
 
@@ -452,7 +452,7 @@ bool CWavefrontPathTracer::CompileAndCreateShader( EShaderKernel kernel )
 
     static const uint32_t s_MaxRadix10IntegerBufferLengh = 12;
     char buffer_TraversalStackSize[ s_MaxRadix10IntegerBufferLengh ];
-    _itoa( m_Scene->m_BVHTraversalStackSize, buffer_TraversalStackSize, 10 );
+    _itoa( m_Scene->m_Mesh.GetBVHMaxStackSize(), buffer_TraversalStackSize, 10 );
 
     rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_STACK_SIZE", buffer_TraversalStackSize } );
 

@@ -78,7 +78,7 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
         constants->filmSize = m_Scene->m_FilmSize;
         constants->lightCount = (uint32_t)m_Scene->m_LightSettings.size();
         constants->maxBounceCount = m_Scene->m_MaxBounceCount;
-        constants->primitiveCount = m_Scene->m_PrimitiveCount;
+        constants->primitiveCount = m_Scene->m_Mesh.GetTriangleCount();
         constants->apertureRadius = m_Scene->CalculateApertureDiameter() * 0.5f;
         constants->focalDistance = m_Scene->m_FocalDistance;
         constants->apertureBaseAngle = m_Scene->m_ApertureRotation;
@@ -149,7 +149,7 @@ bool CMegakernelPathTracer::CompileAndCreateRayTracingKernel()
 
     static const uint32_t s_MaxRadix10IntegerBufferLengh = 12;
     char buffer_TraversalStackSize[ s_MaxRadix10IntegerBufferLengh ];
-    _itoa( m_Scene->m_BVHTraversalStackSize, buffer_TraversalStackSize, 10 );
+    _itoa( m_Scene->m_Mesh.GetBVHMaxStackSize(), buffer_TraversalStackSize, 10 );
 
     rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_STACK_SIZE", buffer_TraversalStackSize } );
 

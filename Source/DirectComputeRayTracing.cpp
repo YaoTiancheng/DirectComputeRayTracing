@@ -41,7 +41,7 @@ struct SRenderer
 
     bool Init();
 
-    bool ResetScene( const char* filepath );
+    bool LoadScene( const char* filepath, bool reset );
 
     void DispatchRayTracing( SRenderContext* renderContext );
 
@@ -211,6 +211,7 @@ bool SRenderer::Init()
         return false;
     }
 
+    m_Scene.m_IsBVHDisabled = CommandLineArgs::Singleton()->GetNoBVHAccel();
     m_Scene.m_EnvironmentImageFilepath = StringConversion::UTF16WStringToUTF8String( CommandLineArgs::Singleton()->GetEnvironmentTextureFilename() );
 
     m_ResolutionWidth = CommandLineArgs::Singleton()->ResolutionX();
@@ -325,16 +326,21 @@ bool SRenderer::Init()
 
     UpdateRenderViewport( m_ResolutionWidth, m_ResolutionHeight );
 
-    ResetScene( CommandLineArgs::Singleton()->GetFilename().c_str() );
+    LoadScene( CommandLineArgs::Singleton()->GetFilename().c_str(), true );
 
     return true;
 }
 
-bool SRenderer::ResetScene( const char* filePath )
+bool SRenderer::LoadScene( const char* filepath, bool reset )
 {
     m_IsFilmDirty = true; // Clear film in case scene reset failed and ray tracing being disabled.
 
-    bool loadSceneResult = m_Scene.LoadFromFile( filePath );
+    if ( reset )
+    {
+        m_Scene.Reset();
+    }
+
+    bool loadSceneResult = m_Scene.LoadFromFile( filepath );
     if ( !loadSceneResult )
     {
         return false;
@@ -677,27 +683,33 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
         if ( ImGui::BeginMenuBar() )
         {
-            if ( ImGui::MenuItem( "Load" ) )
+            if ( ImGui::BeginMenu( "File" ) )
             {
-                OPENFILENAMEA ofn;
-                char filepath[ MAX_PATH ];
-                ZeroMemory( &ofn, sizeof( ofn ) );
-                ofn.lStructSize = sizeof( ofn );
-                ofn.hwndOwner = m_hWnd;
-                ofn.lpstrFile = filepath;
-                ofn.lpstrFile[ 0 ] = '\0';
-                ofn.nMaxFile = sizeof( filepath );
-                ofn.lpstrFilter = "Wavefront OBJ\0*.OBJ\0";
-                ofn.nFilterIndex = 1;
-                ofn.lpstrFileTitle = NULL;
-                ofn.nMaxFileTitle = 0;
-                ofn.lpstrInitialDir = NULL;
-                ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
-
-                if ( GetOpenFileNameA( &ofn ) == TRUE )
+                bool loadScene = ImGui::MenuItem( "Load Scene" );
+                bool resetAndLoadScene = ImGui::MenuItem( "Reset & Load Scene" );
+                if ( loadScene || resetAndLoadScene )
                 {
-                    ResetScene( filepath );
+                    OPENFILENAMEA ofn;
+                    char filepath[ MAX_PATH ];
+                    ZeroMemory( &ofn, sizeof( ofn ) );
+                    ofn.lStructSize = sizeof( ofn );
+                    ofn.hwndOwner = m_hWnd;
+                    ofn.lpstrFile = filepath;
+                    ofn.lpstrFile[ 0 ] = '\0';
+                    ofn.nMaxFile = sizeof( filepath );
+                    ofn.lpstrFilter = "Wavefront OBJ\0*.OBJ\0XML\0*.XML\0";
+                    ofn.nFilterIndex = 1;
+                    ofn.lpstrFileTitle = NULL;
+                    ofn.nMaxFileTitle = 0;
+                    ofn.lpstrInitialDir = NULL;
+                    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+
+                    if ( GetOpenFileNameA( &ofn ) == TRUE )
+                    {
+                        LoadScene( filepath, resetAndLoadScene );
+                    }
                 }
+                ImGui::EndMenu();
             }
             if ( ImGui::BeginMenu( "Edit", m_Scene.m_HasValidScene ) )
             {
@@ -767,11 +779,11 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
         if ( ImGui::CollapsingHeader( "Materials" ) )
         {
-            for ( size_t iMaterial = 0; iMaterial < m_Scene.m_Materials.size(); ++iMaterial )
+            for ( size_t iMaterial = 0; iMaterial < m_Scene.m_Mesh.GetMaterials().size(); ++iMaterial )
             {
                 bool isSelected = ( iMaterial == m_Scene.m_ObjectSelection.m_MaterialSelectionIndex );
                 ImGui::PushID( (int)iMaterial );
-                if ( ImGui::Selectable( m_Scene.m_MaterialNames[ iMaterial ].c_str(), isSelected ) )
+                if ( ImGui::Selectable( m_Scene.m_Mesh.GetMaterialNames()[ iMaterial ].c_str(), isSelected ) )
                 {
                     m_Scene.m_ObjectSelection.SelectMaterial( (int)iMaterial );
                 }
@@ -830,9 +842,9 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
         }
         else if ( m_Scene.m_ObjectSelection.m_MaterialSelectionIndex >= 0 )
         {
-            if ( m_Scene.m_ObjectSelection.m_MaterialSelectionIndex < m_Scene.m_Materials.size() )
+            if ( m_Scene.m_ObjectSelection.m_MaterialSelectionIndex < m_Scene.m_Mesh.GetMaterials().size() )
             {
-                Material* selection = m_Scene.m_Materials.data() + m_Scene.m_ObjectSelection.m_MaterialSelectionIndex;
+                Material* selection = m_Scene.m_Mesh.GetMaterials().data() + m_Scene.m_ObjectSelection.m_MaterialSelectionIndex;
                 ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float );
                 if ( ImGui::ColorEdit3( "Albedo", (float*)&selection->albedo ) )
                     m_IsMaterialGPUBufferDirty = true;
@@ -944,7 +956,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
         ImGui::Text( "No BVH: %s", m_Scene.m_IsBVHDisabled ? "On" : "Off" );
         if ( m_Scene.m_HasValidScene )
         {
-            ImGui::Text( "BVH traversal stack size: %d", m_Scene.m_BVHTraversalStackSize );
+            ImGui::Text( "BVH traversal stack size: %d", m_Scene.m_Mesh.GetBVHMaxStackSize() );
         }
         ImGui::Text( "Current Resolution: %dx%d", renderContext->m_CurrentResolutionWidth, renderContext->m_CurrentResolutionHeight );
         ImGui::Text( "Average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate );

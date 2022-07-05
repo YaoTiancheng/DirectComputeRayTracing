@@ -13,6 +13,103 @@ using namespace DirectX;
 
 bool CScene::LoadFromFile( const char* filepath )
 {
+    if ( filepath == nullptr || filepath[ 0 ] == '\0' )
+        return false;
+
+    if ( !LoadFromXMLFile( filepath ) )
+        return false;
+
+    m_VerticesBuffer.reset( GPUBuffer::CreateStructured(
+          sizeof( Vertex ) * m_Mesh.GetVertexCount()
+        , sizeof( Vertex )
+        , D3D11_USAGE_IMMUTABLE
+        , D3D11_BIND_SHADER_RESOURCE
+        , 0
+        , m_Mesh.GetVertices() ) );
+    if ( !m_VerticesBuffer )
+    {
+        CMessagebox::GetSingleton().Append( "Failed to create vertices buffer.\n" );
+        return false;
+    }
+
+    m_TrianglesBuffer.reset( GPUBuffer::CreateStructured(
+          sizeof( uint32_t ) * m_Mesh.GetIndexCount()
+        , sizeof( uint32_t )
+        , D3D11_USAGE_IMMUTABLE
+        , D3D11_BIND_SHADER_RESOURCE
+        , 0
+        , m_Mesh.GetIndices() ) );
+    if ( !m_TrianglesBuffer )
+    {
+        CMessagebox::GetSingleton().Append( "Failed to create triangles buffer.\n" );
+        return false;
+    }
+
+    m_MaterialIdsBuffer.reset( GPUBuffer::CreateStructured(
+          sizeof( uint32_t ) * m_Mesh.GetTriangleCount()
+        , sizeof( uint32_t )
+        , D3D11_USAGE_IMMUTABLE
+        , D3D11_BIND_SHADER_RESOURCE
+        , 0
+        , m_Mesh.GetMaterialIds() ) );
+    if ( !m_MaterialIdsBuffer )
+    {
+        CMessagebox::GetSingleton().Append( "Failed to create material id buffer.\n" );
+        return false;
+    }
+
+    m_MaterialsBuffer.reset( GPUBuffer::CreateStructured(
+          uint32_t( sizeof( Material ) * m_Mesh.GetMaterials().size() )
+        , sizeof( Material )
+        , D3D11_USAGE_DYNAMIC
+        , D3D11_BIND_SHADER_RESOURCE
+        , GPUResourceCreationFlags_CPUWriteable
+        , m_Mesh.GetMaterials().data() ) );
+    if ( !m_MaterialsBuffer )
+    {
+        CMessagebox::GetSingleton().Append( "Failed to create materials buffer.\n" );
+        return false;
+    }
+
+    if ( !CommandLineArgs::Singleton()->GetNoBVHAccel() )
+    {
+        m_BVHNodesBuffer.reset( GPUBuffer::CreateStructured(
+              sizeof( BVHNode ) * m_Mesh.GetBVHNodeCount()
+            , sizeof( BVHNode )
+            , D3D11_USAGE_IMMUTABLE
+            , D3D11_BIND_SHADER_RESOURCE
+            , 0
+            , m_Mesh.GetBVHNodes() ) );
+        if ( !m_BVHNodesBuffer )
+        {
+            CMessagebox::GetSingleton().Append( "Failed to create BVH nodes buffer.\n" );
+            return false;
+        }
+    }
+
+    m_LightsBuffer.reset( GPUBuffer::CreateStructured(
+        sizeof( SLight ) * s_MaxLightsCount
+        , sizeof( SLight )
+        , D3D11_USAGE_DYNAMIC
+        , D3D11_BIND_SHADER_RESOURCE
+        , GPUResourceCreationFlags_CPUWriteable
+        , nullptr ) );
+    if ( !m_LightsBuffer )
+    {
+        CMessagebox::GetSingleton().Append( "Failed to create lights buffer.\n" );
+        return false;
+    }
+
+    m_Camera.SetDirty();
+
+    m_HasValidScene = true;
+    m_ObjectSelection.DeselectAll();
+
+    return true;
+}
+
+void CScene::Reset()
+{
     m_MaxBounceCount = 2;
     m_FilmSize = XMFLOAT2( 0.05333f, 0.03f );
     m_FocalLength = 0.05f;
@@ -26,146 +123,11 @@ bool CScene::LoadFromFile( const char* filepath )
     m_BackgroundColor = { 1.0f, 1.0f, 1.0f, 0.f };
     m_FilterRadius = 1.0f;
 
-    if ( filepath == nullptr || filepath[ 0 ] == '\0' )
-        return false;
-
-    const CommandLineArgs* commandLineArgs = CommandLineArgs::Singleton();
-
-    Mesh mesh;
-    {
-        char filePathNoExtension[ MAX_PATH ];
-        char fileDir[ MAX_PATH ];
-        strcpy( filePathNoExtension, filepath );
-        PathRemoveExtensionA( filePathNoExtension );
-        const char* fileName = PathFindFileNameA( filePathNoExtension );
-        strcpy( fileDir, filepath );
-        PathRemoveFileSpecA( fileDir );
-
-        char BVHFilePath[ MAX_PATH ] = "\0";
-        const char* MTLSearchPath = fileDir;
-        if ( commandLineArgs->GetOutputBVHToFile() )
-        {
-            sprintf_s( BVHFilePath, MAX_PATH, "%s\\%s.xml", fileDir, fileName );
-        }
-        bool buildBVH = !commandLineArgs->GetNoBVHAccel();
-
-        LOG_STRING_FORMAT( "Loading mesh from: %s, MTL search path at: %s, BVH file path at: %s\n", filepath, MTLSearchPath, BVHFilePath );
-
-        if ( !mesh.LoadFromOBJFile( filepath, MTLSearchPath, buildBVH, BVHFilePath ) )
-        {
-            CMessagebox::GetSingleton().AppendFormat( "Failed to load mesh from %s.\n", filepath );
-            return false;
-        }
-
-        LOG_STRING_FORMAT( "Mesh loaded. Triangle count: %d, vertex count: %d, material count: %d\n", mesh.GetTriangleCount(), mesh.GetVertexCount(), mesh.GetMaterials().size() );
-    }
-
-    if ( !commandLineArgs->GetNoBVHAccel() )
-    {
-        uint32_t BVHMaxDepth = mesh.GetBVHMaxDepth();
-        uint32_t BVHMaxStackSize = mesh.GetBVHMaxStackSize();
-        LOG_STRING_FORMAT( "BVH created from mesh. Node count:%d, max depth:%d, max stack size:%d\n", mesh.GetBVHNodeCount(), BVHMaxDepth, BVHMaxStackSize );
-    }
-
-    m_BVHTraversalStackSize = mesh.GetBVHMaxStackSize();
-
-    m_Materials = mesh.GetMaterials();
-    m_MaterialNames = mesh.GetMaterialNames();
-
-    m_VerticesBuffer.reset( GPUBuffer::CreateStructured(
-          sizeof( Vertex ) * mesh.GetVertexCount()
-        , sizeof( Vertex )
-        , D3D11_USAGE_IMMUTABLE
-        , D3D11_BIND_SHADER_RESOURCE
-        , 0
-        , mesh.GetVertices() ) );
-    if ( !m_VerticesBuffer )
-    {
-        CMessagebox::GetSingleton().Append( "Failed to create vertices buffer.\n" );
-        return false;
-    }
-
-    m_TrianglesBuffer.reset( GPUBuffer::CreateStructured(
-          sizeof( uint32_t ) * mesh.GetIndexCount()
-        , sizeof( uint32_t )
-        , D3D11_USAGE_IMMUTABLE
-        , D3D11_BIND_SHADER_RESOURCE
-        , 0
-        , mesh.GetIndices() ) );
-    if ( !m_TrianglesBuffer )
-    {
-        CMessagebox::GetSingleton().Append( "Failed to create triangles buffer.\n" );
-        return false;
-    }
-
-    m_MaterialIdsBuffer.reset( GPUBuffer::CreateStructured(
-          sizeof( uint32_t ) * mesh.GetTriangleCount()
-        , sizeof( uint32_t )
-        , D3D11_USAGE_IMMUTABLE
-        , D3D11_BIND_SHADER_RESOURCE
-        , 0
-        , mesh.GetMaterialIds() ) );
-    if ( !m_MaterialIdsBuffer )
-    {
-        CMessagebox::GetSingleton().Append( "Failed to create material id buffer.\n" );
-        return false;
-    }
-
-    m_MaterialsBuffer.reset( GPUBuffer::CreateStructured(
-          uint32_t( sizeof( Material ) * m_Materials.size() )
-        , sizeof( Material )
-        , D3D11_USAGE_DYNAMIC
-        , D3D11_BIND_SHADER_RESOURCE
-        , GPUResourceCreationFlags_CPUWriteable
-        , m_Materials.data() ) );
-    if ( !m_MaterialsBuffer )
-    {
-        CMessagebox::GetSingleton().Append( "Failed to create materials buffer.\n" );
-        return false;
-    }
-
-    if ( !commandLineArgs->GetNoBVHAccel() )
-    {
-        m_BVHNodesBuffer.reset( GPUBuffer::CreateStructured(
-              sizeof( BVHNode ) * mesh.GetBVHNodeCount()
-            , sizeof( BVHNode )
-            , D3D11_USAGE_IMMUTABLE
-            , D3D11_BIND_SHADER_RESOURCE
-            , 0
-            , mesh.GetBVHNodes() ) );
-        if ( !m_BVHNodesBuffer )
-        {
-            CMessagebox::GetSingleton().Append( "Failed to create BVH nodes buffer.\n" );
-            return false;
-        }
-    }
-
+    m_Mesh.Clear();
     m_LightSettings.clear();
-    m_LightSettings.reserve( s_MaxLightsCount );
 
-    m_LightsBuffer.reset( GPUBuffer::CreateStructured(
-          sizeof( SLight ) * s_MaxLightsCount
-        , sizeof( SLight )
-        , D3D11_USAGE_DYNAMIC
-        , D3D11_BIND_SHADER_RESOURCE
-        , GPUResourceCreationFlags_CPUWriteable
-        , nullptr ) );
-    if ( !m_LightsBuffer )
-    {
-        CMessagebox::GetSingleton().Append( "Failed to create lights buffer.\n" );
-        return false;
-    }
-
-    m_PrimitiveCount = mesh.GetTriangleCount();
-    m_IsBVHDisabled = commandLineArgs->GetNoBVHAccel();
-
-    m_Camera.SetDirty();
-
-    m_HasValidScene = true;
-
+    m_HasValidScene = false;
     m_ObjectSelection.DeselectAll();
-
-    return true;
 }
 
 bool CScene::LoadEnvironmentTextureFromFile( const wchar_t* filepath )
@@ -224,7 +186,7 @@ void CScene::UpdateMaterialGPUData()
 {
     if ( void* address = m_MaterialsBuffer->Map() )
     {
-        memcpy( address, m_Materials.data(), sizeof( Material ) * m_Materials.size() );
+        memcpy( address, m_Mesh.GetMaterials().data(), sizeof( Material ) * m_Mesh.GetMaterials().size() );
         m_MaterialsBuffer->Unmap();
     }
 }

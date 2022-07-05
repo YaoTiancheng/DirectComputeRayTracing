@@ -8,7 +8,15 @@
 class Mesh
 {
 public:
-    bool                    LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool buildBVH = true, const char* BVHFilename = nullptr );
+    bool                    LoadFromOBJFile( const char* filename
+                                           , const char* mtlFileDir
+                                           , bool applyTransform = false
+                                           , const DirectX::XMFLOAT4X4& transform = XMFLOAT4X4( 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f )
+                                           , uint32_t materialIdOverride = -1 );
+
+    void                    BuildBVH( const char* BVHFilename = nullptr );
+
+    void                    Clear();
 
     uint32_t                GetVertexCount() const { return (uint32_t)m_Vertices.size(); }
 
@@ -32,7 +40,11 @@ public:
 
     const std::vector<Material>&    GetMaterials() const { return m_Materials; }
 
+    std::vector<Material>&  GetMaterials() { return m_Materials; }
+
     const std::vector<std::string>& GetMaterialNames() const { return m_MaterialNames; }
+
+    std::vector<std::string>& GetMaterialNames() { return m_MaterialNames; }
 
 private:
     std::vector<Vertex>         m_Vertices;

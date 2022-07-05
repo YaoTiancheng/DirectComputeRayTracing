@@ -110,9 +110,10 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <TreatWarningAsError>true</TreatWarningAsError>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -148,9 +149,10 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <TreatWarningAsError>true</TreatWarningAsError>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -173,6 +175,7 @@
     <ClInclude Include="Source\Camera.h" />
     <ClInclude Include="Source\CommandLineArgs.h" />
     <ClInclude Include="Source\ComputeJob.h" />
+    <ClInclude Include="Source\MathHelper.h" />
     <ClInclude Include="Source\SampleConvolutionRenderer.h" />
     <ClInclude Include="Source\D3D11RenderSystem.h" />
     <ClInclude Include="Source\Application.h" />
@@ -219,6 +222,8 @@
     <ClCompile Include="Source\Camera.cpp" />
     <ClCompile Include="Source\CommandLineArgs.cpp" />
     <ClCompile Include="Source\ComputeJob.cpp" />
+    <ClCompile Include="Source\MathHelper.cpp" />
+    <ClCompile Include="Source\SceneXMLLoading.cpp" />
     <ClCompile Include="Source\SampleConvolutionRenderer.cpp" />
     <ClCompile Include="Source\D3D11RenderSystem.cpp" />
     <ClCompile Include="Source\Application.cpp" />
@@ -278,6 +283,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Source\Mesh.cpp" />
+    <ClCompile Include="Source\SceneWavefrontOBJLoading.cpp" />
     <ClCompile Include="Source\WavefrontPathTracer.cpp" />
   </ItemGroup>
   <ItemGroup>

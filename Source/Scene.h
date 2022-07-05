@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Camera.h"
+#include "Mesh.h"
 #include "../Shaders/Material.inc.hlsl"
 
 enum class ELightType
@@ -64,6 +65,8 @@ class CScene
 public:
     bool LoadFromFile( const char* filepath );
 
+    void Reset();
+
     bool LoadEnvironmentTextureFromFile( const wchar_t* filepath );
 
     void UpdateLightGPUData();
@@ -84,6 +87,12 @@ public:
     const uint32_t s_MaxLightsCount = 64;
     const float s_MaxFocalDistance = 999999.0f;
 
+private:
+    bool LoadFromWavefrontOBJFile( const char* filepath );
+
+    bool LoadFromXMLFile( const char* filepath );
+
+public:
     std::string m_EnvironmentImageFilepath;
 
     DirectX::XMFLOAT2 m_FilmSize;
@@ -98,7 +107,6 @@ public:
     bool m_IsManualFilmDistanceEnabled = false;
     DirectX::XMFLOAT4 m_BackgroundColor;
     uint32_t m_MaxBounceCount;
-    uint32_t m_PrimitiveCount;
     float m_FilterRadius = 1.0f;
     EFilter m_Filter = EFilter::Box;
     float m_GaussianFilterAlpha = 1.5f;
@@ -109,12 +117,10 @@ public:
     bool m_HasValidScene = false;
     bool m_IsBVHDisabled;
     bool m_IsGGXVNDFSamplingEnabled = true;
-    uint32_t m_BVHTraversalStackSize;
 
     Camera m_Camera;
     std::vector<SLightSetting> m_LightSettings;
-    std::vector<Material> m_Materials;
-    std::vector<std::string> m_MaterialNames;
+    Mesh m_Mesh;
 
     GPUTexturePtr m_EnvironmentTexture;
     GPUBufferPtr m_VerticesBuffer;

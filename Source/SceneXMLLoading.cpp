@@ -3,6 +3,7 @@
 #include "Logging.h"
 #include "Scene.h"
 #include "MathHelper.h"
+#include "CommandLineArgs.h"
 #include "RapidXml/rapidxml.hpp"
 
 using namespace rapidxml;
@@ -371,16 +372,19 @@ namespace
         std::unordered_set<std::string_view> conductorMaterialNames = { "conductor", "roughconductor" };
         std::unordered_set<std::string_view> transmissionMaterialNames = { "dielectric", "roughdielectric" };
 
-        bool isDielectric = dielectricMaterialNames.find( { idValue->m_String.data(), idValue->m_String.size() } ) != dielectricMaterialNames.end();
-        bool isConductor = conductorMaterialNames.find( { idValue->m_String.data(), idValue->m_String.size() } ) != conductorMaterialNames.end();
-        bool isTransmission = transmissionMaterialNames.find( { idValue->m_String.data(), idValue->m_String.size() } ) != transmissionMaterialNames.end();
+        bool isDielectric = dielectricMaterialNames.find( { typeValue->m_String.data(), typeValue->m_String.size() } ) != dielectricMaterialNames.end();
+        bool isConductor = conductorMaterialNames.find( { typeValue->m_String.data(), typeValue->m_String.size() } ) != conductorMaterialNames.end();
+        bool isTransmission = transmissionMaterialNames.find( { typeValue->m_String.data(), typeValue->m_String.size() } ) != transmissionMaterialNames.end();
 
         if ( !isDielectric && !isConductor && !isTransmission )
         {
-            LOG_STRING_FORMAT( "Unsupported BSDF type \'%.*s\'\n", idValue->m_String.size(), idValue->m_String.data() );
+            LOG_STRING_FORMAT( "Unsupported BSDF type \'%.*s\'\n", typeValue->m_String.size(), typeValue->m_String.data() );
             return false;
         }
 
+        material->albedo = { 1.0f, 1.0f, 1.0f };
+        material->ior = { 1.5f, 1.5f, 1.5f };
+        material->k = { 1.0f, 1.0f, 1.0f };
         material->flags = 0;
         material->transmission = 0.0f;
         material->emission = { 0.0f, 0.0f, 0.0f };
@@ -420,17 +424,19 @@ namespace
             material->ior.x = intIOR / extIOR;
 
             SValue* diffuseReflectanceValue = BSDF.FindValue( "diffuseReflectance" );
+            XMFLOAT3 albedo = { 1.0f, 1.0f, 1.0f };
             if ( diffuseReflectanceValue )
             {
                 if ( diffuseReflectanceValue->m_Type == EValueType::eRGB )
                 {
-                    material->albedo = diffuseReflectanceValue->m_RGB;
+                    albedo = diffuseReflectanceValue->m_RGB;
                 }
                 else
                 {
                     LOG_STRING( "Non-RGB diffuseReflectance value is not supported.\n" );
                 }
             }
+            material->albedo = albedo;
 
             material->transmission = isTransmission ? 1.0f : 0.0f;
         }
@@ -438,7 +444,8 @@ namespace
         {
             SValue* etaValue = BSDF.FindValue( "eta" );
             SValue* extEtaValue = BSDF.FindValue( "extEta" );
-            XMFLOAT3 eta = { 1.0f, 1.0f, 1.0f }, extEta = { 1.000277f, 1.000277f, 1.000277f };
+            XMFLOAT3 eta = { 1.0f, 1.0f, 1.0f };
+            float extEta = 1.000277f;
             if ( etaValue )
             {
                 if ( etaValue->m_Type == EValueType::eRGB )
@@ -452,18 +459,18 @@ namespace
             }
             if ( extEtaValue )
             {
-                if ( extEtaValue->m_Type == EValueType::eRGB )
+                if ( extEtaValue->m_Type == EValueType::eFloat )
                 {
-                    extEta = extEtaValue->m_RGB;
+                    extEta = extEtaValue->m_Float;
                 }
                 else
                 {
-                    LOG_STRING( "Non-RGB eta value is not supported.\n" );
+                    LOG_STRING( "Non-float extEta value is not supported.\n" );
                 }
             }
-            material->ior.x = eta.x / extEta.x;
-            material->ior.y = eta.y / extEta.y;
-            material->ior.z = eta.z / extEta.z;
+            material->ior.x = eta.x / extEta;
+            material->ior.y = eta.y / extEta;
+            material->ior.z = eta.z / extEta;
 
             SValue* kValue = BSDF.FindValue( "k" );
             XMFLOAT3 k = { 1.0f, 1.0f, 1.0f };
@@ -478,12 +485,15 @@ namespace
                     LOG_STRING( "Non-RGB k value is not supported.\n" );
                 }
             }
+            material->k = k;
 
             material->flags |= MATERIAL_FLAG_IS_METAL;
         }
+
+        return true;
     }
 
-    bool CreateAndAddMaterial( const SValue& BSDF, std::vector<Material>* materials, std::vector<std::string>* names, std::unordered_map<std::string_view, uint32_t>* materialNameToIdMap, uint32_t* materialId )
+    bool CreateAndAddMaterial( const SValue& BSDF, std::vector<Material>* materials, std::vector<std::string>* names, std::unordered_map<const SValue*, uint32_t>* BSDFValuePointerToIdMap, uint32_t* materialId )
     {
         Material newMaterial;
         std::string_view newMaterialName;
@@ -492,10 +502,7 @@ namespace
             uint32_t newMaterialId = (uint32_t)materials->size();
             materials->emplace_back( newMaterial );
             names->emplace_back( newMaterialName.data(), newMaterialName.length() );
-            if ( newMaterialName.length() > 0 )
-            {
-                materialNameToIdMap->insert( std::make_pair( newMaterialName, newMaterialId ) );
-            }
+            BSDFValuePointerToIdMap->insert( std::make_pair( &BSDF, newMaterialId ) );
             *materialId = newMaterialId;
             return true;
         }
@@ -503,7 +510,7 @@ namespace
     }
 }
 
-bool CScene::LoadFromXMLFile( const char* filepath )
+bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
 {
     std::ifstream ifstream( filepath );
     if ( !ifstream )
@@ -525,7 +532,7 @@ bool CScene::LoadFromXMLFile( const char* filepath )
         return false;
     }
 
-    std::unordered_map<std::string_view, uint32_t> materialNameIdMap;
+    std::unordered_map<const SValue*, uint32_t> BSDFValuePointerToIdMap;
     for ( auto& rootObjectValue : rootObjectValues )
     {
         if ( strncmp( "integrator", rootObjectValue.first.data(), rootObjectValue.first.length() ) == 0 )
@@ -573,12 +580,12 @@ bool CScene::LoadFromXMLFile( const char* filepath )
 
             {
                 SValue* apertureRadiusValue = rootObjectValue.second->FindValue( "apertureRadius" );
-                m_RelativeAperture = apertureRadiusValue ? m_FocalLength / ( apertureRadiusValue->m_Float * 2 ) : 0.0f;
+                m_RelativeAperture = apertureRadiusValue ? m_FocalLength / ( apertureRadiusValue->m_Float * 2 ) : 8.0f;
             }
 
             {
                 SValue* focalDistanceValue = rootObjectValue.second->FindValue( "focusDistance" );
-                m_FocalDistance = focalDistanceValue ? focalDistanceValue->m_Float : 0.0f;
+                m_FocalDistance = focalDistanceValue ? focalDistanceValue->m_Float : 2.0f;
             }
 
             {
@@ -618,7 +625,7 @@ bool CScene::LoadFromXMLFile( const char* filepath )
                                 SValue* tauValue = filterValue->FindValue( "lobes" );
                                 m_Filter = EFilter::LanczosSinc;
                                 m_LanczosSincTau = tauValue ? tauValue->m_Integer : 3;
-                                m_FilterRadius = m_LanczosSincTau;
+                                m_FilterRadius = (float)m_LanczosSincTau;
                             }
                             else
                             {
@@ -632,7 +639,7 @@ bool CScene::LoadFromXMLFile( const char* filepath )
         else if ( strncmp( "bsdf", rootObjectValue.first.data(), rootObjectValue.first.length() ) == 0 )
         {
             uint32_t materialId = 0;
-            CreateAndAddMaterial( *rootObjectValue.second, &m_Mesh.GetMaterials(), &m_Mesh.GetMaterialNames(), &materialNameIdMap, &materialId );
+            CreateAndAddMaterial( *rootObjectValue.second, &m_Mesh.GetMaterials(), &m_Mesh.GetMaterialNames(), &BSDFValuePointerToIdMap, &materialId );
         }
         else if ( strncmp( "shape", rootObjectValue.first.data(), rootObjectValue.first.length() ) == 0 )
         {
@@ -643,8 +650,26 @@ bool CScene::LoadFromXMLFile( const char* filepath )
             }
             else
             {
-                if ( strncmp( "obj", typeValue->m_String.data(), typeValue->m_String.length() ) )
+                if ( strncmp( "obj", typeValue->m_String.data(), typeValue->m_String.length() ) == 0 )
                 {
+                    SValue* transformValue = rootObjectValue.second->FindValue( "transform" );
+                    XMFLOAT4X4 transform = transformValue ? transformValue->m_Matrix : XMFLOAT4X4( 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f );
+
+                    uint32_t materialId = -1;
+                    SValue* bsdfValue = rootObjectValue.second->FindValue( "bsdf" );
+                    if ( bsdfValue )
+                    {
+                        auto iter = BSDFValuePointerToIdMap.find( bsdfValue );
+                        if ( iter == BSDFValuePointerToIdMap.end() )
+                        {
+                            CreateAndAddMaterial( *bsdfValue, &m_Mesh.GetMaterials(), &m_Mesh.GetMaterialNames(), &BSDFValuePointerToIdMap, &materialId );
+                        }
+                        else
+                        {
+                            materialId = iter->second;
+                        }
+                    }
+
                     SValue* filenameValue = rootObjectValue.second->FindValue( "filename" );
                     if ( !filenameValue )
                     {
@@ -652,13 +677,41 @@ bool CScene::LoadFromXMLFile( const char* filepath )
                     }
                     else
                     {
-
+                        char zeroTerminatedFilename[ MAX_PATH ];
+                        sprintf_s( zeroTerminatedFilename, sizeof( zeroTerminatedFilename ), "%.*s\0", (int)filenameValue->m_String.length(), filenameValue->m_String.data() );
+                        std::filesystem::path objFilepath = zeroTerminatedFilename;
+                        if ( objFilepath.is_relative() )
+                        {
+                            objFilepath = filepath.parent_path() / objFilepath;
+                        }
+                        if ( !m_Mesh.LoadFromOBJFile( objFilepath.u8string().c_str(), "", true, transform, materialId ) )
+                        {
+                            LOG_STRING_FORMAT( "Failed to load wavefront obj file \'%s\'.\n", zeroTerminatedFilename );
+                        }
                     }
+                }
+                else
+                {
+                    LOG_STRING_FORMAT( "Unsupported shape type \'%.*s\'\n", typeValue->m_String.length(), typeValue->m_String.data() );
                 }
             }
         }
     }
 
     valueList.Clear();
+
+    LOG_STRING_FORMAT( "Mesh loaded. Triangle count: %d, vertex count: %d, material count: %d\n", m_Mesh.GetTriangleCount(), m_Mesh.GetVertexCount(), m_Mesh.GetMaterials().size() );
+
+    const CommandLineArgs* commandLineArgs = CommandLineArgs::Singleton();
+    bool buildBVH = !commandLineArgs->GetNoBVHAccel();
+    if ( buildBVH )
+    {
+        m_Mesh.BuildBVH( nullptr );
+
+        uint32_t BVHMaxDepth = m_Mesh.GetBVHMaxDepth();
+        uint32_t BVHMaxStackSize = m_Mesh.GetBVHMaxStackSize();
+        LOG_STRING_FORMAT( "BVH created from mesh. Node count:%d, max depth:%d, max stack size:%d\n", m_Mesh.GetBVHNodeCount(), BVHMaxDepth, BVHMaxStackSize );
+    }
+
     return true;
 }

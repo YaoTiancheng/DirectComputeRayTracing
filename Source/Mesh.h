@@ -11,7 +11,7 @@ public:
     bool                    LoadFromOBJFile( const char* filename
                                            , const char* mtlFileDir
                                            , bool applyTransform = false
-                                           , const DirectX::XMFLOAT4X4& transform = XMFLOAT4X4( 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f )
+                                           , const DirectX::XMFLOAT4X4& transform = DirectX::XMFLOAT4X4( 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f )
                                            , uint32_t materialIdOverride = -1 );
 
     void                    BuildBVH( const char* BVHFilename = nullptr );

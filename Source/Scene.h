@@ -90,7 +90,7 @@ public:
 private:
     bool LoadFromWavefrontOBJFile( const char* filepath );
 
-    bool LoadFromXMLFile( const char* filepath );
+    bool LoadFromXMLFile( const std::filesystem::path& filepath );
 
 public:
     std::string m_EnvironmentImageFilepath;

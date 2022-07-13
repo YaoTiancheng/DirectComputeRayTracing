@@ -115,6 +115,7 @@ namespace
     SValue* BuildValueGraph( CValueList* valueList, xml_document<>* doc, std::vector<std::pair<std::string_view, SValue*>>* rootObjectValues )
     {
         std::unordered_set<std::string_view> objectTagNames = { "scene", "integrator", "sensor", "sampler", "film", "bsdf", "sampler", "rfilter", "emitter", "shape" };
+        std::unordered_set<std::string_view> valueTagNames = { "float", "integer", "boolean", "string", "rgb" };
 
         xml_node<>* sceneNode = doc->first_node( "scene" );
         if ( !sceneNode )
@@ -220,9 +221,15 @@ namespace
                             {
                                 for ( int32_t c = 0; c < 4; ++c )
                                 {
-                                    currentValue->m_Matrix( r, c ) = (float)atof( parameterSplit[ r * 4 + c ].data() );
+                                    // Mitsuba uses row-major matrix with column vectors, we use row-major matrix with row vectors, so transpose the matrix
+                                    currentValue->m_Matrix( c, r ) = (float)atof( parameterSplit[ r * 4 + c ].data() ); 
                                 }
                             }
+                            // Mitsuba scene is in right handed coordinate system, convert to left handed one.
+                            currentValue->m_Matrix( 0, 0 ) = -currentValue->m_Matrix( 0, 0 );
+                            currentValue->m_Matrix( 1, 0 ) = -currentValue->m_Matrix( 1, 0 );
+                            currentValue->m_Matrix( 2, 0 ) = -currentValue->m_Matrix( 2, 0 );
+                            currentValue->m_Matrix( 3, 0 ) = -currentValue->m_Matrix( 3, 0 );
                         }
                     }
                     else
@@ -260,7 +267,7 @@ namespace
 
                 currentNode = currentNode->next_sibling();
             }
-            else
+            else if ( valueTagNames.find( { currentNode->name(), currentNode->name_size() } ) != valueTagNames.end() )
             {
                 xml_attribute<>* nameAttribute = currentNode->first_attribute( "name", 0 );
                 if ( !nameAttribute )
@@ -325,6 +332,11 @@ namespace
                     currentValue->m_RGB.z = (float)atof( parameterSplit[ 2 ].data() );
                 }
 
+                currentNode = currentNode->next_sibling();
+            }
+            else
+            {
+                LOG_STRING_FORMAT( "Unsupported tag name \"%.*s\"\n", currentNode->name_size(), currentNode->name() );
                 currentNode = currentNode->next_sibling();
             }
 

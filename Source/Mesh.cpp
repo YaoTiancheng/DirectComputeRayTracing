@@ -273,10 +273,6 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool a
                     vertex.tangent = tangent;
                     vertex.texcoord = idx.texcoord_index != -1 ? XMFLOAT2( attrib.texcoords[ idx.texcoord_index * 2 ], attrib.texcoords[ idx.texcoord_index * 2 + 1 ] ) : XMFLOAT2( 0.0f, 0.0f );
 
-                    vertex.position.x = -vertex.position.x;
-                    vertex.normal.x = -vertex.normal.x;
-                    vertex.tangent.x = -vertex.tangent.x;
-
                     if ( applyTransform )
                     {
                         XMVECTOR vPosition = XMLoadFloat3( &vertex.position );

@@ -4,6 +4,7 @@
 #include "Scene.h"
 #include "MathHelper.h"
 #include "CommandLineArgs.h"
+#include "Constants.h"
 #include "RapidXml/rapidxml.hpp"
 
 using namespace rapidxml;
@@ -110,6 +111,17 @@ namespace
     void SplitBySpace( std::string_view string, std::vector<std::string_view>* subStrings )
     {
         return SplitByDelimeter( string, ' ', subStrings );
+    }
+
+    float ClampValueToValidRange( const std::string_view valueName, float value, float min, float max )
+    {
+        float result = value;
+        if ( value < min || value > max )
+        {
+            result = std::clamp( result, min, max );
+            LOG_STRING_FORMAT( "%.*s %f is out of valid range. Clamped to [%f, %f].\n", valueName.length(), valueName.data(), value, min, max );
+        }
+        return result;
     }
 
     SValue* BuildValueGraph( CValueList* valueList, xml_document<>* doc, std::vector<std::pair<std::string_view, SValue*>>* rootObjectValues )
@@ -354,7 +366,7 @@ namespace
         return parentValue;
     }
 
-    bool TranslateMaterialFromBSDF( const SValue& BSDF, Material* material, std::string_view* name )
+    bool TranslateMaterialFromBSDF( const SValue& BSDF, SMaterialSetting* material, std::string_view* name )
     {
         SValue* typeValue = BSDF.FindValue( "type" );
         if ( !typeValue )
@@ -394,17 +406,20 @@ namespace
             return false;
         }
 
-        material->albedo = { 1.0f, 1.0f, 1.0f };
-        material->ior = { 1.5f, 1.5f, 1.5f };
-        material->k = { 1.0f, 1.0f, 1.0f };
-        material->flags = 0;
-        material->transmission = 0.0f;
-        material->emission = { 0.0f, 0.0f, 0.0f };
-        material->texTiling = { 1.0f, 1.0f };
+        material->m_Albedo = { 1.0f, 1.0f, 1.0f };
+        material->m_Emission = { 0.0f, 0.0f, 0.0f };
+        material->m_IOR = { 1.5f, 1.5f, 1.5f };
+        material->m_K = { 1.0f, 1.0f, 1.0f };
+        material->m_Transmission = 0.0f;
+        material->m_Tiling = { 1.0f, 1.0f };
+        material->m_IsMetal = false;
+        material->m_HasAlbedoTexture = false;
+        material->m_HasEmissionTexture = false;
+        material->m_HasRoughnessTexture = false;
 
         SValue* alphaValue = BSDF.FindValue( "alpha" );
         float alpha = alphaValue ? alphaValue->m_Float : 0.0f;
-        material->roughness = sqrt( alpha );
+        material->m_Roughness = sqrt( alpha );
 
         if ( isDielectric || isTransmission )
         {
@@ -433,7 +448,7 @@ namespace
                     LOG_STRING( "Non-float IOR value is not supported.\n" );
                 }
             }
-            material->ior.x = intIOR / extIOR;
+            material->m_IOR.x = intIOR / extIOR;
 
             SValue* diffuseReflectanceValue = BSDF.FindValue( "diffuseReflectance" );
             XMFLOAT3 albedo = { 1.0f, 1.0f, 1.0f };
@@ -448,15 +463,15 @@ namespace
                     LOG_STRING( "Non-RGB diffuseReflectance value is not supported.\n" );
                 }
             }
-            material->albedo = albedo;
+            material->m_Albedo = albedo;
 
-            material->transmission = isTransmission ? 1.0f : 0.0f;
+            material->m_Transmission = isTransmission ? 1.0f : 0.0f;
         }
         else if ( isConductor )
         {
             SValue* etaValue = BSDF.FindValue( "eta" );
             SValue* extEtaValue = BSDF.FindValue( "extEta" );
-            XMFLOAT3 eta = { 1.0f, 1.0f, 1.0f };
+            XMFLOAT3 eta = { 0.0f, 0.0f, 0.0f };
             float extEta = 1.000277f;
             if ( etaValue )
             {
@@ -480,9 +495,9 @@ namespace
                     LOG_STRING( "Non-float extEta value is not supported.\n" );
                 }
             }
-            material->ior.x = eta.x / extEta;
-            material->ior.y = eta.y / extEta;
-            material->ior.z = eta.z / extEta;
+            material->m_IOR.x = eta.x / extEta;
+            material->m_IOR.y = eta.y / extEta;
+            material->m_IOR.z = eta.z / extEta;
 
             SValue* kValue = BSDF.FindValue( "k" );
             XMFLOAT3 k = { 1.0f, 1.0f, 1.0f };
@@ -497,17 +512,24 @@ namespace
                     LOG_STRING( "Non-RGB k value is not supported.\n" );
                 }
             }
-            material->k = k;
+            material->m_K = k;
 
-            material->flags |= MATERIAL_FLAG_IS_METAL;
+            material->m_IsMetal = true;
         }
+
+        material->m_IOR.x = ClampValueToValidRange( "Material IOR.x", material->m_IOR.x, material->m_IsMetal ? 0.0f : 1.0f, MAX_MATERIAL_IOR );
+        material->m_IOR.y = ClampValueToValidRange( "Material IOR.y", material->m_IOR.y, material->m_IsMetal ? 0.0f : 1.0f, MAX_MATERIAL_IOR );
+        material->m_IOR.z = ClampValueToValidRange( "Material IOR.z", material->m_IOR.z, material->m_IsMetal ? 0.0f : 1.0f, MAX_MATERIAL_IOR );
+        material->m_K.x = ClampValueToValidRange( "Material K.x", material->m_K.x, 0.0f, MAX_MATERIAL_K );
+        material->m_K.y = ClampValueToValidRange( "Material K.y", material->m_K.y, 0.0f, MAX_MATERIAL_K );
+        material->m_K.z = ClampValueToValidRange( "Material K.z", material->m_K.z, 0.0f, MAX_MATERIAL_K );
 
         return true;
     }
 
-    bool CreateAndAddMaterial( const SValue& BSDF, std::vector<Material>* materials, std::vector<std::string>* names, std::unordered_map<const SValue*, uint32_t>* BSDFValuePointerToIdMap, uint32_t* materialId )
+    bool CreateAndAddMaterial( const SValue& BSDF, std::vector<SMaterialSetting>* materials, std::vector<std::string>* names, std::unordered_map<const SValue*, uint32_t>* BSDFValuePointerToIdMap, uint32_t* materialId )
     {
-        Material newMaterial;
+        SMaterialSetting newMaterial;
         std::string_view newMaterialName;
         if ( TranslateMaterialFromBSDF( BSDF, &newMaterial, &newMaterialName ) )
         {

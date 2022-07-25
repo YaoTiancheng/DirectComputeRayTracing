@@ -19,6 +19,7 @@
 #include "MessageBox.h"
 #include "ScopedRenderAnnotation.h"
 #include "SampleConvolutionRenderer.h"
+#include "Constants.h"
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_dx11.h"
 #include "imgui/imgui_impl_win32.h"
@@ -347,6 +348,9 @@ bool SRenderer::LoadScene( const char* filepath, bool reset )
     }
 
     m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
+
+    m_IsMaterialGPUBufferDirty = true;
+    m_IsLightGPUBufferDirty = true;
 
     return true;
 }
@@ -844,46 +848,45 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
         {
             if ( m_Scene.m_ObjectSelection.m_MaterialSelectionIndex < m_Scene.m_Mesh.GetMaterials().size() )
             {
-                Material* selection = m_Scene.m_Mesh.GetMaterials().data() + m_Scene.m_ObjectSelection.m_MaterialSelectionIndex;
+                SMaterialSetting* selection = m_Scene.m_Mesh.GetMaterials().data() + m_Scene.m_ObjectSelection.m_MaterialSelectionIndex;
                 ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float );
-                if ( ImGui::ColorEdit3( "Albedo", (float*)&selection->albedo ) )
+                if ( ImGui::ColorEdit3( "Albedo", (float*)&selection->m_Albedo ) )
                     m_IsMaterialGPUBufferDirty = true;
                 ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
-                if ( ImGui::ColorEdit3( "Emission", (float*)&selection->emission ) )
+                if ( ImGui::ColorEdit3( "Emission", (float*)&selection->m_Emission ) )
                     m_IsMaterialGPUBufferDirty = true;
-                if ( ImGui::DragFloat( "Roughness", &selection->roughness, 0.01f, 0.0f, 1.0f ) )
+                if ( ImGui::DragFloat( "Roughness", &selection->m_Roughness, 0.01f, 0.0f, 1.0f ) )
                     m_IsMaterialGPUBufferDirty = true;
-                if ( ImGui::CheckboxFlags( "Is Metal", (int*)&selection->flags, MATERIAL_FLAG_IS_METAL ) )
+                if ( ImGui::Checkbox( "Is Metal", &selection->m_IsMetal ) )
                 {
-                    // Reclamp IOR to above 1.0 when material is not metal
-                    if ( ( selection->flags & MATERIAL_FLAG_IS_METAL ) == 0 )
+                    if ( !selection->m_IsMetal )
                     {
-                        selection->ior.x = std::max( 1.0f, selection->ior.x );
+                        // Reclamp IOR to above 1.0 when material is not metal
+                        selection->m_IOR.x = std::max( 1.0f, selection->m_IOR.x );
                     }
                     m_IsMaterialGPUBufferDirty = true;
                 }
-                bool isMetal = selection->flags & MATERIAL_FLAG_IS_METAL;
-                if ( isMetal )
+                if ( selection->m_IsMetal )
                 {
-                    if ( ImGui::DragFloat3( "IOR", (float*)&selection->ior, 0.01f, 0.01f, 3.0f ) )
+                    if ( ImGui::DragFloat3( "IOR", (float*)&selection->m_IOR, 0.01f, 0.0f, MAX_MATERIAL_IOR, "%.3f", ImGuiSliderFlags_AlwaysClamp ) )
                         m_IsMaterialGPUBufferDirty = true;
-                    if ( ImGui::DragFloat3( "k", (float*)&selection->k, 0.01f, 0.001f, 5.0f ) )
+                    if ( ImGui::DragFloat3( "k", (float*)&selection->m_K, 0.01f, 0.0f, MAX_MATERIAL_K, "%.3f", ImGuiSliderFlags_AlwaysClamp ) )
                         m_IsMaterialGPUBufferDirty = true;
                 }
                 else
                 {
-                    if ( ImGui::DragFloat( "IOR", (float*)&selection->ior, 0.01f, 1.0f, 3.0f ) )
+                    if ( ImGui::DragFloat( "IOR", (float*)&selection->m_IOR, 0.01f, 1.0f, MAX_MATERIAL_IOR ) )
+                        m_IsMaterialGPUBufferDirty = true;
+                    if ( ImGui::DragFloat( "Transmission", &selection->m_Transmission, 0.01f, 0.0f, 1.0f ) )
                         m_IsMaterialGPUBufferDirty = true;
                 }
-                if ( ImGui::DragFloat( "Transmission", &selection->transmission, 0.01f, 0.0f, 1.0f ) )
+                if ( ImGui::DragFloat2( "Texture Tiling", (float*)&selection->m_Tiling, 0.01f, 0.0f, 100000.0f ) )
                     m_IsMaterialGPUBufferDirty = true;
-                if ( ImGui::DragFloat2( "Texture Tiling", (float*)&selection->texTiling, 0.01f, 0.0f, 100000.0f ) )
+                if ( ImGui::Checkbox( "Albedo Texture", &selection->m_HasAlbedoTexture ) )
                     m_IsMaterialGPUBufferDirty = true;
-                if ( ImGui::CheckboxFlags( "Albedo Texture", (int*)&selection->flags, MATERIAL_FLAG_ALBEDO_TEXTURE ) )
+                if ( ImGui::Checkbox( "Emission Texture", &selection->m_HasEmissionTexture ) )
                     m_IsMaterialGPUBufferDirty = true;
-                if ( ImGui::CheckboxFlags( "Emission Texture", (int*)&selection->flags, MATERIAL_FLAG_EMISSION_TEXTURE ) )
-                    m_IsMaterialGPUBufferDirty = true;
-                if ( ImGui::CheckboxFlags( "Roughness Texture", (int*)&selection->flags, MATERIAL_FLAG_ROUGHNESS_TEXTURE ) )
+                if ( ImGui::Checkbox( "Roughness Texture", &selection->m_HasRoughnessTexture ) )
                     m_IsMaterialGPUBufferDirty = true;
             }
         }

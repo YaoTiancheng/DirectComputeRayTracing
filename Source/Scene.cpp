@@ -186,7 +186,23 @@ void CScene::UpdateMaterialGPUData()
 {
     if ( void* address = m_MaterialsBuffer->Map() )
     {
-        memcpy( address, m_Mesh.GetMaterials().data(), sizeof( Material ) * m_Mesh.GetMaterials().size() );
+        auto materials = m_Mesh.GetMaterials();
+        for ( uint32_t i = 0; i < (uint32_t)materials.size(); ++i )
+        {
+            SMaterialSetting* materialSetting = materials.data() + i;
+            Material* material = ( (Material*)address ) + i;
+            material->albedo = materialSetting->m_Albedo;
+            material->emission = materialSetting->m_Emission;
+            material->ior = materialSetting->m_IOR;
+            material->k = materialSetting->m_K;
+            material->roughness = std::clamp( materialSetting->m_Roughness, 0.0f, 1.0f );
+            material->texTiling = materialSetting->m_Tiling;
+            material->transmission = materialSetting->m_IsMetal ? 0.0f : materialSetting->m_Transmission;
+            material->flags = materialSetting->m_IsMetal ? MATERIAL_FLAG_IS_METAL : 0;
+            material->flags |= materialSetting->m_HasAlbedoTexture ? MATERIAL_FLAG_ALBEDO_TEXTURE : 0;
+            material->flags |= materialSetting->m_HasEmissionTexture ? MATERIAL_FLAG_EMISSION_TEXTURE : 0;
+            material->flags |= materialSetting->m_HasRoughnessTexture ? MATERIAL_FLAG_ROUGHNESS_TEXTURE : 0;
+        }
         m_MaterialsBuffer->Unmap();
     }
 }

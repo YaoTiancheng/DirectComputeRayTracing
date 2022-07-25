@@ -41,7 +41,7 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
 
     float E           = SampleCookTorranceMicrofacetBRDFEnergyTexture( wo.z, intersection.alpha );
     float EAvg        = SampleCookTorranceMicrofacetBRDFAverageEnergyTexture( intersection.alpha );
-    float3 Favg       = !isMetal ? MultiscatteringFavgDielectric( eta.r ) : MultiscatteringFavgConductor( eta, intersection.k );
+    float3 Favg       = !isMetal ? MultiscatteringFavgDielectric( eta.r ) : MultiscatteringFavgConductor( intersection.ior, intersection.k );
     float3 Fms        = MultiscatteringFresnel( EAvg, Favg );
     float cosThetaO   = wo.z;
     // Energy for conductor microfacet BRDF is not available, hence we cannot importance sample between microfacet and multiscattering
@@ -53,10 +53,14 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
     float Ediffuse    = !isMetal ? ( 1 - Emicrofacet - Ems ) : 0.0f;
     float Et          = transmission;
     float3 value = !isMetal ? EvaluateCookTorranceMircofacetBRDF_Dielectric( wi, wo, intersection.specular, intersection.alpha, etaI.r, etaT.r, lightingContext )
-                            : EvaluateCookTorranceMircofacetBRDF_Conductor( wi, wo, intersection.specular, intersection.alpha, etaI, etaT, intersection.k, lightingContext );
+                            : EvaluateCookTorranceMircofacetBRDF_Conductor( wi, wo, intersection.specular, intersection.alpha, 1.0f, intersection.ior, intersection.k, lightingContext );
     value += EvaluateCookTorranceMultiscatteringBRDF( wi, wo, intersection.specular, intersection.alpha, E, EAvg, Fms, lightingContext );
     value += EvaluateLambertBRDF( wi, wo, intersection.albedo, lightingContext ) * Ediffuse;
-    value = value * opacity + EvaluateCookTorranceMicrofacetMultiscatteringBSDF( wi, wo, intersection.specular, intersection.alpha, etaI.r, etaT.r, lightingContext ) * Et;
+    value = value * opacity;
+    if ( transmission > 0.0f )
+    {
+        value += EvaluateCookTorranceMicrofacetMultiscatteringBSDF( wi, wo, intersection.specular, intersection.alpha, etaI.r, etaT.r, lightingContext ) * Et;
+    }
 
     return value;
 }
@@ -87,7 +91,7 @@ float EvaluateBSDFPdf( float3 wi, float3 wo, Intersection intersection )
 
     float E           = SampleCookTorranceMicrofacetBRDFEnergyTexture( wo.z, intersection.alpha );
     float EAvg        = SampleCookTorranceMicrofacetBRDFAverageEnergyTexture( intersection.alpha );
-    float3 Favg       = !isMetal ? MultiscatteringFavgDielectric( eta.r ) : MultiscatteringFavgConductor( eta, intersection.k );
+    float3 Favg       = !isMetal ? MultiscatteringFavgDielectric( eta.r ) : MultiscatteringFavgConductor( intersection.ior, intersection.k );
     float3 Fms        = MultiscatteringFresnel( EAvg, Favg );
     float cosThetaO   = wo.z;
     // Energy for conductor microfacet BRDF is not available, hence we cannot importance sample between microfacet and multiscattering
@@ -107,7 +111,10 @@ float EvaluateBSDFPdf( float3 wi, float3 wo, Intersection intersection )
     float pdf = EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * Wmicrofacet;
     pdf += EvaluateCookTorranceMultiscatteringBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * Wms;
     pdf += EvaluateLambertBRDFPdf( wi, wo, lightingContext ) * Wdiffuse;
-    pdf += EvaluateCookTorranceMicrofacetMultiscatteringBSDFPdf( wi, wo, intersection.alpha, etaI.r, etaT.r, lightingContext ) * Wt;
+    if ( transmission > 0.0f )
+    {
+        pdf += EvaluateCookTorranceMicrofacetMultiscatteringBSDFPdf( wi, wo, intersection.alpha, etaI.r, etaT.r, lightingContext ) * Wt;
+    }
 
     return pdf;
 }
@@ -143,7 +150,7 @@ void SampleBSDF( float3 wo
     float cosThetaO   = wo.z;
     float E           = SampleCookTorranceMicrofacetBRDFEnergyTexture( cosThetaO, intersection.alpha );
     float EAvg        = SampleCookTorranceMicrofacetBRDFAverageEnergyTexture( intersection.alpha );
-    float3 Favg       = !isMetal ? MultiscatteringFavgDielectric( eta.r ) : MultiscatteringFavgConductor( eta, intersection.k );
+    float3 Favg       = !isMetal ? MultiscatteringFavgDielectric( eta.r ) : MultiscatteringFavgConductor( intersection.ior, intersection.k );
     float3 Fms        = MultiscatteringFresnel( EAvg, Favg );
     // Energy for conductor microfacet BRDF is not available, hence we cannot importance sample between microfacet and multiscattering
     // and assume both energy is 0.5 in such case
@@ -180,7 +187,7 @@ void SampleBSDF( float3 wo
     case BxDF_INDEX_COOKTORRANCE_MICROFACET_BRDF:
     {
         if ( !isMetal ) SampleCookTorranceMicrofacetBRDF_Dielectric( wo, BRDFSample, intersection.specular, intersection.alpha, etaI.r, etaT.r, wi, value, pdf, isDeltaBxdf, lightingContext );
-        else SampleCookTorranceMicrofacetBRDF_Conductor( wo, BRDFSample, intersection.specular, intersection.alpha, etaI, etaT, intersection.k, wi, value, pdf, isDeltaBxdf, lightingContext );
+        else SampleCookTorranceMicrofacetBRDF_Conductor( wo, BRDFSample, intersection.specular, intersection.alpha, 1.0f, intersection.ior, intersection.k, wi, value, pdf, isDeltaBxdf, lightingContext );
         value *= opacity;
         pdf *= Wmicrofacet;
         break;
@@ -214,7 +221,7 @@ void SampleBSDF( float3 wo
         if ( bxdfIndex != BxDF_INDEX_COOKTORRANCE_MICROFACET_BRDF && opacity > 0.0f )
         {
             float3 brdf = !isMetal ? EvaluateCookTorranceMircofacetBRDF_Dielectric( wi, wo, intersection.specular, intersection.alpha, etaI.r, etaT.r, lightingContext )
-                : EvaluateCookTorranceMircofacetBRDF_Conductor( wi, wo, intersection.specular, intersection.alpha, etaI, etaT, intersection.k, lightingContext );
+                : EvaluateCookTorranceMircofacetBRDF_Conductor( wi, wo, intersection.specular, intersection.alpha, 1.0f, intersection.ior, intersection.k, lightingContext );
             value += brdf * opacity;
             pdf += EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * Wmicrofacet;
         }

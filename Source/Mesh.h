@@ -5,6 +5,21 @@
 #include "../Shaders/Material.inc.hlsl"
 #include "../Shaders/BVHNode.inc.hlsl"
 
+struct SMaterialSetting
+{
+    DirectX::XMFLOAT3 m_Albedo;
+    DirectX::XMFLOAT3 m_Emission;
+    float m_Roughness;
+    DirectX::XMFLOAT3 m_IOR;
+    DirectX::XMFLOAT3 m_K;
+    float m_Transmission;
+    DirectX::XMFLOAT2 m_Tiling;
+    bool m_IsMetal;
+    bool m_HasAlbedoTexture;
+    bool m_HasRoughnessTexture;
+    bool m_HasEmissionTexture;
+};
+
 class Mesh
 {
 public:
@@ -38,9 +53,9 @@ public:
 
     const uint32_t*         GetMaterialIds() const { return m_MaterialIds.data(); }
 
-    const std::vector<Material>&    GetMaterials() const { return m_Materials; }
+    const std::vector<SMaterialSetting>& GetMaterials() const { return m_Materials; }
 
-    std::vector<Material>&  GetMaterials() { return m_Materials; }
+    std::vector<SMaterialSetting>& GetMaterials() { return m_Materials; }
 
     const std::vector<std::string>& GetMaterialNames() const { return m_MaterialNames; }
 
@@ -53,6 +68,6 @@ private:
     uint32_t                    m_BVHMaxDepth = 0;
     uint32_t                    m_BVHMaxStackSize = 0;
     std::vector<uint32_t>       m_MaterialIds;
-    std::vector<Material>       m_Materials;
+    std::vector<SMaterialSetting> m_Materials;
     std::vector<std::string>    m_MaterialNames;
 };

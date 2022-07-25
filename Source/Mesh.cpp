@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "Mesh.h"
 #include "Logging.h"
+#include "Constants.h"
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "OBJLoader/tiny_obj_loader.h"
 #include "MikkTSpace/mikktspace.h"
@@ -301,30 +302,36 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool a
         m_MaterialNames.reserve( m_MaterialNames.size() + materials.size() );
         for ( auto& iterSrcMat : materials )
         {
-            Material dstMat;
-            dstMat.albedo = DirectX::XMFLOAT3( iterSrcMat.diffuse[ 0 ], iterSrcMat.diffuse[ 1 ], iterSrcMat.diffuse[ 2 ] );
-            dstMat.emission = DirectX::XMFLOAT3( iterSrcMat.emission[ 0 ], iterSrcMat.emission[ 1 ], iterSrcMat.emission[ 2 ] );
-            dstMat.roughness = iterSrcMat.roughness;
-            dstMat.ior = XMFLOAT3( iterSrcMat.ior, 1.f, 1.f );
-            dstMat.k = XMFLOAT3( 1.0f, 1.0f, 1.0f );
-            dstMat.transmission = 1.0f - iterSrcMat.dissolve;
-            dstMat.texTiling = XMFLOAT2( 1.0f, 1.0f );
-            dstMat.flags = 0;
+            SMaterialSetting dstMat;
+            dstMat.m_Albedo = DirectX::XMFLOAT3( iterSrcMat.diffuse[ 0 ], iterSrcMat.diffuse[ 1 ], iterSrcMat.diffuse[ 2 ] );
+            dstMat.m_Emission = DirectX::XMFLOAT3( iterSrcMat.emission[ 0 ], iterSrcMat.emission[ 1 ], iterSrcMat.emission[ 2 ] );
+            dstMat.m_Roughness = iterSrcMat.roughness;
+            dstMat.m_IOR = XMFLOAT3( std::clamp( iterSrcMat.ior, 1.0f, MAX_MATERIAL_IOR ), 1.f, 1.f );
+            dstMat.m_K = XMFLOAT3( 1.0f, 1.0f, 1.0f );
+            dstMat.m_Transmission = 1.0f - iterSrcMat.dissolve;
+            dstMat.m_Tiling = XMFLOAT2( 1.0f, 1.0f );
+            dstMat.m_IsMetal = false;
+            dstMat.m_HasAlbedoTexture = false;
+            dstMat.m_HasEmissionTexture = false;
+            dstMat.m_HasRoughnessTexture = false;
             m_Materials.emplace_back( dstMat );
             m_MaterialNames.emplace_back( iterSrcMat.name );
         }
 
         if ( needDefaultMaterial )
         {
-            Material defaultMat;
-            defaultMat.albedo = DirectX::XMFLOAT3( 1.0f, 0.0f, 1.0f );
-            defaultMat.emission = DirectX::XMFLOAT3( 0.0f, 0.0f, 0.0f );
-            defaultMat.roughness = 1.0f;
-            defaultMat.ior = XMFLOAT3( 1.5f, 1.f, 1.f );
-            defaultMat.k = XMFLOAT3( 1.0f, 1.0f, 1.0f );
-            defaultMat.transmission = 0.0f;
-            defaultMat.texTiling = XMFLOAT2( 1.0f, 1.0f );
-            defaultMat.flags = 0;
+            SMaterialSetting defaultMat;
+            defaultMat.m_Albedo = DirectX::XMFLOAT3( 1.0f, 0.0f, 1.0f );
+            defaultMat.m_Emission = DirectX::XMFLOAT3( 0.0f, 0.0f, 0.0f );
+            defaultMat.m_Roughness = 1.0f;
+            defaultMat.m_IOR = XMFLOAT3( 1.5f, 1.f, 1.f );
+            defaultMat.m_K = XMFLOAT3( 1.0f, 1.0f, 1.0f );
+            defaultMat.m_Transmission = 0.0f;
+            defaultMat.m_Tiling = XMFLOAT2( 1.0f, 1.0f );
+            defaultMat.m_IsMetal = false;
+            defaultMat.m_HasAlbedoTexture = false;
+            defaultMat.m_HasEmissionTexture = false;
+            defaultMat.m_HasRoughnessTexture = false;
             m_Materials.emplace_back( defaultMat );
             m_MaterialNames.emplace_back( "Default Material" );
         }

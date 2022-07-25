@@ -39,9 +39,9 @@ float3 FresnelConductor( float cosThetaI, float3 etaI, float3 etaT, float3 k )
     float3 etak2 = etak * etak;
 
     float3 t0 = eta2 - etak2 - sinThetaI2;
-    float3 a2plusb2 = sqrt( t0 * t0 + 4 * eta2 * etak2 );
+    float3 a2plusb2 = SafeSqrt( t0 * t0 + 4 * eta2 * etak2 );
     float3 t1 = a2plusb2 + cosThetaI2;
-    float3 a = sqrt( 0.5f * ( a2plusb2 + t0 ) );
+    float3 a = SafeSqrt( 0.5f * ( a2plusb2 + t0 ) ); // Might get negetive number due to rounding error, so use SafeSqrt to avoid NaN
     float3 t2 = 2.0f * cosThetaI * a;
     float3 Rs = ( t1 - t2 ) / ( t1 + t2 );
 

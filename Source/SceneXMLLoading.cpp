@@ -687,7 +687,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                 if ( strncmp( "obj", typeValue->m_String.data(), typeValue->m_String.length() ) == 0 )
                 {
                     SValue* transformValue = rootObjectValue.second->FindValue( "transform" );
-                    XMFLOAT4X4 transform = transformValue ? transformValue->m_Matrix : XMFLOAT4X4( 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f );
+                    XMFLOAT4X4 transform = transformValue ? transformValue->m_Matrix : MathHelper::s_IdentityMatrix;
 
                     uint32_t materialId = -1;
                     SValue* bsdfValue = rootObjectValue.second->FindValue( "bsdf" );

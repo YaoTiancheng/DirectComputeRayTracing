@@ -25,7 +25,7 @@ bool CScene::LoadFromFile( const char* filepath )
         , D3D11_USAGE_IMMUTABLE
         , D3D11_BIND_SHADER_RESOURCE
         , 0
-        , m_Mesh.GetVertices() ) );
+        , m_Mesh.GetVertices().data() ) );
     if ( !m_VerticesBuffer )
     {
         CMessagebox::GetSingleton().Append( "Failed to create vertices buffer.\n" );
@@ -38,7 +38,7 @@ bool CScene::LoadFromFile( const char* filepath )
         , D3D11_USAGE_IMMUTABLE
         , D3D11_BIND_SHADER_RESOURCE
         , 0
-        , m_Mesh.GetIndices() ) );
+        , m_Mesh.GetIndices().data() ) );
     if ( !m_TrianglesBuffer )
     {
         CMessagebox::GetSingleton().Append( "Failed to create triangles buffer.\n" );

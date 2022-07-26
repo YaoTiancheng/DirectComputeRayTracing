@@ -3,6 +3,8 @@
 
 using namespace DirectX;
 
+const XMFLOAT4X4 MathHelper::s_IdentityMatrix = XMFLOAT4X4( 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f );
+
 XMFLOAT3 MathHelper::MatrixRotationToRollPitchYall( const XMFLOAT4X4& matrix )
 {
     float cy = sqrtf( matrix._33 * matrix._33 + matrix._31 * matrix._31 );

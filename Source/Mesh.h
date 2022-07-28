@@ -27,6 +27,8 @@ public:
     bool LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool applyTransform = false, 
         const DirectX::XMFLOAT4X4& transform = MathHelper::s_IdentityMatrix, uint32_t materialIdOverride = -1 );
 
+    bool GenerateRectangle( uint32_t materialId, bool applyTransform = false, const DirectX::XMFLOAT4X4& transform = MathHelper::s_IdentityMatrix );
+
     void BuildBVH( const char* BVHFilename = nullptr );
 
     void Clear();
@@ -53,7 +55,9 @@ public:
 
     uint32_t GetBVHMaxStackSize() const { return m_BVHMaxStackSize; }
 
-    const uint32_t* GetMaterialIds() const { return m_MaterialIds.data(); }
+    const std::vector<uint32_t>& GetMaterialIds() const { return m_MaterialIds; }
+
+    std::vector<uint32_t>& GetMaterialIds() { return m_MaterialIds; }
 
     const std::vector<SMaterialSetting>& GetMaterials() const { return m_Materials; }
 

@@ -340,6 +340,58 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool a
     return true;
 }
 
+bool Mesh::GenerateRectangle( uint32_t materialId, bool applyTransform, const DirectX::XMFLOAT4X4& transform )
+{
+    if ( GetVertexCount() + 4 <= UINT_MAX )
+    {
+        Vertex vertices[ 4 ] =
+        {
+              { { 1.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } }
+            , { { 1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 0.0f } }
+            , { { -1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } }
+            , { { -1.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 1.0f } }
+        };
+        uint32_t indices[ 6 ] = { 0, 1, 3, 1, 2, 3 };
+
+        uint32_t indexBase = GetVertexCount();
+
+        m_Vertices.reserve( m_Vertices.size() + 4 );
+        XMMATRIX vTransform = XMLoadFloat4x4( &transform );
+        XMVECTOR vDet;
+        XMMATRIX vNormalTransform = XMMatrixTranspose( XMMatrixInverse( &vDet, vTransform ) );
+        for ( auto& vertex : vertices )
+        {
+            m_Vertices.emplace_back();
+            Vertex& meshVertex = m_Vertices.back();
+            XMVECTOR vPosition = XMLoadFloat3( &vertex.position );
+            XMVECTOR vNormal = XMLoadFloat3( &vertex.normal );
+            XMVECTOR vTangent = XMLoadFloat3( &vertex.tangent );
+            vPosition = XMVector3Transform( vPosition, vTransform );
+            vNormal = XMVector3TransformNormal( vNormal, vNormalTransform );
+            vTangent = XMVector3TransformNormal( vTangent, vNormalTransform );
+            XMStoreFloat3( &meshVertex.position, vPosition );
+            XMStoreFloat3( &meshVertex.normal, vNormal );
+            XMStoreFloat3( &meshVertex.tangent, vTangent );
+        }
+
+        m_Indices.reserve( indexBase + 6 );
+        for ( auto index : indices )
+        {
+            m_Indices.push_back( indexBase + index );
+        }
+
+        m_MaterialIds.reserve( m_MaterialIds.size() + 2 );
+        m_MaterialIds.push_back( materialId );
+        m_MaterialIds.push_back( materialId );
+        return true;
+    }
+    else
+    {
+        LOG_STRING( "Trying to generate a rectangle shape but maximum vertex count is exceeded.\n" );
+        return false;
+    }
+}
+
 void Mesh::BuildBVH( const char* BVHFilename )
 {
     std::vector<uint32_t> indices = m_Indices;

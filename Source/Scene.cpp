@@ -51,7 +51,7 @@ bool CScene::LoadFromFile( const char* filepath )
         , D3D11_USAGE_IMMUTABLE
         , D3D11_BIND_SHADER_RESOURCE
         , 0
-        , m_Mesh.GetMaterialIds() ) );
+        , m_Mesh.GetMaterialIds().data() ) );
     if ( !m_MaterialIdsBuffer )
     {
         CMessagebox::GetSingleton().Append( "Failed to create material id buffer.\n" );

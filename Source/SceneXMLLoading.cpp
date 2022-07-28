@@ -566,6 +566,9 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
         return false;
     }
 
+    enum EShapeType { Unsupported = 0, eObj = 1, eRectangle = 2 };
+    std::unordered_map<std::string_view, EShapeType> shapeNameToEnumMap = { { "obj", EShapeType::eObj }, { "rectangle", EShapeType::eRectangle } };
+
     std::unordered_map<const SValue*, uint32_t> BSDFValuePointerToIdMap;
     for ( auto& rootObjectValue : rootObjectValues )
     {
@@ -684,26 +687,35 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
             }
             else
             {
-                if ( strncmp( "obj", typeValue->m_String.data(), typeValue->m_String.length() ) == 0 )
+                SValue* transformValue = rootObjectValue.second->FindValue( "transform" );
+                XMFLOAT4X4 transform = transformValue ? transformValue->m_Matrix : MathHelper::s_IdentityMatrix;
+
+                uint32_t materialId = -1;
+                SValue* bsdfValue = rootObjectValue.second->FindValue( "bsdf" );
+                if ( bsdfValue )
                 {
-                    SValue* transformValue = rootObjectValue.second->FindValue( "transform" );
-                    XMFLOAT4X4 transform = transformValue ? transformValue->m_Matrix : MathHelper::s_IdentityMatrix;
-
-                    uint32_t materialId = -1;
-                    SValue* bsdfValue = rootObjectValue.second->FindValue( "bsdf" );
-                    if ( bsdfValue )
+                    auto iter = BSDFValuePointerToIdMap.find( bsdfValue );
+                    if ( iter == BSDFValuePointerToIdMap.end() )
                     {
-                        auto iter = BSDFValuePointerToIdMap.find( bsdfValue );
-                        if ( iter == BSDFValuePointerToIdMap.end() )
-                        {
-                            CreateAndAddMaterial( *bsdfValue, &m_Mesh.GetMaterials(), &m_Mesh.GetMaterialNames(), &BSDFValuePointerToIdMap, &materialId );
-                        }
-                        else
-                        {
-                            materialId = iter->second;
-                        }
+                        CreateAndAddMaterial( *bsdfValue, &m_Mesh.GetMaterials(), &m_Mesh.GetMaterialNames(), &BSDFValuePointerToIdMap, &materialId );
                     }
+                    else
+                    {
+                        materialId = iter->second;
+                    }
+                }
 
+                EShapeType shapeType = EShapeType::Unsupported;
+                auto itShapeType = shapeNameToEnumMap.find( typeValue->m_String );
+                if ( itShapeType != shapeNameToEnumMap.end() )
+                {
+                    shapeType = itShapeType->second;
+                }
+
+                switch ( shapeType )
+                {
+                case EShapeType::eObj:
+                {
                     SValue* filenameValue = rootObjectValue.second->FindValue( "filename" );
                     if ( !filenameValue )
                     {
@@ -720,13 +732,25 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                         }
                         if ( !m_Mesh.LoadFromOBJFile( objFilepath.u8string().c_str(), "", true, transform, materialId ) )
                         {
-                            LOG_STRING_FORMAT( "Failed to load wavefront obj file \'%s\'.\n", zeroTerminatedFilename );
+                            LOG_STRING_FORMAT( "Failed to load wavefront obj file \'%s\'.\n", objFilepath.u8string().c_str() );
                         }
                     }
+                    break;
                 }
-                else
+                case EShapeType::eRectangle:
+                {
+                    if ( !m_Mesh.GenerateRectangle( materialId, true, transform ) )
+                    {
+                        LOG_STRING( "Failed to generate rantangle shape.\n" );
+                    }
+                    break;
+                }
+                case EShapeType::Unsupported:
+                default:
                 {
                     LOG_STRING_FORMAT( "Unsupported shape type \'%.*s\'\n", typeValue->m_String.length(), typeValue->m_String.data() );
+                    break;
+                }
                 }
             }
         }

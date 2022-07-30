@@ -690,6 +690,9 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                 SValue* transformValue = rootObjectValue.second->FindValue( "transform" );
                 XMFLOAT4X4 transform = transformValue ? transformValue->m_Matrix : MathHelper::s_IdentityMatrix;
 
+                SValue* emitterValue = rootObjectValue.second->FindValue( "emitter" );
+                bool isALight = emitterValue != nullptr;
+
                 uint32_t materialId = -1;
                 SValue* bsdfValue = rootObjectValue.second->FindValue( "bsdf" );
                 if ( bsdfValue )
@@ -702,7 +705,29 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     else
                     {
                         materialId = iter->second;
+                        if ( isALight )
+                        {
+                            SMaterialSetting copyMaterial = m_Mesh.GetMaterials()[ materialId ];
+                            materialId = (uint32_t)m_Mesh.GetMaterials().size();
+                            m_Mesh.GetMaterials().emplace_back( copyMaterial );
+                            m_Mesh.GetMaterialNames().emplace_back();
+                        }
                     }
+                }
+                else if ( isALight )
+                {
+                    materialId = (uint32_t)m_Mesh.GetMaterials().size();
+                    SMaterialSetting material;
+                    material.m_Albedo = XMFLOAT3( 0.f, 0.f, 0.f );
+                    material.m_Roughness = 1.0f;
+                    material.m_IOR = XMFLOAT3( 1.f, 1.f, 1.f );
+                    material.m_Transmission = 0.0f;
+                    material.m_IsMetal = false;
+                    material.m_HasAlbedoTexture = false;
+                    material.m_HasRoughnessTexture = false;
+                    material.m_HasEmissionTexture = false;
+                    m_Mesh.GetMaterials().emplace_back( material );
+                    m_Mesh.GetMaterialNames().emplace_back();
                 }
 
                 EShapeType shapeType = EShapeType::Unsupported;
@@ -741,7 +766,51 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                 {
                     if ( !m_Mesh.GenerateRectangle( materialId, true, transform ) )
                     {
-                        LOG_STRING( "Failed to generate rantangle shape.\n" );
+                        LOG_STRING( "Failed to generate rectangle shape.\n" );
+                    }
+
+                    if ( emitterValue )
+                    {
+                        SValue* emitterTypeValue = emitterValue->FindValue( "type" );
+                        if ( emitterTypeValue && emitterTypeValue->m_Type == EValueType::eString )
+                        {
+                            if ( strncmp( "area", emitterTypeValue->m_String.data(), emitterTypeValue->m_String.length() ) == 0 )
+                            {
+                                m_LightSettings.emplace_back();
+                                SLightSetting& light = m_LightSettings.back();
+
+                                XMFLOAT3 scale;
+                                MathHelper::MatrixDecompose( transform, &light.position, &light.rotation, &scale );
+                                light.size = XMFLOAT2( scale.x * 2.0f, scale.y * 2.0f ); // The rectangle light shape is [-0.5, 0.5] on both axis, so multiply the size by 2.
+
+                                light.color = XMFLOAT3( 1.0f, 1.0f, 1.0f );
+                                SValue* radianceValue = emitterValue->FindValue( "radiance" );
+                                if ( radianceValue )
+                                {
+                                    if ( radianceValue->m_Type == EValueType::eRGB )
+                                    {
+                                        light.color = radianceValue->m_RGB;
+                                    }
+                                    else
+                                    {
+                                        LOG_STRING( "Unsupported radiance type.\n" );
+                                    }
+                                }
+
+                                light.lightType = ELightType::Rectangle;
+
+                                SMaterialSetting& material = m_Mesh.GetMaterials()[ materialId ];
+                                material.m_Emission = light.color;
+                            }
+                            else
+                            {
+                                LOG_STRING_FORMAT( "Unsupported emitter type \'%.*s\' for rectangle shape.\n", emitterTypeValue->m_String.length(), emitterTypeValue->m_String.data() );
+                            }
+                        }
+                        else
+                        {
+                            LOG_STRING( "Cannot determine type from emitter.\n" );
+                        }
                     }
                     break;
                 }

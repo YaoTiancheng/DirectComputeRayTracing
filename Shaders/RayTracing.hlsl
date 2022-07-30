@@ -1,5 +1,6 @@
 
 #define FLT_INF asfloat( 0x7f800000 )
+#define SHADOW_EPSILON 1e-3f
 
 #include "Vertex.inc.hlsl"
 #include "Light.inc.hlsl"
@@ -168,6 +169,7 @@ SLightSampleResult SampleLight( SLight light, Intersection intersection, float2 
         SampleRectangleLight( light, samples, intersection.position, result.radiance, result.wi, result.distance, result.pdf );
     }
 
+    result.distance *= 1 - SHADOW_EPSILON;
     return result;
 }
 
@@ -175,6 +177,7 @@ void EvaluateLight( SLight light, float3 origin, float3 direction, out float dis
 {
     radiance = light.color;
     pdf = EvaluateRectangleLightPdf( light, direction, origin, distance );
+    distance *= 1 - SHADOW_EPSILON;
 }
 
 struct SRay

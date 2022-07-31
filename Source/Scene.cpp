@@ -120,7 +120,7 @@ void CScene::Reset()
     m_ApertureRotation = 0.0f;
     m_ShutterTime = 1.0f;
     m_ISO = 100;
-    m_BackgroundColor = { 1.0f, 1.0f, 1.0f, 0.f };
+    m_BackgroundColor = { 0.0f, 0.0f, 0.0f, 0.f };
     m_FilterRadius = 1.0f;
 
     m_Mesh.Clear();

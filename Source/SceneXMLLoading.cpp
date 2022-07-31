@@ -942,6 +942,36 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                 }
             }
         }
+        else if ( strncmp( "emitter", rootObjectValue.first.data(), rootObjectValue.first.length() ) == 0 )
+        {
+            SValue* emitterTypeValue = rootObjectValue.second->FindValue( "type" );
+            if ( emitterTypeValue && emitterTypeValue->m_Type == EValueType::eString )
+            {
+                if ( strncmp( "constant", emitterTypeValue->m_String.data(), emitterTypeValue->m_String.length() ) == 0 )
+                {
+                    SValue* radianceValue = rootObjectValue.second->FindValue( "radiance" );
+                    if ( radianceValue )
+                    {
+                        if ( radianceValue->m_Type == EValueType::eRGB )
+                        {
+                            m_BackgroundColor = XMFLOAT4( radianceValue->m_RGB.x, radianceValue->m_RGB.y, radianceValue->m_RGB.z, 1.0f );
+                        }
+                        else
+                        {
+                            LOG_STRING_FORMAT( "Non-RGB radiance type is not supported.\n" );
+                        }
+                    }
+                }
+                else
+                {
+                    LOG_STRING_FORMAT( "Unsupported emitter type \'%.*s\'.\n", emitterTypeValue->m_String.length(), emitterTypeValue->m_String.data() );
+                }
+            }
+            else
+            {
+                LOG_STRING( "Cannot determine emitter type.\n" );
+            }
+        }
     }
 
     valueList.Clear();

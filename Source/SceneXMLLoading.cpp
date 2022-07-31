@@ -21,6 +21,25 @@ enum EValueType
     eObject
 };
 
+enum EShapeType 
+{
+    Unsupported = 0, eObj = 1, eRectangle = 2 
+};
+
+enum EMaterialType
+{
+    eUnsupported,
+    eDiffuse,
+    eRoughDiffuse,
+    eDielectric,
+    eRoughDielectric,
+    eConductor,
+    eRoughConductor,
+    ePlastic,
+    eRoughPlastic,
+    eTwosided,
+};
+
 struct SValue
 {
     EValueType m_Type;
@@ -366,13 +385,23 @@ namespace
         return parentValue;
     }
 
-    bool TranslateMaterialFromBSDF( const SValue& BSDF, SMaterialSetting* material, std::string_view* name )
+    bool TranslateMaterialFromBSDF( const SValue& BSDF, const std::unordered_map<std::string_view, EMaterialType>& materialNameToEnumMap, SMaterialSetting* material, std::string_view* name )
     {
+        EMaterialType materialType = EMaterialType::eUnsupported;
+
         SValue* typeValue = BSDF.FindValue( "type" );
         if ( !typeValue )
         {
             LOG_STRING( "Cannot obtain bsdf type.\n" );
             return false;
+        }
+
+        {
+            auto it = materialNameToEnumMap.find( typeValue->m_String );
+            if ( it != materialNameToEnumMap.end() )
+            {
+                materialType = it->second;
+            }
         }
 
         SValue* idValue = BSDF.FindValue( "id" );
@@ -381,7 +410,7 @@ namespace
             *name = idValue->m_String;
         }
 
-        if ( strncmp( "twosided", typeValue->m_String.data(), typeValue->m_String.size() ) == 0 )
+        if ( materialType == EMaterialType::eTwosided )
         {
             SValue* childBSDF = BSDF.FindValue( "bsdf" );
             if ( !childBSDF )
@@ -389,39 +418,100 @@ namespace
                 LOG_STRING( "Cannot find child BSDF inside a twosided BSDF.\n" );
                 return false;
             }
-            return TranslateMaterialFromBSDF( *childBSDF, material, name );
+            return TranslateMaterialFromBSDF( *childBSDF, materialNameToEnumMap, material, name );
         }
 
-        std::unordered_set<std::string_view> dielectricMaterialNames = { "diffuse", "plastic", "roughplastic" };
-        std::unordered_set<std::string_view> conductorMaterialNames = { "conductor", "roughconductor" };
-        std::unordered_set<std::string_view> transmissionMaterialNames = { "dielectric", "roughdielectric" };
-
-        bool isDielectric = dielectricMaterialNames.find( { typeValue->m_String.data(), typeValue->m_String.size() } ) != dielectricMaterialNames.end();
-        bool isConductor = conductorMaterialNames.find( { typeValue->m_String.data(), typeValue->m_String.size() } ) != conductorMaterialNames.end();
-        bool isTransmission = transmissionMaterialNames.find( { typeValue->m_String.data(), typeValue->m_String.size() } ) != transmissionMaterialNames.end();
-
-        if ( !isDielectric && !isConductor && !isTransmission )
+        bool hasDielectricIOR = false;
+        bool hasConductorIOR = false;
+        bool isTransmissive = false;
+        bool hasRoughness = false;
+        bool hasDiffuseReflectance = false;
+        switch ( materialType )
         {
-            LOG_STRING_FORMAT( "Unsupported BSDF type \'%.*s\'\n", typeValue->m_String.size(), typeValue->m_String.data() );
+        case EMaterialType::eDiffuse:
+        {
+            hasDiffuseReflectance = true;
+            break;
+        }
+        case EMaterialType::eRoughDiffuse:
+        {
+            hasDiffuseReflectance = true;
+            hasRoughness = true;
+            break;
+        }
+        case EMaterialType::eDielectric:
+        {
+            hasDielectricIOR = true;
+            isTransmissive = true;
+            break;
+        }
+        case EMaterialType::eRoughDielectric:
+        {
+            hasDielectricIOR = true;
+            isTransmissive = true;
+            hasRoughness = true;
+            break;
+        }
+        case EMaterialType::eConductor:
+        {
+            hasConductorIOR = true;
+            break;
+        }
+        case EMaterialType::eRoughConductor:
+        {
+            hasConductorIOR = true;
+            hasRoughness = true;
+            break;
+        }
+        case EMaterialType::ePlastic:
+        {
+            hasDielectricIOR = true;
+            hasDiffuseReflectance = true;
+            break;
+        }
+        case EMaterialType::eRoughPlastic:
+        {
+            hasDielectricIOR = true;
+            hasDiffuseReflectance = true;
+            hasRoughness = true;
+            break;
+        }
+        case EMaterialType::eTwosided:
+        {
+            assert(false && "Should recursively translate child BSDF and never gets here.");
             return false;
         }
+        default:
+        {
+            LOG_STRING_FORMAT( "Unsupported material type \'%.*s\', assigning default values.\n", typeValue->m_String.length(), typeValue->m_String.data() );
+            break;
+        }
+        }
 
-        material->m_Albedo = { 1.0f, 1.0f, 1.0f };
+        assert( ( !hasDielectricIOR && !hasConductorIOR ) || ( hasDielectricIOR != hasConductorIOR ) );
+        assert( ( !hasConductorIOR && !isTransmissive ) || ( hasConductorIOR != isTransmissive ) );
+        assert( !isTransmissive || hasDielectricIOR );
+
+        material->m_Albedo = { 0.0f, 0.0f, 0.0f };
         material->m_Emission = { 0.0f, 0.0f, 0.0f };
-        material->m_IOR = { 1.5f, 1.5f, 1.5f };
+        material->m_Roughness = 0.0f;
+        material->m_IOR = { 1.0f, 1.0f, 1.0f };
         material->m_K = { 1.0f, 1.0f, 1.0f };
         material->m_Transmission = 0.0f;
         material->m_Tiling = { 1.0f, 1.0f };
-        material->m_IsMetal = false;
+        material->m_IsMetal = hasConductorIOR;
         material->m_HasAlbedoTexture = false;
         material->m_HasEmissionTexture = false;
         material->m_HasRoughnessTexture = false;
 
-        SValue* alphaValue = BSDF.FindValue( "alpha" );
-        float alpha = alphaValue ? alphaValue->m_Float : 0.0f;
-        material->m_Roughness = sqrt( alpha );
+        if ( hasRoughness )
+        {
+            SValue* alphaValue = BSDF.FindValue( "alpha" );
+            float alpha = alphaValue ? alphaValue->m_Float : 0.0f;
+            material->m_Roughness = sqrt( alpha );
+        }
 
-        if ( isDielectric || isTransmission )
+        if ( hasDielectricIOR )
         {
             SValue* intIORValue = BSDF.FindValue( "intIOR" );
             SValue* extIORValue = BSDF.FindValue( "extIOR" );
@@ -449,25 +539,8 @@ namespace
                 }
             }
             material->m_IOR.x = intIOR / extIOR;
-
-            SValue* diffuseReflectanceValue = BSDF.FindValue( "diffuseReflectance" );
-            XMFLOAT3 albedo = { 1.0f, 1.0f, 1.0f };
-            if ( diffuseReflectanceValue )
-            {
-                if ( diffuseReflectanceValue->m_Type == EValueType::eRGB )
-                {
-                    albedo = diffuseReflectanceValue->m_RGB;
-                }
-                else
-                {
-                    LOG_STRING( "Non-RGB diffuseReflectance value is not supported.\n" );
-                }
-            }
-            material->m_Albedo = albedo;
-
-            material->m_Transmission = isTransmission ? 1.0f : 0.0f;
         }
-        else if ( isConductor )
+        else if ( hasConductorIOR )
         {
             SValue* etaValue = BSDF.FindValue( "eta" );
             SValue* extEtaValue = BSDF.FindValue( "extEta" );
@@ -513,8 +586,42 @@ namespace
                 }
             }
             material->m_K = k;
+        }
 
-            material->m_IsMetal = true;
+        if ( hasDiffuseReflectance )
+        {
+            XMFLOAT3 albedo = { 0.5f, 0.5f, 0.5f };
+            SValue* diffuseReflectanceValue = BSDF.FindValue( !hasDielectricIOR ? "reflectance" : "diffuseReflectance" );
+            if ( diffuseReflectanceValue )
+            {
+                if ( diffuseReflectanceValue->m_Type == EValueType::eRGB )
+                {
+                    albedo = diffuseReflectanceValue->m_RGB;
+                }
+                else
+                {
+                    LOG_STRING( "Non-RGB diffuse reflectance value is not supported.\n" );
+                }
+            }
+            material->m_Albedo = albedo;
+        }
+
+        if ( isTransmissive )
+        {
+            float specularTransmittance = 1.0f;
+            SValue* specularTransmittanceValue = BSDF.FindValue( "specularTransmittance" );
+            if ( specularTransmittanceValue )
+            {
+                if ( specularTransmittanceValue->m_Type == EValueType::eFloat )
+                {
+                    specularTransmittance = specularTransmittanceValue->m_Float;
+                }
+                else
+                {
+                    LOG_STRING( "Non-float specular transmittance value is not supported.\n" );
+                }
+            }
+            material->m_Transmission = specularTransmittance;
         }
 
         material->m_IOR.x = ClampValueToValidRange( "Material IOR.x", material->m_IOR.x, material->m_IsMetal ? 0.0f : 1.0f, MAX_MATERIAL_IOR );
@@ -527,11 +634,12 @@ namespace
         return true;
     }
 
-    bool CreateAndAddMaterial( const SValue& BSDF, std::vector<SMaterialSetting>* materials, std::vector<std::string>* names, std::unordered_map<const SValue*, uint32_t>* BSDFValuePointerToIdMap, uint32_t* materialId )
+    bool CreateAndAddMaterial( const SValue& BSDF, const std::unordered_map<std::string_view, EMaterialType>& materialNameToEnumMap, std::vector<SMaterialSetting>* materials
+        , std::vector<std::string>* names, std::unordered_map<const SValue*, uint32_t>* BSDFValuePointerToIdMap, uint32_t* materialId )
     {
         SMaterialSetting newMaterial;
         std::string_view newMaterialName;
-        if ( TranslateMaterialFromBSDF( BSDF, &newMaterial, &newMaterialName ) )
+        if ( TranslateMaterialFromBSDF( BSDF, materialNameToEnumMap, &newMaterial, &newMaterialName ) )
         {
             uint32_t newMaterialId = (uint32_t)materials->size();
             materials->emplace_back( newMaterial );
@@ -566,8 +674,19 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
         return false;
     }
 
-    enum EShapeType { Unsupported = 0, eObj = 1, eRectangle = 2 };
     std::unordered_map<std::string_view, EShapeType> shapeNameToEnumMap = { { "obj", EShapeType::eObj }, { "rectangle", EShapeType::eRectangle } };
+    std::unordered_map<std::string_view, EMaterialType> materialNameToEnumMap =
+    {
+          { "diffuse", EMaterialType::eDiffuse }
+        , { "roughdiffuse", EMaterialType::eRoughDiffuse }
+        , { "dielectric", EMaterialType::eDielectric }
+        , { "roughdielectric", EMaterialType::eRoughDielectric }
+        , { "conductor", EMaterialType::eConductor }
+        , { "roughconductor", EMaterialType::eRoughConductor }
+        , { "plastic", EMaterialType::ePlastic }
+        , { "roughplastic", EMaterialType::eRoughPlastic }
+        , { "twosided", EMaterialType::eTwosided }
+    };
 
     std::unordered_map<const SValue*, uint32_t> BSDFValuePointerToIdMap;
     for ( auto& rootObjectValue : rootObjectValues )
@@ -676,7 +795,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
         else if ( strncmp( "bsdf", rootObjectValue.first.data(), rootObjectValue.first.length() ) == 0 )
         {
             uint32_t materialId = 0;
-            CreateAndAddMaterial( *rootObjectValue.second, &m_Mesh.GetMaterials(), &m_Mesh.GetMaterialNames(), &BSDFValuePointerToIdMap, &materialId );
+            CreateAndAddMaterial( *rootObjectValue.second, materialNameToEnumMap, &m_Mesh.GetMaterials(), &m_Mesh.GetMaterialNames(), &BSDFValuePointerToIdMap, &materialId );
         }
         else if ( strncmp( "shape", rootObjectValue.first.data(), rootObjectValue.first.length() ) == 0 )
         {
@@ -700,7 +819,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     auto iter = BSDFValuePointerToIdMap.find( bsdfValue );
                     if ( iter == BSDFValuePointerToIdMap.end() )
                     {
-                        CreateAndAddMaterial( *bsdfValue, &m_Mesh.GetMaterials(), &m_Mesh.GetMaterialNames(), &BSDFValuePointerToIdMap, &materialId );
+                        CreateAndAddMaterial( *bsdfValue, materialNameToEnumMap, &m_Mesh.GetMaterials(), &m_Mesh.GetMaterialNames(), &BSDFValuePointerToIdMap, &materialId );
                     }
                     else
                     {
@@ -719,7 +838,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     materialId = (uint32_t)m_Mesh.GetMaterials().size();
                     SMaterialSetting material;
                     material.m_Albedo = XMFLOAT3( 0.f, 0.f, 0.f );
-                    material.m_Roughness = 1.0f;
+                    material.m_Roughness = 0.0f;
                     material.m_IOR = XMFLOAT3( 1.f, 1.f, 1.f );
                     material.m_Transmission = 0.0f;
                     material.m_IsMetal = false;

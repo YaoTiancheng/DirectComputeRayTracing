@@ -5,7 +5,7 @@
 
 static const uint8_t k_MaxPrimCountInNode = 2;
 
-static void CalculateTriangleBoundingBox( const Vertex& vert0, const Vertex& vert1, const Vertex& vert2, DirectX::BoundingBox* bbox )
+static void CalculateTriangleBoundingBox( const GPU::Vertex& vert0, const GPU::Vertex& vert1, const GPU::Vertex& vert2, DirectX::BoundingBox* bbox )
 {
     DirectX::XMVECTOR v0 = DirectX::XMLoadFloat3( &vert0.position );
     DirectX::XMVECTOR v1 = DirectX::XMLoadFloat3( &vert1.position );
@@ -69,11 +69,10 @@ struct BVHNodeInfo
 
 static void BuildNodes( 
       std::vector<PrimitiveInfo>& primitiveInfos
-    , const Vertex* vertices
+    , const GPU::Vertex* vertices
     , const TriangleIndices* triangles
     , const BVHNodeInfo& rootNodeInfo
     , TriangleIndices* reorderedTriangles
-    , const uint32_t* triangleIds
     , uint32_t* reorderedTriangleIds
     , uint32_t& reorderedTrianglesCount
     , std::vector<UnpackedBVHNode>* bvhNodes
@@ -112,7 +111,7 @@ static void BuildNodes(
         {
             uint32_t primIndex = primitiveInfos[ currentNodeInfo.primBegin ].primIndex;
             reorderedTriangles[ reorderedTrianglesCount ] = triangles[ primIndex ];
-            reorderedTriangleIds[ reorderedTrianglesCount ] = triangleIds[ primIndex ];
+            reorderedTriangleIds[ reorderedTrianglesCount ] = primIndex;
             bvhNode->primIndex = reorderedTrianglesCount;
             bvhNode->primCount = 1;
             reorderedTrianglesCount += 1;
@@ -170,9 +169,9 @@ static void BuildNodes(
                 {
                     for ( size_t iPrim = 0; iPrim < primCount; ++iPrim )
                     {
-                        size_t primIndex = primitiveInfos[ currentNodeInfo.primBegin + iPrim ].primIndex;
+                        uint32_t primIndex = primitiveInfos[ currentNodeInfo.primBegin + iPrim ].primIndex;
                         reorderedTriangles[ reorderedTrianglesCount + iPrim ] = triangles[ primIndex ];
-                        reorderedTriangleIds[ reorderedTrianglesCount + iPrim ] = triangleIds[ primIndex ];
+                        reorderedTriangleIds[ reorderedTrianglesCount + iPrim ] = primIndex;
                     }
                     bvhNode->primIndex = reorderedTrianglesCount;
                     bvhNode->primCount = uint8_t( primCount );
@@ -272,9 +271,9 @@ static void BuildNodes(
                     // Create leaf node
                     for ( size_t i = 0; i < primCount; ++i )
                     {
-                        size_t primIndex = primitiveInfos[ currentNodeInfo.primBegin + i ].primIndex;
+                        uint32_t primIndex = primitiveInfos[ currentNodeInfo.primBegin + i ].primIndex;
                         reorderedTriangles[ reorderedTrianglesCount + i ] = triangles[ primIndex ];
-                        reorderedTriangleIds[ reorderedTrianglesCount + i ] = triangleIds[ primIndex ];
+                        reorderedTriangleIds[ reorderedTrianglesCount + i ] = primIndex;
                     }
                     bvhNode->primIndex = reorderedTrianglesCount;
                     bvhNode->primCount = uint8_t( primCount );
@@ -303,7 +302,7 @@ static void BuildNodes(
     }
 }
 
-void BuildBVH( const Vertex* vertices, const uint32_t* indices, uint32_t* reorderedIndices, const uint32_t* triangleIds, uint32_t* reorderedTriangleIds, uint32_t triangleCount, std::vector<UnpackedBVHNode>* bvhNodes, uint32_t* maxDepth, uint32_t* maxStackSize )
+void BuildBVH( const GPU::Vertex* vertices, const uint32_t* indices, uint32_t* reorderedIndices, uint32_t* reorderedTriangleIds, uint32_t triangleCount, std::vector<UnpackedBVHNode>* bvhNodes, uint32_t* maxDepth, uint32_t* maxStackSize )
 {
     std::vector<PrimitiveInfo> primitiveInfos;
     primitiveInfos.reserve( triangleCount );
@@ -319,16 +318,16 @@ void BuildBVH( const Vertex* vertices, const uint32_t* indices, uint32_t* reorde
     }
 
     uint32_t reorderedTrianglesCount = 0;
-    BuildNodes( primitiveInfos, vertices, (TriangleIndices*)indices, { -1, 0, triangleCount, 0 }, (TriangleIndices*)reorderedIndices, triangleIds, reorderedTriangleIds, reorderedTrianglesCount, bvhNodes, maxDepth, maxStackSize );
+    BuildNodes( primitiveInfos, vertices, (TriangleIndices*)indices, { -1, 0, triangleCount, 0 }, (TriangleIndices*)reorderedIndices, reorderedTriangleIds, reorderedTrianglesCount, bvhNodes, maxDepth, maxStackSize );
     assert( reorderedTrianglesCount == triangleCount );
 }
 
-void PackBVH( const UnpackedBVHNode* bvhNodes, uint32_t nodeCount, BVHNode* packedBvhNodes )
+void PackBVH( const UnpackedBVHNode* bvhNodes, uint32_t nodeCount, GPU::BVHNode* packedBvhNodes )
 {
     for ( uint32_t iNode = 0; iNode < nodeCount; ++iNode )
     {
         const UnpackedBVHNode& unpacked = bvhNodes[ iNode ];
-        BVHNode& packed = packedBvhNodes[ iNode ];
+        GPU::BVHNode& packed = packedBvhNodes[ iNode ];
 
         DirectX::XMVECTOR vCenter = DirectX::XMLoadFloat3( &unpacked.bbox.Center );
         DirectX::XMVECTOR vExtends = DirectX::XMLoadFloat3( &unpacked.bbox.Extents );

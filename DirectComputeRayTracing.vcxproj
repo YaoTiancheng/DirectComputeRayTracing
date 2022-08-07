@@ -369,7 +369,7 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Shaders\Light.inc.hlsl">
+    <None Include="Shaders\LightSharedDef.inc.hlsl">
       <FileType>Document</FileType>
     </None>
   </ItemGroup>
@@ -424,7 +424,7 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Shaders\LightSampling.inc.hlsl">
+    <None Include="Shaders\Light.inc.hlsl">
       <FileType>Document</FileType>
     </None>
   </ItemGroup>

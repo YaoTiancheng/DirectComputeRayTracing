@@ -2,7 +2,10 @@
 #define FLT_INF asfloat( 0x7f800000 )
 #define SHADOW_EPSILON 1e-3f
 
+#include "Math.inc.hlsl"
+#include "MonteCarlo.inc.hlsl"
 #include "Vertex.inc.hlsl"
+#include "LightSharedDef.inc.hlsl"
 #include "Light.inc.hlsl"
 #include "Material.inc.hlsl"
 #include "BVHNode.inc.hlsl"
@@ -12,8 +15,6 @@
 #include "BVHAccel.inc.hlsl"
 #include "HitShader.inc.hlsl"
 #include "EnvironmentShader.inc.hlsl"
-#include "LightSampling.inc.hlsl"
-#include "MonteCarlo.inc.hlsl"
 #include "Intrinsics.inc.hlsl"
 
 SamplerState UVClampSampler;
@@ -154,29 +155,47 @@ struct SLightSampleResult
     bool isDeltaLight;
 };
 
-SLightSampleResult SampleLight( SLight light, Intersection intersection, float2 samples, float3 wo )
+SLightSampleResult SampleLightDirect( SLight light, float3 position, StructuredBuffer<Vertex> vertices, StructuredBuffer<uint> triangles, float2 samples )
 {
     SLightSampleResult result;
 
     result.isDeltaLight = false;
     if ( light.flags & LIGHT_FLAGS_POINT_LIGHT )
     {
-        SamplePointLight( light, samples, intersection.position, result.radiance, result.wi, result.distance, result.pdf );
+        SampleLight_Point( light, samples, position, result.radiance, result.wi, result.distance, result.pdf );
         result.isDeltaLight = true;
+    }
+    else if ( light.flags & LIGHT_FLAGS_TRIANGLE_LIGHT )
+    {
+        uint triangleId = light.primitiveId;
+        float3 v0 = vertices[ triangles[ triangleId * 3 ] ].position;
+        float3 v1 = vertices[ triangles[ triangleId * 3 + 1 ] ].position;
+        float3 v2 = vertices[ triangles[ triangleId * 3 + 2 ] ].position;
+        SampleLight_Triangle( light, v0, v1, v2, samples, position, result.radiance, result.wi, result.distance, result.pdf );
     }
     else
     {
-        SampleRectangleLight( light, samples, intersection.position, result.radiance, result.wi, result.distance, result.pdf );
+        SampleLight_Rectangle( light, samples, position, result.radiance, result.wi, result.distance, result.pdf );
     }
 
     result.distance *= 1 - SHADOW_EPSILON;
     return result;
 }
 
-void EvaluateLight( SLight light, float3 origin, float3 direction, out float distance, out float3 radiance, out float pdf )
+void EvaluateLightDirect( SLight light, StructuredBuffer<Vertex> vertices, StructuredBuffer<uint> triangles, float3 origin, float3 direction, out float distance, out float3 radiance, out float pdf )
 {
-    radiance = light.color;
-    pdf = EvaluateRectangleLightPdf( light, direction, origin, distance );
+    if ( light.flags == 0 )
+    {
+        EvaluateLight_Rectangle( light, direction, origin, radiance, pdf, distance );
+    }
+    else if ( light.flags & LIGHT_FLAGS_TRIANGLE_LIGHT )
+    {
+        uint triangleId = light.primitiveId;
+        float3 v0 = vertices[ triangles[ triangleId * 3 ] ].position;
+        float3 v1 = vertices[ triangles[ triangleId * 3 + 1 ] ].position;
+        float3 v2 = vertices[ triangles[ triangleId * 3 + 2 ] ].position;
+        EvaluateLight_Triangle( light, v0, v1, v2, direction, origin, radiance, pdf, distance );
+    }
     distance *= 1 - SHADOW_EPSILON;
 }
 
@@ -482,7 +501,7 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
         float2 lightSamples = GetNextSample2D( rng );
 
         lightIndex = floor( lightSelectionSample * g_LightCount );
-        SLightSampleResult sampleResult = SampleLight( g_Lights[ lightIndex ], intersection, lightSamples, wo );
+        SLightSampleResult sampleResult = SampleLightDirect( g_Lights[ lightIndex ], intersection.position, g_Vertices, g_Triangles, lightSamples );
         isDeltaLight = sampleResult.isDeltaLight;
 
         if ( any( sampleResult.radiance > 0.0f ) && sampleResult.pdf > 0.0f )
@@ -534,7 +553,7 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
             {
                 float3 radiance;
                 float lightPdf;
-                EvaluateLight( g_Lights[ lightIndex ], intersection.position, wi, lightDistance, radiance, lightPdf );
+                EvaluateLightDirect( g_Lights[ lightIndex ], g_Vertices, g_Triangles, intersection.position, wi, lightDistance, radiance, lightPdf );
                 if ( lightPdf > 0.0f )
                 {
                     float weight = !isDeltaBxdf ? PowerHeuristic( 1, bsdfPdf, 1, lightPdf ) : 1.0f;
@@ -869,7 +888,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
             float2 lightSamples = GetNextSample2D( rng );
 
             lightIndex = floor( lightSelectionSample * g_LightCount );
-            SLightSampleResult sampleResult = SampleLight( g_Lights[ lightIndex ], intersection, lightSamples, wo );
+            SLightSampleResult sampleResult = SampleLightDirect( g_Lights[ lightIndex ], intersection.position, g_Vertices, g_Triangles, lightSamples );
             isDeltaLight = sampleResult.isDeltaLight;
 
             if ( any( sampleResult.radiance > 0.0f ) && sampleResult.pdf > 0.0f
@@ -909,7 +928,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
                 float3 radiance;
                 float lightPdf;
                 float lightDistance = 0.0f;
-                EvaluateLight( g_Lights[ lightIndex ], lastHitPosition, wi, lightDistance, radiance, lightPdf );
+                EvaluateLightDirect( g_Lights[ lightIndex ], g_Vertices, g_Triangles, lastHitPosition, wi, lightDistance, radiance, lightPdf );
                 if ( lightPdf > 0.0f && lightDistance < hitDistance ) // hitDistance is inf if there is no hit
                 {
                     float weight = !isDeltaBxdf ? PowerHeuristic( 1, bsdfPdf, 1, lightPdf ) : 1.0f;

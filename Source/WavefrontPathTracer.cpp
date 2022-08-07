@@ -350,7 +350,7 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SR
     if ( void* address = m_MaterialConstantBuffer->Map() )
     {
         SMaterialConstants* constants = (SMaterialConstants*)address;
-        constants->g_LightCount = (uint32_t)m_Scene->m_LightSettings.size();
+        constants->g_LightCount = m_Scene->GetLightCount();
         m_MaterialConstantBuffer->Unmap();
     }
 

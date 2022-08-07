@@ -76,7 +76,7 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
         m_Scene->m_Camera.GetTransformMatrix( &constants->cameraTransform );
         constants->filmDistance = m_Scene->GetFilmDistance();
         constants->filmSize = m_Scene->m_FilmSize;
-        constants->lightCount = (uint32_t)m_Scene->m_LightSettings.size();
+        constants->lightCount = m_Scene->GetLightCount();
         constants->maxBounceCount = m_Scene->m_MaxBounceCount;
         constants->primitiveCount = m_Scene->m_Mesh.GetTriangleCount();
         constants->apertureRadius = m_Scene->CalculateApertureDiameter() * 0.5f;

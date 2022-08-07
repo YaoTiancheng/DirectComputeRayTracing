@@ -6,7 +6,7 @@
 #include "MessageBox.h"
 #include "GPUBuffer.h"
 #include "GPUTexture.h"
-#include "../Shaders/Light.inc.hlsl"
+#include "../Shaders/LightSharedDef.inc.hlsl"
 #include "imgui/imgui.h"
 
 using namespace DirectX;
@@ -20,8 +20,8 @@ bool CScene::LoadFromFile( const char* filepath )
         return false;
 
     m_VerticesBuffer.reset( GPUBuffer::CreateStructured(
-          sizeof( Vertex ) * m_Mesh.GetVertexCount()
-        , sizeof( Vertex )
+          sizeof( GPU::Vertex ) * m_Mesh.GetVertexCount()
+        , sizeof( GPU::Vertex )
         , D3D11_USAGE_IMMUTABLE
         , D3D11_BIND_SHADER_RESOURCE
         , 0
@@ -59,8 +59,8 @@ bool CScene::LoadFromFile( const char* filepath )
     }
 
     m_MaterialsBuffer.reset( GPUBuffer::CreateStructured(
-          uint32_t( sizeof( Material ) * m_Mesh.GetMaterials().size() )
-        , sizeof( Material )
+          uint32_t( sizeof( GPU::Material ) * m_Mesh.GetMaterials().size() )
+        , sizeof( GPU::Material )
         , D3D11_USAGE_DYNAMIC
         , D3D11_BIND_SHADER_RESOURCE
         , GPUResourceCreationFlags_CPUWriteable
@@ -74,8 +74,8 @@ bool CScene::LoadFromFile( const char* filepath )
     if ( !CommandLineArgs::Singleton()->GetNoBVHAccel() )
     {
         m_BVHNodesBuffer.reset( GPUBuffer::CreateStructured(
-              sizeof( BVHNode ) * m_Mesh.GetBVHNodeCount()
-            , sizeof( BVHNode )
+              sizeof( GPU::BVHNode ) * m_Mesh.GetBVHNodeCount()
+            , sizeof( GPU::BVHNode )
             , D3D11_USAGE_IMMUTABLE
             , D3D11_BIND_SHADER_RESOURCE
             , 0
@@ -88,8 +88,8 @@ bool CScene::LoadFromFile( const char* filepath )
     }
 
     m_LightsBuffer.reset( GPUBuffer::CreateStructured(
-        sizeof( SLight ) * s_MaxLightsCount
-        , sizeof( SLight )
+          sizeof( GPU::SLight ) * s_MaxLightsCount
+        , sizeof( GPU::SLight )
         , D3D11_USAGE_DYNAMIC
         , D3D11_BIND_SHADER_RESOURCE
         , GPUResourceCreationFlags_CPUWriteable
@@ -124,7 +124,8 @@ void CScene::Reset()
     m_FilterRadius = 1.0f;
 
     m_Mesh.Clear();
-    m_LightSettings.clear();
+    m_Lights.clear();
+    m_TriangleLights.clear();
 
     m_HasValidScene = false;
     m_ObjectSelection.DeselectAll();
@@ -140,14 +141,15 @@ void CScene::UpdateLightGPUData()
 {
     if ( void* address = m_LightsBuffer->Map() )
     {
-        for ( uint32_t i = 0; i < (uint32_t)m_LightSettings.size(); ++i )
-        {
-            SLightSetting* lightSetting = m_LightSettings.data() + i;
-            SLight* light = ( (SLight*)address ) + i;
+        GPU::SLight* GPULight = (GPU::SLight*)address;
 
-            XMVECTOR xmPosition = XMLoadFloat3( &lightSetting->position );
-            XMVECTOR xmQuat = XMQuaternionRotationRollPitchYaw( lightSetting->rotation.x, lightSetting->rotation.y, lightSetting->rotation.z );
-            XMFLOAT3 size3 = XMFLOAT3( lightSetting->size.x, lightSetting->size.y, 1.0f );
+        for ( uint32_t i = 0; i < (uint32_t)m_Lights.size(); ++i )
+        {
+            SLight* CPULight = m_Lights.data() + i;
+
+            XMVECTOR xmPosition = XMLoadFloat3( &CPULight->position );
+            XMVECTOR xmQuat = XMQuaternionRotationRollPitchYaw( CPULight->rotation.x, CPULight->rotation.y, CPULight->rotation.z );
+            XMFLOAT3 size3 = XMFLOAT3( CPULight->size.x, CPULight->size.y, 1.0f );
             XMVECTOR xmScale = XMLoadFloat3( &size3 );
             XMMATRIX xmTransform = XMMatrixAffineTransformation( xmScale, g_XMZero, xmQuat, xmPosition );
 
@@ -155,29 +157,42 @@ void CScene::UpdateLightGPUData()
             xmTransform = XMMatrixTranspose( xmTransform );
             XMFLOAT4X4 transform44;
             XMStoreFloat4x4( &transform44, xmTransform );
-            light->transform = XMFLOAT4X3( (float*)&transform44 );
+            GPULight->transform = XMFLOAT4X3( (float*)&transform44 );
 
-            light->color = lightSetting->color;
+            GPULight->color = CPULight->color;
 
-            switch ( lightSetting->lightType )
+            switch ( CPULight->lightType )
             {
             case ELightType::Point:
             {
-                light->flags = LIGHT_FLAGS_POINT_LIGHT;
+                GPULight->flags = LIGHT_FLAGS_POINT_LIGHT;
                 break;
             }
             case ELightType::Rectangle:
             {
-                light->flags = 0;
+                GPULight->flags = 0;
                 break;
             }
             default:
             {
-                light->flags = 0;
+                GPULight->flags = 0;
                 break;
             }
             }
+
+            ++GPULight;
         }
+
+        for ( uint32_t i = 0; i < (uint32_t)m_TriangleLights.size(); ++i )
+        {
+            const STriangleLight* CPUlight = m_TriangleLights.data() + i;
+            GPULight->color = CPUlight->m_Radiance;
+            GPULight->primitiveId = CPUlight->m_TriangleId;
+            GPULight->invSurfaceArea = CPUlight->m_InvSurfaceArea;
+            GPULight->flags = LIGHT_FLAGS_TRIANGLE_LIGHT;
+            ++GPULight;
+        }
+
         m_LightsBuffer->Unmap();
     }
 }
@@ -190,7 +205,7 @@ void CScene::UpdateMaterialGPUData()
         for ( uint32_t i = 0; i < (uint32_t)materials.size(); ++i )
         {
             SMaterialSetting* materialSetting = materials.data() + i;
-            Material* material = ( (Material*)address ) + i;
+            GPU::Material* material = ( (GPU::Material*)address ) + i;
             material->albedo = materialSetting->m_Albedo;
             material->emission = materialSetting->m_Emission;
             material->ior = materialSetting->m_IOR;

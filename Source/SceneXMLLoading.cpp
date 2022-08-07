@@ -674,6 +674,8 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
         return false;
     }
 
+    size_t baseTriangleLightIndex = m_TriangleLights.size();
+
     std::unordered_map<std::string_view, EShapeType> shapeNameToEnumMap = { { "obj", EShapeType::eObj }, { "rectangle", EShapeType::eRectangle } };
     std::unordered_map<std::string_view, EMaterialType> materialNameToEnumMap =
     {
@@ -824,27 +826,21 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     else
                     {
                         materialId = iter->second;
-                        if ( isALight )
-                        {
-                            SMaterialSetting copyMaterial = m_Mesh.GetMaterials()[ materialId ];
-                            materialId = (uint32_t)m_Mesh.GetMaterials().size();
-                            m_Mesh.GetMaterials().emplace_back( copyMaterial );
-                            m_Mesh.GetMaterialNames().emplace_back();
-                        }
                     }
                 }
                 else if ( isALight )
                 {
+                    // Assign a pitch black non-reflective material to light
                     materialId = (uint32_t)m_Mesh.GetMaterials().size();
                     SMaterialSetting material;
                     material.m_Albedo = XMFLOAT3( 0.f, 0.f, 0.f );
-                    material.m_Roughness = 0.0f;
+                    material.m_Roughness = 0.f;
                     material.m_IOR = XMFLOAT3( 1.f, 1.f, 1.f );
-                    material.m_Transmission = 0.0f;
+                    material.m_Transmission = 0.f;
                     material.m_IsMetal = false;
                     material.m_HasAlbedoTexture = false;
                     material.m_HasRoughnessTexture = false;
-                    material.m_HasEmissionTexture = false;
+                    material.m_HasRoughnessTexture = false;
                     m_Mesh.GetMaterials().emplace_back( material );
                     m_Mesh.GetMaterialNames().emplace_back();
                 }
@@ -886,49 +882,62 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     if ( !m_Mesh.GenerateRectangle( materialId, true, transform ) )
                     {
                         LOG_STRING( "Failed to generate rectangle shape.\n" );
+                        break;
                     }
 
                     if ( emitterValue )
                     {
-                        SValue* emitterTypeValue = emitterValue->FindValue( "type" );
-                        if ( emitterTypeValue && emitterTypeValue->m_Type == EValueType::eString )
+                        if ( GetLightCount() + 2 <= s_MaxLightsCount )
                         {
-                            if ( strncmp( "area", emitterTypeValue->m_String.data(), emitterTypeValue->m_String.length() ) == 0 )
+                            SValue* emitterTypeValue = emitterValue->FindValue( "type" );
+                            if ( emitterTypeValue && emitterTypeValue->m_Type == EValueType::eString )
                             {
-                                m_LightSettings.emplace_back();
-                                SLightSetting& light = m_LightSettings.back();
-
-                                XMFLOAT3 scale;
-                                MathHelper::MatrixDecompose( transform, &light.position, &light.rotation, &scale );
-                                light.size = XMFLOAT2( scale.x * 2.0f, scale.y * 2.0f ); // The rectangle light shape is [-0.5, 0.5] on both axis, so multiply the size by 2.
-
-                                light.color = XMFLOAT3( 1.0f, 1.0f, 1.0f );
-                                SValue* radianceValue = emitterValue->FindValue( "radiance" );
-                                if ( radianceValue )
+                                if ( strncmp( "area", emitterTypeValue->m_String.data(), emitterTypeValue->m_String.length() ) == 0 )
                                 {
-                                    if ( radianceValue->m_Type == EValueType::eRGB )
+                                    XMFLOAT3 radiance( 1.0f, 1.0f, 1.0f );
+                                    SValue* radianceValue = emitterValue->FindValue( "radiance" );
+                                    if ( radianceValue )
                                     {
-                                        light.color = radianceValue->m_RGB;
+                                        if ( radianceValue->m_Type == EValueType::eRGB )
+                                        {
+                                            radiance = radianceValue->m_RGB;
+                                        }
+                                        else
+                                        {
+                                            LOG_STRING( "Unsupported radiance type.\n" );
+                                        }
                                     }
-                                    else
+
+                                    XMFLOAT3 scale, position, rotation;
+                                    MathHelper::MatrixDecompose( transform, &position, &rotation, &scale );
+                                    float surfaceAreaPreTriangle = 4.f * scale.x * scale.y * .5f; // mitsuba rectangle emitter is [-1, 1] on XY axis so initial area is 4
+                                    float invSurfaceAreaPerTriangle = surfaceAreaPreTriangle >= 1e-6f ? 1.f / surfaceAreaPreTriangle : 0.f;
+
+                                    assert( m_Mesh.GetTriangleCount() >= 2 );
+                                    uint32_t triangleId = m_Mesh.GetTriangleCount() - 2;
+                                    for ( uint32_t i = 0; i < 2; ++i )
                                     {
-                                        LOG_STRING( "Unsupported radiance type.\n" );
+                                        m_TriangleLights.emplace_back();
+                                        STriangleLight& light = m_TriangleLights.back();
+                                        light.m_Radiance = radiance;
+                                        light.m_TriangleId = triangleId;
+                                        light.m_InvSurfaceArea = invSurfaceAreaPerTriangle;
+                                        ++triangleId;
                                     }
                                 }
-
-                                light.lightType = ELightType::Rectangle;
-
-                                SMaterialSetting& material = m_Mesh.GetMaterials()[ materialId ];
-                                material.m_Emission = light.color;
+                                else
+                                {
+                                    LOG_STRING_FORMAT( "Unsupported emitter type \'%.*s\' for rectangle shape.\n", emitterTypeValue->m_String.length(), emitterTypeValue->m_String.data() );
+                                }
                             }
                             else
                             {
-                                LOG_STRING_FORMAT( "Unsupported emitter type \'%.*s\' for rectangle shape.\n", emitterTypeValue->m_String.length(), emitterTypeValue->m_String.data() );
+                                LOG_STRING( "Cannot determine type from emitter.\n" );
                             }
                         }
                         else
                         {
-                            LOG_STRING( "Cannot determine type from emitter.\n" );
+                            LOG_STRING( "Max light count exceeded.\n" );
                         }
                     }
                     break;
@@ -982,7 +991,16 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
     bool buildBVH = !commandLineArgs->GetNoBVHAccel();
     if ( buildBVH )
     {
-        m_Mesh.BuildBVH( nullptr );
+        std::vector<uint32_t> reorderedTriangleId;
+        m_Mesh.BuildBVH( nullptr, &reorderedTriangleId );
+
+        // Remap the triangle lights to the reordered triangles
+        for ( size_t i = baseTriangleLightIndex; i < m_TriangleLights.size(); ++i )
+        {
+            auto it = std::find( reorderedTriangleId.begin(), reorderedTriangleId.end(), m_TriangleLights[ i ].m_TriangleId );
+            assert( it != reorderedTriangleId.end() );
+            m_TriangleLights[ i ].m_TriangleId = (uint32_t)std::distance( reorderedTriangleId.begin(), it );
+        }
 
         uint32_t BVHMaxDepth = m_Mesh.GetBVHMaxDepth();
         uint32_t BVHMaxStackSize = m_Mesh.GetBVHMaxStackSize();

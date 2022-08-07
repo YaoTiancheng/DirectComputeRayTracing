@@ -19,13 +19,20 @@ enum class EFilter
     LanczosSinc = 4,
 };
 
-struct SLightSetting
+struct SLight
 {
     DirectX::XMFLOAT3 position;
     DirectX::XMFLOAT3 rotation;
     DirectX::XMFLOAT3 color;
     DirectX::XMFLOAT2 size;
     ELightType lightType;
+};
+
+struct STriangleLight
+{
+    uint32_t m_TriangleId;
+    DirectX::XMFLOAT3 m_Radiance;
+    float m_InvSurfaceArea;
 };
 
 struct SSceneObjectSelection
@@ -75,6 +82,8 @@ public:
 
     float GetFilmDistance() const;
 
+    uint32_t GetLightCount() const { return (uint32_t)( m_Lights.size() + m_TriangleLights.size() ); }
+
     float CalculateFocalDistance() const;
 
     float CalculateFilmDistance() const;
@@ -119,7 +128,8 @@ public:
     bool m_IsGGXVNDFSamplingEnabled = true;
 
     Camera m_Camera;
-    std::vector<SLightSetting> m_LightSettings;
+    std::vector<SLight> m_Lights;
+    std::vector<STriangleLight> m_TriangleLights;
     Mesh m_Mesh;
 
     GPUTexturePtr m_EnvironmentTexture;

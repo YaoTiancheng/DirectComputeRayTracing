@@ -3,6 +3,8 @@
 
 #include "CppTypes.h"
 
+GPU_STRUCTURE_NAMESPACE_BEGIN
+
 struct BVHNode
 {
     float3 bboxMin;
@@ -10,5 +12,7 @@ struct BVHNode
     uint   childOrPrimIndex;
     uint   misc;
 };
+
+GPU_STRUCTURE_NAMESPACE_END
 
 #endif

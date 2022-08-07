@@ -8,6 +8,8 @@
 #define MATERIAL_FLAG_EMISSION_TEXTURE  0x4
 #define MATERIAL_FLAG_IS_METAL          0x8
 
+GPU_STRUCTURE_NAMESPACE_BEGIN
+
 struct Material
 {
     float3 albedo;
@@ -19,5 +21,7 @@ struct Material
     float2 texTiling;
     uint   flags;
 };
+
+GPU_STRUCTURE_NAMESPACE_END
 
 #endif

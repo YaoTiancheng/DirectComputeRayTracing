@@ -8,23 +8,23 @@ bool RayTriangleIntersect( float3 origin
     , float3 direction
     , float tMin
     , float tMax
-    , Vertex v0
-    , Vertex v1
-    , Vertex v2
+    , float3 v0
+    , float3 v1
+    , float3 v2
     , out float t
     , out float u
     , out float v
     , out bool backface )
 {
-    float3 v0v1 = v1.position - v0.position; 
-    float3 v0v2 = v2.position - v0.position;
+    float3 v0v1 = v1 - v0; 
+    float3 v0v2 = v2 - v0;
 
     float3 pvec = cross( direction, v0v2 );
     float det = dot( v0v1, pvec );
 
     float invDet = 1 / det; 
  
-    float3 tvec = origin - v0.position;
+    float3 tvec = origin - v0;
     u = dot( tvec, pvec ) * invDet; 
 
     float3 qvec = cross( tvec, v0v1 );

@@ -300,8 +300,8 @@
     <None Include="Shaders\LightingContext.inc.hlsl" />
     <None Include="Shaders\Xoshiro.inc.hlsl" />
     <None Include="Shaders\UInt64.inc.hlsl" />
+    <None Include="Shaders\LightSharedDef.inc.hlsl" />
     <None Include="Shaders\Light.inc.hlsl" />
-    <None Include="Shaders\LightSampling.inc.hlsl" />
     <None Include="Shaders\BxDFTextureDef.inc.hlsl" />
     <None Include="Shaders\Fresnel.inc.hlsl" />
     <None Include="Shaders\SpecularBRDF.inc.hlsl" />

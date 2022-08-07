@@ -3,6 +3,8 @@
 
 #include "CppTypes.h"
 
+GPU_STRUCTURE_NAMESPACE_BEGIN
+
 struct Vertex
 {
     float3  position;
@@ -10,5 +12,7 @@ struct Vertex
     float3  tangent;
     float2  texcoord;
 };
+
+GPU_STRUCTURE_NAMESPACE_END
 
 #endif

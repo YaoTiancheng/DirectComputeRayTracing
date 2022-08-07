@@ -3,28 +3,6 @@
 
 #include "Intersection.inc.hlsl"
 
-float2 VectorBaryCentric2( float2 p0, float2 p1, float2 p2, float u, float v )
-{
-    float2 r1 = p1 - p0;
-    float2 r2 = p2 - p0;
-    r1 = r1 * u;
-    r2 = r2 * v;
-    r1 = r1 + p0;
-    r1 = r1 + r2;
-    return r1;
-}
-
-float3 VectorBaryCentric3( float3 p0, float3 p1, float3 p2, float u, float v )
-{
-    float3 r1 = p1 - p0;
-    float3 r2 = p2 - p0;
-    r1 = r1 * u;
-    r2 = r2 * v;
-    r1 = r1 + p0;
-    r1 = r1 + r2;
-    return r1;
-}
-
 float CheckerboardTexture( float2 texcoord )
 {
     return ( ( uint( texcoord.x * 2 ) + uint( texcoord.y * 2 ) ) & 0x1 ) != 0 ? 1.0f : 0.0f;

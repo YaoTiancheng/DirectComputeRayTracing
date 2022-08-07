@@ -12,11 +12,14 @@ struct UnpackedBVHNode
     uint8_t                 splitAxis;
 };
 
-struct Vertex;
-struct BVHNode;
+namespace GPU
+{
+    struct Vertex;
+    struct BVHNode;
+}
 
-void BuildBVH( const Vertex* vertices, const uint32_t* indicies, uint32_t* reorderedIndices, const uint32_t* triangleIds, uint32_t* reorderedTriangleIds, uint32_t triangleCount, std::vector<UnpackedBVHNode>* bvhNodes, uint32_t* maxDepth, uint32_t* maxStackSize );
+void BuildBVH( const GPU::Vertex* vertices, const uint32_t* indicies, uint32_t* reorderedIndices, uint32_t* reorderedTriangleIds, uint32_t triangleCount, std::vector<UnpackedBVHNode>* bvhNodes, uint32_t* maxDepth, uint32_t* maxStackSize );
 
-void PackBVH( const UnpackedBVHNode* bvhNodes, uint32_t nodeCount, BVHNode* packedBvhNodes );
+void PackBVH( const UnpackedBVHNode* bvhNodes, uint32_t nodeCount, GPU::BVHNode* packedBvhNodes );
 
 void SerializeBVHToXML( const UnpackedBVHNode* rootNode, FILE* file );

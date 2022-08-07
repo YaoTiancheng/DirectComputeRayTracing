@@ -23,8 +23,6 @@
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_dx11.h"
 #include "imgui/imgui_impl_win32.h"
-#include "../Shaders/Light.inc.hlsl"
-#include "../Shaders/Material.inc.hlsl"
 #include "../Shaders/SumLuminanceDef.inc.hlsl"
 
 using namespace DirectX;
@@ -721,12 +719,12 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 {
                     ELightType lightType = ELightType::Point;
                     bool menuItemClicked = false;
-                    if ( ImGui::MenuItem( "Point Light", "", false, m_Scene.m_LightSettings.size() < m_Scene.s_MaxLightsCount ) )
+                    if ( ImGui::MenuItem( "Point Light", "", false, m_Scene.m_Lights.size() < m_Scene.s_MaxLightsCount ) )
                     {
                         lightType = ELightType::Point;
                         menuItemClicked = true;
                     }
-                    if ( ImGui::MenuItem( "Rectangle Light", "", false, m_Scene.m_LightSettings.size() < m_Scene.s_MaxLightsCount ) )
+                    if ( ImGui::MenuItem( "Rectangle Light", "", false, m_Scene.m_Lights.size() < m_Scene.s_MaxLightsCount ) )
                     {
                         lightType = ELightType::Rectangle;
                         menuItemClicked = true;
@@ -734,12 +732,12 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
                     if ( menuItemClicked )
                     {
-                        m_Scene.m_LightSettings.emplace_back();
-                        m_Scene.m_LightSettings.back().color = XMFLOAT3( 1.0f, 1.0f, 1.0f );
-                        m_Scene.m_LightSettings.back().position = XMFLOAT3( 0.0f, 0.0f, 0.0f );
-                        m_Scene.m_LightSettings.back().rotation = XMFLOAT3( 0.0f, 0.0f, 0.0f );
-                        m_Scene.m_LightSettings.back().size = XMFLOAT2( 1.0f, 1.0f );
-                        m_Scene.m_LightSettings.back().lightType = lightType;
+                        m_Scene.m_Lights.emplace_back();
+                        m_Scene.m_Lights.back().color = XMFLOAT3( 1.0f, 1.0f, 1.0f );
+                        m_Scene.m_Lights.back().position = XMFLOAT3( 0.0f, 0.0f, 0.0f );
+                        m_Scene.m_Lights.back().rotation = XMFLOAT3( 0.0f, 0.0f, 0.0f );
+                        m_Scene.m_Lights.back().size = XMFLOAT2( 1.0f, 1.0f );
+                        m_Scene.m_Lights.back().lightType = lightType;
                         m_IsLightGPUBufferDirty = true;
                         m_IsFilmDirty = true;
                     }
@@ -748,7 +746,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 }
                 if ( ImGui::MenuItem( "Delete", "", false, m_Scene.m_ObjectSelection.m_LightSelectionIndex != -1 ) )
                 {
-                    m_Scene.m_LightSettings.erase( m_Scene.m_LightSettings.begin() + m_Scene.m_ObjectSelection.m_LightSelectionIndex );
+                    m_Scene.m_Lights.erase( m_Scene.m_Lights.begin() + m_Scene.m_ObjectSelection.m_LightSelectionIndex );
                     m_Scene.m_ObjectSelection.m_LightSelectionIndex = -1;
                     m_IsLightGPUBufferDirty = true;
                     m_IsFilmDirty = true;;
@@ -770,7 +768,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
         if ( ImGui::CollapsingHeader( "Lights" ) )
         {
             char label[ 32 ];
-            for ( size_t iLight = 0; iLight < m_Scene.m_LightSettings.size(); ++iLight )
+            for ( size_t iLight = 0; iLight < m_Scene.m_Lights.size(); ++iLight )
             {
                 bool isSelected = ( iLight == m_Scene.m_ObjectSelection.m_LightSelectionIndex );
                 sprintf( label, "Light %d", uint32_t( iLight ) );
@@ -806,9 +804,9 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
         if ( m_Scene.m_ObjectSelection.m_LightSelectionIndex >= 0 )
         {
             ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
-            if ( m_Scene.m_ObjectSelection.m_LightSelectionIndex < m_Scene.m_LightSettings.size() )
+            if ( m_Scene.m_ObjectSelection.m_LightSelectionIndex < m_Scene.m_Lights.size() )
             {
-                SLightSetting* selection = m_Scene.m_LightSettings.data() + m_Scene.m_ObjectSelection.m_LightSelectionIndex;
+                SLight* selection = m_Scene.m_Lights.data() + m_Scene.m_ObjectSelection.m_LightSelectionIndex;
 
                 if ( ImGui::DragFloat3( "Position", (float*)&selection->position, 1.0f ) )
                     m_IsLightGPUBufferDirty = true;

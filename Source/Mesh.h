@@ -29,7 +29,7 @@ public:
 
     bool GenerateRectangle( uint32_t materialId, bool applyTransform = false, const DirectX::XMFLOAT4X4& transform = MathHelper::s_IdentityMatrix );
 
-    void BuildBVH( const char* BVHFilename = nullptr );
+    void BuildBVH( const char* BVHFilename = nullptr, std::vector<uint32_t>* reorderedTriangleIds = nullptr );
 
     void Clear();
 
@@ -41,15 +41,15 @@ public:
 
     uint32_t GetBVHNodeCount() const { return (uint32_t)m_BVHNodes.size(); }
 
-    const std::vector<Vertex>& GetVertices() const { return m_Vertices; }
+    const std::vector<GPU::Vertex>& GetVertices() const { return m_Vertices; }
 
-    std::vector<Vertex>& GetVertices() { return m_Vertices; }
+    std::vector<GPU::Vertex>& GetVertices() { return m_Vertices; }
 
     const std::vector<uint32_t>& GetIndices() const { return m_Indices; }
 
     std::vector<uint32_t>& GetIndices() { return m_Indices; }
 
-    const BVHNode* GetBVHNodes() const { return m_BVHNodes.data(); }
+    const GPU::BVHNode* GetBVHNodes() const { return m_BVHNodes.data(); }
 
     uint32_t GetBVHMaxDepth() const { return m_BVHMaxDepth; }
 
@@ -68,9 +68,9 @@ public:
     std::vector<std::string>& GetMaterialNames() { return m_MaterialNames; }
 
 private:
-    std::vector<Vertex> m_Vertices;
+    std::vector<GPU::Vertex> m_Vertices;
     std::vector<uint32_t> m_Indices;
-    std::vector<BVHNode> m_BVHNodes;
+    std::vector<GPU::BVHNode> m_BVHNodes;
     uint32_t m_BVHMaxDepth = 0;
     uint32_t m_BVHMaxStackSize = 0;
     std::vector<uint32_t> m_MaterialIds;

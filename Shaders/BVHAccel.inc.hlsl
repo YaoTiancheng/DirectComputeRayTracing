@@ -78,9 +78,9 @@ bool BVHIntersectNoInterp( float3 origin
                 uint primEnd = primBegin + primCount;
                 for ( uint iPrim = primBegin; iPrim < primEnd; ++iPrim )
                 {
-                    Vertex v0 = vertices[ triangles[ iPrim * 3 ] ];
-                    Vertex v1 = vertices[ triangles[ iPrim * 3 + 1 ] ];
-                    Vertex v2 = vertices[ triangles[ iPrim * 3 + 2 ] ];
+                    float3 v0 = vertices[ triangles[ iPrim * 3 ] ].position;
+                    float3 v1 = vertices[ triangles[ iPrim * 3 + 1 ] ].position;
+                    float3 v2 = vertices[ triangles[ iPrim * 3 + 2 ] ].position;
                     if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
                     {
                         tMax = t;
@@ -104,9 +104,9 @@ bool BVHIntersectNoInterp( float3 origin
 #else
     for ( uint iPrim = 0; iPrim < primitiveCount; ++iPrim )
     {
-        Vertex v0 = vertices[ triangles[ iPrim * 3 ] ];
-        Vertex v1 = vertices[ triangles[ iPrim * 3 + 1 ] ];
-        Vertex v2 = vertices[ triangles[ iPrim * 3 + 2 ] ];
+        float3 v0 = vertices[ triangles[ iPrim * 3 ] ].position;
+        float3 v1 = vertices[ triangles[ iPrim * 3 + 1 ] ].position;
+        float3 v2 = vertices[ triangles[ iPrim * 3 + 2 ] ].position;
         if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
         {
             tMax = t;
@@ -154,9 +154,9 @@ bool BVHIntersect( float3 origin
                 uint primEnd = primBegin + primCount;
                 for ( uint iPrim = primBegin; iPrim < primEnd; ++iPrim )
                 {
-                    Vertex v0 = vertices[ triangles[ iPrim * 3 ] ];
-                    Vertex v1 = vertices[ triangles[ iPrim * 3 + 1 ] ];
-                    Vertex v2 = vertices[ triangles[ iPrim * 3 + 2 ] ];
+                    float3 v0 = vertices[ triangles[ iPrim * 3 ] ].position;
+                    float3 v1 = vertices[ triangles[ iPrim * 3 + 1 ] ].position;
+                    float3 v2 = vertices[ triangles[ iPrim * 3 + 2 ] ].position;
                     float t, u, v;
                     bool backface;
                     if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
@@ -179,9 +179,9 @@ bool BVHIntersect( float3 origin
     bool backface;
     for ( uint iPrim = 0; iPrim < primitiveCount; ++iPrim )
     {
-        Vertex v0 = vertices[ triangles[ iPrim * 3 ] ];
-        Vertex v1 = vertices[ triangles[ iPrim * 3 + 1 ] ];
-        Vertex v2 = vertices[ triangles[ iPrim * 3 + 2 ] ];
+        float3 v0 = vertices[ triangles[ iPrim * 3 ] ].position;
+        float3 v1 = vertices[ triangles[ iPrim * 3 + 1 ] ].position;
+        float3 v2 = vertices[ triangles[ iPrim * 3 + 2 ] ].position;
         if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
         {
             return true;

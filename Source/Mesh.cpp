@@ -268,7 +268,7 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool a
                         return false;
 
                     vertexIndex = (uint32_t)m_Vertices.size();
-                    Vertex vertex;
+                    GPU::Vertex vertex;
                     vertex.position = XMFLOAT3( attrib.vertices[ idx.vertex_index * 3 ], attrib.vertices[ idx.vertex_index * 3 + 1 ], attrib.vertices[ idx.vertex_index * 3 + 2 ] );
                     vertex.normal = XMFLOAT3( attrib.normals[ idx.normal_index * 3 ], attrib.normals[ idx.normal_index * 3 + 1 ], attrib.normals[ idx.normal_index * 3 + 2 ] );
                     vertex.tangent = tangent;
@@ -344,14 +344,14 @@ bool Mesh::GenerateRectangle( uint32_t materialId, bool applyTransform, const Di
 {
     if ( GetVertexCount() + 4 <= UINT_MAX )
     {
-        Vertex vertices[ 4 ] =
+        GPU::Vertex vertices[ 4 ] =
         {
               { { 1.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } }
             , { { 1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 0.0f } }
             , { { -1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } }
             , { { -1.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 1.0f } }
         };
-        uint32_t indices[ 6 ] = { 0, 1, 3, 1, 2, 3 };
+        uint32_t indices[ 6 ] = { 0, 3, 1, 1, 3, 2 };
 
         uint32_t indexBase = GetVertexCount();
 
@@ -362,7 +362,7 @@ bool Mesh::GenerateRectangle( uint32_t materialId, bool applyTransform, const Di
         for ( auto& vertex : vertices )
         {
             m_Vertices.emplace_back();
-            Vertex& meshVertex = m_Vertices.back();
+            GPU::Vertex& meshVertex = m_Vertices.back();
             XMVECTOR vPosition = XMLoadFloat3( &vertex.position );
             XMVECTOR vNormal = XMLoadFloat3( &vertex.normal );
             XMVECTOR vTangent = XMLoadFloat3( &vertex.tangent );
@@ -392,12 +392,27 @@ bool Mesh::GenerateRectangle( uint32_t materialId, bool applyTransform, const Di
     }
 }
 
-void Mesh::BuildBVH( const char* BVHFilename )
+void Mesh::BuildBVH( const char* BVHFilename, std::vector<uint32_t>* reorderedTriangleIds )
 {
     std::vector<uint32_t> indices = m_Indices;
-    std::vector<uint32_t> materialIds = m_MaterialIds;
+    std::vector<uint32_t> triangleIds;
+    std::vector<uint32_t>* reorderedTriangleIdsUsed = reorderedTriangleIds;
+    if ( !reorderedTriangleIds )
+    {
+        reorderedTriangleIdsUsed = &triangleIds;
+    }
+    reorderedTriangleIdsUsed->resize( GetTriangleCount() );
     std::vector<UnpackedBVHNode> BVHNodes;
-    ::BuildBVH( m_Vertices.data(), indices.data(), m_Indices.data(), materialIds.data(), m_MaterialIds.data(), GetTriangleCount(), &BVHNodes, &m_BVHMaxDepth, &m_BVHMaxStackSize );
+    ::BuildBVH( m_Vertices.data(), indices.data(), m_Indices.data(), reorderedTriangleIdsUsed->data(), GetTriangleCount(), &BVHNodes, &m_BVHMaxDepth, &m_BVHMaxStackSize );
+
+    // Reorder material id
+    {
+        std::vector<uint32_t> materialIds = m_MaterialIds;
+        for ( size_t i = 0; i < materialIds.size(); ++i )
+        {
+            m_MaterialIds[ i ] = materialIds[ (*reorderedTriangleIdsUsed)[ i ] ];
+        }
+    }
 
     if ( BVHFilename && BVHFilename[ 0 ] != '\0' )
     {

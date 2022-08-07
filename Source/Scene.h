@@ -93,7 +93,7 @@ public:
     float CalculateApertureDiameter() const { return m_FocalLength / m_RelativeAperture; }
 
     const uint32_t s_MaxRayBounce = 20;
-    const uint32_t s_MaxLightsCount = 64;
+    const uint32_t s_MaxLightsCount = 5000;
     const float s_MaxFocalDistance = 999999.0f;
 
 private:

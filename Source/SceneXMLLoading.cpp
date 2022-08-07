@@ -674,8 +674,6 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
         return false;
     }
 
-    size_t baseTriangleLightIndex = m_TriangleLights.size();
-
     std::unordered_map<std::string_view, EShapeType> shapeNameToEnumMap = { { "obj", EShapeType::eObj }, { "rectangle", EShapeType::eRectangle } };
     std::unordered_map<std::string_view, EMaterialType> materialNameToEnumMap =
     {
@@ -852,6 +850,8 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     shapeType = itShapeType->second;
                 }
 
+                uint32_t triangleCountBase = m_Mesh.GetTriangleCount();
+
                 switch ( shapeType )
                 {
                 case EShapeType::eObj:
@@ -882,63 +882,6 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     if ( !m_Mesh.GenerateRectangle( materialId, true, transform ) )
                     {
                         LOG_STRING( "Failed to generate rectangle shape.\n" );
-                        break;
-                    }
-
-                    if ( emitterValue )
-                    {
-                        if ( GetLightCount() + 2 <= s_MaxLightsCount )
-                        {
-                            SValue* emitterTypeValue = emitterValue->FindValue( "type" );
-                            if ( emitterTypeValue && emitterTypeValue->m_Type == EValueType::eString )
-                            {
-                                if ( strncmp( "area", emitterTypeValue->m_String.data(), emitterTypeValue->m_String.length() ) == 0 )
-                                {
-                                    XMFLOAT3 radiance( 1.0f, 1.0f, 1.0f );
-                                    SValue* radianceValue = emitterValue->FindValue( "radiance" );
-                                    if ( radianceValue )
-                                    {
-                                        if ( radianceValue->m_Type == EValueType::eRGB )
-                                        {
-                                            radiance = radianceValue->m_RGB;
-                                        }
-                                        else
-                                        {
-                                            LOG_STRING( "Unsupported radiance type.\n" );
-                                        }
-                                    }
-
-                                    XMFLOAT3 scale, position, rotation;
-                                    MathHelper::MatrixDecompose( transform, &position, &rotation, &scale );
-                                    float surfaceAreaPreTriangle = 4.f * scale.x * scale.y * .5f; // mitsuba rectangle emitter is [-1, 1] on XY axis so initial area is 4
-                                    float invSurfaceAreaPerTriangle = surfaceAreaPreTriangle >= 1e-6f ? 1.f / surfaceAreaPreTriangle : 0.f;
-
-                                    assert( m_Mesh.GetTriangleCount() >= 2 );
-                                    uint32_t triangleId = m_Mesh.GetTriangleCount() - 2;
-                                    for ( uint32_t i = 0; i < 2; ++i )
-                                    {
-                                        m_TriangleLights.emplace_back();
-                                        STriangleLight& light = m_TriangleLights.back();
-                                        light.m_Radiance = radiance;
-                                        light.m_TriangleId = triangleId;
-                                        light.m_InvSurfaceArea = invSurfaceAreaPerTriangle;
-                                        ++triangleId;
-                                    }
-                                }
-                                else
-                                {
-                                    LOG_STRING_FORMAT( "Unsupported emitter type \'%.*s\' for rectangle shape.\n", emitterTypeValue->m_String.length(), emitterTypeValue->m_String.data() );
-                                }
-                            }
-                            else
-                            {
-                                LOG_STRING( "Cannot determine type from emitter.\n" );
-                            }
-                        }
-                        else
-                        {
-                            LOG_STRING( "Max light count exceeded.\n" );
-                        }
                     }
                     break;
                 }
@@ -948,6 +891,70 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     LOG_STRING_FORMAT( "Unsupported shape type \'%.*s\'\n", typeValue->m_String.length(), typeValue->m_String.data() );
                     break;
                 }
+                }
+
+                if ( emitterValue )
+                {
+                    uint32_t triangleCount = m_Mesh.GetTriangleCount();
+                    uint32_t addedTriangleCount = triangleCount - triangleCountBase;
+                    if ( GetLightCount() + addedTriangleCount <= s_MaxLightsCount )
+                    {
+                        SValue* emitterTypeValue = emitterValue->FindValue( "type" );
+                        if ( emitterTypeValue && emitterTypeValue->m_Type == EValueType::eString )
+                        {
+                            if ( strncmp( "area", emitterTypeValue->m_String.data(), emitterTypeValue->m_String.length() ) == 0 )
+                            {
+                                XMFLOAT3 radiance( 1.0f, 1.0f, 1.0f );
+                                SValue* radianceValue = emitterValue->FindValue( "radiance" );
+                                if ( radianceValue )
+                                {
+                                    if ( radianceValue->m_Type == EValueType::eRGB )
+                                    {
+                                        radiance = radianceValue->m_RGB;
+                                    }
+                                    else
+                                    {
+                                        LOG_STRING( "Unsupported radiance type.\n" );
+                                    }
+                                }
+
+                                // Create lights
+                                const std::vector<uint32_t>& indices = m_Mesh.GetIndices();
+                                const std::vector<GPU::Vertex>& vertices = m_Mesh.GetVertices();
+                                for ( uint32_t iTriangle = triangleCountBase; iTriangle < triangleCount; ++iTriangle )
+                                {
+                                    XMVECTOR vP0 = XMLoadFloat3( &vertices[ indices[ iTriangle * 3 ] ].position );
+                                    XMVECTOR vP1 = XMLoadFloat3( &vertices[ indices[ iTriangle * 3 + 1 ] ].position );
+                                    XMVECTOR vP2 = XMLoadFloat3( &vertices[ indices[ iTriangle * 3 + 2 ] ].position );
+                                    XMVECTOR vP0P1 = vP1 - vP0;
+                                    XMVECTOR vP0P2 = vP2 - vP0;
+                                    XMVECTOR vCross = XMVector3Cross( vP0P1, vP0P2 );
+                                    XMVECTOR vArea = XMVector3Length( vCross );
+                                    float area;
+                                    XMStoreFloat( &area, vArea );
+                                    float invSurfaceArea = 1.f / ( area * .5f );
+
+                                    m_TriangleLights.emplace_back();
+                                    STriangleLight& light = m_TriangleLights.back();
+                                    light.m_Radiance = radiance;
+                                    light.m_TriangleId = iTriangle;
+                                    light.m_InvSurfaceArea = invSurfaceArea;
+                                }
+                            }
+                            else
+                            {
+                                LOG_STRING_FORMAT( "Unsupported emitter type \'%.*s\' for shape.\n", emitterTypeValue->m_String.length(), emitterTypeValue->m_String.data() );
+                            }
+                        }
+                        else
+                        {
+                            LOG_STRING( "Cannot determine type from emitter.\n" );
+                        }
+                    }
+                    else
+                    {
+                        LOG_STRING( "Max light count exceeded.\n" );
+                    }
                 }
             }
         }
@@ -995,7 +1002,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
         m_Mesh.BuildBVH( nullptr, &reorderedTriangleId );
 
         // Remap the triangle lights to the reordered triangles
-        for ( size_t i = baseTriangleLightIndex; i < m_TriangleLights.size(); ++i )
+        for ( size_t i = 0; i < m_TriangleLights.size(); ++i )
         {
             auto it = std::find( reorderedTriangleId.begin(), reorderedTriangleId.end(), m_TriangleLights[ i ].m_TriangleId );
             assert( it != reorderedTriangleId.end() );

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "BVHAccel.h"
 #include "Camera.h"
 #include "Mesh.h"
 #include "../Shaders/Material.inc.hlsl"
@@ -30,9 +31,25 @@ struct SLight
 
 struct STriangleLight
 {
-    uint32_t m_TriangleId;
+    uint32_t m_MeshIndex;
+    uint32_t m_TriangleIndex;
     DirectX::XMFLOAT3 m_Radiance;
     float m_InvSurfaceArea;
+};
+
+struct SMaterial
+{
+    DirectX::XMFLOAT3 m_Albedo;
+    DirectX::XMFLOAT3 m_Emission;
+    float m_Roughness;
+    DirectX::XMFLOAT3 m_IOR;
+    DirectX::XMFLOAT3 m_K;
+    float m_Transmission;
+    DirectX::XMFLOAT2 m_Tiling;
+    bool m_IsMetal;
+    bool m_HasAlbedoTexture;
+    bool m_HasRoughnessTexture;
+    bool m_HasEmissionTexture;
 };
 
 struct SSceneObjectSelection
@@ -101,6 +118,8 @@ private:
 
     bool LoadFromXMLFile( const std::filesystem::path& filepath );
 
+    bool CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, const char* MTLBaseDir, bool applyTransform, const DirectX::XMFLOAT4X4& transform, uint32_t materialIdOverride );
+
 public:
     std::string m_EnvironmentImageFilepath;
 
@@ -130,7 +149,11 @@ public:
     Camera m_Camera;
     std::vector<SLight> m_Lights;
     std::vector<STriangleLight> m_TriangleLights;
-    Mesh m_Mesh;
+    std::vector<SMaterial> m_Materials;
+    std::vector<std::string> m_MaterialNames;
+    std::vector<Mesh> m_Meshes;
+    std::vector<BVHAccel::BVHNode> m_TLAS;
+    std::vector<DirectX::XMFLOAT4X3> m_InstanceTransforms;
 
     GPUTexturePtr m_EnvironmentTexture;
     GPUBufferPtr m_VerticesBuffer;

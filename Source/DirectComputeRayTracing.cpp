@@ -846,7 +846,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
         {
             if ( m_Scene.m_ObjectSelection.m_MaterialSelectionIndex < m_Scene.m_Mesh.GetMaterials().size() )
             {
-                SMaterialSetting* selection = m_Scene.m_Mesh.GetMaterials().data() + m_Scene.m_ObjectSelection.m_MaterialSelectionIndex;
+                SMaterial* selection = m_Scene.m_Mesh.GetMaterials().data() + m_Scene.m_ObjectSelection.m_MaterialSelectionIndex;
                 ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float );
                 if ( ImGui::ColorEdit3( "Albedo", (float*)&selection->m_Albedo ) )
                     m_IsMaterialGPUBufferDirty = true;

@@ -385,7 +385,7 @@ namespace
         return parentValue;
     }
 
-    bool TranslateMaterialFromBSDF( const SValue& BSDF, const std::unordered_map<std::string_view, EMaterialType>& materialNameToEnumMap, SMaterialSetting* material, std::string_view* name )
+    bool TranslateMaterialFromBSDF( const SValue& BSDF, const std::unordered_map<std::string_view, EMaterialType>& materialNameToEnumMap, SMaterial* material, std::string_view* name )
     {
         EMaterialType materialType = EMaterialType::eUnsupported;
 
@@ -634,10 +634,10 @@ namespace
         return true;
     }
 
-    bool CreateAndAddMaterial( const SValue& BSDF, const std::unordered_map<std::string_view, EMaterialType>& materialNameToEnumMap, std::vector<SMaterialSetting>* materials
+    bool CreateAndAddMaterial( const SValue& BSDF, const std::unordered_map<std::string_view, EMaterialType>& materialNameToEnumMap, std::vector<SMaterial>* materials
         , std::vector<std::string>* names, std::unordered_map<const SValue*, uint32_t>* BSDFValuePointerToIdMap, uint32_t* materialId )
     {
-        SMaterialSetting newMaterial;
+        SMaterial newMaterial;
         std::string_view newMaterialName;
         if ( TranslateMaterialFromBSDF( BSDF, materialNameToEnumMap, &newMaterial, &newMaterialName ) )
         {
@@ -687,6 +687,9 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
         , { "roughplastic", EMaterialType::eRoughPlastic }
         , { "twosided", EMaterialType::eTwosided }
     };
+
+    size_t meshIndexBase = m_Meshes.size();
+    size_t triangleLightIndexBase = m_TriangleLights.size();
 
     std::unordered_map<const SValue*, uint32_t> BSDFValuePointerToIdMap;
     for ( auto& rootObjectValue : rootObjectValues )
@@ -795,7 +798,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
         else if ( strncmp( "bsdf", rootObjectValue.first.data(), rootObjectValue.first.length() ) == 0 )
         {
             uint32_t materialId = 0;
-            CreateAndAddMaterial( *rootObjectValue.second, materialNameToEnumMap, &m_Mesh.GetMaterials(), &m_Mesh.GetMaterialNames(), &BSDFValuePointerToIdMap, &materialId );
+            CreateAndAddMaterial( *rootObjectValue.second, materialNameToEnumMap, &m_Materials, &m_MaterialNames, &BSDFValuePointerToIdMap, &materialId );
         }
         else if ( strncmp( "shape", rootObjectValue.first.data(), rootObjectValue.first.length() ) == 0 )
         {
@@ -812,14 +815,14 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                 SValue* emitterValue = rootObjectValue.second->FindValue( "emitter" );
                 bool isALight = emitterValue != nullptr;
 
-                uint32_t materialId = -1;
+                uint32_t materialId = INVALID_MATERIAL_ID;
                 SValue* bsdfValue = rootObjectValue.second->FindValue( "bsdf" );
                 if ( bsdfValue )
                 {
                     auto iter = BSDFValuePointerToIdMap.find( bsdfValue );
                     if ( iter == BSDFValuePointerToIdMap.end() )
                     {
-                        CreateAndAddMaterial( *bsdfValue, materialNameToEnumMap, &m_Mesh.GetMaterials(), &m_Mesh.GetMaterialNames(), &BSDFValuePointerToIdMap, &materialId );
+                        CreateAndAddMaterial( *bsdfValue, materialNameToEnumMap, &m_Materials, &m_MaterialNames, &BSDFValuePointerToIdMap, &materialId );
                     }
                     else
                     {
@@ -829,8 +832,8 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                 else if ( isALight )
                 {
                     // Assign a pitch black non-reflective material to light
-                    materialId = (uint32_t)m_Mesh.GetMaterials().size();
-                    SMaterialSetting material;
+                    materialId = (uint32_t)m_Materials.size();
+                    SMaterial material;
                     material.m_Albedo = XMFLOAT3( 0.f, 0.f, 0.f );
                     material.m_Roughness = 0.f;
                     material.m_IOR = XMFLOAT3( 1.f, 1.f, 1.f );
@@ -839,8 +842,8 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     material.m_HasAlbedoTexture = false;
                     material.m_HasRoughnessTexture = false;
                     material.m_HasRoughnessTexture = false;
-                    m_Mesh.GetMaterials().emplace_back( material );
-                    m_Mesh.GetMaterialNames().emplace_back();
+                    m_Materials.emplace_back( material );
+                    m_MaterialNames.emplace_back();
                 }
 
                 EShapeType shapeType = EShapeType::Unsupported;
@@ -850,8 +853,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     shapeType = itShapeType->second;
                 }
 
-                uint32_t triangleCountBase = m_Mesh.GetTriangleCount();
-
+                bool meshCreated = false;
                 switch ( shapeType )
                 {
                 case EShapeType::eObj:
@@ -870,7 +872,11 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                         {
                             objFilepath = filepath.parent_path() / objFilepath;
                         }
-                        if ( !m_Mesh.LoadFromOBJFile( objFilepath.u8string().c_str(), "", true, transform, materialId ) )
+                        if ( CreateMeshAndMaterialsFromWavefrontOBJFile( objFilepath.u8string().c_str(), "", true, transform, materialId ) )
+                        {
+                            meshCreated = true;
+                        }
+                        else
                         {
                             LOG_STRING_FORMAT( "Failed to load wavefront obj file \'%s\'.\n", objFilepath.u8string().c_str() );
                         }
@@ -879,7 +885,13 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                 }
                 case EShapeType::eRectangle:
                 {
-                    if ( !m_Mesh.GenerateRectangle( materialId, true, transform ) )
+                    Mesh mesh;
+                    if ( mesh.GenerateRectangle( materialId, true, transform ) )
+                    {
+                        m_Meshes.emplace_back( mesh );
+                        meshCreated = true;
+                    }
+                    else
                     {
                         LOG_STRING( "Failed to generate rectangle shape.\n" );
                     }
@@ -893,11 +905,11 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                 }
                 }
 
-                if ( emitterValue )
+                if ( meshCreated && emitterValue )
                 {
-                    uint32_t triangleCount = m_Mesh.GetTriangleCount();
-                    uint32_t addedTriangleCount = triangleCount - triangleCountBase;
-                    if ( GetLightCount() + addedTriangleCount <= s_MaxLightsCount )
+                    Mesh& mesh = m_Meshes.back();
+                    uint32_t triangleCount = mesh.GetTriangleCount();
+                    if ( GetLightCount() + triangleCount <= s_MaxLightsCount )
                     {
                         SValue* emitterTypeValue = emitterValue->FindValue( "type" );
                         if ( emitterTypeValue && emitterTypeValue->m_Type == EValueType::eString )
@@ -919,9 +931,9 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                                 }
 
                                 // Create lights
-                                const std::vector<uint32_t>& indices = m_Mesh.GetIndices();
-                                const std::vector<GPU::Vertex>& vertices = m_Mesh.GetVertices();
-                                for ( uint32_t iTriangle = triangleCountBase; iTriangle < triangleCount; ++iTriangle )
+                                const std::vector<uint32_t>& indices = mesh.GetIndices();
+                                const std::vector<GPU::Vertex>& vertices = mesh.GetVertices();
+                                for ( uint32_t iTriangle = 0; iTriangle < triangleCount; ++iTriangle )
                                 {
                                     XMVECTOR vP0 = XMLoadFloat3( &vertices[ indices[ iTriangle * 3 ] ].position );
                                     XMVECTOR vP1 = XMLoadFloat3( &vertices[ indices[ iTriangle * 3 + 1 ] ].position );
@@ -936,8 +948,9 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
 
                                     m_TriangleLights.emplace_back();
                                     STriangleLight& light = m_TriangleLights.back();
+                                    light.m_MeshIndex = (uint32_t)m_Meshes.size() - 1;
+                                    light.m_TriangleIndex = iTriangle;
                                     light.m_Radiance = radiance;
-                                    light.m_TriangleId = iTriangle;
                                     light.m_InvSurfaceArea = invSurfaceArea;
                                 }
                             }
@@ -992,17 +1005,19 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
 
     valueList.Clear();
 
-    LOG_STRING_FORMAT( "Mesh loaded. Triangle count: %d, vertex count: %d, material count: %d\n", m_Mesh.GetTriangleCount(), m_Mesh.GetVertexCount(), m_Mesh.GetMaterials().size() );
-
     const CommandLineArgs* commandLineArgs = CommandLineArgs::Singleton();
     bool buildBVH = !commandLineArgs->GetNoBVHAccel();
     if ( buildBVH )
     {
-        std::vector<uint32_t> reorderedTriangleId;
-        m_Mesh.BuildBVH( nullptr, &reorderedTriangleId );
+        std::vector<uint32_t> reorderedTriangleIndices;
+        for ( size_t iMesh = meshIndexBase; iMesh < m_Meshes.size(); ++iMesh )
+        {
+            Mesh& mesh = m_Meshes[ iMesh ];
+            mesh.BuildBVH( nullptr, &reorderedTriangleIndices );
+        }
 
         // Remap the triangle lights to the reordered triangles
-        for ( size_t i = 0; i < m_TriangleLights.size(); ++i )
+        for ( size_t iLight = triangleLightIndexBase; iLight < m_TriangleLights.size(); ++iLight )
         {
             auto it = std::find( reorderedTriangleId.begin(), reorderedTriangleId.end(), m_TriangleLights[ i ].m_TriangleId );
             assert( it != reorderedTriangleId.end() );

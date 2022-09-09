@@ -4,6 +4,7 @@
 #include "Logging.h"
 #include "CommandLineArgs.h"
 #include "MessageBox.h"
+#include "MathHelper.h"
 
 using namespace DirectX;
 
@@ -29,24 +30,27 @@ bool CScene::LoadFromWavefrontOBJFile( const char* filepath )
 
     LOG_STRING_FORMAT( "Loading mesh from: %s, MTL search path at: %s, BVH file path at: %s\n", filepath, MTLSearchPath, BVHFilePath );
 
-    if ( !m_Mesh.LoadFromOBJFile( filepath, MTLSearchPath ) )
+    size_t materialCount = m_Materials.size();
+    if ( !CreateMeshAndMaterialsFromWavefrontOBJFile( filepath, MTLSearchPath, false, MathHelper::s_IdentityMatrix, INVALID_MATERIAL_ID ) )
     {
         CMessagebox::GetSingleton().AppendFormat( "Failed to load mesh from %s.\n", filepath );
         return false;
     }
 
+    Mesh& mesh = m_Meshes.back();
+
     if ( buildBVH )
     {
-        m_Mesh.BuildBVH( BVHFilePath );
+        mesh.BuildBVH( BVHFilePath );
     }
 
-    LOG_STRING_FORMAT( "Mesh loaded. Triangle count: %d, vertex count: %d, material count: %d\n", m_Mesh.GetTriangleCount(), m_Mesh.GetVertexCount(), m_Mesh.GetMaterials().size() );
+    LOG_STRING_FORMAT( "Mesh loaded. Triangle count: %d, vertex count: %d, material count: %d\n", mesh.GetTriangleCount(), mesh.GetVertexCount(), m_Materials.size() - materialCount );
 
     if ( !commandLineArgs->GetNoBVHAccel() )
     {
-        uint32_t BVHMaxDepth = m_Mesh.GetBVHMaxDepth();
-        uint32_t BVHMaxStackSize = m_Mesh.GetBVHMaxStackSize();
-        LOG_STRING_FORMAT( "BVH created from mesh. Node count:%d, max depth:%d, max stack size:%d\n", m_Mesh.GetBVHNodeCount(), BVHMaxDepth, BVHMaxStackSize );
+        uint32_t BVHMaxDepth = mesh.GetBVHMaxDepth();
+        uint32_t BVHMaxStackSize = mesh.GetBVHMaxStackSize();
+        LOG_STRING_FORMAT( "BVH created from mesh. Node count:%d, max depth:%d, max stack size:%d\n", mesh.GetBVHNodeCount(), BVHMaxDepth, BVHMaxStackSize );
     }
 
     return true;

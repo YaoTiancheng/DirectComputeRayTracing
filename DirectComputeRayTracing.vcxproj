@@ -212,7 +212,6 @@
     <ClInclude Include="Source\GPUTexture.h" />
     <ClInclude Include="Source\DirectComputeRayTracing.h" />
     <ClInclude Include="Source\stdafx.h" />
-    <ClInclude Include="Source\OBJLoader\tiny_obj_loader.h" />
     <ClInclude Include="Source\Mesh.h" />
     <ClInclude Include="Source\WavefrontPathTracer.h" />
     <ClInclude Include="targetver.h" />
@@ -285,6 +284,7 @@
     </ClCompile>
     <ClCompile Include="Source\Mesh.cpp" />
     <ClCompile Include="Source\SceneWavefrontOBJLoading.cpp" />
+    <ClCompile Include="Source\TinyObjLoader.cpp" />
     <ClCompile Include="Source\WavefrontPathTracer.cpp" />
   </ItemGroup>
   <ItemGroup>

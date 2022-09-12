@@ -29,14 +29,6 @@ struct SLight
     ELightType lightType;
 };
 
-struct STriangleLight
-{
-    uint32_t m_MeshIndex;
-    uint32_t m_TriangleIndex;
-    DirectX::XMFLOAT3 m_Radiance;
-    float m_InvSurfaceArea;
-};
-
 struct SMaterial
 {
     DirectX::XMFLOAT3 m_Albedo;
@@ -99,7 +91,7 @@ public:
 
     float GetFilmDistance() const;
 
-    uint32_t GetLightCount() const { return (uint32_t)( m_Lights.size() + m_TriangleLights.size() ); }
+    uint32_t GetLightCount() const { return (uint32_t)m_Lights.size(); }
 
     float CalculateFocalDistance() const;
 
@@ -118,7 +110,7 @@ private:
 
     bool LoadFromXMLFile( const std::filesystem::path& filepath );
 
-    bool CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, const char* MTLBaseDir, bool applyTransform, const DirectX::XMFLOAT4X4& transform, uint32_t materialIdOverride );
+    bool CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, const char* MTLBaseDir, bool applyTransform, const DirectX::XMFLOAT4X4& transform, bool changeWindingOrder, uint32_t materialIdOverride );
 
 public:
     std::string m_EnvironmentImageFilepath;
@@ -143,17 +135,15 @@ public:
     uint32_t m_LanczosSincTau = 3;
 
     bool m_HasValidScene = false;
-    bool m_IsBVHDisabled;
     bool m_IsGGXVNDFSamplingEnabled = true;
 
     Camera m_Camera;
     std::vector<SLight> m_Lights;
-    std::vector<STriangleLight> m_TriangleLights;
     std::vector<SMaterial> m_Materials;
     std::vector<std::string> m_MaterialNames;
     std::vector<Mesh> m_Meshes;
-    std::vector<BVHAccel::BVHNode> m_TLAS;
     std::vector<DirectX::XMFLOAT4X3> m_InstanceTransforms;
+    uint32_t m_BVHTraversalStackSize;
 
     GPUTexturePtr m_EnvironmentTexture;
     GPUBufferPtr m_VerticesBuffer;
@@ -162,6 +152,7 @@ public:
     GPUBufferPtr m_LightsBuffer;
     GPUBufferPtr m_MaterialIdsBuffer;
     GPUBufferPtr m_MaterialsBuffer;
+    GPUBufferPtr m_InstanceTransformsBuffer;
 
     SSceneObjectSelection m_ObjectSelection;
 };

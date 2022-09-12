@@ -12,7 +12,7 @@
 
 using namespace DirectX;
 
-bool CScene::CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, const char* MTLBaseDir, bool applyTransform, const DirectX::XMFLOAT4X4& transform, uint32_t materialIdOverride )
+bool CScene::CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, const char* MTLBaseDir, bool applyTransform, const DirectX::XMFLOAT4X4& transform, bool changeWindingOrder, uint32_t materialIdOverride )
 {
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
@@ -26,7 +26,7 @@ bool CScene::CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, c
     }
 
     Mesh mesh;
-    bool createMeshSuccessful = mesh.CreateFromWavefrontOBJData( attrib, shapes, (uint32_t)m_Materials.size(), applyTransform, transform, materialIdOverride );
+    bool createMeshSuccessful = mesh.CreateFromWavefrontOBJData( attrib, shapes, (uint32_t)m_Materials.size(), applyTransform, transform, changeWindingOrder, materialIdOverride );
     if ( !createMeshSuccessful )
     {
         return false;
@@ -41,19 +41,19 @@ bool CScene::CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, c
         m_MaterialNames.reserve( m_MaterialNames.size() + materials.size() );
         for ( auto& iterSrcMat : materials )
         {
-            SMaterial dstMat;
-            dstMat.m_Albedo = DirectX::XMFLOAT3( iterSrcMat.diffuse[ 0 ], iterSrcMat.diffuse[ 1 ], iterSrcMat.diffuse[ 2 ] );
-            dstMat.m_Emission = DirectX::XMFLOAT3( iterSrcMat.emission[ 0 ], iterSrcMat.emission[ 1 ], iterSrcMat.emission[ 2 ] );
-            dstMat.m_Roughness = iterSrcMat.roughness;
-            dstMat.m_IOR = XMFLOAT3( std::clamp( iterSrcMat.ior, 1.0f, MAX_MATERIAL_IOR ), 1.f, 1.f );
-            dstMat.m_K = XMFLOAT3( 1.0f, 1.0f, 1.0f );
-            dstMat.m_Transmission = 1.0f - iterSrcMat.dissolve;
-            dstMat.m_Tiling = XMFLOAT2( 1.0f, 1.0f );
-            dstMat.m_IsMetal = false;
-            dstMat.m_HasAlbedoTexture = false;
-            dstMat.m_HasEmissionTexture = false;
-            dstMat.m_HasRoughnessTexture = false;
-            m_Materials.emplace_back( dstMat );
+            SMaterial destMaterial;
+            destMaterial.m_Albedo = DirectX::XMFLOAT3( iterSrcMat.diffuse[ 0 ], iterSrcMat.diffuse[ 1 ], iterSrcMat.diffuse[ 2 ] );
+            destMaterial.m_Emission = DirectX::XMFLOAT3( iterSrcMat.emission[ 0 ], iterSrcMat.emission[ 1 ], iterSrcMat.emission[ 2 ] );
+            destMaterial.m_Roughness = iterSrcMat.roughness;
+            destMaterial.m_IOR = XMFLOAT3( std::clamp( iterSrcMat.ior, 1.0f, MAX_MATERIAL_IOR ), 1.f, 1.f );
+            destMaterial.m_K = XMFLOAT3( 1.0f, 1.0f, 1.0f );
+            destMaterial.m_Transmission = 1.0f - iterSrcMat.dissolve;
+            destMaterial.m_Tiling = XMFLOAT2( 1.0f, 1.0f );
+            destMaterial.m_IsMetal = false;
+            destMaterial.m_HasAlbedoTexture = false;
+            destMaterial.m_HasEmissionTexture = false;
+            destMaterial.m_HasRoughnessTexture = false;
+            m_Materials.emplace_back( destMaterial );
             m_MaterialNames.emplace_back( iterSrcMat.name );
         }
     }
@@ -84,8 +84,10 @@ bool CScene::LoadFromFile( const char* filepath )
         }
     }
 
+    std::vector<BVHAccel::BVHNode> TLAS;
+    std::vector<uint32_t> reorderedInstanceIndices;
     {
-        assert( m_Meshes.size() == m_InstanceTransforms.size() );
+        assert( m_Meshes.size() == m_InstanceTransforms.size() ); // For now, mesh count must equal to instance count
         std::vector<BVHAccel::SInstance> BLASInstances;
         BLASInstances.reserve( m_Meshes.size() );
         for ( size_t iMesh = 0; iMesh < m_Meshes.size(); ++iMesh )
@@ -98,23 +100,41 @@ bool CScene::LoadFromFile( const char* filepath )
             BLASInstances.back().m_Transform = m_InstanceTransforms[ iMesh ];
         }
 
-        std::vector<uint32_t> reorderedInstanceIndices;
+        std::vector<uint32_t> instanceStackSizes;
+        instanceStackSizes.resize( m_InstanceTransforms.size() );
         reorderedInstanceIndices.resize( m_InstanceTransforms.size() );
         uint32_t BVHMaxDepth = 0;
         uint32_t BVHMaxStackSize = 0;
-        m_TLAS.clear();
-        BVHAccel::BuildTLAS( BLASInstances.data(), reorderedInstanceIndices.data(), (uint32_t)m_Meshes.size(), &m_TLAS, &BVHMaxDepth, &BVHMaxStackSize );
-        LOG_STRING_FORMAT( "TLAS created. Node count:%d, max depth:%d, max stack size:%d\n", m_TLAS.size(), BVHMaxDepth, BVHMaxStackSize );
+        BVHAccel::BuildTLAS( BLASInstances.data(), reorderedInstanceIndices.data(), (uint32_t)m_Meshes.size(), &TLAS, &BVHMaxDepth, &BVHMaxStackSize, instanceStackSizes.data() );
+        LOG_STRING_FORMAT( "TLAS created. Node count:%d, max depth:%d, max stack size:%d\n", TLAS.size(), BVHMaxDepth, BVHMaxStackSize );
+
+        uint32_t maxStackSize = 0;
+        for ( uint32_t iInstance = 0; iInstance < (uint32_t)instanceStackSizes.size(); ++iInstance )
+        {
+            uint32_t originalInstance = reorderedInstanceIndices[ iInstance ];
+            maxStackSize = std::max( maxStackSize, instanceStackSizes[ iInstance ] + m_Meshes[ originalInstance ].GetBVHMaxStackSize() );
+        }
+        m_BVHTraversalStackSize = maxStackSize;
+        LOG_STRING_FORMAT( "BVH traversal stack size requirement is %d\n", maxStackSize );
     }
 
     uint32_t totalVertexCount = 0;
     uint32_t totalIndexCount = 0;
-    uint32_t totalBVHNodeCount = (uint32_t)m_TLAS.size();
+    uint32_t totalBVHNodeCount = (uint32_t)TLAS.size();
     for ( auto& mesh : m_Meshes )
     {
         totalVertexCount += mesh.GetVertexCount();
         totalIndexCount += mesh.GetIndexCount();
         totalBVHNodeCount += mesh.GetBVHNodeCount();
+    }
+
+    LOG_STRING_FORMAT( "Total vertex count %d, total index count %d, total BVH node count %d\n", totalVertexCount, totalIndexCount, totalBVHNodeCount );
+
+    const uint32_t s_MaxBVHNodeCount = 2147483647;
+    if ( totalBVHNodeCount > s_MaxBVHNodeCount )
+    {
+        LOG_STRING_FORMAT( "Total BVH node count %d exceeds limit %d\n", totalBVHNodeCount, s_MaxBVHNodeCount );
+        return false;
     }
 
     {
@@ -135,7 +155,11 @@ bool CScene::LoadFromFile( const char* filepath )
             , 0
             , vertices.data() ) );
 
-        if ( !m_VerticesBuffer )
+        if ( m_VerticesBuffer )
+        {
+            LOG_STRING_FORMAT( "Vertex buffer created, size %d\n", sizeof( GPU::Vertex ) * totalVertexCount );
+        }
+        else 
         {
             LOG_STRING( "Failed to create vertices buffer.\n" );
             return false;
@@ -165,7 +189,12 @@ bool CScene::LoadFromFile( const char* filepath )
             , D3D11_BIND_SHADER_RESOURCE
             , 0
             , indices.data() ) );
-        if ( !m_TrianglesBuffer )
+
+        if ( m_TrianglesBuffer )
+        {
+            LOG_STRING_FORMAT( "Triangle buffer created, size %d\n", sizeof( uint32_t )* totalIndexCount );
+        }
+        else 
         {
             LOG_STRING( "Failed to create triangles buffer.\n" );
             return false;
@@ -176,49 +205,144 @@ bool CScene::LoadFromFile( const char* filepath )
         std::vector<GPU::BVHNode> BVHNodes;
         BVHNodes.resize( totalBVHNodeCount );
 
-    }
-    
+        std::vector<uint32_t> BLASNodeIndexOffsets;
+        BLASNodeIndexOffsets.reserve( m_Meshes.size() );
 
-    m_MaterialIdsBuffer.reset( GPUBuffer::CreateStructured(
-          sizeof( uint32_t ) * m_Mesh.GetTriangleCount()
-        , sizeof( uint32_t )
-        , D3D11_USAGE_IMMUTABLE
-        , D3D11_BIND_SHADER_RESOURCE
-        , 0
-        , m_Mesh.GetMaterialIds().data() ) );
-    if ( !m_MaterialIdsBuffer )
-    {
-        CMessagebox::GetSingleton().Append( "Failed to create material id buffer.\n" );
-        return false;
-    }
+        GPU::BVHNode* dest = BVHNodes.data() + TLAS.size();
+        uint32_t triangleIndexOffset = 0;
+        uint32_t nodeIndexOffset = (uint32_t)TLAS.size();
+        for ( auto& mesh : m_Meshes )
+        {
+            BVHAccel::PackBVH( mesh.GetBVHNodes(), mesh.GetBVHNodeCount(), true, dest, nodeIndexOffset, triangleIndexOffset );
+            dest += mesh.GetBVHNodeCount();
+            BLASNodeIndexOffsets.push_back( nodeIndexOffset );
+            triangleIndexOffset += mesh.GetTriangleCount();;
+            nodeIndexOffset += mesh.GetBVHNodeCount();
+        }
 
-    m_MaterialsBuffer.reset( GPUBuffer::CreateStructured(
-          uint32_t( sizeof( GPU::Material ) * m_Mesh.GetMaterials().size() )
-        , sizeof( GPU::Material )
-        , D3D11_USAGE_DYNAMIC
-        , D3D11_BIND_SHADER_RESOURCE
-        , GPUResourceCreationFlags_CPUWriteable
-        , m_Mesh.GetMaterials().data() ) );
-    if ( !m_MaterialsBuffer )
-    {
-        CMessagebox::GetSingleton().Append( "Failed to create materials buffer.\n" );
-        return false;
-    }
+        // Make the TLAS point to the BLASes
+        for ( auto& node : TLAS )
+        {
+            if ( node.m_PrimCount > 0 )
+            {
+                uint32_t primIndex = node.m_PrimIndex;
+                assert( node.m_PrimCount == 1 );
+                uint32_t originalPrimIndex = reorderedInstanceIndices[ primIndex ];
+                node.m_ChildIndex = BLASNodeIndexOffsets[ originalPrimIndex ];
+                node.m_InstanceIndex = primIndex;
+            }
+        }
 
-    if ( !CommandLineArgs::Singleton()->GetNoBVHAccel() )
-    {
+        dest = BVHNodes.data();
+        BVHAccel::PackBVH( TLAS.data(), (uint32_t)TLAS.size(), false, dest );
+
         m_BVHNodesBuffer.reset( GPUBuffer::CreateStructured(
-              sizeof( GPU::BVHNode ) * m_Mesh.GetBVHNodeCount()
+              sizeof( GPU::BVHNode ) * totalBVHNodeCount
             , sizeof( GPU::BVHNode )
             , D3D11_USAGE_IMMUTABLE
             , D3D11_BIND_SHADER_RESOURCE
             , 0
-            , m_Mesh.GetBVHNodes() ) );
-        if ( !m_BVHNodesBuffer )
+            , BVHNodes.data() ) );
+
+        if ( m_BVHNodesBuffer )
         {
-            CMessagebox::GetSingleton().Append( "Failed to create BVH nodes buffer.\n" );
+            LOG_STRING_FORMAT( "BVH node buffer created, size %d\n", sizeof( GPU::BVHNode )* totalBVHNodeCount );
+        }
+        else
+        {
+            LOG_STRING( "Failed to create BVH nodes buffer.\n" );
             return false;
         }
+    }
+    
+    {
+        std::vector<uint32_t> materialIds;
+        materialIds.resize( totalIndexCount / 3 );
+        uint32_t* dest = materialIds.data();
+        for ( auto& mesh : m_Meshes )
+        {
+            assert( mesh.GetMaterialIds().size() == mesh.GetIndexCount() / 3 );
+            memcpy( dest, mesh.GetMaterialIds().data(), mesh.GetMaterialIds().size() * sizeof( uint32_t ) );
+            dest += mesh.GetMaterialIds().size();
+        }
+
+        m_MaterialIdsBuffer.reset( GPUBuffer::CreateStructured(
+              sizeof( uint32_t ) * (uint32_t)materialIds.size()
+            , sizeof( uint32_t )
+            , D3D11_USAGE_IMMUTABLE
+            , D3D11_BIND_SHADER_RESOURCE
+            , 0
+            , materialIds.data() ) );
+
+        if ( m_MaterialIdsBuffer )
+        {
+            LOG_STRING_FORMAT( "Material id buffer created, size %d\n", sizeof( uint32_t ) * materialIds.size() );
+        }
+        else 
+        {
+            LOG_STRING( "Failed to create material id buffer.\n" );
+            return false;
+        }
+    }
+
+    {
+        std::vector<DirectX::XMFLOAT4X3> instanceTransforms;
+        instanceTransforms.resize( m_InstanceTransforms.size() * 2 );
+
+        DirectX::XMFLOAT4X3* dest = instanceTransforms.data();
+        for ( uint32_t i = 0; i < (uint32_t)m_InstanceTransforms.size(); ++i )
+        {
+            const DirectX::XMFLOAT4X3& transform = m_InstanceTransforms[ reorderedInstanceIndices[ i ] ];
+            *dest = DirectX::XMFLOAT4X3( transform._11, transform._21, transform._31, transform._41, transform._12, transform._22, transform._32, transform._42, transform._13, transform._23, transform._33, transform._43 );
+            ++dest;
+        }
+
+        DirectX::XMFLOAT4X3 rowMajorMatrix;
+        for ( uint32_t i = 0; i < (uint32_t)m_InstanceTransforms.size(); ++i )
+        {
+            const DirectX::XMFLOAT4X3& transform = m_InstanceTransforms[ reorderedInstanceIndices[ i ] ];
+            DirectX::XMMATRIX vMatrix = DirectX::XMLoadFloat4x3( &transform );
+            DirectX::XMVECTOR vDet;
+            vMatrix = DirectX::XMMatrixInverse( &vDet, vMatrix );
+            DirectX::XMStoreFloat4x3( &rowMajorMatrix, vMatrix );
+            *dest = DirectX::XMFLOAT4X3( rowMajorMatrix._11, rowMajorMatrix._21, rowMajorMatrix._31, rowMajorMatrix._41, rowMajorMatrix._12, rowMajorMatrix._22, rowMajorMatrix._32, rowMajorMatrix._42, rowMajorMatrix._13, rowMajorMatrix._23, rowMajorMatrix._33, rowMajorMatrix._43 );
+            ++dest;
+        }
+
+        m_InstanceTransformsBuffer.reset( GPUBuffer::CreateStructured(
+              sizeof( DirectX::XMFLOAT4X3 ) * (uint32_t)instanceTransforms.size()
+            , sizeof( DirectX::XMFLOAT4X3 )
+            , D3D11_USAGE_IMMUTABLE
+            , D3D11_BIND_SHADER_RESOURCE
+            , 0
+            , instanceTransforms.data() ) );
+
+        if ( m_InstanceTransformsBuffer )
+        {
+            LOG_STRING_FORMAT( "Instance transform buffer created, size %d\n", sizeof( DirectX::XMFLOAT4X3 ) * instanceTransforms.size() );
+        }
+        else 
+        {
+            LOG_STRING( "Failed to instance transform buffer.\n" );
+            return false;
+        }
+    }
+    
+    m_MaterialsBuffer.reset( GPUBuffer::CreateStructured(
+          uint32_t( sizeof( GPU::Material ) * m_Materials.size() )
+        , sizeof( GPU::Material )
+        , D3D11_USAGE_DYNAMIC
+        , D3D11_BIND_SHADER_RESOURCE
+        , GPUResourceCreationFlags_CPUWriteable ) );
+
+    if ( m_MaterialsBuffer )
+    {
+        LOG_STRING_FORMAT( "Material buffer created, size %d\n", sizeof( GPU::Material )* m_Materials.size() );
+    }
+    else 
+    {
+        LOG_STRING( "Failed to create materials buffer.\n" );
+        return false;
     }
 
     m_LightsBuffer.reset( GPUBuffer::CreateStructured(
@@ -228,9 +352,14 @@ bool CScene::LoadFromFile( const char* filepath )
         , D3D11_BIND_SHADER_RESOURCE
         , GPUResourceCreationFlags_CPUWriteable
         , nullptr ) );
-    if ( !m_LightsBuffer )
+
+    if ( m_LightsBuffer )
     {
-        CMessagebox::GetSingleton().Append( "Failed to create lights buffer.\n" );
+        LOG_STRING_FORMAT( "Light buffer created, size %d\n", sizeof( GPU::SLight )* s_MaxLightsCount );
+    }
+    else 
+    {
+        LOG_STRING( "Failed to create lights buffer.\n" );
         return false;
     }
 
@@ -257,9 +386,11 @@ void CScene::Reset()
     m_BackgroundColor = { 0.0f, 0.0f, 0.0f, 0.f };
     m_FilterRadius = 1.0f;
 
-    m_Mesh.Clear();
+    m_Meshes.clear();
     m_Lights.clear();
-    m_TriangleLights.clear();
+    m_Materials.clear();
+    m_MaterialNames.clear();
+    m_InstanceTransforms.clear();
 
     m_HasValidScene = false;
     m_ObjectSelection.DeselectAll();
@@ -317,16 +448,6 @@ void CScene::UpdateLightGPUData()
             ++GPULight;
         }
 
-        for ( uint32_t i = 0; i < (uint32_t)m_TriangleLights.size(); ++i )
-        {
-            const STriangleLight* CPUlight = m_TriangleLights.data() + i;
-            GPULight->color = CPUlight->m_Radiance;
-            GPULight->primitiveId = CPUlight->m_TriangleId;
-            GPULight->invSurfaceArea = CPUlight->m_InvSurfaceArea;
-            GPULight->flags = LIGHT_FLAGS_TRIANGLE_LIGHT;
-            ++GPULight;
-        }
-
         m_LightsBuffer->Unmap();
     }
 }
@@ -335,10 +456,9 @@ void CScene::UpdateMaterialGPUData()
 {
     if ( void* address = m_MaterialsBuffer->Map() )
     {
-        auto materials = m_Mesh.GetMaterials();
-        for ( uint32_t i = 0; i < (uint32_t)materials.size(); ++i )
+        for ( uint32_t i = 0; i < (uint32_t)m_Materials.size(); ++i )
         {
-            SMaterial* materialSetting = materials.data() + i;
+            SMaterial* materialSetting = m_Materials.data() + i;
             GPU::Material* material = ( (GPU::Material*)address ) + i;
             material->albedo = materialSetting->m_Albedo;
             material->emission = materialSetting->m_Emission;

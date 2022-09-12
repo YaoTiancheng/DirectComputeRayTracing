@@ -16,7 +16,6 @@
 #include "HitShader.inc.hlsl"
 #include "EnvironmentShader.inc.hlsl"
 #include "Intrinsics.inc.hlsl"
-#include "InstanceSharedDef.inc.hlsl"
 
 SamplerState UVClampSampler;
 
@@ -98,12 +97,18 @@ void HitInfoToIntersection( float3 origin
     , StructuredBuffer<uint> triangles
     , StructuredBuffer<uint> materialIds
     , StructuredBuffer<Material> materials
+    , StructuredBuffer<float4x3> instances
     , out Intersection intersection )
 {
     Vertex v0 = vertices[ triangles[ hitInfo.triangleId * 3 ] ];
     Vertex v1 = vertices[ triangles[ hitInfo.triangleId * 3 + 1 ] ];
     Vertex v2 = vertices[ triangles[ hitInfo.triangleId * 3 + 2 ] ];
     HitShader( origin, direction, v0, v1, v2, hitInfo.t, hitInfo.u, hitInfo.v, hitInfo.triangleId, hitInfo.backface, materialIds, materials, intersection );
+    // Transform the position & vectors from local space to world space. Assuming the transform only contains uniform scaling otherwise the transformed vectors are wrong.
+    intersection.position = mul( float4( intersection.position, 1.f ), instances[ hitInfo.instanceIndex ] );
+    intersection.normal = normalize( mul( float4( intersection.normal, 0.f ), instances[ hitInfo.instanceIndex ] ) );
+    intersection.geometryNormal = normalize( mul( float4( intersection.geometryNormal, 0.f ), instances[ hitInfo.instanceIndex ] ) );
+    intersection.tangent = normalize( mul( float4( intersection.tangent, 0.f ), instances[ hitInfo.instanceIndex ] ) );
 }
 
 bool IntersectScene( float3 origin
@@ -112,20 +117,20 @@ bool IntersectScene( float3 origin
     , StructuredBuffer<Vertex> vertices
     , StructuredBuffer<uint> triangles
     , StructuredBuffer<BVHNode> BVHNodes
-    , Buffer<float4x3> Instances
+    , StructuredBuffer<float4x3> instancesTransforms
+    , StructuredBuffer<float4x3> instancesInvTransforms
     , StructuredBuffer<uint> materialIds
     , StructuredBuffer<Material> materials
-    , uint primitiveCount
     , inout Intersection intersection
     , out float t )
 {
     SHitInfo hitInfo = (SHitInfo)0;
     t = FLT_INF;
-    bool hasIntersection = BVHIntersectNoInterp( origin, direction, 0, dispatchThreadIndex, vertices, triangles, BVHNodes, Instances, primitiveCount, hitInfo );
+    bool hasIntersection = BVHIntersectNoInterp( origin, direction, 0, dispatchThreadIndex, vertices, triangles, BVHNodes, instancesInvTransforms, hitInfo );
     if ( hasIntersection )
     {
         t = hitInfo.t;
-        HitInfoToIntersection( origin, direction, hitInfo, vertices, triangles, materialIds, materials, intersection );
+        HitInfoToIntersection( origin, direction, hitInfo, vertices, triangles, materialIds, materials, instancesTransforms, intersection );
     }
     return hasIntersection;
 }
@@ -137,10 +142,9 @@ bool IsOcculuded( float3 origin
     , StructuredBuffer<Vertex> vertices
     , StructuredBuffer<uint> triangles
     , StructuredBuffer<BVHNode> BVHNodes
-    , Buffer<float4x3> Instances
-    , uint primitiveCount )
+    , StructuredBuffer<float4x3> Instances )
 {
-    return BVHIntersect( origin, direction, 0, distance, dispatchThreadIndex, vertices, triangles, BVHNodes, Instances, primitiveCount );
+    return BVHIntersect( origin, direction, 0, distance, dispatchThreadIndex, vertices, triangles, BVHNodes, Instances );
 }
 
 void WriteSample( float3 l, float2 sample, uint2 pixelPos, RWTexture2D<float2> samplePositionTexture, RWTexture2D<float3> sampleValueTexture )
@@ -168,14 +172,6 @@ SLightSampleResult SampleLightDirect( SLight light, float3 position, StructuredB
         SampleLight_Point( light, samples, position, result.radiance, result.wi, result.distance, result.pdf );
         result.isDeltaLight = true;
     }
-    else if ( light.flags & LIGHT_FLAGS_TRIANGLE_LIGHT )
-    {
-        uint triangleId = light.primitiveId;
-        float3 v0 = vertices[ triangles[ triangleId * 3 ] ].position;
-        float3 v1 = vertices[ triangles[ triangleId * 3 + 1 ] ].position;
-        float3 v2 = vertices[ triangles[ triangleId * 3 + 2 ] ].position;
-        SampleLight_Triangle( light, v0, v1, v2, samples, position, result.radiance, result.wi, result.distance, result.pdf );
-    }
     else
     {
         SampleLight_Rectangle( light, samples, position, result.radiance, result.wi, result.distance, result.pdf );
@@ -191,14 +187,6 @@ void EvaluateLightDirect( SLight light, StructuredBuffer<Vertex> vertices, Struc
     {
         EvaluateLight_Rectangle( light, direction, origin, radiance, pdf, distance );
     }
-    else if ( light.flags & LIGHT_FLAGS_TRIANGLE_LIGHT )
-    {
-        uint triangleId = light.primitiveId;
-        float3 v0 = vertices[ triangles[ triangleId * 3 ] ].position;
-        float3 v1 = vertices[ triangles[ triangleId * 3 + 1 ] ].position;
-        float3 v2 = vertices[ triangles[ triangleId * 3 + 2 ] ].position;
-        EvaluateLight_Triangle( light, v0, v1, v2, direction, origin, radiance, pdf, distance );
-    }
     distance *= 1 - SHADOW_EPSILON;
 }
 
@@ -212,9 +200,10 @@ struct SRay
 
 struct SRayHit
 {
-    float  t;
+    float t;
     float2 uv;
-    uint   triangleId;
+    uint triangleId;
+    uint instanceIndex;
 };
 
 struct SMISResults
@@ -259,17 +248,13 @@ cbuffer QueueConstants : register( b0 )
     uint g_ShadowRayCount;
 }
 
-cbuffer BVHConstants : register( b1 )
-{
-    uint g_PrimitiveCount;
-}
-
-StructuredBuffer<Vertex>      g_Vertices      : register( t0 );
-StructuredBuffer<uint>        g_Triangles     : register( t1 );
-StructuredBuffer<BVHNode>     g_BVHNodes      : register( t2 );
-StructuredBuffer<SRay>        g_Rays          : register( t3 );
-Buffer<uint>                  g_PathIndices   : register( t4 );
-RWStructuredBuffer<SRayHit>   g_RayHits       : register( u0 );
+StructuredBuffer<Vertex> g_Vertices                 : register( t0 );
+StructuredBuffer<uint> g_Triangles                  : register( t1 );
+StructuredBuffer<BVHNode> g_BVHNodes                : register( t2 );
+StructuredBuffer<SRay> g_Rays                       : register( t3 );
+Buffer<uint> g_PathIndices                          : register( t4 );
+StructuredBuffer<float4x3> g_InstanceInvTransforms  : register( t5 );
+RWStructuredBuffer<SRayHit> g_RayHits               : register( u0 );
 
 [numthreads( 32, 1, 1 )]
 void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
@@ -287,12 +272,13 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
         , g_Vertices
         , g_Triangles
         , g_BVHNodes
-        , g_PrimitiveCount
+        , g_InstanceInvTransforms
         , hitInfo );
     SRayHit rayHit;
     rayHit.t = hasHit ? hitInfo.t : FLT_INF;
     rayHit.uv = float2( hitInfo.u, hitInfo.v );
     rayHit.triangleId = ( hitInfo.triangleId & 0x7FFFFFFF ) | ( hitInfo.backface ? 1 << 31 : 0 );
+    rayHit.instanceIndex = hitInfo.instanceIndex;
 
     g_RayHits[ pathIndex ] = rayHit;
 }
@@ -307,17 +293,13 @@ cbuffer QueueConstants : register( b0 )
     uint g_ShadowRayCount;
 }
 
-cbuffer BVHConstants : register( b1 )
-{
-    uint g_PrimitiveCount;
-}
-
-StructuredBuffer<Vertex>      g_Vertices      : register( t0 );
-StructuredBuffer<uint>        g_Triangles     : register( t1 );
-StructuredBuffer<BVHNode>     g_BVHNodes      : register( t2 );
-StructuredBuffer<SRay>        g_Rays          : register( t3 );
-Buffer<uint>                  g_PathIndices   : register( t4 );
-RWBuffer<uint>                g_Flags         : register( u0 );
+StructuredBuffer<Vertex> g_Vertices                 : register( t0 );
+StructuredBuffer<uint> g_Triangles                  : register( t1 );
+StructuredBuffer<BVHNode> g_BVHNodes                : register( t2 );
+StructuredBuffer<SRay> g_Rays                       : register( t3 );
+Buffer<uint> g_PathIndices                          : register( t4 );
+StructuredBuffer<float4x3> g_InstanceInvTransforms  : register( t5 );
+RWBuffer<uint> g_Flags                              : register( u0 );
 
 [numthreads( 32, 1, 1 )]
 void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
@@ -335,7 +317,7 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
         , g_Vertices
         , g_Triangles
         , g_BVHNodes
-        , g_PrimitiveCount );
+        , g_InstanceInvTransforms );
 
     uint flags = SetPathFlagsBit_HasShadowRayHit( g_Flags[ pathIndex ], hasHit );
     g_Flags[ pathIndex ] = flags;
@@ -438,18 +420,19 @@ StructuredBuffer<SRayHit>                   g_RayHits                           
 StructuredBuffer<Vertex>                    g_Vertices                          : register( t2 );
 StructuredBuffer<uint>                      g_Triangles                         : register( t3 );
 StructuredBuffer<SLight>                    g_Lights                            : register( t4 );
-StructuredBuffer<uint>                      g_MaterialIds                       : register( t5 );
-StructuredBuffer<Material>                  g_Materials                         : register( t6 );
-Texture2D<float>                            g_CookTorranceCompETexture          : register( t7 );
-Texture2D<float>                            g_CookTorranceCompEAvgTexture       : register( t8 );
-Texture2D<float>                            g_CookTorranceCompInvCDFTexture     : register( t9 );
-Texture2D<float>                            g_CookTorranceCompPdfScaleTexture   : register( t10 );
-Texture2DArray<float>                       g_CookTorranceCompEFresnelTexture   : register( t11 );
-Texture2DArray<float>                       g_CookTorranceBSDFETexture          : register( t12 );
-Texture2DArray<float>                       g_CookTorranceBSDFAvgETexture       : register( t13 );
-Texture2DArray<float>                       g_CookTorranceBTDFETexture          : register( t14 );
-Texture2DArray<float>                       g_CookTorranceBSDFInvCDFTexture     : register( t15 );
-Texture2DArray<float>                       g_CookTorranceBSDFPDFScaleTexture   : register( t16 );
+StructuredBuffer<float4x3>                  g_InstanceTransforms                : register( t5 );
+StructuredBuffer<uint>                      g_MaterialIds                       : register( t6 );
+StructuredBuffer<Material>                  g_Materials                         : register( t7 );
+Texture2D<float>                            g_CookTorranceCompETexture          : register( t8 );
+Texture2D<float>                            g_CookTorranceCompEAvgTexture       : register( t9 );
+Texture2D<float>                            g_CookTorranceCompInvCDFTexture     : register( t10 );
+Texture2D<float>                            g_CookTorranceCompPdfScaleTexture   : register( t11 );
+Texture2DArray<float>                       g_CookTorranceCompEFresnelTexture   : register( t12 );
+Texture2DArray<float>                       g_CookTorranceBSDFETexture          : register( t13 );
+Texture2DArray<float>                       g_CookTorranceBSDFAvgETexture       : register( t14 );
+Texture2DArray<float>                       g_CookTorranceBTDFETexture          : register( t15 );
+Texture2DArray<float>                       g_CookTorranceBSDFInvCDFTexture     : register( t16 );
+Texture2DArray<float>                       g_CookTorranceBSDFPDFScaleTexture   : register( t17 );
 
 RWStructuredBuffer<SRay>                    g_Rays                              : register( u0 );
 RWStructuredBuffer<SRay>                    g_ShadowRays                        : register( u1 );
@@ -477,12 +460,13 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
     hitInfo.v = rayHit.uv.y;
     hitInfo.triangleId = rayHit.triangleId & 0x7FFFFFFF;
     hitInfo.backface = ( rayHit.triangleId >> 31 ) != 0;
+    hitInfo.instanceIndex = rayHit.instanceIndex;
 
     SRay ray = g_Rays[ pathIndex ];
     float3 origin = ray.origin;
     float3 direction = ray.direction;
     Intersection intersection;
-    HitInfoToIntersection( origin, direction, hitInfo, g_Vertices, g_Triangles, g_MaterialIds, g_Materials, intersection );
+    HitInfoToIntersection( origin, direction, hitInfo, g_Vertices, g_Triangles, g_MaterialIds, g_Materials, g_InstanceTransforms, intersection );
 
     Xoshiro128StarStar rng = g_Rngs[ pathIndex ];
 
@@ -813,7 +797,6 @@ cbuffer RayTracingConstants : register( b0 )
     uint2 g_Resolution;
     float4 g_Background;
     uint g_MaxBounceCount;
-    uint g_PrimitiveCount;
     uint g_LightCount;
     float g_ApertureRadius;
     float g_FocalDistance;
@@ -838,8 +821,8 @@ Texture2DArray<float> g_CookTorranceBTDFETexture        : register( t10 );
 Texture2DArray<float> g_CookTorranceBSDFInvCDFTexture   : register( t11 );
 Texture2DArray<float> g_CookTorranceBSDFPDFScaleTexture : register( t12 );
 StructuredBuffer<BVHNode> g_BVHNodes                    : register( t13 );
-Buffer<float4x3> g_InstanceTransforms                   : register( t14 );
-Buffer<float4x3> g_InstanceInvTransforms                : register( t15 );
+StructuredBuffer<float4x3> g_InstanceTransforms         : register( t14 );
+StructuredBuffer<float4x3> g_InstanceInvTransforms      : register( t15 );
 StructuredBuffer<uint> g_MaterialIds                    : register( t16 );
 StructuredBuffer<Material> g_Materials                  : register( t17 );
 TextureCube<float3> g_EnvTexture                        : register( t18 );
@@ -871,7 +854,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     GenerateRay( filmSample, apertureSample, g_FilmSize, g_ApertureRadius, g_FocalDistance, g_FilmDistance, g_BladeCount, g_BladeVertexPos, g_ApertureBaseAngle, g_CameraTransform, intersection.position, wi );
 
     float hitDistance;
-    bool hasHit = IntersectScene( intersection.position, wi, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceInvTransforms, g_MaterialIds, g_Materials, g_PrimitiveCount, intersection, hitDistance );
+    bool hasHit = IntersectScene( intersection.position, wi, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceTransforms, g_InstanceInvTransforms, g_MaterialIds, g_Materials, intersection, hitDistance );
 
     uint iBounce = 0;
     while ( iBounce <= g_MaxBounceCount )
@@ -897,7 +880,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
             isDeltaLight = sampleResult.isDeltaLight;
 
             if ( any( sampleResult.radiance > 0.0f ) && sampleResult.pdf > 0.0f
-                && !IsOcculuded( OffsetRayOrigin( intersection.position, intersection.geometryNormal, sampleResult.wi ), sampleResult.wi, sampleResult.distance, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_PrimitiveCount ) )
+                && !IsOcculuded( OffsetRayOrigin( intersection.position, intersection.geometryNormal, sampleResult.wi ), sampleResult.wi, sampleResult.distance, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceInvTransforms ) )
             {
                 float3 bsdf = EvaluateBSDF( sampleResult.wi, wo, intersection );
                 float NdotWI = abs( dot( intersection.normal, sampleResult.wi ) );
@@ -926,7 +909,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
             pathThroughput = pathThroughput * bsdf * NdotWI / bsdfPdf;
 
             float3 lastHitPosition = intersection.position;
-            hasHit = IntersectScene( OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi ), wi, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceInvTransforms, g_MaterialIds, g_Materials, g_PrimitiveCount, intersection, hitDistance );
+            hasHit = IntersectScene( OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi ), wi, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceTransforms, g_InstanceInvTransforms, g_MaterialIds, g_Materials, intersection, hitDistance );
 
             if ( g_LightCount != 0 && !isDeltaLight )
             {
@@ -959,7 +942,6 @@ cbuffer RayTracingConstants : register( b0 )
     uint2 g_Resolution;
     float4 g_Background;
     uint g_MaxBounceCount;
-    uint g_PrimitiveCount;
     uint g_LightCount;
     float g_ApertureRadius;
     float g_FocalDistance;
@@ -973,8 +955,8 @@ cbuffer RayTracingConstants : register( b0 )
 StructuredBuffer<Vertex> g_Vertices     : register( t0 );
 StructuredBuffer<uint> g_Triangles      : register( t1 );
 StructuredBuffer<BVHNode> g_BVHNodes    : register( t13 );
-Buffer<float4x3> g_InstanceTransforms   : register( t14 );
-Buffer<float4x3> g_InstanceInvTransforms : register( t15 );
+StructuredBuffer<float4x3> g_InstanceTransforms : register( t14 );
+StructuredBuffer<float4x3> g_InstanceInvTransforms : register( t15 );
 StructuredBuffer<uint> g_MaterialIds    : register( t16 );
 StructuredBuffer<Material> g_Materials  : register( t17 );
 RWTexture2D<float2> g_SamplePositionTexture : register( u0 );
@@ -1002,7 +984,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     GenerateRay( filmSample, apertureSample, g_FilmSize, g_ApertureRadius, g_FocalDistance, g_FilmDistance, g_BladeCount, g_BladeVertexPos, g_ApertureBaseAngle, g_CameraTransform, intersection.position, wo );
 
     float hitDistance = 0.0f;
-    if ( IntersectScene( intersection.position, wo, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceInvTransforms, g_MaterialIds, g_Materials, g_PrimitiveCount, intersection, hitDistance ) )
+    if ( IntersectScene( intersection.position, wo, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceTransforms, g_InstanceInvTransforms, g_MaterialIds, g_Materials, intersection, hitDistance ) )
     {
 #if defined( OUTPUT_NORMAL )
         l = intersection.normal * 0.5f + 0.5f;

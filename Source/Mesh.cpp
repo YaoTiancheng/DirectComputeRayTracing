@@ -149,7 +149,7 @@ static bool GenerateTangentVectorsForMesh( const tinyobj::attrib_t& attrib, cons
     return genTangSpaceDefault( context );
 }
 
-bool Mesh::CreateFromWavefrontOBJData( const tinyobj::attrib_t& attrib, const std::vector<tinyobj::shape_t>& shapes, uint32_t materialIdBase, bool applyTransform, const DirectX::XMFLOAT4X4& transform, uint32_t materialIdOverride )
+bool Mesh::CreateFromWavefrontOBJData( const tinyobj::attrib_t& attrib, const std::vector<tinyobj::shape_t>& shapes, uint32_t materialIdBase, bool applyTransform, const DirectX::XMFLOAT4X4& transform, bool changeWindingOrder, uint32_t materialIdOverride )
 {
     std::unordered_map<SVertexKey, uint32_t> vertexKeyToVertexIndexMap;
 
@@ -181,6 +181,11 @@ bool Mesh::CreateFromWavefrontOBJData( const tinyobj::attrib_t& attrib, const st
         XMVECTOR vDet;
         vNormalTransform = XMMatrixTranspose( XMMatrixInverse( &vDet, vTransform ) );
     }
+
+    // For winding order selection
+    const int originalTriangleIndices[ 3 ] = { 0, 1, 2 };
+    const int changedTriangleIndices[ 3 ] = { 0, 2, 1 };
+    const int* triangleIndices = changeWindingOrder ? changedTriangleIndices : originalTriangleIndices;
 
     for ( size_t iShapes = 0; iShapes < shapes.size(); ++iShapes )
     {
@@ -226,12 +231,12 @@ bool Mesh::CreateFromWavefrontOBJData( const tinyobj::attrib_t& attrib, const st
 
             for ( int iVertex = 0; iVertex < 3; ++iVertex )
             {
-                tinyobj::index_t idx = mesh.indices[ iFace * 3 + iVertex ];
+                tinyobj::index_t idx = mesh.indices[ iFace * 3 + triangleIndices[ iVertex ] ];
 
                 if ( idx.vertex_index == -1 || idx.normal_index == -1 )
                     return false;
 
-                XMFLOAT3 tangent = tangents[ iFace * 3 + iVertex ];
+                XMFLOAT3 tangent = tangents[ iFace * 3 + triangleIndices[ iVertex ] ];
 
                 SVertexKey vertexKey = { idx, tangent };
                 uint32_t vertexIndex = 0;
@@ -288,7 +293,7 @@ bool Mesh::GenerateRectangle( uint32_t materialId, bool applyTransform, const Di
             , { { -1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } }
             , { { -1.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 1.0f } }
         };
-        uint32_t indices[ 6 ] = { 0, 3, 1, 1, 3, 2 };
+        uint32_t indices[ 6 ] = { 0, 1, 3, 1, 2, 3 }; // Front face winding order CCW
 
         uint32_t indexBase = GetVertexCount();
 

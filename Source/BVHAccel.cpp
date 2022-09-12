@@ -71,7 +71,7 @@ struct BVHNodeInfo
     uint32_t depth;
 };
 
-template<typename PrimitiveType, bool HasPrimitive>
+template<typename PrimitiveType, bool HasPrimitive, bool HasLeafNodeStackSizes>
 static void BuildNodes( 
       std::vector<SPrimitiveInfo>& primitiveInfos
     , const PrimitiveType* primitives
@@ -82,8 +82,11 @@ static void BuildNodes(
     , uint32_t& reorderedPrimitiveCount
     , std::vector<BVHAccel::BVHNode>* BVHNodes
     , uint32_t* maxDepth
-    , uint32_t* maxStackSize )
+    , uint32_t* maxStackSize
+    , uint32_t* leafNodeStackSizes)
 {
+    using BVHNode = BVHAccel::BVHNode;
+
     std::stack<BVHNodeInfo> stack;
 
     BVHNodeInfo currentNodeInfo = rootNodeInfo;
@@ -103,6 +106,7 @@ static void BuildNodes(
         BVHNode* BVHNode = &BVHNodes->back();
 
         BVHNode->m_PrimCount = 0;
+        BVHNode->m_IsLeaf = false;
 
         // Calculate bounding box for this node
         BVHNode->m_BoundingBox = primitiveInfos[ currentNodeInfo.primBegin ].m_BoundingBox;
@@ -122,7 +126,12 @@ static void BuildNodes(
             reorderedPrimitiveIndices[ reorderedPrimitiveCount ] = m_PrimIndex;
             BVHNode->m_PrimIndex = reorderedPrimitiveCount;
             BVHNode->m_PrimCount = 1;
+            BVHNode->m_IsLeaf = true;
             reorderedPrimitiveCount += 1;
+            if ( HasLeafNodeStackSizes )
+            {
+                leafNodeStackSizes[ BVHNode->m_PrimIndex ] = (uint32_t)stack.size();
+            }
             
             if ( !stack.empty() )
             {
@@ -186,7 +195,12 @@ static void BuildNodes(
                     }
                     BVHNode->m_PrimIndex = reorderedPrimitiveCount;
                     BVHNode->m_PrimCount = uint8_t( m_PrimCount );
+                    BVHNode->m_IsLeaf = true;
                     reorderedPrimitiveCount += m_PrimCount;
+                    if ( HasLeafNodeStackSizes )
+                    {
+                        leafNodeStackSizes[ BVHNode->m_PrimIndex ] = (uint32_t)stack.size();
+                    }
 
                     if ( !stack.empty() )
                     {
@@ -291,7 +305,12 @@ static void BuildNodes(
                     }
                     BVHNode->m_PrimIndex = reorderedPrimitiveCount;
                     BVHNode->m_PrimCount = uint8_t( m_PrimCount );
+                    BVHNode->m_IsLeaf = true;
                     reorderedPrimitiveCount += m_PrimCount;
+                    if ( HasLeafNodeStackSizes )
+                    {
+                        leafNodeStackSizes[ BVHNode->m_PrimIndex ] = (uint32_t)stack.size();
+                    }
 
                     if ( !stack.empty() )
                     {
@@ -335,11 +354,11 @@ void BuildBLAS( const GPU::Vertex* vertices, const uint32_t* indices, uint32_t* 
     }
 
     uint32_t reorderedTriangleCount = 0;
-    BuildNodes<TriangleIndices, true>( primitiveInfos, (TriangleIndices*)indices, { -1, 0, triangleCount, 0 }, 2, (TriangleIndices*)reorderedIndices, reorderedTriangleIndices, reorderedTriangleCount, BVHNodes, maxDepth, maxStackSize );
+    BuildNodes<TriangleIndices, true, false>( primitiveInfos, (TriangleIndices*)indices, { -1, 0, triangleCount, 0 }, 2, (TriangleIndices*)reorderedIndices, reorderedTriangleIndices, reorderedTriangleCount, BVHNodes, maxDepth, maxStackSize, nullptr );
     assert( reorderedTriangleCount == triangleCount );
 }
 
-void BuildTLAS( const SInstance* instances, uint32_t* reorderedInstanceIndices, uint32_t instanceCount, std::vector<BVHNode>* BVHNodes, uint32_t* maxDepth, uint32_t* maxStackSize )
+void BuildTLAS( const SInstance* instances, uint32_t* reorderedInstanceIndices, uint32_t instanceCount, std::vector<BVHNode>* BVHNodes, uint32_t* maxDepth, uint32_t* maxStackSize, uint32_t* instanceStackSizes )
 {
     std::vector<SPrimitiveInfo> primitiveInfos;
     primitiveInfos.reserve( instanceCount );
@@ -352,11 +371,11 @@ void BuildTLAS( const SInstance* instances, uint32_t* reorderedInstanceIndices, 
     }
 
     uint32_t reorderedInstanceCount = 0;
-    BuildNodes<int, false>( primitiveInfos, nullptr, { -1, 0, instanceCount, 0 }, 1, nullptr, reorderedInstanceIndices, reorderedInstanceCount, BVHNodes, maxDepth, maxStackSize );
+    BuildNodes<int, false, true>( primitiveInfos, nullptr, { -1, 0, instanceCount, 0 }, 1, nullptr, reorderedInstanceIndices, reorderedInstanceCount, BVHNodes, maxDepth, maxStackSize, instanceStackSizes );
     assert( reorderedInstanceCount == instanceCount );
 }
 
-void PackBVH( const BVHNode* BVHNodes, uint32_t nodeCount, bool isBLAS, GPU::BVHNode* packedBVHNodes )
+void PackBVH( const BVHNode* BVHNodes, uint32_t nodeCount, bool isBLAS, GPU::BVHNode* packedBVHNodes, uint32_t nodeIndexOffset, uint32_t primitiveIndexOffset )
 {
     if ( nodeCount > 0 )
     {
@@ -373,7 +392,19 @@ void PackBVH( const BVHNode* BVHNodes, uint32_t nodeCount, bool isBLAS, GPU::BVH
             DirectX::XMStoreFloat3( &packed.bboxMax, vBBoxMax );
 
             packed.rightChildOrPrimIndex = unpacked.m_ChildIndex;
-            packed.misc = unpacked.m_PrimCount | ( isBLAS && iNode == 0 ? 0x100 : 0 );
+            packed.misc = unpacked.m_PrimCount;
+            if ( !unpacked.m_IsLeaf )
+            {
+                packed.rightChildOrPrimIndex += nodeIndexOffset;
+            }
+            else if ( isBLAS )
+            {
+                packed.rightChildOrPrimIndex += primitiveIndexOffset;
+            }
+            if ( !isBLAS && unpacked.m_IsLeaf )
+            {
+                packed.misc |= 0x100;
+            }
         }
     }
 }

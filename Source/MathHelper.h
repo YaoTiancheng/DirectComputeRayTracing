@@ -2,7 +2,8 @@
 
 namespace MathHelper
 {
-    extern const DirectX::XMFLOAT4X4 s_IdentityMatrix;
+    extern const DirectX::XMFLOAT4X4 s_IdentityMatrix4x4;
+    extern const DirectX::XMFLOAT4X3 s_IdentityMatrix4x3;
 
     DirectX::XMFLOAT3 MatrixRotationToRollPitchYall( const DirectX::XMFLOAT3X3& matrix );
 

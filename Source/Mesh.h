@@ -6,16 +6,15 @@
 #include "../Shaders/Vertex.inc.hlsl"
 #include "../Shaders/Material.inc.hlsl"
 #include "../Shaders/BVHNode.inc.hlsl"
-#define TINYOBJLOADER_IMPLEMENTATION
-#include "OBJLoader/tiny_obj_loader.h"
+#include "tinyobjloader/tiny_obj_loader.h"
 
 class Mesh
 {
 public:
     bool CreateFromWavefrontOBJData( const tinyobj::attrib_t& attrib, const std::vector<tinyobj::shape_t>& shapes, uint32_t materialIdBase, bool applyTransform = false,
-        const DirectX::XMFLOAT4X4& transform = MathHelper::s_IdentityMatrix, uint32_t materialIdOverride = INVALID_MATERIAL_ID );
+        const DirectX::XMFLOAT4X4& transform = MathHelper::s_IdentityMatrix4x4, bool changeWindingOrder = false, uint32_t materialIdOverride = INVALID_MATERIAL_ID );
 
-    bool GenerateRectangle( uint32_t materialId, bool applyTransform = false, const DirectX::XMFLOAT4X4& transform = MathHelper::s_IdentityMatrix );
+    bool GenerateRectangle( uint32_t materialId, bool applyTransform = false, const DirectX::XMFLOAT4X4& transform = MathHelper::s_IdentityMatrix4x4 );
 
     void BuildBVH( const char* BVHFilename = nullptr, std::vector<uint32_t>* reorderedTriangleIndices = nullptr );
 

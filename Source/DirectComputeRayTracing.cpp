@@ -210,7 +210,6 @@ bool SRenderer::Init()
         return false;
     }
 
-    m_Scene.m_IsBVHDisabled = CommandLineArgs::Singleton()->GetNoBVHAccel();
     m_Scene.m_EnvironmentImageFilepath = StringConversion::UTF16WStringToUTF8String( CommandLineArgs::Singleton()->GetEnvironmentTextureFilename() );
 
     m_ResolutionWidth = CommandLineArgs::Singleton()->ResolutionX();
@@ -781,11 +780,11 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
         if ( ImGui::CollapsingHeader( "Materials" ) )
         {
-            for ( size_t iMaterial = 0; iMaterial < m_Scene.m_Mesh.GetMaterials().size(); ++iMaterial )
+            for ( size_t iMaterial = 0; iMaterial < m_Scene.m_Materials.size(); ++iMaterial )
             {
                 bool isSelected = ( iMaterial == m_Scene.m_ObjectSelection.m_MaterialSelectionIndex );
                 ImGui::PushID( (int)iMaterial );
-                if ( ImGui::Selectable( m_Scene.m_Mesh.GetMaterialNames()[ iMaterial ].c_str(), isSelected ) )
+                if ( ImGui::Selectable( m_Scene.m_MaterialNames[ iMaterial ].c_str(), isSelected ) )
                 {
                     m_Scene.m_ObjectSelection.SelectMaterial( (int)iMaterial );
                 }
@@ -844,9 +843,9 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
         }
         else if ( m_Scene.m_ObjectSelection.m_MaterialSelectionIndex >= 0 )
         {
-            if ( m_Scene.m_ObjectSelection.m_MaterialSelectionIndex < m_Scene.m_Mesh.GetMaterials().size() )
+            if ( m_Scene.m_ObjectSelection.m_MaterialSelectionIndex < m_Scene.m_Materials.size() )
             {
-                SMaterial* selection = m_Scene.m_Mesh.GetMaterials().data() + m_Scene.m_ObjectSelection.m_MaterialSelectionIndex;
+                SMaterial* selection = m_Scene.m_Materials.data() + m_Scene.m_ObjectSelection.m_MaterialSelectionIndex;
                 ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float );
                 if ( ImGui::ColorEdit3( "Albedo", (float*)&selection->m_Albedo ) )
                     m_IsMaterialGPUBufferDirty = true;
@@ -954,11 +953,6 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
     {
         ImGui::Begin( "Render Stats." );
 
-        ImGui::Text( "No BVH: %s", m_Scene.m_IsBVHDisabled ? "On" : "Off" );
-        if ( m_Scene.m_HasValidScene )
-        {
-            ImGui::Text( "BVH traversal stack size: %d", m_Scene.m_Mesh.GetBVHMaxStackSize() );
-        }
         ImGui::Text( "Current Resolution: %dx%d", renderContext->m_CurrentResolutionWidth, renderContext->m_CurrentResolutionHeight );
         ImGui::Text( "Average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate );
         ImGui::Text( "SPP: %d", m_SPP );

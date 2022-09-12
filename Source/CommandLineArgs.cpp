@@ -8,7 +8,6 @@ CommandLineArgs::CommandLineArgs()
     , m_ResolutionY( 720 )
     , m_ShaderDebugEnabled( false )
     , m_UseDebugDevice( false )
-    , m_NoBVHAccel( false )
     , m_OutputBVHToFile( false )
 {
     assert( s_Singleton == nullptr );
@@ -53,10 +52,6 @@ void CommandLineArgs::Parse( const wchar_t* cmdLine )
         else if ( wcscmp( argStr, L"-DebugDevice" ) == 0 )
         {
             m_UseDebugDevice = true;
-        }
-        else if ( wcscmp( argStr, L"-NoBVH" ) == 0 )
-        {
-            m_NoBVHAccel = true;
         }
         else if ( wcscmp( argStr, L"-OutputBVH" ) == 0 )
         {

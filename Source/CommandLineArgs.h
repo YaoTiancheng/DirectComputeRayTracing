@@ -15,8 +15,6 @@ public:
 
     const std::string& GetFilename() const { return m_Filename; }
 
-    bool GetNoBVHAccel() const { return m_NoBVHAccel; }
-
     const std::wstring& GetEnvironmentTextureFilename() const { return m_EnvironmentTextureFilename; }
 
     bool GetOutputBVHToFile() const { return m_OutputBVHToFile; }
@@ -28,7 +26,6 @@ private:
     uint32_t    m_ResolutionY;
     bool        m_ShaderDebugEnabled;
     bool        m_UseDebugDevice;
-    bool        m_NoBVHAccel;
     std::string m_Filename;
     std::wstring m_EnvironmentTextureFilename;
     bool        m_OutputBVHToFile;

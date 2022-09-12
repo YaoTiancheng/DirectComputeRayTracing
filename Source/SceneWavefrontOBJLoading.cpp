@@ -20,38 +20,15 @@ bool CScene::LoadFromWavefrontOBJFile( const char* filepath )
     strcpy( fileDir, filepath );
     PathRemoveFileSpecA( fileDir );
 
-    char BVHFilePath[ MAX_PATH ] = "\0";
     const char* MTLSearchPath = fileDir;
-    if ( commandLineArgs->GetOutputBVHToFile() )
-    {
-        sprintf_s( BVHFilePath, MAX_PATH, "%s\\%s.xml", fileDir, fileName );
-    }
-    bool buildBVH = !commandLineArgs->GetNoBVHAccel();
-
-    LOG_STRING_FORMAT( "Loading mesh from: %s, MTL search path at: %s, BVH file path at: %s\n", filepath, MTLSearchPath, BVHFilePath );
-
-    size_t materialCount = m_Materials.size();
-    if ( !CreateMeshAndMaterialsFromWavefrontOBJFile( filepath, MTLSearchPath, false, MathHelper::s_IdentityMatrix, INVALID_MATERIAL_ID ) )
+    LOG_STRING_FORMAT( "Loading mesh from: %s, MTL search path at: %s\n", filepath, MTLSearchPath );
+    if ( !CreateMeshAndMaterialsFromWavefrontOBJFile( filepath, MTLSearchPath, false, MathHelper::s_IdentityMatrix4x4, false, INVALID_MATERIAL_ID ) )
     {
         CMessagebox::GetSingleton().AppendFormat( "Failed to load mesh from %s.\n", filepath );
         return false;
     }
 
-    Mesh& mesh = m_Meshes.back();
-
-    if ( buildBVH )
-    {
-        mesh.BuildBVH( BVHFilePath );
-    }
-
-    LOG_STRING_FORMAT( "Mesh loaded. Triangle count: %d, vertex count: %d, material count: %d\n", mesh.GetTriangleCount(), mesh.GetVertexCount(), m_Materials.size() - materialCount );
-
-    if ( !commandLineArgs->GetNoBVHAccel() )
-    {
-        uint32_t BVHMaxDepth = mesh.GetBVHMaxDepth();
-        uint32_t BVHMaxStackSize = mesh.GetBVHMaxStackSize();
-        LOG_STRING_FORMAT( "BVH created from mesh. Node count:%d, max depth:%d, max stack size:%d\n", mesh.GetBVHNodeCount(), BVHMaxDepth, BVHMaxStackSize );
-    }
+    m_InstanceTransforms.push_back( MathHelper::s_IdentityMatrix4x3 );
 
     return true;
 }

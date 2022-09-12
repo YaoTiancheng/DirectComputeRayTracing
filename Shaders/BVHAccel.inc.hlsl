@@ -57,6 +57,7 @@ struct SHitInfo
     float u;
     float v;
     uint triangleId;
+    uint instanceIndex;
     bool backface;
 };
 
@@ -67,18 +68,17 @@ bool BVHIntersectNoInterp( float3 origin
     , StructuredBuffer<Vertex> vertices
     , StructuredBuffer<uint> triangles
     , StructuredBuffer<BVHNode> BVHNodes
-    , Buffer<float4x3> Instances
-    , uint primitiveCount
+    , StructuredBuffer<float4x3> Instances
     , inout SHitInfo hitInfo )
 {
     float tMax = FLT_INF;
     float t, u, v;
     bool backface;
 
-#if !defined( NO_BVH_ACCEL )
     BVHTraversalStackReset( dispatchThreadIndex );
 
     uint nodeIndex = 0;
+    uint instanceIndex = 0;
     bool isBLAS = false;
     float3 localRayOrigin = origin;
     float3 localRayDirection = direction;
@@ -95,6 +95,7 @@ bool BVHIntersectNoInterp( float3 origin
                 localRayOrigin = mul( float4( origin, 1.f ), instanceInvTransform );
                 localRayDirection = mul( float4( direction, 0.f ), instanceInvTransform );
                 isBLAS = true;
+                instanceIndex = primCountOrInstanceIndex;
                 nodeIndex = BVHNodes[ nodeIndex ].rightChildOrPrimIndex;
             }
             else
@@ -121,6 +122,7 @@ bool BVHIntersectNoInterp( float3 origin
                             hitInfo.v = v;
                             hitInfo.backface = backface;
                             hitInfo.triangleId = iPrim;
+                            hitInfo.instanceIndex = instanceIndex;
                         }
                     }
                     bool lastNodeIsBLAS = isBLAS;
@@ -161,23 +163,6 @@ bool BVHIntersectNoInterp( float3 origin
             }
         }
     }
-#else
-    for ( uint iPrim = 0; iPrim < primitiveCount; ++iPrim )
-    {
-        float3 v0 = vertices[ triangles[ iPrim * 3 ] ].position;
-        float3 v1 = vertices[ triangles[ iPrim * 3 + 1 ] ].position;
-        float3 v2 = vertices[ triangles[ iPrim * 3 + 2 ] ].position;
-        if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
-        {
-            tMax = t;
-            hitInfo.t = t;
-            hitInfo.u = u;
-            hitInfo.v = v;
-            hitInfo.backface = backface;
-            hitInfo.triangleId = iPrim;
-        }
-    }
-#endif
 
     return !isinf( tMax );
 }
@@ -190,10 +175,8 @@ bool BVHIntersect( float3 origin
     , StructuredBuffer<Vertex> vertices
     , StructuredBuffer<uint> triangles
     , StructuredBuffer<BVHNode> BVHNodes
-    , Buffer<float4x3> Instances
-    , uint primitiveCount )
+    , StructuredBuffer<float4x3> Instances )
 {
-#if !defined( NO_BVH_ACCEL )
     BVHTraversalStackReset( dispatchThreadIndex );
 
     uint nodeIndex = 0;
@@ -276,20 +259,6 @@ bool BVHIntersect( float3 origin
             }
         }
     }
-#else
-    float t, u, v;
-    bool backface;
-    for ( uint iPrim = 0; iPrim < primitiveCount; ++iPrim )
-    {
-        float3 v0 = vertices[ triangles[ iPrim * 3 ] ].position;
-        float3 v1 = vertices[ triangles[ iPrim * 3 + 1 ] ].position;
-        float3 v2 = vertices[ triangles[ iPrim * 3 + 2 ] ].position;
-        if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
-        {
-            return true;
-        }
-    }
-#endif
 
     return false;
 }

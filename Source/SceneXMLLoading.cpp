@@ -689,7 +689,6 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
     };
 
     size_t meshIndexBase = m_Meshes.size();
-    size_t triangleLightIndexBase = m_TriangleLights.size();
 
     std::unordered_map<const SValue*, uint32_t> BSDFValuePointerToIdMap;
     for ( auto& rootObjectValue : rootObjectValues )
@@ -809,8 +808,9 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
             }
             else
             {
+                
                 SValue* transformValue = rootObjectValue.second->FindValue( "transform" );
-                XMFLOAT4X4 transform = transformValue ? transformValue->m_Matrix : MathHelper::s_IdentityMatrix;
+                XMFLOAT4X4 transform = transformValue ? transformValue->m_Matrix : MathHelper::s_IdentityMatrix4x4;
 
                 SValue* emitterValue = rootObjectValue.second->FindValue( "emitter" );
                 bool isALight = emitterValue != nullptr;
@@ -872,7 +872,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                         {
                             objFilepath = filepath.parent_path() / objFilepath;
                         }
-                        if ( CreateMeshAndMaterialsFromWavefrontOBJFile( objFilepath.u8string().c_str(), "", true, transform, materialId ) )
+                        if ( CreateMeshAndMaterialsFromWavefrontOBJFile( objFilepath.u8string().c_str(), "", true, MathHelper::s_IdentityMatrix4x4, true, materialId ) )
                         {
                             meshCreated = true;
                         }
@@ -886,7 +886,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                 case EShapeType::eRectangle:
                 {
                     Mesh mesh;
-                    if ( mesh.GenerateRectangle( materialId, true, transform ) )
+                    if ( mesh.GenerateRectangle( materialId, true, MathHelper::s_IdentityMatrix4x4 ) )
                     {
                         m_Meshes.emplace_back( mesh );
                         meshCreated = true;
@@ -905,69 +905,9 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                 }
                 }
 
-                if ( meshCreated && emitterValue )
+                if ( meshCreated )
                 {
-                    Mesh& mesh = m_Meshes.back();
-                    uint32_t triangleCount = mesh.GetTriangleCount();
-                    if ( GetLightCount() + triangleCount <= s_MaxLightsCount )
-                    {
-                        SValue* emitterTypeValue = emitterValue->FindValue( "type" );
-                        if ( emitterTypeValue && emitterTypeValue->m_Type == EValueType::eString )
-                        {
-                            if ( strncmp( "area", emitterTypeValue->m_String.data(), emitterTypeValue->m_String.length() ) == 0 )
-                            {
-                                XMFLOAT3 radiance( 1.0f, 1.0f, 1.0f );
-                                SValue* radianceValue = emitterValue->FindValue( "radiance" );
-                                if ( radianceValue )
-                                {
-                                    if ( radianceValue->m_Type == EValueType::eRGB )
-                                    {
-                                        radiance = radianceValue->m_RGB;
-                                    }
-                                    else
-                                    {
-                                        LOG_STRING( "Unsupported radiance type.\n" );
-                                    }
-                                }
-
-                                // Create lights
-                                const std::vector<uint32_t>& indices = mesh.GetIndices();
-                                const std::vector<GPU::Vertex>& vertices = mesh.GetVertices();
-                                for ( uint32_t iTriangle = 0; iTriangle < triangleCount; ++iTriangle )
-                                {
-                                    XMVECTOR vP0 = XMLoadFloat3( &vertices[ indices[ iTriangle * 3 ] ].position );
-                                    XMVECTOR vP1 = XMLoadFloat3( &vertices[ indices[ iTriangle * 3 + 1 ] ].position );
-                                    XMVECTOR vP2 = XMLoadFloat3( &vertices[ indices[ iTriangle * 3 + 2 ] ].position );
-                                    XMVECTOR vP0P1 = vP1 - vP0;
-                                    XMVECTOR vP0P2 = vP2 - vP0;
-                                    XMVECTOR vCross = XMVector3Cross( vP0P1, vP0P2 );
-                                    XMVECTOR vArea = XMVector3Length( vCross );
-                                    float area;
-                                    XMStoreFloat( &area, vArea );
-                                    float invSurfaceArea = 1.f / ( area * .5f );
-
-                                    m_TriangleLights.emplace_back();
-                                    STriangleLight& light = m_TriangleLights.back();
-                                    light.m_MeshIndex = (uint32_t)m_Meshes.size() - 1;
-                                    light.m_TriangleIndex = iTriangle;
-                                    light.m_Radiance = radiance;
-                                    light.m_InvSurfaceArea = invSurfaceArea;
-                                }
-                            }
-                            else
-                            {
-                                LOG_STRING_FORMAT( "Unsupported emitter type \'%.*s\' for shape.\n", emitterTypeValue->m_String.length(), emitterTypeValue->m_String.data() );
-                            }
-                        }
-                        else
-                        {
-                            LOG_STRING( "Cannot determine type from emitter.\n" );
-                        }
-                    }
-                    else
-                    {
-                        LOG_STRING( "Max light count exceeded.\n" );
-                    }
+                    m_InstanceTransforms.push_back( XMFLOAT4X3( transform._11, transform._12, transform._13, transform._21, transform._22, transform._23, transform._31, transform._32, transform._33, transform._41, transform._42, transform._43 ) );
                 }
             }
         }
@@ -1004,30 +944,6 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
     }
 
     valueList.Clear();
-
-    const CommandLineArgs* commandLineArgs = CommandLineArgs::Singleton();
-    bool buildBVH = !commandLineArgs->GetNoBVHAccel();
-    if ( buildBVH )
-    {
-        std::vector<uint32_t> reorderedTriangleIndices;
-        for ( size_t iMesh = meshIndexBase; iMesh < m_Meshes.size(); ++iMesh )
-        {
-            Mesh& mesh = m_Meshes[ iMesh ];
-            mesh.BuildBVH( nullptr, &reorderedTriangleIndices );
-        }
-
-        // Remap the triangle lights to the reordered triangles
-        for ( size_t iLight = triangleLightIndexBase; iLight < m_TriangleLights.size(); ++iLight )
-        {
-            auto it = std::find( reorderedTriangleId.begin(), reorderedTriangleId.end(), m_TriangleLights[ i ].m_TriangleId );
-            assert( it != reorderedTriangleId.end() );
-            m_TriangleLights[ i ].m_TriangleId = (uint32_t)std::distance( reorderedTriangleId.begin(), it );
-        }
-
-        uint32_t BVHMaxDepth = m_Mesh.GetBVHMaxDepth();
-        uint32_t BVHMaxStackSize = m_Mesh.GetBVHMaxStackSize();
-        LOG_STRING_FORMAT( "BVH created from mesh. Node count:%d, max depth:%d, max stack size:%d\n", m_Mesh.GetBVHNodeCount(), BVHMaxDepth, BVHMaxStackSize );
-    }
 
     return true;
 }

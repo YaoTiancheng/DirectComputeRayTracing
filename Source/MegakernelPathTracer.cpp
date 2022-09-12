@@ -21,7 +21,6 @@ struct SRayTracingConstants
     uint32_t            resolutionY;
     DirectX::XMFLOAT4   background;
     uint32_t            maxBounceCount;
-    uint32_t            primitiveCount;
     uint32_t            lightCount;
     float               apertureRadius;
     float               focalDistance;
@@ -31,6 +30,7 @@ struct SRayTracingConstants
     float               apertureBaseAngle;
     uint32_t            tileOffsetX;
     uint32_t            tileOffsetY;
+    uint32_t            padding;
 };
 
 bool CMegakernelPathTracer::Create()
@@ -78,7 +78,6 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
         constants->filmSize = m_Scene->m_FilmSize;
         constants->lightCount = m_Scene->GetLightCount();
         constants->maxBounceCount = m_Scene->m_MaxBounceCount;
-        constants->primitiveCount = m_Scene->m_Mesh.GetTriangleCount();
         constants->apertureRadius = m_Scene->CalculateApertureDiameter() * 0.5f;
         constants->focalDistance = m_Scene->m_FocalDistance;
         constants->apertureBaseAngle = m_Scene->m_ApertureRotation;
@@ -113,6 +112,8 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
         , renderData.m_CookTorranceBSDFInvCDFTexture->GetSRV()
         , renderData.m_CookTorranceBSDFPDFScaleTexture->GetSRV()
         , m_Scene->m_BVHNodesBuffer ? m_Scene->m_BVHNodesBuffer->GetSRV() : nullptr
+        , m_Scene->m_InstanceTransformsBuffer->GetSRV( 0, (uint32_t)m_Scene->m_InstanceTransforms.size() )
+        , m_Scene->m_InstanceTransformsBuffer->GetSRV( (uint32_t)m_Scene->m_InstanceTransforms.size(), (uint32_t)m_Scene->m_InstanceTransforms.size() )
         , m_Scene->m_MaterialIdsBuffer->GetSRV()
         , m_Scene->m_MaterialsBuffer->GetSRV()
         , m_Scene->m_EnvironmentTexture ? m_Scene->m_EnvironmentTexture->GetSRV() : nullptr
@@ -149,16 +150,12 @@ bool CMegakernelPathTracer::CompileAndCreateRayTracingKernel()
 
     static const uint32_t s_MaxRadix10IntegerBufferLengh = 12;
     char buffer_TraversalStackSize[ s_MaxRadix10IntegerBufferLengh ];
-    _itoa( m_Scene->m_Mesh.GetBVHMaxStackSize(), buffer_TraversalStackSize, 10 );
+    _itoa( m_Scene->m_BVHTraversalStackSize, buffer_TraversalStackSize, 10 );
 
     rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_STACK_SIZE", buffer_TraversalStackSize } );
 
     rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_GROUP_SIZE", "256" } );
 
-    if ( m_Scene->m_IsBVHDisabled )
-    {
-        rayTracingShaderDefines.push_back( { "NO_BVH_ACCEL", "0" } );
-    }
     if ( m_Scene->m_IsGGXVNDFSamplingEnabled )
     {
         rayTracingShaderDefines.push_back( { "GGX_SAMPLE_VNDF", "0" } );

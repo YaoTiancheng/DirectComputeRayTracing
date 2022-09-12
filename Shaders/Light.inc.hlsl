@@ -51,40 +51,4 @@ void SampleLight_Rectangle( SLight light, float2 samples, float3 position, out f
     pdf = WIdotN > 0.0f ? ( distance * distance ) / ( WIdotN * area ) : 0.0f;
 }
 
-void EvaluateLight_Triangle( SLight light, float3 v0, float3 v1, float3 v2, float3 wi, float3 position, out float3 radiance, out float pdf, out float distance )
-{
-    float u, v;
-    bool backface;
-    bool hasHit = RayTriangleIntersect( position, wi, 0.f, FLT_INF, v0, v1, v2, distance, u, v, backface );
-    float3 v0v1 = v1 - v0;
-    float3 v0v2 = v2 - v0;
-    float3 normalWS = normalize( cross( v0v2, v0v1 ) );
-    float WIdotN = -dot( wi, normalWS );
-    float invSurfaceArea = light.invSurfaceArea;
-    pdf = hasHit && WIdotN > 0.0f ? ( distance * distance * invSurfaceArea ) / WIdotN : 0.f;
-    radiance = hasHit && WIdotN > 0.0f ? light.color : 0.f;
-    distance = distance;
-}
-
-void SampleLight_Triangle( SLight light, float3 v0, float3 v1, float3 v2, float2 samples, float3 position, out float3 radiance, out float3 wi, out float distance, out float pdf )
-{
-    float2 samplePosBarycentric = SampleTriangle( samples );
-    float3 samplePosWS = VectorBaryCentric3( v0, v1, v2, samplePosBarycentric.x, samplePosBarycentric.y );
-
-    float3 v0v1 = v1 - v0;
-    float3 v0v2 = v2 - v0;
-    float3 crossProduct = cross( v0v2, v0v1 );
-    float3 normalWS = normalize( crossProduct );
-
-    wi = samplePosWS - position;
-    distance = length( wi );
-    wi /= distance;
-
-    float WIdotN = -dot( wi, normalWS );
-    radiance = WIdotN > 0.0f ? light.color : 0.0f;
-
-    float invSurfaceArea = light.invSurfaceArea;
-    pdf = WIdotN > 0.0f ? ( distance * distance * invSurfaceArea ) / WIdotN : 0.0f;
-}
-
 #endif

@@ -84,6 +84,7 @@ bool BVHIntersectNoInterp( float3 origin
     float3 localRayDirection = direction;
     while ( true )
     {
+        bool popNode = false;
         if ( RayAABBIntersect( localRayOrigin, 1.f / localRayDirection, tMin, tMax, BVHNodes[ nodeIndex ].bboxMin, BVHNodes[ nodeIndex ].bboxMax ) )
         {
             bool hasBLAS = BVHNodeHasBLAS( BVHNodes[ nodeIndex ] );
@@ -125,27 +126,16 @@ bool BVHIntersectNoInterp( float3 origin
                             hitInfo.instanceIndex = instanceIndex;
                         }
                     }
-                    bool lastNodeIsBLAS = isBLAS;
-                    if ( BVHTraversalStackPopback( dispatchThreadIndex, nodeIndex, isBLAS ) )
-                    {
-                        // If last node is BLAS and the next one is not, then we are going to pop back to TLAS.
-                        // The situation when last node is NOT BLAS and the next one IS should never happen, there is no way to pop back from a TLAS to BLAS.
-                        if ( lastNodeIsBLAS != isBLAS ) 
-                        {
-                            localRayOrigin = origin;
-                            localRayDirection = direction;
-                        }
-                    }
-                    else
-                    {
-                        break;
-                    }
+                    popNode = true;
                 }
             }
         }
         else
         {
-            // TODO: Reuse this branch with the same one above
+            popNode = true;
+        }
+        if ( popNode )
+        {
             bool lastNodeIsBLAS = isBLAS;
             if ( BVHTraversalStackPopback( dispatchThreadIndex, nodeIndex, isBLAS ) )
             {
@@ -185,6 +175,7 @@ bool BVHIntersect( float3 origin
     float3 localRayDirection = direction;
     while ( true )
     {
+        bool popNode = false;
         if ( RayAABBIntersect( localRayOrigin, 1.f / localRayDirection, tMin, tMax, BVHNodes[ nodeIndex ].bboxMin, BVHNodes[ nodeIndex ].bboxMax ) )
         {
             bool hasBLAS = BVHNodeHasBLAS( BVHNodes[ nodeIndex ] );
@@ -221,27 +212,16 @@ bool BVHIntersect( float3 origin
                             return true;
                         }
                     }
-                    bool lastNodeIsBLAS = isBLAS;
-                    if ( BVHTraversalStackPopback( dispatchThreadIndex, nodeIndex, isBLAS ) )
-                    {
-                        // If last node is BLAS and the next one is not, then we are going to pop back to TLAS.
-                        // The situation when last node is NOT BLAS and the next one is should never happen, there is no way to pop back from a TLAS to BLAS.
-                        if ( lastNodeIsBLAS != isBLAS )
-                        {
-                            localRayOrigin = origin;
-                            localRayDirection = direction;
-                        }
-                    }
-                    else
-                    {
-                        break;
-                    }
+                    popNode = true;
                 }
             }
         }
         else
         {
-            // TODO: Reuse this branch with the same one above
+            popNode = true;
+        }
+        if ( popNode )
+        {
             bool lastNodeIsBLAS = isBLAS;
             if ( BVHTraversalStackPopback( dispatchThreadIndex, nodeIndex, isBLAS ) )
             {

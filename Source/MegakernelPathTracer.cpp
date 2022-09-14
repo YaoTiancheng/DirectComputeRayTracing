@@ -33,6 +33,12 @@ struct SRayTracingConstants
     uint32_t            padding;
 };
 
+struct SDebugConstants
+{
+    uint32_t m_IterationThreshold;
+    uint32_t m_Padding[ 3 ];
+};
+
 bool CMegakernelPathTracer::Create()
 {
     m_RayTracingConstantsBuffer.reset( GPUBuffer::Create(
@@ -45,11 +51,22 @@ bool CMegakernelPathTracer::Create()
     if ( !m_RayTracingConstantsBuffer )
         return false;
 
+    m_DebugConstantsBuffer.reset( GPUBuffer::Create(
+          sizeof( SDebugConstants )
+        , 0
+        , DXGI_FORMAT_UNKNOWN
+        , D3D11_USAGE_DYNAMIC
+        , D3D11_BIND_CONSTANT_BUFFER
+        , GPUResourceCreationFlags_CPUWriteable ) );
+    if ( !m_DebugConstantsBuffer )
+        return false;
+
     return true;
 }
 
 void CMegakernelPathTracer::Destroy()
 {
+    m_DebugConstantsBuffer.reset();
     m_RayTracingConstantsBuffer.reset();
     m_RayTracingShader.reset();
 }
@@ -92,6 +109,15 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
 
         m_RayTracingConstantsBuffer->Unmap();
     }
+    if ( m_OutputType > 0 )
+    {
+        if ( void* address = m_DebugConstantsBuffer->Map() )
+        {
+            SDebugConstants* constants = (SDebugConstants*)address;
+            constants->m_IterationThreshold = m_IterationThreshold;
+            m_DebugConstantsBuffer->Unmap();
+        }
+    }
 
     ComputeJob computeJob;
     computeJob.m_SamplerStates = { renderData.m_UVClampSamplerState.Get() };
@@ -119,7 +145,7 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
         , m_Scene->m_EnvironmentTexture ? m_Scene->m_EnvironmentTexture->GetSRV() : nullptr
     };
 
-    computeJob.m_ConstantBuffers = { m_RayTracingConstantsBuffer->GetBuffer(), renderData.m_RayTracingFrameConstantBuffer->GetBuffer() };
+    computeJob.m_ConstantBuffers = { m_RayTracingConstantsBuffer->GetBuffer(), renderData.m_RayTracingFrameConstantBuffer->GetBuffer(), m_DebugConstantsBuffer->GetBuffer() };
     computeJob.m_Shader = m_RayTracingShader.get();
 
     uint32_t dispatchThreadWidth = renderContext.m_IsSmallResolutionEnabled ? renderContext.m_CurrentResolutionWidth : m_TileSize;
@@ -164,7 +190,7 @@ bool CMegakernelPathTracer::CompileAndCreateRayTracingKernel()
     {
         rayTracingShaderDefines.push_back( { "NO_ENV_TEXTURE", "0" } );
     }
-    static const char* s_RayTracingOutputDefines[] = { "MEGAKERNEL", "OUTPUT_NORMAL", "OUTPUT_TANGENT", "OUTPUT_ALBEDO", "OUTPUT_NEGATIVE_NDOTV", "OUTPUT_BACKFACE" };
+    static const char* s_RayTracingOutputDefines[] = { "MEGAKERNEL", "OUTPUT_NORMAL", "OUTPUT_TANGENT", "OUTPUT_ALBEDO", "OUTPUT_NEGATIVE_NDOTV", "OUTPUT_BACKFACE", "OUTPUT_ITERATION_COUNT" };
     if ( s_RayTracingOutputDefines[ m_OutputType ] )
     {
         rayTracingShaderDefines.push_back( { s_RayTracingOutputDefines[ m_OutputType ], "0" } );
@@ -201,11 +227,19 @@ void CMegakernelPathTracer::OnImGUI()
             m_FilmClearTrigger = true;
         }
 
-        static const char* s_OutputNames[] = { "Path Tracing", "Shading Normal", "Shading Tangent", "Albedo", "Negative NdotV", "Backface" };
+        static const char* s_OutputNames[] = { "Path Tracing", "Shading Normal", "Shading Tangent", "Albedo", "Negative NdotV", "Backface", "Iteration Count"};
         if ( ImGui::Combo( "Output", (int*)&m_OutputType, s_OutputNames, IM_ARRAYSIZE( s_OutputNames ) ) )
         {
             CompileAndCreateRayTracingKernel();
             m_FilmClearTrigger = true;
+        }
+        
+        if ( m_OutputType == 6 )
+        {
+            if ( ImGui::DragInt( "Iteration Threshold", (int*)&m_IterationThreshold, 1.f, 1, 10000, "%d", ImGuiSliderFlags_AlwaysClamp ) )
+            {
+                m_FilmClearTrigger = true;
+            }
         }
     }
 }

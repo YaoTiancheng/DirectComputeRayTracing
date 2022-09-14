@@ -69,11 +69,13 @@ bool BVHIntersectNoInterp( float3 origin
     , StructuredBuffer<uint> triangles
     , StructuredBuffer<BVHNode> BVHNodes
     , StructuredBuffer<float4x3> Instances
-    , inout SHitInfo hitInfo )
+    , inout SHitInfo hitInfo
+    , out uint iterationCounter )
 {
     float tMax = FLT_INF;
     float t, u, v;
     bool backface;
+    iterationCounter = 0;
 
     BVHTraversalStackReset( dispatchThreadIndex );
 
@@ -84,6 +86,7 @@ bool BVHIntersectNoInterp( float3 origin
     float3 localRayDirection = direction;
     while ( true )
     {
+        ++iterationCounter;
         bool popNode = false;
         if ( RayAABBIntersect( localRayOrigin, 1.f / localRayDirection, tMin, tMax, BVHNodes[ nodeIndex ].bboxMin, BVHNodes[ nodeIndex ].bboxMax ) )
         {

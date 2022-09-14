@@ -11,6 +11,7 @@ public:
         : m_TileSize( 512 )
         , m_CurrentTileIndex( 0 )
         , m_Scene( scene )
+        , m_IterationThreshold( 20 )
     {
     }
 
@@ -46,11 +47,13 @@ private:
 
     ComputeShaderPtr m_RayTracingShader;
     GPUBufferPtr m_RayTracingConstantsBuffer;
+    GPUBufferPtr m_DebugConstantsBuffer;
 
     uint32_t m_TileSize;
     uint32_t m_CurrentTileIndex;
 
     uint32_t m_OutputType;
+    uint32_t m_IterationThreshold;
 
     bool m_FilmClearTrigger;
 };

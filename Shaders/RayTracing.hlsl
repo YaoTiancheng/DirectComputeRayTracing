@@ -122,11 +122,12 @@ bool IntersectScene( float3 origin
     , StructuredBuffer<uint> materialIds
     , StructuredBuffer<Material> materials
     , inout Intersection intersection
-    , out float t )
+    , out float t
+    , out uint iterationCounter )
 {
     SHitInfo hitInfo = (SHitInfo)0;
     t = FLT_INF;
-    bool hasIntersection = BVHIntersectNoInterp( origin, direction, 0, dispatchThreadIndex, vertices, triangles, BVHNodes, instancesInvTransforms, hitInfo );
+    bool hasIntersection = BVHIntersectNoInterp( origin, direction, 0, dispatchThreadIndex, vertices, triangles, BVHNodes, instancesInvTransforms, hitInfo, iterationCounter );
     if ( hasIntersection )
     {
         t = hitInfo.t;
@@ -265,6 +266,7 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
     uint pathIndex = g_PathIndices[ threadId ];
     SRay ray = g_Rays[ pathIndex ];
     SHitInfo hitInfo;
+    uint iterationCounter;
     bool hasHit = BVHIntersectNoInterp( ray.origin
         , ray.direction
         , 0
@@ -273,7 +275,8 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
         , g_Triangles
         , g_BVHNodes
         , g_InstanceInvTransforms
-        , hitInfo );
+        , hitInfo
+        , iterationCounter );
     SRayHit rayHit;
     rayHit.t = hasHit ? hitInfo.t : FLT_INF;
     rayHit.uv = float2( hitInfo.u, hitInfo.v );
@@ -854,7 +857,8 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     GenerateRay( filmSample, apertureSample, g_FilmSize, g_ApertureRadius, g_FocalDistance, g_FilmDistance, g_BladeCount, g_BladeVertexPos, g_ApertureBaseAngle, g_CameraTransform, intersection.position, wi );
 
     float hitDistance;
-    bool hasHit = IntersectScene( intersection.position, wi, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceTransforms, g_InstanceInvTransforms, g_MaterialIds, g_Materials, intersection, hitDistance );
+    uint iterationCounter;
+    bool hasHit = IntersectScene( intersection.position, wi, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceTransforms, g_InstanceInvTransforms, g_MaterialIds, g_Materials, intersection, hitDistance, iterationCounter );
 
     uint iBounce = 0;
     while ( iBounce <= g_MaxBounceCount )
@@ -909,7 +913,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
             pathThroughput = pathThroughput * bsdf * NdotWI / bsdfPdf;
 
             float3 lastHitPosition = intersection.position;
-            hasHit = IntersectScene( OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi ), wi, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceTransforms, g_InstanceInvTransforms, g_MaterialIds, g_Materials, intersection, hitDistance );
+            hasHit = IntersectScene( OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi ), wi, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceTransforms, g_InstanceInvTransforms, g_MaterialIds, g_Materials, intersection, hitDistance, iterationCounter );
 
             if ( g_LightCount != 0 && !isDeltaLight )
             {
@@ -933,7 +937,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 
 #endif
 
-#if defined( OUTPUT_NORMAL ) || defined( OUTPUT_TANGENT ) || defined( OUTPUT_ALBEDO ) || defined( OUTPUT_NEGATIVE_NDOTV ) || defined( OUTPUT_BACKFACE )
+#if defined( OUTPUT_NORMAL ) || defined( OUTPUT_TANGENT ) || defined( OUTPUT_ALBEDO ) || defined( OUTPUT_NEGATIVE_NDOTV ) || defined( OUTPUT_BACKFACE ) || defined( OUTPUT_ITERATION_COUNT )
 
 cbuffer RayTracingConstants : register( b0 )
 {
@@ -950,6 +954,11 @@ cbuffer RayTracingConstants : register( b0 )
     uint g_BladeCount;
     float g_ApertureBaseAngle;
     uint2 g_TileOffset;
+}
+
+cbuffer DebugConstants : register( b2 )
+{
+    uint g_IterationThreshold;
 }
 
 StructuredBuffer<Vertex> g_Vertices     : register( t0 );
@@ -984,7 +993,8 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     GenerateRay( filmSample, apertureSample, g_FilmSize, g_ApertureRadius, g_FocalDistance, g_FilmDistance, g_BladeCount, g_BladeVertexPos, g_ApertureBaseAngle, g_CameraTransform, intersection.position, wo );
 
     float hitDistance = 0.0f;
-    if ( IntersectScene( intersection.position, wo, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceTransforms, g_InstanceInvTransforms, g_MaterialIds, g_Materials, intersection, hitDistance ) )
+    uint iterationCounter;
+    if ( IntersectScene( intersection.position, wo, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceTransforms, g_InstanceInvTransforms, g_MaterialIds, g_Materials, intersection, hitDistance, iterationCounter ) )
     {
 #if defined( OUTPUT_NORMAL )
         l = intersection.normal * 0.5f + 0.5f;
@@ -996,6 +1006,8 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
         l = dot( -wo, intersection.normal ) < 0.0f ? float3( 0.0f, 1.0f, 0.0f ) : float3( 1.0f, 0.0f, 0.0f );
 #elif defined( OUTPUT_BACKFACE )
         l = intersection.backface ? float3( 0.0f, 1.0f, 0.0f ) : float3( 1.0f, 0.0f, 0.0f );
+#elif defined( OUTPUT_ITERATION_COUNT )
+        l = iterationCounter / (float)g_IterationThreshold;
 #endif
     }
 

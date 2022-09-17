@@ -437,6 +437,10 @@ bool CWavefrontPathTracer::CompileAndCreateShader( EShaderKernel kernel )
     {
         rayTracingShaderDefines.push_back( { "GGX_SAMPLE_VNDF", "0" } );
     }
+    if ( !m_Scene->m_TraverseBVHFrontToBack )
+    {
+        rayTracingShaderDefines.push_back( { "BVH_NO_FRONT_TO_BACK_TRAVERSAL", "0" } );
+    }
     if ( m_Scene->m_EnvironmentTexture.get() == nullptr )
     {
         rayTracingShaderDefines.push_back( { "NO_ENV_TEXTURE", "0" } );

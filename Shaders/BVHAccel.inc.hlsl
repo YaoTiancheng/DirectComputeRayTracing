@@ -112,7 +112,11 @@ bool BVHIntersectNoInterp( float3 origin
                 if ( primCountOrInstanceIndex == 0 )
                 {
                     uint splitAxis = BVHNodeGetSplitAxis( BVHNodes[ nodeIndex ] );
+#if defined( BVH_NO_FRONT_TO_BACK_TRAVERSAL )
+                    uint isDirectionNegative = false;
+#else 
                     uint isDirectionNegative = splitAxis == 0 ? localRayDirection.x < 0.f : ( splitAxis == 1 ? localRayDirection.y < 0.f : localRayDirection.z < 0.f );
+#endif
                     uint pushNodeIndex = isDirectionNegative ? nodeIndex + 1 : BVHNodes[ nodeIndex ].rightChildOrPrimIndex;
                     nodeIndex = isDirectionNegative ? BVHNodes[ nodeIndex ].rightChildOrPrimIndex : nodeIndex + 1;
                     BVHTraversalStackPushback( dispatchThreadIndex, pushNodeIndex, isBLAS );
@@ -205,7 +209,11 @@ bool BVHIntersect( float3 origin
                 if ( primCountOrInstanceIndex == 0 )
                 {
                     uint splitAxis = BVHNodeGetSplitAxis( BVHNodes[ nodeIndex ] );
+#if defined( BVH_NO_FRONT_TO_BACK_TRAVERSAL )
+                    uint isDirectionNegative = false;
+#else 
                     uint isDirectionNegative = splitAxis == 0 ? localRayDirection.x < 0.f : ( splitAxis == 1 ? localRayDirection.y < 0.f : localRayDirection.z < 0.f );
+#endif
                     uint pushNodeIndex = isDirectionNegative ? nodeIndex + 1 : BVHNodes[ nodeIndex ].rightChildOrPrimIndex;
                     nodeIndex = isDirectionNegative ? BVHNodes[ nodeIndex ].rightChildOrPrimIndex : nodeIndex + 1;
                     BVHTraversalStackPushback( dispatchThreadIndex, pushNodeIndex, isBLAS );

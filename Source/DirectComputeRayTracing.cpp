@@ -618,6 +618,12 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
                 m_IsFilmDirty = true;
             }
+
+            if ( ImGui::Checkbox( "Traverse BVH Front-to-back", &m_Scene.m_TraverseBVHFrontToBack ) )
+            {
+                m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
+                m_IsFilmDirty = true;
+            }
         }
 
         if ( ImGui::CollapsingHeader( "Environment" ) )

@@ -135,6 +135,7 @@ public:
     uint32_t m_LanczosSincTau = 3;
 
     bool m_HasValidScene = false;
+    bool m_TraverseBVHFrontToBack = true;
     bool m_IsGGXVNDFSamplingEnabled = true;
 
     Camera m_Camera;

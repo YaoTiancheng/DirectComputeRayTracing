@@ -334,7 +334,7 @@ bool Mesh::GenerateRectangle( uint32_t materialId, bool applyTransform, const Di
     }
 }
 
-void Mesh::BuildBVH( const char* BVHFilename, std::vector<uint32_t>* reorderedTriangleIndices )
+void Mesh::BuildBVH( std::vector<uint32_t>* reorderedTriangleIndices )
 {
     std::vector<uint32_t> indices = m_Indices;
     std::vector<uint32_t> triangleIndices;
@@ -352,16 +352,6 @@ void Mesh::BuildBVH( const char* BVHFilename, std::vector<uint32_t>* reorderedTr
         for ( size_t i = 0; i < materialIds.size(); ++i )
         {
             m_MaterialIds[ i ] = materialIds[ (*reorderedTriangleIndicesUsed)[ i ] ];
-        }
-    }
-
-    if ( BVHFilename && BVHFilename[ 0 ] != '\0' )
-    {
-        FILE* file = fopen( BVHFilename, "w" );
-        if ( file )
-        {
-            SerializeBVHToXML( m_BVHNodes.data(), file );
-            fclose( file );
         }
     }
 }

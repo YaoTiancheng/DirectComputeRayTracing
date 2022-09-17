@@ -36,7 +36,7 @@ void BuildBLAS( const GPU::Vertex* vertices, const uint32_t* indicies, uint32_t*
     , std::vector<BVHNode>* BVHNodes, uint32_t* maxDepth, uint32_t* maxStackSize );
 
 void BuildTLAS( const SInstance* instances, uint32_t* reorderedInstanceIndices, uint32_t instanceCount, std::vector<BVHNode>* BVHNodes
-    , uint32_t* maxDepth, uint32_t* maxStackSize, uint32_t* instanceStackSizes );
+    , uint32_t* maxDepth, uint32_t* maxStackSize, uint32_t* instanceDepths );
 
 void PackBVH( const BVHNode* BVHNodes, uint32_t nodeCount, bool isBLAS, GPU::BVHNode* packedBVHNodes, uint32_t nodeIndexOffset = 0, uint32_t primitiveIndexOffset = 0 );
 

@@ -16,7 +16,7 @@ public:
 
     bool GenerateRectangle( uint32_t materialId, bool applyTransform = false, const DirectX::XMFLOAT4X4& transform = MathHelper::s_IdentityMatrix4x4 );
 
-    void BuildBVH( const char* BVHFilename = nullptr, std::vector<uint32_t>* reorderedTriangleIndices = nullptr );
+    void BuildBVH( std::vector<uint32_t>* reorderedTriangleIndices = nullptr );
 
     void Clear();
 

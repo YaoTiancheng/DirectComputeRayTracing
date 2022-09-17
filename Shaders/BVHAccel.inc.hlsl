@@ -13,6 +13,11 @@ uint BVHNodeHasBLAS( BVHNode node )
     return ( node.misc & 0x100 ) != 0;
 }
 
+uint BVHNodeGetSplitAxis( BVHNode node )
+{
+    return node.misc & 0x600;
+}
+
 struct BVHTraversalStack
 {
     uint nodeIndex[ RT_BVH_TRAVERSAL_STACK_SIZE ];
@@ -106,8 +111,11 @@ bool BVHIntersectNoInterp( float3 origin
             {
                 if ( primCountOrInstanceIndex == 0 )
                 {
-                    BVHTraversalStackPushback( dispatchThreadIndex, BVHNodes[ nodeIndex ].rightChildOrPrimIndex, isBLAS );
-                    ++nodeIndex;
+                    uint splitAxis = BVHNodeGetSplitAxis( BVHNodes[ nodeIndex ] );
+                    uint isDirectionNegative = splitAxis == 0 ? localRayDirection.x < 0.f : ( splitAxis == 1 ? localRayDirection.y < 0.f : localRayDirection.z < 0.f );
+                    uint pushNodeIndex = isDirectionNegative ? nodeIndex + 1 : BVHNodes[ nodeIndex ].rightChildOrPrimIndex;
+                    nodeIndex = isDirectionNegative ? BVHNodes[ nodeIndex ].rightChildOrPrimIndex : nodeIndex + 1;
+                    BVHTraversalStackPushback( dispatchThreadIndex, pushNodeIndex, isBLAS );
                 }
                 else
                 {
@@ -196,8 +204,11 @@ bool BVHIntersect( float3 origin
             {
                 if ( primCountOrInstanceIndex == 0 )
                 {
-                    BVHTraversalStackPushback( dispatchThreadIndex, BVHNodes[ nodeIndex ].rightChildOrPrimIndex, isBLAS );
-                    ++nodeIndex;
+                    uint splitAxis = BVHNodeGetSplitAxis( BVHNodes[ nodeIndex ] );
+                    uint isDirectionNegative = splitAxis == 0 ? localRayDirection.x < 0.f : ( splitAxis == 1 ? localRayDirection.y < 0.f : localRayDirection.z < 0.f );
+                    uint pushNodeIndex = isDirectionNegative ? nodeIndex + 1 : BVHNodes[ nodeIndex ].rightChildOrPrimIndex;
+                    nodeIndex = isDirectionNegative ? BVHNodes[ nodeIndex ].rightChildOrPrimIndex : nodeIndex + 1;
+                    BVHTraversalStackPushback( dispatchThreadIndex, pushNodeIndex, isBLAS );
                 }
                 else
                 {

@@ -71,7 +71,7 @@ struct BVHNodeInfo
     uint32_t depth;
 };
 
-template<typename PrimitiveType, bool HasPrimitive, bool HasLeafNodeStackSizes>
+template<typename PrimitiveType, bool HasPrimitive, bool HasLeafNodeDepths>
 static void BuildNodes( 
       std::vector<SPrimitiveInfo>& primitiveInfos
     , const PrimitiveType* primitives
@@ -83,7 +83,7 @@ static void BuildNodes(
     , std::vector<BVHAccel::BVHNode>* BVHNodes
     , uint32_t* maxDepth
     , uint32_t* maxStackSize
-    , uint32_t* leafNodeStackSizes)
+    , uint32_t* leafNodeDepths )
 {
     using BVHNode = BVHAccel::BVHNode;
 
@@ -128,9 +128,9 @@ static void BuildNodes(
             BVHNode->m_PrimCount = 1;
             BVHNode->m_IsLeaf = true;
             reorderedPrimitiveCount += 1;
-            if ( HasLeafNodeStackSizes )
+            if ( HasLeafNodeDepths )
             {
-                leafNodeStackSizes[ BVHNode->m_PrimIndex ] = (uint32_t)stack.size();
+                leafNodeDepths[ BVHNode->m_PrimIndex ] = currentNodeInfo.depth;
             }
             
             if ( !stack.empty() )
@@ -197,9 +197,9 @@ static void BuildNodes(
                     BVHNode->m_PrimCount = uint8_t( m_PrimCount );
                     BVHNode->m_IsLeaf = true;
                     reorderedPrimitiveCount += m_PrimCount;
-                    if ( HasLeafNodeStackSizes )
+                    if ( HasLeafNodeDepths )
                     {
-                        leafNodeStackSizes[ BVHNode->m_PrimIndex ] = (uint32_t)stack.size();
+                        leafNodeDepths[ BVHNode->m_PrimIndex ] = currentNodeInfo.depth;
                     }
 
                     if ( !stack.empty() )
@@ -307,9 +307,9 @@ static void BuildNodes(
                     BVHNode->m_PrimCount = uint8_t( m_PrimCount );
                     BVHNode->m_IsLeaf = true;
                     reorderedPrimitiveCount += m_PrimCount;
-                    if ( HasLeafNodeStackSizes )
+                    if ( HasLeafNodeDepths )
                     {
-                        leafNodeStackSizes[ BVHNode->m_PrimIndex ] = (uint32_t)stack.size();
+                        leafNodeDepths[ BVHNode->m_PrimIndex ] = currentNodeInfo.depth;
                     }
 
                     if ( !stack.empty() )
@@ -358,7 +358,7 @@ void BuildBLAS( const GPU::Vertex* vertices, const uint32_t* indices, uint32_t* 
     assert( reorderedTriangleCount == triangleCount );
 }
 
-void BuildTLAS( const SInstance* instances, uint32_t* reorderedInstanceIndices, uint32_t instanceCount, std::vector<BVHNode>* BVHNodes, uint32_t* maxDepth, uint32_t* maxStackSize, uint32_t* instanceStackSizes )
+void BuildTLAS( const SInstance* instances, uint32_t* reorderedInstanceIndices, uint32_t instanceCount, std::vector<BVHNode>* BVHNodes, uint32_t* maxDepth, uint32_t* maxStackSize, uint32_t* instanceDepths )
 {
     std::vector<SPrimitiveInfo> primitiveInfos;
     primitiveInfos.reserve( instanceCount );
@@ -371,7 +371,7 @@ void BuildTLAS( const SInstance* instances, uint32_t* reorderedInstanceIndices, 
     }
 
     uint32_t reorderedInstanceCount = 0;
-    BuildNodes<int, false, true>( primitiveInfos, nullptr, { -1, 0, instanceCount, 0 }, 1, nullptr, reorderedInstanceIndices, reorderedInstanceCount, BVHNodes, maxDepth, maxStackSize, instanceStackSizes );
+    BuildNodes<int, false, true>( primitiveInfos, nullptr, { -1, 0, instanceCount, 0 }, 1, nullptr, reorderedInstanceIndices, reorderedInstanceCount, BVHNodes, maxDepth, maxStackSize, instanceDepths );
     assert( reorderedInstanceCount == instanceCount );
 }
 
@@ -393,6 +393,7 @@ void PackBVH( const BVHNode* BVHNodes, uint32_t nodeCount, bool isBLAS, GPU::BVH
 
             packed.rightChildOrPrimIndex = unpacked.m_ChildIndex;
             packed.misc = unpacked.m_PrimCount;
+            packed.misc |= ( unpacked.m_SplitAxis & 0x3 ) << 9;
             if ( !unpacked.m_IsLeaf )
             {
                 packed.rightChildOrPrimIndex += nodeIndexOffset;
@@ -466,14 +467,15 @@ void SerializeBVHToXML( const BVHNode* rootNode, FILE* file )
         }
         else
         {
-            fprintf( file, "<Node Center=\"%.2f,%.2f,%.2f\" Extents=\"%.2f,%.2f,%.2f\" ChildIndex=\"%d\">\n",
+            fprintf( file, "<Node Center=\"%.2f,%.2f,%.2f\" Extents=\"%.2f,%.2f,%.2f\" ChildIndex=\"%d\" SplitAxis=\"%d\">\n",
                 currentNode.node->m_BoundingBox.Center.x,
                 currentNode.node->m_BoundingBox.Center.y,
                 currentNode.node->m_BoundingBox.Center.z,
                 currentNode.node->m_BoundingBox.Extents.x,
                 currentNode.node->m_BoundingBox.Extents.y,
                 currentNode.node->m_BoundingBox.Extents.z,
-                currentNode.node->m_ChildIndex );
+                currentNode.node->m_ChildIndex,
+                currentNode.node->m_SplitAxis );
 
             stack.push( currentNode );
             currentNode = { currentNode.node + 1, true };

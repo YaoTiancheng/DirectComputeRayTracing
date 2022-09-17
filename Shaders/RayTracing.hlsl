@@ -834,9 +834,6 @@ RWTexture2D<float3> g_SampleValueTexture                : register( u1 );
 
 #include "BSDFs.inc.hlsl"
 
-#define GROUP_SIZE_X 16
-#define GROUP_SIZE_Y 16
-
 [ numthreads( GROUP_SIZE_X, GROUP_SIZE_Y, 1 ) ]
 void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 {
@@ -971,9 +968,6 @@ StructuredBuffer<Material> g_Materials  : register( t17 );
 RWTexture2D<float2> g_SamplePositionTexture : register( u0 );
 RWTexture2D<float3> g_SampleValueTexture    : register( u1 );
 
-#define GROUP_SIZE_X 16
-#define GROUP_SIZE_Y 16
-
 [ numthreads( GROUP_SIZE_X, GROUP_SIZE_Y, 1 ) ]
 void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 {
@@ -1007,7 +1001,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 #elif defined( OUTPUT_BACKFACE )
         l = intersection.backface ? float3( 0.0f, 1.0f, 0.0f ) : float3( 1.0f, 0.0f, 0.0f );
 #elif defined( OUTPUT_ITERATION_COUNT )
-        l = iterationCounter / (float)g_IterationThreshold;
+        l = iterationCounter <= g_IterationThreshold ? iterationCounter / (float)g_IterationThreshold : float3( 1.f, 0.f, 0.f );
 #endif
     }
 

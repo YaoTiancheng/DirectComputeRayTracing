@@ -76,11 +76,10 @@ bool CScene::LoadFromFile( const char* filepath )
         for ( size_t iMesh = meshIndexBase; iMesh < m_Meshes.size(); ++iMesh )
         {
             Mesh& mesh = m_Meshes[ iMesh ];
-            mesh.BuildBVH( nullptr, &reorderedTriangleIndices );
+            mesh.BuildBVH( &reorderedTriangleIndices );
 
             uint32_t BVHMaxDepth = mesh.GetBVHMaxDepth();
-            uint32_t BVHMaxStackSize = mesh.GetBVHMaxStackSize();
-            LOG_STRING_FORMAT( "BLAS created from mesh %d. Node count:%d, max depth:%d, max stack size:%d\n", iMesh, mesh.GetBVHNodeCount(), BVHMaxDepth, BVHMaxStackSize );
+            LOG_STRING_FORMAT( "BLAS created from mesh %d. Node count:%d, depth:%d\n", iMesh, mesh.GetBVHNodeCount(), BVHMaxDepth );
         }
     }
 
@@ -100,19 +99,19 @@ bool CScene::LoadFromFile( const char* filepath )
             BLASInstances.back().m_Transform = m_InstanceTransforms[ iMesh ];
         }
 
-        std::vector<uint32_t> instanceStackSizes;
-        instanceStackSizes.resize( m_InstanceTransforms.size() );
+        std::vector<uint32_t> instanceDepths; // Which depth of the TLAS each instance is at
+        instanceDepths.resize( m_InstanceTransforms.size() );
         reorderedInstanceIndices.resize( m_InstanceTransforms.size() );
         uint32_t BVHMaxDepth = 0;
         uint32_t BVHMaxStackSize = 0;
-        BVHAccel::BuildTLAS( BLASInstances.data(), reorderedInstanceIndices.data(), (uint32_t)m_Meshes.size(), &TLAS, &BVHMaxDepth, &BVHMaxStackSize, instanceStackSizes.data() );
-        LOG_STRING_FORMAT( "TLAS created. Node count:%d, max depth:%d, max stack size:%d\n", TLAS.size(), BVHMaxDepth, BVHMaxStackSize );
+        BVHAccel::BuildTLAS( BLASInstances.data(), reorderedInstanceIndices.data(), (uint32_t)m_Meshes.size(), &TLAS, &BVHMaxDepth, &BVHMaxStackSize, instanceDepths.data() );
+        LOG_STRING_FORMAT( "TLAS created. Node count:%d, depth:%d\n", TLAS.size(), BVHMaxDepth );
 
         uint32_t maxStackSize = 0;
-        for ( uint32_t iInstance = 0; iInstance < (uint32_t)instanceStackSizes.size(); ++iInstance )
+        for ( uint32_t iInstance = 0; iInstance < (uint32_t)instanceDepths.size(); ++iInstance )
         {
             uint32_t originalInstance = reorderedInstanceIndices[ iInstance ];
-            maxStackSize = std::max( maxStackSize, instanceStackSizes[ iInstance ] + m_Meshes[ originalInstance ].GetBVHMaxStackSize() );
+            maxStackSize = std::max( maxStackSize, instanceDepths[ iInstance ] + m_Meshes[ originalInstance ].GetBVHMaxDepth() );
         }
         m_BVHTraversalStackSize = maxStackSize;
         LOG_STRING_FORMAT( "BVH traversal stack size requirement is %d\n", maxStackSize );
@@ -129,6 +128,38 @@ bool CScene::LoadFromFile( const char* filepath )
     }
 
     LOG_STRING_FORMAT( "Total vertex count %d, total index count %d, total BVH node count %d\n", totalVertexCount, totalIndexCount, totalBVHNodeCount );
+
+    if ( CommandLineArgs::Singleton()->GetOutputBVHToFile() )
+    {
+        std::filesystem::path baseDirectory = filepath;
+        baseDirectory.remove_filename();
+        std::string baseDirectoryU8String = baseDirectory.u8string();
+
+        char formattedFilenameBuffer[ MAX_PATH ];
+        uint32_t instanceIndex = 0;
+        for ( auto& index : reorderedInstanceIndices )
+        {
+            const Mesh& mesh = m_Meshes[ index ];
+            sprintf_s( formattedFilenameBuffer, ARRAY_LENGTH( formattedFilenameBuffer ), "%s/BLAS_Instance_%d.xml", baseDirectoryU8String.c_str(), instanceIndex );
+            FILE* file = fopen( formattedFilenameBuffer, "w" );
+            if ( file )
+            {
+                BVHAccel::SerializeBVHToXML( mesh.GetBVHNodes(), file );
+                fclose( file );
+                LOG_STRING_FORMAT( "BLAS written to file %s\n", formattedFilenameBuffer );
+            }
+            ++instanceIndex;
+        }
+
+        sprintf_s( formattedFilenameBuffer, ARRAY_LENGTH( formattedFilenameBuffer ), "%s/TLAS.xml", baseDirectoryU8String.c_str() );
+        FILE* file = fopen( formattedFilenameBuffer, "w" );
+        if ( file )
+        {
+            BVHAccel::SerializeBVHToXML( TLAS.data(), file );
+            fclose( file );
+            LOG_STRING_FORMAT( "TLAS written to file %s\n", formattedFilenameBuffer );
+        }
+    }
 
     const uint32_t s_MaxBVHNodeCount = 2147483647;
     if ( totalBVHNodeCount > s_MaxBVHNodeCount )

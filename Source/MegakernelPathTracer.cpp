@@ -13,6 +13,9 @@
 
 using namespace DirectX;
 
+#define CS_GROUP_SIZE_X 16
+#define CS_GROUP_SIZE_Y 8
+
 struct SRayTracingConstants
 {
     DirectX::XMFLOAT4X4 cameraTransform;
@@ -150,8 +153,8 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
 
     uint32_t dispatchThreadWidth = renderContext.m_IsSmallResolutionEnabled ? renderContext.m_CurrentResolutionWidth : m_TileSize;
     uint32_t dispatchThreadHeight = renderContext.m_IsSmallResolutionEnabled ? renderContext.m_CurrentResolutionHeight : m_TileSize;
-    computeJob.m_DispatchSizeX = (uint32_t)ceil( dispatchThreadWidth / 16.0f );
-    computeJob.m_DispatchSizeY = (uint32_t)ceil( dispatchThreadHeight / 16.0f );
+    computeJob.m_DispatchSizeX = (uint32_t)ceil( dispatchThreadWidth / (float)CS_GROUP_SIZE_X );
+    computeJob.m_DispatchSizeY = (uint32_t)ceil( dispatchThreadHeight / (float)CS_GROUP_SIZE_Y );
     computeJob.m_DispatchSizeZ = 1;
 
     computeJob.Dispatch();
@@ -177,10 +180,14 @@ bool CMegakernelPathTracer::CompileAndCreateRayTracingKernel()
     static const uint32_t s_MaxRadix10IntegerBufferLengh = 12;
     char buffer_TraversalStackSize[ s_MaxRadix10IntegerBufferLengh ];
     _itoa( m_Scene->m_BVHTraversalStackSize, buffer_TraversalStackSize, 10 );
-
     rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_STACK_SIZE", buffer_TraversalStackSize } );
 
-    rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_GROUP_SIZE", "256" } );
+    char buffer_TraversalGroupSize[ s_MaxRadix10IntegerBufferLengh ];
+    _itoa( CS_GROUP_SIZE_X * CS_GROUP_SIZE_Y, buffer_TraversalGroupSize, 10 );
+    rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_GROUP_SIZE", buffer_TraversalGroupSize } );
+
+    rayTracingShaderDefines.push_back( { "GROUP_SIZE_X", DCRT_STRINGIFY_MACRO_VALUE( CS_GROUP_SIZE_X ) } );
+    rayTracingShaderDefines.push_back( { "GROUP_SIZE_Y", DCRT_STRINGIFY_MACRO_VALUE( CS_GROUP_SIZE_Y ) } );
 
     if ( m_Scene->m_IsGGXVNDFSamplingEnabled )
     {

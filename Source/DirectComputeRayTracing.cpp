@@ -84,8 +84,14 @@ struct SRenderer
 
     SRectangle m_RenderViewport;
 
+    bool m_RayTracingHasHit = false;
+    SRayHit m_RayTracingHit;
+    uint32_t m_RayTracingPixelPos[ 2 ] = { 0, 0 };
+    float m_RayTracingSubPixelPos[ 2 ] = { 0.f, 0.f };
+
     uint32_t m_SPP;
     bool m_ShowUI = true;
+    bool m_ShowRayTracingUI = false;
 };
 
 SRenderer* s_Renderer = nullptr;
@@ -527,6 +533,10 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
     {
         m_ShowUI = !m_ShowUI;
     }
+    if ( ImGui::GetIO().KeysDown[ VK_F2 ] && ImGui::GetIO().KeysDownDuration[ VK_F2 ] == 0.0f )
+    {
+        m_ShowRayTracingUI = !m_ShowRayTracingUI;
+    }
 
     if ( !m_ShowUI )
         return;
@@ -962,6 +972,40 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
         ImGui::Text( "Current Resolution: %dx%d", renderContext->m_CurrentResolutionWidth, renderContext->m_CurrentResolutionHeight );
         ImGui::Text( "Average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate );
         ImGui::Text( "SPP: %d", m_SPP );
+        ImGui::End();
+    }
+
+    if ( m_ShowRayTracingUI )
+    {
+        ImGui::Begin( "Ray Tracing Tool" );
+
+        ImGui::InputInt2( "Pixel Position", (int*)m_RayTracingPixelPos );
+        ImGui::DragFloat2( "Sub-pixel Position", (float*)m_RayTracingSubPixelPos, .1f, 0.f, .999999f, "%.6f", ImGuiSliderFlags_AlwaysClamp );
+        if ( ImGui::Button( "Trace" ) )
+        {
+            DirectX::XMFLOAT2 screenPos = { (float)m_RayTracingPixelPos[ 0 ] + m_RayTracingSubPixelPos[ 0 ], (float)m_RayTracingPixelPos[ 1 ] + m_RayTracingSubPixelPos[ 1 ] };
+            screenPos.x /= m_ResolutionWidth;
+            screenPos.y /= m_ResolutionHeight;
+
+            XMVECTOR rayOrigin, rayDirection;
+            m_Scene.ScreenToCameraRay( screenPos, &rayOrigin, &rayDirection );
+            m_RayTracingHasHit = m_Scene.TraceRay( rayOrigin, rayDirection, 0.f, &m_RayTracingHit );
+        }
+
+        if ( m_RayTracingHasHit )
+        {
+            SRayHit* hit = &m_RayTracingHit;
+            char stringBuffer[ 512 ];
+            sprintf_s( stringBuffer, ARRAY_LENGTH( stringBuffer ), "Found hit\nDistance: %f\nCoord: %f %f\nInstance: %d\nMesh index: %d\nMesh: %s\nTriangle: %d"
+                , hit->m_T, hit->m_U, hit->m_V, hit->m_InstanceIndex, hit->m_MeshIndex, m_Scene.m_Meshes[ hit->m_MeshIndex ].GetName().c_str(), hit->m_TriangleIndex );
+            ImGui::InputTextMultiline( "Result", stringBuffer, ARRAY_LENGTH( stringBuffer ), ImVec2( 0, 0 ), ImGuiInputTextFlags_ReadOnly );
+        }
+        else
+        {
+            char stringBuffer[] = "No hit";
+            ImGui::InputText( "Result", stringBuffer, ARRAY_LENGTH( stringBuffer ), ImGuiInputTextFlags_ReadOnly );
+        }
+
         ImGui::End();
     }
 

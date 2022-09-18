@@ -874,6 +874,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                         }
                         if ( CreateMeshAndMaterialsFromWavefrontOBJFile( objFilepath.u8string().c_str(), "", true, MathHelper::s_IdentityMatrix4x4, true, materialId ) )
                         {
+                            m_Meshes.back().SetName( std::string( filenameValue->m_String.data(), filenameValue->m_String.length() ) );
                             meshCreated = true;
                         }
                         else
@@ -888,6 +889,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     Mesh mesh;
                     if ( mesh.GenerateRectangle( materialId, true, MathHelper::s_IdentityMatrix4x4 ) )
                     {
+                        mesh.SetName( "rectangle" );
                         m_Meshes.emplace_back( mesh );
                         meshCreated = true;
                     }

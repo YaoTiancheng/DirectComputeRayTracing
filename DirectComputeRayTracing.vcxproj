@@ -223,6 +223,7 @@
     <ClCompile Include="Source\CommandLineArgs.cpp" />
     <ClCompile Include="Source\ComputeJob.cpp" />
     <ClCompile Include="Source\MathHelper.cpp" />
+    <ClCompile Include="Source\SceneRayTrace.cpp" />
     <ClCompile Include="Source\SceneXMLLoading.cpp" />
     <ClCompile Include="Source\SampleConvolutionRenderer.cpp" />
     <ClCompile Include="Source\D3D11RenderSystem.cpp" />

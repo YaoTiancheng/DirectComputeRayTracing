@@ -46,7 +46,12 @@ public:
 
     std::vector<uint32_t>& GetMaterialIds() { return m_MaterialIds; }
 
+    void SetName( const std::string& name ) { m_Name = name; }
+
+    const std::string& GetName() const { return m_Name; }
+
 private:
+    std::string m_Name;
     std::vector<GPU::Vertex> m_Vertices;
     std::vector<uint32_t> m_Indices;
     std::vector<BVHAccel::BVHNode> m_BVHNodes;

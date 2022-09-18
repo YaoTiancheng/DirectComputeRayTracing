@@ -44,6 +44,16 @@ struct SMaterial
     bool m_HasEmissionTexture;
 };
 
+struct SRayHit
+{
+    float m_T;
+    float m_U;
+    float m_V;
+    uint32_t m_InstanceIndex;
+    uint32_t m_MeshIndex;
+    uint32_t m_TriangleIndex;
+};
+
 struct SSceneObjectSelection
 {
     void SelectLight( int index )
@@ -101,6 +111,10 @@ public:
 
     float CalculateApertureDiameter() const { return m_FocalLength / m_RelativeAperture; }
 
+    bool XM_CALLCONV TraceRay( DirectX::FXMVECTOR origin, DirectX::FXMVECTOR direction, float tMin, SRayHit* outRayHit ) const;
+
+    void ScreenToCameraRay( const DirectX::XMFLOAT2& screenPos, DirectX::XMVECTOR* origin, DirectX::XMVECTOR* direction );
+
     const uint32_t s_MaxRayBounce = 20;
     const uint32_t s_MaxLightsCount = 5000;
     const float s_MaxFocalDistance = 999999.0f;
@@ -143,6 +157,8 @@ public:
     std::vector<SMaterial> m_Materials;
     std::vector<std::string> m_MaterialNames;
     std::vector<Mesh> m_Meshes;
+    std::vector<BVHAccel::BVHNode> m_TLAS;
+    std::vector<uint32_t> m_ReorderedInstanceIndices;
     std::vector<DirectX::XMFLOAT4X3> m_InstanceTransforms;
     uint32_t m_BVHTraversalStackSize;
 

@@ -79,12 +79,11 @@ bool CScene::LoadFromFile( const char* filepath )
             mesh.BuildBVH( &reorderedTriangleIndices );
 
             uint32_t BVHMaxDepth = mesh.GetBVHMaxDepth();
-            LOG_STRING_FORMAT( "BLAS created from mesh %d. Node count:%d, depth:%d\n", iMesh, mesh.GetBVHNodeCount(), BVHMaxDepth );
+            LOG_STRING_FORMAT( "BLAS created from mesh %s. Node count:%d, depth:%d\n", mesh.GetName().c_str(), mesh.GetBVHNodeCount(), BVHMaxDepth );
         }
     }
 
-    std::vector<BVHAccel::BVHNode> TLAS;
-    std::vector<uint32_t> reorderedInstanceIndices;
+    m_TLAS.clear();
     {
         assert( m_Meshes.size() == m_InstanceTransforms.size() ); // For now, mesh count must equal to instance count
         std::vector<BVHAccel::SInstance> BLASInstances;
@@ -101,16 +100,16 @@ bool CScene::LoadFromFile( const char* filepath )
 
         std::vector<uint32_t> instanceDepths; // Which depth of the TLAS each instance is at
         instanceDepths.resize( m_InstanceTransforms.size() );
-        reorderedInstanceIndices.resize( m_InstanceTransforms.size() );
+        m_ReorderedInstanceIndices.resize( m_InstanceTransforms.size() );
         uint32_t BVHMaxDepth = 0;
         uint32_t BVHMaxStackSize = 0;
-        BVHAccel::BuildTLAS( BLASInstances.data(), reorderedInstanceIndices.data(), (uint32_t)m_Meshes.size(), &TLAS, &BVHMaxDepth, &BVHMaxStackSize, instanceDepths.data() );
-        LOG_STRING_FORMAT( "TLAS created. Node count:%d, depth:%d\n", TLAS.size(), BVHMaxDepth );
+        BVHAccel::BuildTLAS( BLASInstances.data(), m_ReorderedInstanceIndices.data(), (uint32_t)m_Meshes.size(), &m_TLAS, &BVHMaxDepth, &BVHMaxStackSize, instanceDepths.data() );
+        LOG_STRING_FORMAT( "TLAS created. Node count:%d, depth:%d\n", m_TLAS.size(), BVHMaxDepth );
 
         uint32_t maxStackSize = 0;
         for ( uint32_t iInstance = 0; iInstance < (uint32_t)instanceDepths.size(); ++iInstance )
         {
-            uint32_t originalInstance = reorderedInstanceIndices[ iInstance ];
+            uint32_t originalInstance = m_ReorderedInstanceIndices[ iInstance ];
             maxStackSize = std::max( maxStackSize, instanceDepths[ iInstance ] + m_Meshes[ originalInstance ].GetBVHMaxDepth() );
         }
         m_BVHTraversalStackSize = maxStackSize;
@@ -119,7 +118,7 @@ bool CScene::LoadFromFile( const char* filepath )
 
     uint32_t totalVertexCount = 0;
     uint32_t totalIndexCount = 0;
-    uint32_t totalBVHNodeCount = (uint32_t)TLAS.size();
+    uint32_t totalBVHNodeCount = (uint32_t)m_TLAS.size();
     for ( auto& mesh : m_Meshes )
     {
         totalVertexCount += mesh.GetVertexCount();
@@ -137,7 +136,7 @@ bool CScene::LoadFromFile( const char* filepath )
 
         char formattedFilenameBuffer[ MAX_PATH ];
         uint32_t instanceIndex = 0;
-        for ( auto& index : reorderedInstanceIndices )
+        for ( auto& index : m_ReorderedInstanceIndices )
         {
             const Mesh& mesh = m_Meshes[ index ];
             sprintf_s( formattedFilenameBuffer, ARRAY_LENGTH( formattedFilenameBuffer ), "%s/BLAS_Instance_%d.xml", baseDirectoryU8String.c_str(), instanceIndex );
@@ -155,7 +154,7 @@ bool CScene::LoadFromFile( const char* filepath )
         FILE* file = fopen( formattedFilenameBuffer, "w" );
         if ( file )
         {
-            BVHAccel::SerializeBVHToXML( TLAS.data(), file );
+            BVHAccel::SerializeBVHToXML( m_TLAS.data(), file );
             fclose( file );
             LOG_STRING_FORMAT( "TLAS written to file %s\n", formattedFilenameBuffer );
         }
@@ -239,9 +238,9 @@ bool CScene::LoadFromFile( const char* filepath )
         std::vector<uint32_t> BLASNodeIndexOffsets;
         BLASNodeIndexOffsets.reserve( m_Meshes.size() );
 
-        GPU::BVHNode* dest = BVHNodes.data() + TLAS.size();
+        GPU::BVHNode* dest = BVHNodes.data() + m_TLAS.size();
         uint32_t triangleIndexOffset = 0;
-        uint32_t nodeIndexOffset = (uint32_t)TLAS.size();
+        uint32_t nodeIndexOffset = (uint32_t)m_TLAS.size();
         for ( auto& mesh : m_Meshes )
         {
             BVHAccel::PackBVH( mesh.GetBVHNodes(), mesh.GetBVHNodeCount(), true, dest, nodeIndexOffset, triangleIndexOffset );
@@ -252,13 +251,14 @@ bool CScene::LoadFromFile( const char* filepath )
         }
 
         // Make the TLAS point to the BLASes
+        std::vector<BVHAccel::BVHNode> TLAS = m_TLAS; // we make a copy here so the original TLAS could be used for CPU ray trace
         for ( auto& node : TLAS )
         {
             if ( node.m_PrimCount > 0 )
             {
                 uint32_t primIndex = node.m_PrimIndex;
                 assert( node.m_PrimCount == 1 );
-                uint32_t originalPrimIndex = reorderedInstanceIndices[ primIndex ];
+                uint32_t originalPrimIndex = m_ReorderedInstanceIndices[ primIndex ];
                 node.m_ChildIndex = BLASNodeIndexOffsets[ originalPrimIndex ];
                 node.m_InstanceIndex = primIndex;
             }
@@ -323,7 +323,7 @@ bool CScene::LoadFromFile( const char* filepath )
         DirectX::XMFLOAT4X3* dest = instanceTransforms.data();
         for ( uint32_t i = 0; i < (uint32_t)m_InstanceTransforms.size(); ++i )
         {
-            const DirectX::XMFLOAT4X3& transform = m_InstanceTransforms[ reorderedInstanceIndices[ i ] ];
+            const DirectX::XMFLOAT4X3& transform = m_InstanceTransforms[ m_ReorderedInstanceIndices[ i ] ];
             *dest = DirectX::XMFLOAT4X3( transform._11, transform._21, transform._31, transform._41, transform._12, transform._22, transform._32, transform._42, transform._13, transform._23, transform._33, transform._43 );
             ++dest;
         }
@@ -331,7 +331,7 @@ bool CScene::LoadFromFile( const char* filepath )
         DirectX::XMFLOAT4X3 rowMajorMatrix;
         for ( uint32_t i = 0; i < (uint32_t)m_InstanceTransforms.size(); ++i )
         {
-            const DirectX::XMFLOAT4X3& transform = m_InstanceTransforms[ reorderedInstanceIndices[ i ] ];
+            const DirectX::XMFLOAT4X3& transform = m_InstanceTransforms[ m_ReorderedInstanceIndices[ i ] ];
             DirectX::XMMATRIX vMatrix = DirectX::XMLoadFloat4x3( &transform );
             DirectX::XMVECTOR vDet;
             vMatrix = DirectX::XMMatrixInverse( &vDet, vMatrix );
@@ -421,6 +421,8 @@ void CScene::Reset()
     m_Lights.clear();
     m_Materials.clear();
     m_MaterialNames.clear();
+    m_TLAS.clear();
+    m_ReorderedInstanceIndices.clear();
     m_InstanceTransforms.clear();
 
     m_HasValidScene = false;

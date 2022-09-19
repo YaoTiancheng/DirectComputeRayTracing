@@ -91,7 +91,7 @@ struct SRenderer
 
     uint32_t m_SPP;
     uint32_t m_CursorPixelPosOnRenderViewport[ 2 ];
-	uint32_t m_CursorPixelPosOnFilm[ 2 ];
+    uint32_t m_CursorPixelPosOnFilm[ 2 ];
     bool m_ShowUI = true;
     bool m_ShowRayTracingUI = false;
 };
@@ -982,10 +982,10 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
             ::ScreenToClient( m_hWnd, &pos );
 
             m_CursorPixelPosOnRenderViewport[ 0 ] = (uint32_t)std::clamp<int>( (int)pos.x - (int)m_RenderViewport.m_TopLeftX, 0, (int)m_RenderViewport.m_Width );
-			m_CursorPixelPosOnRenderViewport[ 1 ] = (uint32_t)std::clamp<int>( (int)pos.y - (int)m_RenderViewport.m_TopLeftY, 0, (int)m_RenderViewport.m_Height );
+            m_CursorPixelPosOnRenderViewport[ 1 ] = (uint32_t)std::clamp<int>( (int)pos.y - (int)m_RenderViewport.m_TopLeftY, 0, (int)m_RenderViewport.m_Height );
 
             float filmPixelPerRenderViewportPixelX = (float)m_ResolutionWidth / m_RenderViewport.m_Width;
-			float filmPixelPerRenderViewportPixelY = (float)m_ResolutionHeight / m_RenderViewport.m_Height;
+            float filmPixelPerRenderViewportPixelY = (float)m_ResolutionHeight / m_RenderViewport.m_Height;
             m_CursorPixelPosOnFilm[ 0 ] = (uint32_t)std::floorf( filmPixelPerRenderViewportPixelX * m_CursorPixelPosOnRenderViewport[ 0 ] );
             m_CursorPixelPosOnFilm[ 1 ] = (uint32_t)std::floorf( filmPixelPerRenderViewportPixelY * m_CursorPixelPosOnRenderViewport[ 1 ] );
 

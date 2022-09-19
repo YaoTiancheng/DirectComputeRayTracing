@@ -90,6 +90,8 @@ struct SRenderer
     float m_RayTracingSubPixelPos[ 2 ] = { 0.f, 0.f };
 
     uint32_t m_SPP;
+    uint32_t m_CursorPixelPosOnRenderViewport[ 2 ];
+	uint32_t m_CursorPixelPosOnFilm[ 2 ];
     bool m_ShowUI = true;
     bool m_ShowRayTracingUI = false;
 };
@@ -969,9 +971,28 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
     {
         ImGui::Begin( "Render Stats." );
 
-        ImGui::Text( "Current Resolution: %dx%d", renderContext->m_CurrentResolutionWidth, renderContext->m_CurrentResolutionHeight );
+        ImGui::Text( "Film Resolution: %dx%d", renderContext->m_CurrentResolutionWidth, renderContext->m_CurrentResolutionHeight );
+        ImGui::Text( "Render Viewport: %dx%d", m_RenderViewport.m_Width, m_RenderViewport.m_Height );
         ImGui::Text( "Average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate );
         ImGui::Text( "SPP: %d", m_SPP );
+
+        {
+            POINT pos;
+            ::GetCursorPos( &pos );
+            ::ScreenToClient( m_hWnd, &pos );
+
+            m_CursorPixelPosOnRenderViewport[ 0 ] = (uint32_t)std::clamp<int>( (int)pos.x - (int)m_RenderViewport.m_TopLeftX, 0, (int)m_RenderViewport.m_Width );
+			m_CursorPixelPosOnRenderViewport[ 1 ] = (uint32_t)std::clamp<int>( (int)pos.y - (int)m_RenderViewport.m_TopLeftY, 0, (int)m_RenderViewport.m_Height );
+
+            float filmPixelPerRenderViewportPixelX = (float)m_ResolutionWidth / m_RenderViewport.m_Width;
+			float filmPixelPerRenderViewportPixelY = (float)m_ResolutionHeight / m_RenderViewport.m_Height;
+            m_CursorPixelPosOnFilm[ 0 ] = (uint32_t)std::floorf( filmPixelPerRenderViewportPixelX * m_CursorPixelPosOnRenderViewport[ 0 ] );
+            m_CursorPixelPosOnFilm[ 1 ] = (uint32_t)std::floorf( filmPixelPerRenderViewportPixelY * m_CursorPixelPosOnRenderViewport[ 1 ] );
+
+            ImGui::Text( "Cursor Pos (Render Viewport): %d %d", m_CursorPixelPosOnRenderViewport[ 0 ], m_CursorPixelPosOnRenderViewport[ 1 ] );
+            ImGui::Text( "Cursor Pos (Film): %d %d", m_CursorPixelPosOnFilm[ 0 ], m_CursorPixelPosOnFilm[ 1 ] );
+        }
+
         ImGui::End();
     }
 

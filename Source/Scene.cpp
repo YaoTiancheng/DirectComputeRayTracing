@@ -139,7 +139,7 @@ bool CScene::LoadFromFile( const char* filepath )
         for ( auto& index : m_ReorderedInstanceIndices )
         {
             const Mesh& mesh = m_Meshes[ index ];
-            sprintf_s( formattedFilenameBuffer, ARRAY_LENGTH( formattedFilenameBuffer ), "%s/BLAS_Instance_%d.xml", baseDirectoryU8String.c_str(), instanceIndex );
+            sprintf_s( formattedFilenameBuffer, ARRAY_LENGTH( formattedFilenameBuffer ), "%s/BLAS_Instance_%d_%s.xml", baseDirectoryU8String.c_str(), instanceIndex, mesh.GetName().c_str() );
             FILE* file = fopen( formattedFilenameBuffer, "w" );
             if ( file )
             {

@@ -427,7 +427,7 @@ void SerializeBVHToXML( const BVHNode* rootNode, FILE* file )
     {
         if ( currentNode.node->m_PrimCount != 0 )
         {
-            fprintf( file, "<Node Center=\"%.2f,%.2f,%.2f\" Extents=\"%.2f,%.2f,%.2f\" PrimIndex=\"%d\" PrimCount=\"%d\"/>\n",
+            fprintf( file, "<Node Center=\"%.4f,%.4f,%.4f\" Extents=\"%.4f,%.4f,%.4f\" PrimIndex=\"%d\" PrimCount=\"%d\"/>\n",
                 currentNode.node->m_BoundingBox.Center.x,
                 currentNode.node->m_BoundingBox.Center.y,
                 currentNode.node->m_BoundingBox.Center.z,
@@ -467,7 +467,7 @@ void SerializeBVHToXML( const BVHNode* rootNode, FILE* file )
         }
         else
         {
-            fprintf( file, "<Node Center=\"%.2f,%.2f,%.2f\" Extents=\"%.2f,%.2f,%.2f\" ChildIndex=\"%d\" SplitAxis=\"%d\">\n",
+            fprintf( file, "<Node Center=\"%.4f,%.4f,%.4f\" Extents=\"%.4f,%.4f,%.4f\" ChildIndex=\"%d\" SplitAxis=\"%d\">\n",
                 currentNode.node->m_BoundingBox.Center.x,
                 currentNode.node->m_BoundingBox.Center.y,
                 currentNode.node->m_BoundingBox.Center.z,

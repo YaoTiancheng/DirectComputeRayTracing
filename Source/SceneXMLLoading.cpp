@@ -874,7 +874,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                         }
                         if ( CreateMeshAndMaterialsFromWavefrontOBJFile( objFilepath.u8string().c_str(), "", true, MathHelper::s_IdentityMatrix4x4, true, materialId ) )
                         {
-                            m_Meshes.back().SetName( std::string( filenameValue->m_String.data(), filenameValue->m_String.length() ) );
+                            m_Meshes.back().SetName( objFilepath.stem().u8string() );
                             meshCreated = true;
                         }
                         else

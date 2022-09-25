@@ -15,7 +15,7 @@ uint BVHNodeHasBLAS( BVHNode node )
 
 uint BVHNodeGetSplitAxis( BVHNode node )
 {
-    return node.misc & 0x600;
+    return ( node.misc >> 9 ) & 0x3;
 }
 
 struct BVHTraversalStack

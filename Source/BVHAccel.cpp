@@ -416,18 +416,20 @@ void SerializeBVHToXML( const BVHNode* rootNode, FILE* file )
     {
         const BVHNode* node;
         bool isLeftChild;
+        uint32_t nodeIndex;
     };
 
     std::stack<TraversalNode> stack;
 
     fprintf( file, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" );
 
-    TraversalNode currentNode = { rootNode, false };
+    TraversalNode currentNode = { rootNode, false, 0 };
     while ( true )
     {
         if ( currentNode.node->m_PrimCount != 0 )
         {
-            fprintf( file, "<Node Center=\"%.4f,%.4f,%.4f\" Extents=\"%.4f,%.4f,%.4f\" PrimIndex=\"%d\" PrimCount=\"%d\"/>\n",
+            fprintf( file, "<Node Index=\"%d\" Center=\"%.4f,%.4f,%.4f\" Extents=\"%.4f,%.4f,%.4f\" PrimIndex=\"%d\" PrimCount=\"%d\"/>\n",
+                currentNode.nodeIndex,
                 currentNode.node->m_BoundingBox.Center.x,
                 currentNode.node->m_BoundingBox.Center.y,
                 currentNode.node->m_BoundingBox.Center.z,
@@ -439,7 +441,7 @@ void SerializeBVHToXML( const BVHNode* rootNode, FILE* file )
 
             if ( currentNode.isLeftChild )
             {
-                currentNode = { &rootNode[ stack.top().node->m_ChildIndex ], false };
+                currentNode = { &rootNode[ stack.top().node->m_ChildIndex ], false, stack.top().node->m_ChildIndex };
                 continue;
             }
             else
@@ -456,7 +458,7 @@ void SerializeBVHToXML( const BVHNode* rootNode, FILE* file )
 
                 if ( !stack.empty() )
                 {
-                    currentNode = { &rootNode[ stack.top().node->m_ChildIndex ], false };
+                    currentNode = { &rootNode[ stack.top().node->m_ChildIndex ], false, stack.top().node->m_ChildIndex };
                     continue;
                 }
                 else
@@ -467,7 +469,8 @@ void SerializeBVHToXML( const BVHNode* rootNode, FILE* file )
         }
         else
         {
-            fprintf( file, "<Node Center=\"%.4f,%.4f,%.4f\" Extents=\"%.4f,%.4f,%.4f\" ChildIndex=\"%d\" SplitAxis=\"%d\">\n",
+            fprintf( file, "<Node Index=\"%d\" Center=\"%.4f,%.4f,%.4f\" Extents=\"%.4f,%.4f,%.4f\" ChildIndex=\"%d\" SplitAxis=\"%d\">\n",
+                currentNode.nodeIndex,
                 currentNode.node->m_BoundingBox.Center.x,
                 currentNode.node->m_BoundingBox.Center.y,
                 currentNode.node->m_BoundingBox.Center.z,
@@ -478,7 +481,7 @@ void SerializeBVHToXML( const BVHNode* rootNode, FILE* file )
                 currentNode.node->m_SplitAxis );
 
             stack.push( currentNode );
-            currentNode = { currentNode.node + 1, true };
+            currentNode = { currentNode.node + 1, true, currentNode.nodeIndex + 1 };
         }
     }
 }

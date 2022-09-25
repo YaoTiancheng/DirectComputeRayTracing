@@ -357,6 +357,8 @@ bool SRenderer::LoadScene( const char* filepath, bool reset )
     m_IsMaterialGPUBufferDirty = true;
     m_IsLightGPUBufferDirty = true;
 
+    m_RayTracingHasHit = false;
+
     return true;
 }
 

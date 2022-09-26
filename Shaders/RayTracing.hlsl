@@ -1000,10 +1000,11 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
         l = dot( -wo, intersection.normal ) < 0.0f ? float3( 0.0f, 1.0f, 0.0f ) : float3( 1.0f, 0.0f, 0.0f );
 #elif defined( OUTPUT_BACKFACE )
         l = intersection.backface ? float3( 0.0f, 1.0f, 0.0f ) : float3( 1.0f, 0.0f, 0.0f );
-#elif defined( OUTPUT_ITERATION_COUNT )
-        l = iterationCounter <= g_IterationThreshold ? iterationCounter / (float)g_IterationThreshold : float3( 1.f, 0.f, 0.f );
 #endif
     }
+#if defined( OUTPUT_ITERATION_COUNT )
+    l = iterationCounter <= g_IterationThreshold ? iterationCounter / (float)g_IterationThreshold : float3( 1.f, 0.f, 0.f );
+#endif
 
     WriteSample( l, pixelSample, pixelPos, g_SamplePositionTexture, g_SampleValueTexture );
 }

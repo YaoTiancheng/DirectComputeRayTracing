@@ -194,7 +194,7 @@ bool CScene::TraceRay( FXMVECTOR origin, FXMVECTOR direction, float tMin, SRayHi
 
 void CScene::ScreenToCameraRay( const DirectX::XMFLOAT2& screenPos, DirectX::XMVECTOR* origin, DirectX::XMVECTOR* direction )
 {
-    XMFLOAT3A scalarFilmPos = XMFLOAT3A( -screenPos.x + .5f, screenPos.y - .5f, CalculateFilmDistance() );
+    XMFLOAT3A scalarFilmPos = XMFLOAT3A( screenPos.x - .5f, -screenPos.y + .5f, CalculateFilmDistance() );
     scalarFilmPos.x *= m_FilmSize.x;
     scalarFilmPos.y *= m_FilmSize.y;
 

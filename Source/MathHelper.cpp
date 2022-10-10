@@ -3,7 +3,8 @@
 
 using namespace DirectX;
 
-const XMFLOAT4X4 MathHelper::s_IdentityMatrix = XMFLOAT4X4( 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f );
+const XMFLOAT4X4 MathHelper::s_IdentityMatrix4x4 = XMFLOAT4X4( 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f );
+const XMFLOAT4X3 MathHelper::s_IdentityMatrix4x3 = XMFLOAT4X3( 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f );
 
 XMFLOAT3 MathHelper::MatrixRotationToRollPitchYall( const XMFLOAT3X3& matrix )
 {

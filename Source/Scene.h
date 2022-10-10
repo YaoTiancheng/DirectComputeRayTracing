@@ -1,5 +1,6 @@
 #pragma once
 
+#include "BVHAccel.h"
 #include "Camera.h"
 #include "Mesh.h"
 #include "../Shaders/Material.inc.hlsl"
@@ -28,11 +29,29 @@ struct SLight
     ELightType lightType;
 };
 
-struct STriangleLight
+struct SMaterial
 {
-    uint32_t m_TriangleId;
-    DirectX::XMFLOAT3 m_Radiance;
-    float m_InvSurfaceArea;
+    DirectX::XMFLOAT3 m_Albedo;
+    DirectX::XMFLOAT3 m_Emission;
+    float m_Roughness;
+    DirectX::XMFLOAT3 m_IOR;
+    DirectX::XMFLOAT3 m_K;
+    float m_Transmission;
+    DirectX::XMFLOAT2 m_Tiling;
+    bool m_IsMetal;
+    bool m_HasAlbedoTexture;
+    bool m_HasRoughnessTexture;
+    bool m_HasEmissionTexture;
+};
+
+struct SRayHit
+{
+    float m_T;
+    float m_U;
+    float m_V;
+    uint32_t m_InstanceIndex;
+    uint32_t m_MeshIndex;
+    uint32_t m_TriangleIndex;
 };
 
 struct SSceneObjectSelection
@@ -82,7 +101,7 @@ public:
 
     float GetFilmDistance() const;
 
-    uint32_t GetLightCount() const { return (uint32_t)( m_Lights.size() + m_TriangleLights.size() ); }
+    uint32_t GetLightCount() const { return (uint32_t)m_Lights.size(); }
 
     float CalculateFocalDistance() const;
 
@@ -92,6 +111,10 @@ public:
 
     float CalculateApertureDiameter() const { return m_FocalLength / m_RelativeAperture; }
 
+    bool XM_CALLCONV TraceRay( DirectX::FXMVECTOR origin, DirectX::FXMVECTOR direction, float tMin, SRayHit* outRayHit ) const;
+
+    void ScreenToCameraRay( const DirectX::XMFLOAT2& screenPos, DirectX::XMVECTOR* origin, DirectX::XMVECTOR* direction );
+
     const uint32_t s_MaxRayBounce = 20;
     const uint32_t s_MaxLightsCount = 5000;
     const float s_MaxFocalDistance = 999999.0f;
@@ -100,6 +123,8 @@ private:
     bool LoadFromWavefrontOBJFile( const char* filepath );
 
     bool LoadFromXMLFile( const std::filesystem::path& filepath );
+
+    bool CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, const char* MTLBaseDir, bool applyTransform, const DirectX::XMFLOAT4X4& transform, bool changeWindingOrder, uint32_t materialIdOverride );
 
 public:
     std::string m_EnvironmentImageFilepath;
@@ -124,13 +149,18 @@ public:
     uint32_t m_LanczosSincTau = 3;
 
     bool m_HasValidScene = false;
-    bool m_IsBVHDisabled;
+    bool m_TraverseBVHFrontToBack = true;
     bool m_IsGGXVNDFSamplingEnabled = true;
 
     Camera m_Camera;
     std::vector<SLight> m_Lights;
-    std::vector<STriangleLight> m_TriangleLights;
-    Mesh m_Mesh;
+    std::vector<SMaterial> m_Materials;
+    std::vector<std::string> m_MaterialNames;
+    std::vector<Mesh> m_Meshes;
+    std::vector<BVHAccel::BVHNode> m_TLAS;
+    std::vector<uint32_t> m_ReorderedInstanceIndices;
+    std::vector<DirectX::XMFLOAT4X3> m_InstanceTransforms;
+    uint32_t m_BVHTraversalStackSize;
 
     GPUTexturePtr m_EnvironmentTexture;
     GPUBufferPtr m_VerticesBuffer;
@@ -139,6 +169,7 @@ public:
     GPUBufferPtr m_LightsBuffer;
     GPUBufferPtr m_MaterialIdsBuffer;
     GPUBufferPtr m_MaterialsBuffer;
+    GPUBufferPtr m_InstanceTransformsBuffer;
 
     SSceneObjectSelection m_ObjectSelection;
 };

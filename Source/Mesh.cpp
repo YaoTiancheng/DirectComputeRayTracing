@@ -2,8 +2,6 @@
 #include "Mesh.h"
 #include "Logging.h"
 #include "Constants.h"
-#define TINYOBJLOADER_IMPLEMENTATION
-#include "OBJLoader/tiny_obj_loader.h"
 #include "MikkTSpace/mikktspace.h"
 
 inline void hash_combine( std::size_t& seed ) { }
@@ -151,19 +149,8 @@ static bool GenerateTangentVectorsForMesh( const tinyobj::attrib_t& attrib, cons
     return genTangSpaceDefault( context );
 }
 
-bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool applyTransform, const DirectX::XMFLOAT4X4& transform, uint32_t materialIdOverride )
+bool Mesh::CreateFromWavefrontOBJData( const tinyobj::attrib_t& attrib, const std::vector<tinyobj::shape_t>& shapes, uint32_t materialIdBase, bool applyTransform, const DirectX::XMFLOAT4X4& transform, bool changeWindingOrder, uint32_t materialIdOverride )
 {
-    tinyobj::attrib_t attrib;
-    std::vector<tinyobj::shape_t> shapes;
-    std::vector<tinyobj::material_t> materials;
-    std::string warn;
-    std::string err;
-    bool loadSuccessful = tinyobj::LoadObj( &attrib, &shapes, &materials, &warn, &err, filename, mtlFileDir );
-    if ( !loadSuccessful )
-    {
-        return false;
-    }
-
     std::unordered_map<SVertexKey, uint32_t> vertexKeyToVertexIndexMap;
 
     size_t normalCount = attrib.normals.size() / 3;
@@ -195,9 +182,14 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool a
         vNormalTransform = XMMatrixTranspose( XMMatrixInverse( &vDet, vTransform ) );
     }
 
+    // For winding order selection
+    const int originalTriangleIndices[ 3 ] = { 0, 1, 2 };
+    const int changedTriangleIndices[ 3 ] = { 0, 2, 1 };
+    const int* triangleIndices = changeWindingOrder ? changedTriangleIndices : originalTriangleIndices;
+
     for ( size_t iShapes = 0; iShapes < shapes.size(); ++iShapes )
     {
-        tinyobj::mesh_t& mesh = shapes[ iShapes ].mesh;
+        const tinyobj::mesh_t& mesh = shapes[ iShapes ].mesh;
 
         assert( mesh.num_face_vertices.size() == mesh.material_ids.size() );
 
@@ -230,16 +222,7 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool a
             if ( !hasMaterialOverride )
             {
                 int materialId = mesh.material_ids[ iFace ];
-                // If the triangle has a material id out of range then assign a default material for it.
-                if ( materialId < 0 || materialId >= materials.size() )
-                {
-                    materialId = (int)materials.size();
-                    if ( !needDefaultMaterial )
-                    {
-                        needDefaultMaterial = true;
-                    }
-                }
-                m_MaterialIds.push_back( uint32_t( m_Materials.size() + materialId ) );
+                m_MaterialIds.push_back( materialId != -1 ? materialIdBase + uint32_t( materialId ) : INVALID_MATERIAL_ID );
             }
             else
             {
@@ -248,12 +231,12 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool a
 
             for ( int iVertex = 0; iVertex < 3; ++iVertex )
             {
-                tinyobj::index_t idx = mesh.indices[ iFace * 3 + iVertex ];
+                tinyobj::index_t idx = mesh.indices[ iFace * 3 + triangleIndices[ iVertex ] ];
 
                 if ( idx.vertex_index == -1 || idx.normal_index == -1 )
                     return false;
 
-                XMFLOAT3 tangent = tangents[ iFace * 3 + iVertex ];
+                XMFLOAT3 tangent = tangents[ iFace * 3 + triangleIndices[ iVertex ] ];
 
                 SVertexKey vertexKey = { idx, tangent };
                 uint32_t vertexIndex = 0;
@@ -296,47 +279,6 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool a
         }
     }
 
-    if ( !hasMaterialOverride )
-    {
-        m_Materials.reserve( m_Materials.size() + materials.size() );
-        m_MaterialNames.reserve( m_MaterialNames.size() + materials.size() );
-        for ( auto& iterSrcMat : materials )
-        {
-            SMaterialSetting dstMat;
-            dstMat.m_Albedo = DirectX::XMFLOAT3( iterSrcMat.diffuse[ 0 ], iterSrcMat.diffuse[ 1 ], iterSrcMat.diffuse[ 2 ] );
-            dstMat.m_Emission = DirectX::XMFLOAT3( iterSrcMat.emission[ 0 ], iterSrcMat.emission[ 1 ], iterSrcMat.emission[ 2 ] );
-            dstMat.m_Roughness = iterSrcMat.roughness;
-            dstMat.m_IOR = XMFLOAT3( std::clamp( iterSrcMat.ior, 1.0f, MAX_MATERIAL_IOR ), 1.f, 1.f );
-            dstMat.m_K = XMFLOAT3( 1.0f, 1.0f, 1.0f );
-            dstMat.m_Transmission = 1.0f - iterSrcMat.dissolve;
-            dstMat.m_Tiling = XMFLOAT2( 1.0f, 1.0f );
-            dstMat.m_IsMetal = false;
-            dstMat.m_HasAlbedoTexture = false;
-            dstMat.m_HasEmissionTexture = false;
-            dstMat.m_HasRoughnessTexture = false;
-            m_Materials.emplace_back( dstMat );
-            m_MaterialNames.emplace_back( iterSrcMat.name );
-        }
-
-        if ( needDefaultMaterial )
-        {
-            SMaterialSetting defaultMat;
-            defaultMat.m_Albedo = DirectX::XMFLOAT3( 1.0f, 0.0f, 1.0f );
-            defaultMat.m_Emission = DirectX::XMFLOAT3( 0.0f, 0.0f, 0.0f );
-            defaultMat.m_Roughness = 1.0f;
-            defaultMat.m_IOR = XMFLOAT3( 1.5f, 1.f, 1.f );
-            defaultMat.m_K = XMFLOAT3( 1.0f, 1.0f, 1.0f );
-            defaultMat.m_Transmission = 0.0f;
-            defaultMat.m_Tiling = XMFLOAT2( 1.0f, 1.0f );
-            defaultMat.m_IsMetal = false;
-            defaultMat.m_HasAlbedoTexture = false;
-            defaultMat.m_HasEmissionTexture = false;
-            defaultMat.m_HasRoughnessTexture = false;
-            m_Materials.emplace_back( defaultMat );
-            m_MaterialNames.emplace_back( "Default Material" );
-        }
-    }
-
     return true;
 }
 
@@ -351,7 +293,7 @@ bool Mesh::GenerateRectangle( uint32_t materialId, bool applyTransform, const Di
             , { { -1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } }
             , { { -1.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 1.0f } }
         };
-        uint32_t indices[ 6 ] = { 0, 3, 1, 1, 3, 2 };
+        uint32_t indices[ 6 ] = { 0, 1, 3, 1, 2, 3 }; // Front face winding order CCW
 
         uint32_t indexBase = GetVertexCount();
 
@@ -392,40 +334,26 @@ bool Mesh::GenerateRectangle( uint32_t materialId, bool applyTransform, const Di
     }
 }
 
-void Mesh::BuildBVH( const char* BVHFilename, std::vector<uint32_t>* reorderedTriangleIds )
+void Mesh::BuildBVH( std::vector<uint32_t>* reorderedTriangleIndices )
 {
     std::vector<uint32_t> indices = m_Indices;
-    std::vector<uint32_t> triangleIds;
-    std::vector<uint32_t>* reorderedTriangleIdsUsed = reorderedTriangleIds;
-    if ( !reorderedTriangleIds )
+    std::vector<uint32_t> triangleIndices;
+    std::vector<uint32_t>* reorderedTriangleIndicesUsed = reorderedTriangleIndices;
+    if ( !reorderedTriangleIndices )
     {
-        reorderedTriangleIdsUsed = &triangleIds;
+        reorderedTriangleIndicesUsed = &triangleIndices;
     }
-    reorderedTriangleIdsUsed->resize( GetTriangleCount() );
-    std::vector<UnpackedBVHNode> BVHNodes;
-    ::BuildBVH( m_Vertices.data(), indices.data(), m_Indices.data(), reorderedTriangleIdsUsed->data(), GetTriangleCount(), &BVHNodes, &m_BVHMaxDepth, &m_BVHMaxStackSize );
+    reorderedTriangleIndicesUsed->resize( GetTriangleCount() );
+    BVHAccel::BuildBLAS( m_Vertices.data(), indices.data(), m_Indices.data(), reorderedTriangleIndicesUsed->data(), GetTriangleCount(), &m_BVHNodes, &m_BVHMaxDepth, &m_BVHMaxStackSize );
 
     // Reorder material id
     {
         std::vector<uint32_t> materialIds = m_MaterialIds;
         for ( size_t i = 0; i < materialIds.size(); ++i )
         {
-            m_MaterialIds[ i ] = materialIds[ (*reorderedTriangleIdsUsed)[ i ] ];
+            m_MaterialIds[ i ] = materialIds[ (*reorderedTriangleIndicesUsed)[ i ] ];
         }
     }
-
-    if ( BVHFilename && BVHFilename[ 0 ] != '\0' )
-    {
-        FILE* file = fopen( BVHFilename, "w" );
-        if ( file )
-        {
-            SerializeBVHToXML( BVHNodes.data(), file );
-            fclose( file );
-        }
-    }
-
-    m_BVHNodes.resize( BVHNodes.size() );
-    ::PackBVH( BVHNodes.data(), uint32_t( BVHNodes.size() ), m_BVHNodes.data() );
 }
 
 void Mesh::Clear()
@@ -433,8 +361,6 @@ void Mesh::Clear()
     m_Vertices.clear();
     m_Indices.clear();
     m_MaterialIds.clear();
-    m_MaterialNames.clear();
-    m_Materials.clear();
     m_BVHNodes.clear();
     m_BVHMaxDepth = 0;
     m_BVHMaxStackSize = 0;

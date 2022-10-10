@@ -73,7 +73,6 @@ private:
     GPUBufferPtr m_ControlConstantBuffer;
     GPUBufferPtr m_NewPathConstantBuffer;
     GPUBufferPtr m_MaterialConstantBuffer;
-    GPUBufferPtr m_RayCastConstantBuffer;
 
     static const uint32_t s_QueueCounterStagingBufferCount = 2;
     GPUBufferPtr m_QueueCounterStagingBuffer[ s_QueueCounterStagingBufferCount ];

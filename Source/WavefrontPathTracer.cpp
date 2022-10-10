@@ -51,12 +51,6 @@ struct SMaterialConstants
     uint32_t padding[ 3 ];
 };
 
-struct SRayCastConstants
-{
-    uint32_t g_PrimitiveCount;
-    uint32_t padding[ 3 ];
-};
-
 bool CWavefrontPathTracer::Create()
 {
     m_RayBuffer.reset( GPUBuffer::CreateStructured(
@@ -68,8 +62,8 @@ bool CWavefrontPathTracer::Create()
         return false;
 
     m_RayHitBuffer.reset( GPUBuffer::CreateStructured(
-          s_PathPoolLaneCount * 16
-        , 16
+          s_PathPoolLaneCount * 20
+        , 20
         , D3D11_USAGE_DEFAULT
         , D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS ) );
     if ( !m_RayHitBuffer )
@@ -227,16 +221,6 @@ bool CWavefrontPathTracer::Create()
     if ( !m_MaterialConstantBuffer )
         return false;
 
-    m_RayCastConstantBuffer.reset( GPUBuffer::Create(
-          sizeof( SRayCastConstants )
-        , 0
-        , DXGI_FORMAT_UNKNOWN
-        , D3D11_USAGE_DYNAMIC
-        , D3D11_BIND_CONSTANT_BUFFER
-        , GPUResourceCreationFlags_CPUWriteable ) );
-    if ( !m_RayCastConstantBuffer )
-        return false;
-
     return true;
 }
 
@@ -273,7 +257,6 @@ void CWavefrontPathTracer::Destroy()
     m_ControlConstantBuffer.reset();
     m_NewPathConstantBuffer.reset();
     m_MaterialConstantBuffer.reset();
-    m_RayCastConstantBuffer.reset();
 
     for ( uint32_t i = 0; i < (uint32_t)EShaderKernel::_Count; ++i )
     {
@@ -352,14 +335,6 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SR
         SMaterialConstants* constants = (SMaterialConstants*)address;
         constants->g_LightCount = m_Scene->GetLightCount();
         m_MaterialConstantBuffer->Unmap();
-    }
-
-    // Fill raycast constant buffer
-    if ( void* address = m_RayCastConstantBuffer->Map() )
-    {
-        SRayCastConstants* constants = (SRayCastConstants*)address;
-        constants->g_PrimitiveCount = (uint32_t)m_Scene->m_Mesh.GetTriangleCount();
-        m_RayCastConstantBuffer->Unmap();
     }
 
     if ( m_NewImage )
@@ -452,19 +427,19 @@ bool CWavefrontPathTracer::CompileAndCreateShader( EShaderKernel kernel )
 
     static const uint32_t s_MaxRadix10IntegerBufferLengh = 12;
     char buffer_TraversalStackSize[ s_MaxRadix10IntegerBufferLengh ];
-    _itoa( m_Scene->m_Mesh.GetBVHMaxStackSize(), buffer_TraversalStackSize, 10 );
+    _itoa( m_Scene->m_BVHTraversalStackSize, buffer_TraversalStackSize, 10 );
 
     rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_STACK_SIZE", buffer_TraversalStackSize } );
 
     rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_GROUP_SIZE", "32" } );
 
-    if ( m_Scene->m_IsBVHDisabled )
-    {
-        rayTracingShaderDefines.push_back( { "NO_BVH_ACCEL", "0" } );
-    }
     if ( m_Scene->m_IsGGXVNDFSamplingEnabled )
     {
         rayTracingShaderDefines.push_back( { "GGX_SAMPLE_VNDF", "0" } );
+    }
+    if ( !m_Scene->m_TraverseBVHFrontToBack )
+    {
+        rayTracingShaderDefines.push_back( { "BVH_NO_FRONT_TO_BACK_TRAVERSAL", "0" } );
     }
     if ( m_Scene->m_EnvironmentTexture.get() == nullptr )
     {
@@ -631,6 +606,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
             , m_Scene->m_VerticesBuffer->GetSRV()
             , m_Scene->m_TrianglesBuffer->GetSRV()
             , m_Scene->m_LightsBuffer->GetSRV()
+            , m_Scene->m_InstanceTransformsBuffer->GetSRV( 0, (uint32_t)m_Scene->m_InstanceTransforms.size() )
             , m_Scene->m_MaterialIdsBuffer->GetSRV()
             , m_Scene->m_MaterialsBuffer->GetSRV()
             , renderData.m_CookTorranceCompETexture->GetSRV()
@@ -684,7 +660,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
         SCOPED_RENDER_ANNOTATION( L"Extension raycast" );
 
         ComputeJob job;
-        job.m_ConstantBuffers = { m_QueueConstantsBuffers[ 0 ]->GetBuffer(), m_RayCastConstantBuffer->GetBuffer() };
+        job.m_ConstantBuffers = { m_QueueConstantsBuffers[ 0 ]->GetBuffer() };
         job.m_SRVs =
         {
               m_Scene->m_VerticesBuffer->GetSRV()
@@ -692,6 +668,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
             , m_Scene->m_BVHNodesBuffer->GetSRV()
             , m_RayBuffer->GetSRV()
             , m_QueueBuffers[ (int)EShaderKernel::ExtensionRayCast ]->GetSRV()
+            , m_Scene->m_InstanceTransformsBuffer->GetSRV( (uint32_t)m_Scene->m_InstanceTransforms.size(), (uint32_t)m_Scene->m_InstanceTransforms.size() )
         };
         job.m_UAVs.push_back( m_RayHitBuffer->GetUAV() );
         job.m_Shader = m_Shaders[ (int)EShaderKernel::ExtensionRayCast ].get();
@@ -717,7 +694,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
         SCOPED_RENDER_ANNOTATION( L"Shadow raycast" );
 
         ComputeJob job;
-        job.m_ConstantBuffers = { m_QueueConstantsBuffers[ 0 ]->GetBuffer(), m_RayCastConstantBuffer->GetBuffer() };
+        job.m_ConstantBuffers = { m_QueueConstantsBuffers[ 0 ]->GetBuffer() };
         job.m_SRVs =
         {
               m_Scene->m_VerticesBuffer->GetSRV()
@@ -725,6 +702,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
             , m_Scene->m_BVHNodesBuffer->GetSRV()
             , m_ShadowRayBuffer->GetSRV()
             , m_QueueBuffers[ (int)EShaderKernel::ShadowRayCast ]->GetSRV()
+            , m_Scene->m_InstanceTransformsBuffer->GetSRV( (uint32_t)m_Scene->m_InstanceTransforms.size(), (uint32_t)m_Scene->m_InstanceTransforms.size() )
         };
         job.m_UAVs.push_back( m_FlagsBuffer->GetUAV() );
         job.m_Shader = m_Shaders[ (int)EShaderKernel::ShadowRayCast ].get();

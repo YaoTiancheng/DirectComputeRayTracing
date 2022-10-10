@@ -9,7 +9,7 @@ struct BVHNode
 {
     float3 bboxMin;
     float3 bboxMax;
-    uint   childOrPrimIndex;
+    uint   rightChildOrPrimIndex;
     uint   misc;
 };
 

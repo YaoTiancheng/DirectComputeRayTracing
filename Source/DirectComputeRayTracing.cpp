@@ -84,8 +84,16 @@ struct SRenderer
 
     SRectangle m_RenderViewport;
 
+    bool m_RayTracingHasHit = false;
+    SRayHit m_RayTracingHit;
+    uint32_t m_RayTracingPixelPos[ 2 ] = { 0, 0 };
+    float m_RayTracingSubPixelPos[ 2 ] = { 0.f, 0.f };
+
     uint32_t m_SPP;
+    uint32_t m_CursorPixelPosOnRenderViewport[ 2 ];
+    uint32_t m_CursorPixelPosOnFilm[ 2 ];
     bool m_ShowUI = true;
+    bool m_ShowRayTracingUI = false;
 };
 
 SRenderer* s_Renderer = nullptr;
@@ -210,7 +218,6 @@ bool SRenderer::Init()
         return false;
     }
 
-    m_Scene.m_IsBVHDisabled = CommandLineArgs::Singleton()->GetNoBVHAccel();
     m_Scene.m_EnvironmentImageFilepath = StringConversion::UTF16WStringToUTF8String( CommandLineArgs::Singleton()->GetEnvironmentTextureFilename() );
 
     m_ResolutionWidth = CommandLineArgs::Singleton()->ResolutionX();
@@ -349,6 +356,8 @@ bool SRenderer::LoadScene( const char* filepath, bool reset )
 
     m_IsMaterialGPUBufferDirty = true;
     m_IsLightGPUBufferDirty = true;
+
+    m_RayTracingHasHit = false;
 
     return true;
 }
@@ -528,6 +537,10 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
     {
         m_ShowUI = !m_ShowUI;
     }
+    if ( ImGui::GetIO().KeysDown[ VK_F2 ] && ImGui::GetIO().KeysDownDuration[ VK_F2 ] == 0.0f )
+    {
+        m_ShowRayTracingUI = !m_ShowRayTracingUI;
+    }
 
     if ( !m_ShowUI )
         return;
@@ -615,6 +628,12 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
             }
 
             if ( ImGui::Checkbox( "GGX VNDF Sampling", &m_Scene.m_IsGGXVNDFSamplingEnabled ) )
+            {
+                m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
+                m_IsFilmDirty = true;
+            }
+
+            if ( ImGui::Checkbox( "Traverse BVH Front-to-back", &m_Scene.m_TraverseBVHFrontToBack ) )
             {
                 m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
                 m_IsFilmDirty = true;
@@ -781,11 +800,11 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
         if ( ImGui::CollapsingHeader( "Materials" ) )
         {
-            for ( size_t iMaterial = 0; iMaterial < m_Scene.m_Mesh.GetMaterials().size(); ++iMaterial )
+            for ( size_t iMaterial = 0; iMaterial < m_Scene.m_Materials.size(); ++iMaterial )
             {
                 bool isSelected = ( iMaterial == m_Scene.m_ObjectSelection.m_MaterialSelectionIndex );
                 ImGui::PushID( (int)iMaterial );
-                if ( ImGui::Selectable( m_Scene.m_Mesh.GetMaterialNames()[ iMaterial ].c_str(), isSelected ) )
+                if ( ImGui::Selectable( m_Scene.m_MaterialNames[ iMaterial ].c_str(), isSelected ) )
                 {
                     m_Scene.m_ObjectSelection.SelectMaterial( (int)iMaterial );
                 }
@@ -844,9 +863,9 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
         }
         else if ( m_Scene.m_ObjectSelection.m_MaterialSelectionIndex >= 0 )
         {
-            if ( m_Scene.m_ObjectSelection.m_MaterialSelectionIndex < m_Scene.m_Mesh.GetMaterials().size() )
+            if ( m_Scene.m_ObjectSelection.m_MaterialSelectionIndex < m_Scene.m_Materials.size() )
             {
-                SMaterialSetting* selection = m_Scene.m_Mesh.GetMaterials().data() + m_Scene.m_ObjectSelection.m_MaterialSelectionIndex;
+                SMaterial* selection = m_Scene.m_Materials.data() + m_Scene.m_ObjectSelection.m_MaterialSelectionIndex;
                 ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float );
                 if ( ImGui::ColorEdit3( "Albedo", (float*)&selection->m_Albedo ) )
                     m_IsMaterialGPUBufferDirty = true;
@@ -954,14 +973,62 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
     {
         ImGui::Begin( "Render Stats." );
 
-        ImGui::Text( "No BVH: %s", m_Scene.m_IsBVHDisabled ? "On" : "Off" );
-        if ( m_Scene.m_HasValidScene )
-        {
-            ImGui::Text( "BVH traversal stack size: %d", m_Scene.m_Mesh.GetBVHMaxStackSize() );
-        }
-        ImGui::Text( "Current Resolution: %dx%d", renderContext->m_CurrentResolutionWidth, renderContext->m_CurrentResolutionHeight );
+        ImGui::Text( "Film Resolution: %dx%d", renderContext->m_CurrentResolutionWidth, renderContext->m_CurrentResolutionHeight );
+        ImGui::Text( "Render Viewport: %dx%d", m_RenderViewport.m_Width, m_RenderViewport.m_Height );
         ImGui::Text( "Average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate );
         ImGui::Text( "SPP: %d", m_SPP );
+
+        {
+            POINT pos;
+            ::GetCursorPos( &pos );
+            ::ScreenToClient( m_hWnd, &pos );
+
+            m_CursorPixelPosOnRenderViewport[ 0 ] = (uint32_t)std::clamp<int>( (int)pos.x - (int)m_RenderViewport.m_TopLeftX, 0, (int)m_RenderViewport.m_Width );
+            m_CursorPixelPosOnRenderViewport[ 1 ] = (uint32_t)std::clamp<int>( (int)pos.y - (int)m_RenderViewport.m_TopLeftY, 0, (int)m_RenderViewport.m_Height );
+
+            float filmPixelPerRenderViewportPixelX = (float)m_ResolutionWidth / m_RenderViewport.m_Width;
+            float filmPixelPerRenderViewportPixelY = (float)m_ResolutionHeight / m_RenderViewport.m_Height;
+            m_CursorPixelPosOnFilm[ 0 ] = (uint32_t)std::floorf( filmPixelPerRenderViewportPixelX * m_CursorPixelPosOnRenderViewport[ 0 ] );
+            m_CursorPixelPosOnFilm[ 1 ] = (uint32_t)std::floorf( filmPixelPerRenderViewportPixelY * m_CursorPixelPosOnRenderViewport[ 1 ] );
+
+            ImGui::Text( "Cursor Pos (Render Viewport): %d %d", m_CursorPixelPosOnRenderViewport[ 0 ], m_CursorPixelPosOnRenderViewport[ 1 ] );
+            ImGui::Text( "Cursor Pos (Film): %d %d", m_CursorPixelPosOnFilm[ 0 ], m_CursorPixelPosOnFilm[ 1 ] );
+        }
+
+        ImGui::End();
+    }
+
+    if ( m_ShowRayTracingUI )
+    {
+        ImGui::Begin( "Ray Tracing Tool" );
+
+        ImGui::InputInt2( "Pixel Position", (int*)m_RayTracingPixelPos );
+        ImGui::DragFloat2( "Sub-pixel Position", (float*)m_RayTracingSubPixelPos, .1f, 0.f, .999999f, "%.6f", ImGuiSliderFlags_AlwaysClamp );
+        if ( ImGui::Button( "Trace" ) )
+        {
+            DirectX::XMFLOAT2 screenPos = { (float)m_RayTracingPixelPos[ 0 ] + m_RayTracingSubPixelPos[ 0 ], (float)m_RayTracingPixelPos[ 1 ] + m_RayTracingSubPixelPos[ 1 ] };
+            screenPos.x /= m_ResolutionWidth;
+            screenPos.y /= m_ResolutionHeight;
+
+            XMVECTOR rayOrigin, rayDirection;
+            m_Scene.ScreenToCameraRay( screenPos, &rayOrigin, &rayDirection );
+            m_RayTracingHasHit = m_Scene.TraceRay( rayOrigin, rayDirection, 0.f, &m_RayTracingHit );
+        }
+
+        if ( m_RayTracingHasHit )
+        {
+            SRayHit* hit = &m_RayTracingHit;
+            char stringBuffer[ 512 ];
+            sprintf_s( stringBuffer, ARRAY_LENGTH( stringBuffer ), "Found hit\nDistance: %f\nCoord: %f %f\nInstance: %d\nMesh index: %d\nMesh: %s\nTriangle: %d"
+                , hit->m_T, hit->m_U, hit->m_V, hit->m_InstanceIndex, hit->m_MeshIndex, m_Scene.m_Meshes[ hit->m_MeshIndex ].GetName().c_str(), hit->m_TriangleIndex );
+            ImGui::InputTextMultiline( "Result", stringBuffer, ARRAY_LENGTH( stringBuffer ), ImVec2( 0, 0 ), ImGuiInputTextFlags_ReadOnly );
+        }
+        else
+        {
+            char stringBuffer[] = "No hit";
+            ImGui::InputText( "Result", stringBuffer, ARRAY_LENGTH( stringBuffer ), ImGuiInputTextFlags_ReadOnly );
+        }
+
         ImGui::End();
     }
 

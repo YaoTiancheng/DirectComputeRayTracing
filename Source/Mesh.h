@@ -1,35 +1,22 @@
 #pragma once
 
+#include "Constants.h"
 #include "BVHAccel.h"
 #include "MathHelper.h"
 #include "../Shaders/Vertex.inc.hlsl"
 #include "../Shaders/Material.inc.hlsl"
 #include "../Shaders/BVHNode.inc.hlsl"
-
-struct SMaterialSetting
-{
-    DirectX::XMFLOAT3 m_Albedo;
-    DirectX::XMFLOAT3 m_Emission;
-    float m_Roughness;
-    DirectX::XMFLOAT3 m_IOR;
-    DirectX::XMFLOAT3 m_K;
-    float m_Transmission;
-    DirectX::XMFLOAT2 m_Tiling;
-    bool m_IsMetal;
-    bool m_HasAlbedoTexture;
-    bool m_HasRoughnessTexture;
-    bool m_HasEmissionTexture;
-};
+#include "tinyobjloader/tiny_obj_loader.h"
 
 class Mesh
 {
 public:
-    bool LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool applyTransform = false, 
-        const DirectX::XMFLOAT4X4& transform = MathHelper::s_IdentityMatrix, uint32_t materialIdOverride = -1 );
+    bool CreateFromWavefrontOBJData( const tinyobj::attrib_t& attrib, const std::vector<tinyobj::shape_t>& shapes, uint32_t materialIdBase, bool applyTransform = false,
+        const DirectX::XMFLOAT4X4& transform = MathHelper::s_IdentityMatrix4x4, bool changeWindingOrder = false, uint32_t materialIdOverride = INVALID_MATERIAL_ID );
 
-    bool GenerateRectangle( uint32_t materialId, bool applyTransform = false, const DirectX::XMFLOAT4X4& transform = MathHelper::s_IdentityMatrix );
+    bool GenerateRectangle( uint32_t materialId, bool applyTransform = false, const DirectX::XMFLOAT4X4& transform = MathHelper::s_IdentityMatrix4x4 );
 
-    void BuildBVH( const char* BVHFilename = nullptr, std::vector<uint32_t>* reorderedTriangleIds = nullptr );
+    void BuildBVH( std::vector<uint32_t>* reorderedTriangleIndices = nullptr );
 
     void Clear();
 
@@ -49,7 +36,7 @@ public:
 
     std::vector<uint32_t>& GetIndices() { return m_Indices; }
 
-    const GPU::BVHNode* GetBVHNodes() const { return m_BVHNodes.data(); }
+    const BVHAccel::BVHNode* GetBVHNodes() const { return m_BVHNodes.data(); }
 
     uint32_t GetBVHMaxDepth() const { return m_BVHMaxDepth; }
 
@@ -59,21 +46,16 @@ public:
 
     std::vector<uint32_t>& GetMaterialIds() { return m_MaterialIds; }
 
-    const std::vector<SMaterialSetting>& GetMaterials() const { return m_Materials; }
+    void SetName( const std::string& name ) { m_Name = name; }
 
-    std::vector<SMaterialSetting>& GetMaterials() { return m_Materials; }
-
-    const std::vector<std::string>& GetMaterialNames() const { return m_MaterialNames; }
-
-    std::vector<std::string>& GetMaterialNames() { return m_MaterialNames; }
+    const std::string& GetName() const { return m_Name; }
 
 private:
+    std::string m_Name;
     std::vector<GPU::Vertex> m_Vertices;
     std::vector<uint32_t> m_Indices;
-    std::vector<GPU::BVHNode> m_BVHNodes;
+    std::vector<BVHAccel::BVHNode> m_BVHNodes;
     uint32_t m_BVHMaxDepth = 0;
     uint32_t m_BVHMaxStackSize = 0;
     std::vector<uint32_t> m_MaterialIds;
-    std::vector<SMaterialSetting> m_Materials;
-    std::vector<std::string> m_MaterialNames;
 };

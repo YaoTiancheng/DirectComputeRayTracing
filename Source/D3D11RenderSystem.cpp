@@ -8,6 +8,7 @@ ID3D11Device*           g_Device = nullptr;
 ID3D11DeviceContext*    g_DeviceContext = nullptr;
 IDXGISwapChain*         g_SwapChain = nullptr;
 ID3DUserDefinedAnnotation* g_Annotation = nullptr;
+bool g_SupportTearing = false;
 
 ID3D11Device* GetDevice()
 {
@@ -31,6 +32,19 @@ ID3DUserDefinedAnnotation* GetAnnotation()
 
 bool InitRenderSystem( HWND hWnd )
 {
+    // Check tearing support
+    {
+        Microsoft::WRL::ComPtr<IDXGIFactory5> factory;
+        HRESULT hr = CreateDXGIFactory1( IID_PPV_ARGS( &factory ) );
+        BOOL allowTearing = FALSE;
+        if ( SUCCEEDED( hr ) )
+        {
+            hr = factory->CheckFeatureSupport( DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof( allowTearing ) );
+        }
+
+        g_SupportTearing = SUCCEEDED( hr ) && allowTearing;
+    }
+
     DXGI_SWAP_CHAIN_DESC swapChainDesc;
     ZeroMemory( &swapChainDesc, sizeof( DXGI_SWAP_CHAIN_DESC ) );
     swapChainDesc.BufferDesc.RefreshRate.Numerator = 60;
@@ -42,6 +56,7 @@ bool InitRenderSystem( HWND hWnd )
     swapChainDesc.OutputWindow = hWnd;
     swapChainDesc.Windowed = TRUE;
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT::DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    swapChainDesc.Flags = g_SupportTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
 
     UINT flags = D3D11_CREATE_DEVICE_SINGLETHREADED;
     if ( CommandLineArgs::Singleton()->UseDebugDevice() )
@@ -94,5 +109,10 @@ void ResizeSwapChainBuffers( uint32_t width, uint32_t height )
     DXGI_SWAP_CHAIN_DESC swapChainDesc;
     g_SwapChain->GetDesc( &swapChainDesc );
     g_SwapChain->ResizeBuffers( swapChainDesc.BufferCount, width, height, swapChainDesc.BufferDesc.Format, swapChainDesc.Flags );
+}
+
+void Present( UINT syncInterval )
+{
+    g_SwapChain->Present( syncInterval, g_SupportTearing ? DXGI_PRESENT_ALLOW_TEARING : 0 );
 }
 

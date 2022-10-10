@@ -483,7 +483,7 @@ void SRenderer::RenderOneFrame()
     RTV = nullptr;
     GetDeviceContext()->OMSetRenderTargets( 1, &RTV, nullptr );
 
-    GetSwapChain()->Present( 0, 0 );
+    Present( 0 );
 }
 
 void SRenderer::UpdateGPUData()

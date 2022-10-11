@@ -89,7 +89,7 @@ struct SSceneObjectSelection
 class CScene
 {
 public:
-    bool LoadFromFile( const char* filepath );
+    bool LoadFromFile( const std::filesystem::path& filepath );
 
     void Reset();
 
@@ -120,7 +120,7 @@ public:
     const float s_MaxFocalDistance = 999999.0f;
 
 private:
-    bool LoadFromWavefrontOBJFile( const char* filepath );
+    bool LoadFromWavefrontOBJFile( const std::filesystem::path& filepath );
 
     bool LoadFromXMLFile( const std::filesystem::path& filepath );
 

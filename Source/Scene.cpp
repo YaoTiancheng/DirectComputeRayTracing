@@ -61,15 +61,27 @@ bool CScene::CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, c
     return true;
 }
 
-bool CScene::LoadFromFile( const char* filepath )
+bool CScene::LoadFromFile( const std::filesystem::path& filepath )
 {
-    if ( filepath == nullptr || filepath[ 0 ] == '\0' )
+    if ( !filepath.has_filename() )
         return false;
 
     size_t meshIndexBase = m_Meshes.size();
 
-    if ( !LoadFromXMLFile( filepath ) )
-        return false;
+    {
+        const std::filesystem::path extension = filepath.extension();
+        bool isWavefrontOBJFile = true;
+        if ( extension == ".xml" || extension == ".XML" )
+        {
+            isWavefrontOBJFile = false;
+        }
+
+        bool loadResult = isWavefrontOBJFile ? LoadFromWavefrontOBJFile( filepath ) : LoadFromXMLFile( filepath );
+        if ( !loadResult )
+        { 
+            return false;
+        }
+    }
 
     {
         std::vector<uint32_t> reorderedTriangleIndices;

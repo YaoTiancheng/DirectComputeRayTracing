@@ -20,6 +20,8 @@ bool CScene::LoadFromWavefrontOBJFile( const std::filesystem::path& filepath )
     }
 
     m_InstanceTransforms.push_back( MathHelper::s_IdentityMatrix4x3 );
+    // TODO: Assert only 1 mesh is created
+    m_Meshes.back().SetName( filepath.stem().u8string() );
 
     return true;
 }

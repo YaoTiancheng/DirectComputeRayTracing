@@ -61,6 +61,21 @@ bool CScene::CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, c
     return true;
 }
 
+static void GetDefaultMaterial(SMaterial* material)
+{
+    material->m_Albedo = XMFLOAT3( 1.f, 0.f, 1.f );
+    material->m_Emission = XMFLOAT3( 0.f, 0.f, 0.f );
+    material->m_Roughness = 1.f;
+    material->m_IOR = XMFLOAT3( 1.f, 1.f, 1.f );
+    material->m_K = XMFLOAT3( 1.0f, 1.0f, 1.0f );
+    material->m_Transmission = 0.f;
+    material->m_Tiling = XMFLOAT2( 1.0f, 1.0f );
+    material->m_IsMetal = false;
+    material->m_HasAlbedoTexture = false;
+    material->m_HasEmissionTexture = false;
+    material->m_HasRoughnessTexture = false;
+}
+
 bool CScene::LoadFromFile( const std::filesystem::path& filepath )
 {
     if ( !filepath.has_filename() )
@@ -80,6 +95,43 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
         if ( !loadResult )
         { 
             return false;
+        }
+    }
+
+    // Assign default material
+    {
+        for ( size_t iMesh = meshIndexBase; iMesh < m_Meshes.size(); ++iMesh )
+        {
+            uint32_t defaultMaterialIndex = INVALID_MATERIAL_ID;
+
+            auto& materialIndices = m_Meshes[ iMesh ].GetMaterialIds();
+            for ( auto& materialIndex : materialIndices )
+            {
+                if ( materialIndex == INVALID_MATERIAL_ID )
+                {
+                    if ( defaultMaterialIndex == INVALID_MATERIAL_ID )
+                    { 
+                        if ( m_Materials.size() < (size_t)std::numeric_limits<uint32_t>::max() )
+                        { 
+                            defaultMaterialIndex = (uint32_t)m_Materials.size();
+                        }
+                        else
+                        {
+                            LOG_STRING_FORMAT( "Trying to create default material %s but material count has exceeded limit.", m_Meshes[ iMesh ].GetName().c_str() );
+                            return false;
+                        }
+                    }
+                    materialIndex = defaultMaterialIndex;
+                }
+            }
+
+            if ( defaultMaterialIndex != INVALID_MATERIAL_ID )
+            {
+                SMaterial material;
+                GetDefaultMaterial( &material );
+                m_Materials.emplace_back( material );
+                m_MaterialNames.emplace_back( m_Meshes[ iMesh ].GetName() );
+            }
         }
     }
 

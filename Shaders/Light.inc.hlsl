@@ -1,7 +1,7 @@
 #ifndef _LIGHT_H_
 #define _LIGHT_H_
 
-void SampleLightDirect_Point( SLight light, float3 p, out float3 radiance, out float3 wi, out float distance, out float pdf )
+void PointLight_Sample( SLight light, float3 p, out float3 radiance, out float3 wi, out float distance, out float pdf )
 {
     float3 lightPosWS = Light_GetPosition( light );
     wi = lightPosWS - p;
@@ -11,7 +11,12 @@ void SampleLightDirect_Point( SLight light, float3 p, out float3 radiance, out f
     pdf = 1.0f;
 }
 
-void EvaluateLightDirect_Triangle( SLight light, float4x3 transform, float3 v0, float3 v1, float3 v2, float3 wi, float3 normal, float distance, out float3 radiance, out float pdf )
+float3 TriangleLight_Evaluate( SLight light, float3 direction, float3 normal )
+{
+    return dot( direction, normal ) > 0.f ? light.radiance : 0.f;
+}
+
+void TriangleLight_EvaluateWithPDF( SLight light, float4x3 transform, float3 v0, float3 v1, float3 v2, float3 wi, float3 normal, float distance, out float3 radiance, out float pdf )
 {
     // Transform all vertices to world space before evaluation so we can calculate correct surface area use triangle edge vectors
     v0 = mul( float4( v0, 1.f ), transform );
@@ -29,7 +34,7 @@ void EvaluateLightDirect_Triangle( SLight light, float4x3 transform, float3 v0, 
     pdf *= WIdotN > 0.f ? distance * distance / dot( -wi, normal ) : 0.f;
 }
 
-void SampleLightDirect_Triangle( SLight light, float4x3 transform, float3 v0, float3 v1, float3 v2, float2 samples, float3 p, out float3 radiance, out float3 wi, out float distance, out float pdf )
+void TriangleLight_Sample( SLight light, float4x3 transform, float3 v0, float3 v1, float3 v2, float2 samples, float3 p, out float3 radiance, out float3 wi, out float distance, out float pdf )
 {
     // Transform all vertices to world space to calculate correct surface area use triangle edge vectors
     float3 vws0 = mul( float4( v0, 1.f ), transform );

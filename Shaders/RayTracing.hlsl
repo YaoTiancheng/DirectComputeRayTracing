@@ -182,7 +182,7 @@ SLightSampleResult SampleLightDirect( float3 p, StructuredBuffer<SLight> lights,
     result.isDeltaLight = false;
     if ( light.flags & LIGHT_FLAGS_POINT_LIGHT )
     {
-        SampleLightDirect_Point( light, p, result.radiance, result.wi, result.distance, result.pdf );
+        PointLight_Sample( light, p, result.radiance, result.wi, result.distance, result.pdf );
         result.isDeltaLight = true;
     }
     else if ( light.flags & LIGHT_FLAGS_MESH_LIGHT )
@@ -196,7 +196,7 @@ SLightSampleResult SampleLightDirect( float3 p, StructuredBuffer<SLight> lights,
         float3 v1 = vertices[ triangles[ triangleIndex * 3 + 1 ] ].position;
         float3 v2 = vertices[ triangles[ triangleIndex * 3 + 2 ] ].position;
         float4x3 instanceTransform = instanceTransforms[ Light_GetInstanceIndex( light ) ];
-        SampleLightDirect_Triangle( light, instanceTransform, v0, v1, v2, triangleSample, p, result.radiance, result.wi, result.distance, result.pdf );
+        TriangleLight_Sample( light, instanceTransform, v0, v1, v2, triangleSample, p, result.radiance, result.wi, result.distance, result.pdf );
 
         result.pdf /= Light_GetTriangleCount( light );
         result.radiance *= Light_GetTriangleCount( light );
@@ -222,7 +222,7 @@ void EvaluateLightDirect( uint lightIndex, uint triangleIndex, float3 normal, fl
         float3 v1 = vertices[ triangles[ triangleIndex * 3 + 1 ] ].position;
         float3 v2 = vertices[ triangles[ triangleIndex * 3 + 2 ] ].position;
         float4x3 instanceTransform = instanceTransforms[ Light_GetInstanceIndex( light ) ];
-        EvaluateLightDirect_Triangle( light, instanceTransform, v0, v1, v2, wi, normal, distance, radiance, pdf );
+        TriangleLight_EvaluateWithPDF( light, instanceTransform, v0, v1, v2, wi, normal, distance, radiance, pdf );
         pdf /= Light_GetTriangleCount( light );
     }
     
@@ -898,6 +898,13 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 
     if ( hasHit )
     { 
+#if defined( LIGHT_VISIBLE )
+        if ( intersection.lightIndex != LIGHT_INDEX_INVALID )
+        {
+            l = TriangleLight_Evaluate( g_Lights[ intersection.lightIndex ], -wi, intersection.geometryNormal );
+        }
+#endif
+
         uint iBounce = 0;
         while ( iBounce <= g_MaxBounceCount && hasHit )
         {

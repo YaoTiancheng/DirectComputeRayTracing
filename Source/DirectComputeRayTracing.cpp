@@ -638,6 +638,12 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
                 m_IsFilmDirty = true;
             }
+
+            if ( ImGui::Checkbox( "Lights Visble to Camera", &m_Scene.m_IsLightVisible ) )
+            {
+                m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
+                m_IsFilmDirty = true;
+            }
         }
 
         if ( ImGui::CollapsingHeader( "Environment" ) )

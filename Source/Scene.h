@@ -147,6 +147,7 @@ public:
     bool m_HasValidScene = false;
     bool m_TraverseBVHFrontToBack = true;
     bool m_IsGGXVNDFSamplingEnabled = true;
+    bool m_IsLightVisible = true;
 
     Camera m_Camera;
     std::vector<SPointLight> m_PointLights;

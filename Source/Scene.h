@@ -5,12 +5,6 @@
 #include "Mesh.h"
 #include "../Shaders/Material.inc.hlsl"
 
-enum class ELightType
-{
-    Point = 0,
-    Rectangle = 1,
-};
-
 enum class EFilter
 {
     Box = 0,
@@ -20,19 +14,21 @@ enum class EFilter
     LanczosSinc = 4,
 };
 
-struct SLight
+struct SPointLight
 {
     DirectX::XMFLOAT3 position;
-    DirectX::XMFLOAT3 rotation;
     DirectX::XMFLOAT3 color;
-    DirectX::XMFLOAT2 size;
-    ELightType lightType;
+};
+
+struct SMeshLight
+{
+    uint32_t m_InstanceIndex;
+    DirectX::XMFLOAT3 color;
 };
 
 struct SMaterial
 {
     DirectX::XMFLOAT3 m_Albedo;
-    DirectX::XMFLOAT3 m_Emission;
     float m_Roughness;
     DirectX::XMFLOAT3 m_IOR;
     DirectX::XMFLOAT3 m_K;
@@ -101,7 +97,7 @@ public:
 
     float GetFilmDistance() const;
 
-    uint32_t GetLightCount() const { return (uint32_t)m_Lights.size(); }
+    uint32_t GetLightCount() const { return (uint32_t)m_MeshLights.size() + (uint32_t)m_PointLights.size(); }
 
     float CalculateFocalDistance() const;
 
@@ -153,7 +149,8 @@ public:
     bool m_IsGGXVNDFSamplingEnabled = true;
 
     Camera m_Camera;
-    std::vector<SLight> m_Lights;
+    std::vector<SPointLight> m_PointLights;
+    std::vector<SMeshLight> m_MeshLights;
     std::vector<SMaterial> m_Materials;
     std::vector<std::string> m_MaterialNames;
     std::vector<Mesh> m_Meshes;
@@ -170,6 +167,7 @@ public:
     GPUBufferPtr m_MaterialIdsBuffer;
     GPUBufferPtr m_MaterialsBuffer;
     GPUBufferPtr m_InstanceTransformsBuffer;
+    GPUBufferPtr m_InstanceLightIndicesBuffer;
 
     SSceneObjectSelection m_ObjectSelection;
 };

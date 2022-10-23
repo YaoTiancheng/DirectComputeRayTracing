@@ -98,8 +98,12 @@ void HitInfoToIntersection( float3 origin
     , StructuredBuffer<uint> materialIds
     , StructuredBuffer<Material> materials
     , StructuredBuffer<float4x3> instances
-    , out Intersection intersection )
+    , Buffer<uint> instanceLightIndices
+    , inout Intersection intersection )
 {
+    intersection.lightIndex = instanceLightIndices[ hitInfo.instanceIndex ];
+    intersection.triangleIndex = hitInfo.triangleId;
+
     Vertex v0 = vertices[ triangles[ hitInfo.triangleId * 3 ] ];
     Vertex v1 = vertices[ triangles[ hitInfo.triangleId * 3 + 1 ] ];
     Vertex v2 = vertices[ triangles[ hitInfo.triangleId * 3 + 2 ] ];
@@ -119,19 +123,22 @@ bool IntersectScene( float3 origin
     , StructuredBuffer<BVHNode> BVHNodes
     , StructuredBuffer<float4x3> instancesTransforms
     , StructuredBuffer<float4x3> instancesInvTransforms
+    , Buffer<uint> instanceLightIndices
     , StructuredBuffer<uint> materialIds
     , StructuredBuffer<Material> materials
     , inout Intersection intersection
     , out float t
     , out uint iterationCounter )
 {
+    intersection.lightIndex = LIGHT_INDEX_INVALID;
+    intersection.triangleIndex = 0;
     SHitInfo hitInfo = (SHitInfo)0;
     t = FLT_INF;
     bool hasIntersection = BVHIntersectNoInterp( origin, direction, 0, dispatchThreadIndex, vertices, triangles, BVHNodes, instancesInvTransforms, hitInfo, iterationCounter );
     if ( hasIntersection )
     {
         t = hitInfo.t;
-        HitInfoToIntersection( origin, direction, hitInfo, vertices, triangles, materialIds, materials, instancesTransforms, intersection );
+        HitInfoToIntersection( origin, direction, hitInfo, vertices, triangles, materialIds, materials, instancesTransforms, instanceLightIndices, intersection );
     }
     return hasIntersection;
 }
@@ -163,32 +170,63 @@ struct SLightSampleResult
     bool isDeltaLight;
 };
 
-SLightSampleResult SampleLightDirect( SLight light, float3 position, StructuredBuffer<Vertex> vertices, StructuredBuffer<uint> triangles, float2 samples )
+SLightSampleResult SampleLightDirect( float3 p, StructuredBuffer<SLight> lights, uint lightCount, StructuredBuffer<Vertex> vertices, StructuredBuffer<uint> triangles, StructuredBuffer<float4x3> instanceTransforms, inout Xoshiro128StarStar rng )
 {
     SLightSampleResult result;
+
+    // Uniformly select one light
+    float lightSelectionSample = GetNextSample1D( rng );
+    uint lightIndex = floor( lightSelectionSample * lightCount );
+    SLight light = lights[ lightIndex ];
 
     result.isDeltaLight = false;
     if ( light.flags & LIGHT_FLAGS_POINT_LIGHT )
     {
-        SampleLight_Point( light, samples, position, result.radiance, result.wi, result.distance, result.pdf );
+        SampleLightDirect_Point( light, p, result.radiance, result.wi, result.distance, result.pdf );
         result.isDeltaLight = true;
     }
-    else
+    else if ( light.flags & LIGHT_FLAGS_MESH_LIGHT )
     {
-        SampleLight_Rectangle( light, samples, position, result.radiance, result.wi, result.distance, result.pdf );
+        // Uniformly select one triangle
+        float triangleSelectionSample = GetNextSample1D( rng );
+        float2 triangleSample = GetNextSample2D( rng );
+        uint triangleIndex = Light_GetTriangleOffset( light ) + floor( triangleSelectionSample * Light_GetTriangleCount( light ) );
+
+        float3 v0 = vertices[ triangles[ triangleIndex * 3 ] ].position;
+        float3 v1 = vertices[ triangles[ triangleIndex * 3 + 1 ] ].position;
+        float3 v2 = vertices[ triangles[ triangleIndex * 3 + 2 ] ].position;
+        float4x3 instanceTransform = instanceTransforms[ Light_GetInstanceIndex( light ) ];
+        SampleLightDirect_Triangle( light, instanceTransform, v0, v1, v2, triangleSample, p, result.radiance, result.wi, result.distance, result.pdf );
+
+        result.pdf /= Light_GetTriangleCount( light );
+        result.radiance *= Light_GetTriangleCount( light );
     }
+
+    result.pdf /= lightCount;
+    result.radiance *= lightCount;
 
     result.distance *= 1 - SHADOW_EPSILON;
     return result;
 }
 
-void EvaluateLightDirect( SLight light, StructuredBuffer<Vertex> vertices, StructuredBuffer<uint> triangles, float3 origin, float3 direction, out float distance, out float3 radiance, out float pdf )
+void EvaluateLightDirect( uint lightIndex, uint triangleIndex, float3 normal, float3 wi, float distance, StructuredBuffer<SLight> lights, uint lightCount
+    , StructuredBuffer<Vertex> vertices, StructuredBuffer<uint> triangles, StructuredBuffer<float4x3> instanceTransforms, out float3 radiance, out float pdf )
 {
-    if ( light.flags == 0 )
+    radiance = 0.f;
+    pdf = 0.f;
+
+    SLight light = lights[ lightIndex ];
+    if ( light.flags & LIGHT_FLAGS_MESH_LIGHT )
     {
-        EvaluateLight_Rectangle( light, direction, origin, radiance, pdf, distance );
+        float3 v0 = vertices[ triangles[ triangleIndex * 3 ] ].position;
+        float3 v1 = vertices[ triangles[ triangleIndex * 3 + 1 ] ].position;
+        float3 v2 = vertices[ triangles[ triangleIndex * 3 + 2 ] ].position;
+        float4x3 instanceTransform = instanceTransforms[ Light_GetInstanceIndex( light ) ];
+        EvaluateLightDirect_Triangle( light, instanceTransform, v0, v1, v2, wi, normal, distance, radiance, pdf );
+        pdf /= Light_GetTriangleCount( light );
     }
-    distance *= 1 - SHADOW_EPSILON;
+    
+    pdf /= lightCount;
 }
 
 struct SRay
@@ -828,7 +866,8 @@ StructuredBuffer<float4x3> g_InstanceTransforms         : register( t14 );
 StructuredBuffer<float4x3> g_InstanceInvTransforms      : register( t15 );
 StructuredBuffer<uint> g_MaterialIds                    : register( t16 );
 StructuredBuffer<Material> g_Materials                  : register( t17 );
-TextureCube<float3> g_EnvTexture                        : register( t18 );
+Buffer<uint> g_InstanceLightIndices                     : register( t18 );
+TextureCube<float3> g_EnvTexture                        : register( t19 );
 RWTexture2D<float2> g_SamplePositionTexture             : register( u0 );
 RWTexture2D<float3> g_SampleValueTexture                : register( u1 );
 
@@ -843,8 +882,8 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 
     Xoshiro128StarStar rng = InitializeRandomNumberGenerator( pixelPos, g_FrameSeed );
 
-    float3 pathThroughput = 1.0f;
-    float3 l = 0.0f;
+    float3 pathThroughput = 1.f;
+    float3 l = 0.f;
     float3 wi, wo;
     Intersection intersection;
 
@@ -855,78 +894,68 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 
     float hitDistance;
     uint iterationCounter;
-    bool hasHit = IntersectScene( intersection.position, wi, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceTransforms, g_InstanceInvTransforms, g_MaterialIds, g_Materials, intersection, hitDistance, iterationCounter );
+    bool hasHit = IntersectScene( intersection.position, wi, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceTransforms, g_InstanceInvTransforms, g_InstanceLightIndices, g_MaterialIds, g_Materials, intersection, hitDistance, iterationCounter );
 
-    uint iBounce = 0;
-    while ( iBounce <= g_MaxBounceCount )
-    {
-        if ( !hasHit )
+    if ( hasHit )
+    { 
+        uint iBounce = 0;
+        while ( iBounce <= g_MaxBounceCount && hasHit )
         {
-            l += pathThroughput * EnvironmentShader( wi, g_Background.xyz, g_EnvTexture, UVClampSampler );
-            break;
-        }
+            wo = -wi;
 
-        wo = -wi;
-
-        // Sample light
-        bool isDeltaLight = false;
-        uint lightIndex = 0;
-        if ( g_LightCount != 0 )
-        {
-            float lightSelectionSample = GetNextSample1D( rng );
-            float2 lightSamples = GetNextSample2D( rng );
-
-            lightIndex = floor( lightSelectionSample * g_LightCount );
-            SLightSampleResult sampleResult = SampleLightDirect( g_Lights[ lightIndex ], intersection.position, g_Vertices, g_Triangles, lightSamples );
-            isDeltaLight = sampleResult.isDeltaLight;
-
-            if ( any( sampleResult.radiance > 0.0f ) && sampleResult.pdf > 0.0f
-                && !IsOcculuded( OffsetRayOrigin( intersection.position, intersection.geometryNormal, sampleResult.wi ), sampleResult.wi, sampleResult.distance, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceInvTransforms ) )
+            // Sample light
+            if ( g_LightCount != 0 )
             {
-                float3 bsdf = EvaluateBSDF( sampleResult.wi, wo, intersection );
-                float NdotWI = abs( dot( intersection.normal, sampleResult.wi ) );
-                float bsdfPdf = EvaluateBSDFPdf( sampleResult.wi, wo, intersection );
-                float weight = isDeltaLight ? 1.0f : PowerHeuristic( 1, sampleResult.pdf, 1, bsdfPdf );
-                l += pathThroughput * sampleResult.radiance * bsdf * NdotWI * weight * g_LightCount / sampleResult.pdf;
-            }
-        }
-
-        l += pathThroughput * intersection.emission;
-
-        // Sample BSDF
-        {
-            float bsdfSelectionSample = GetNextSample1D( rng );
-            float2 bsdfSample = GetNextSample2D( rng );
-
-            float3 bsdf;
-            float bsdfPdf;
-            bool isDeltaBxdf;
-            SampleBSDF( wo, bsdfSample, bsdfSelectionSample, intersection, wi, bsdf, bsdfPdf, isDeltaBxdf );
-
-            if ( all( bsdf == 0.0f ) || bsdfPdf == 0.0f )
-                break;
-
-            float NdotWI = abs( dot( intersection.normal, wi ) );
-            pathThroughput = pathThroughput * bsdf * NdotWI / bsdfPdf;
-
-            float3 lastHitPosition = intersection.position;
-            hasHit = IntersectScene( OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi ), wi, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceTransforms, g_InstanceInvTransforms, g_MaterialIds, g_Materials, intersection, hitDistance, iterationCounter );
-
-            if ( g_LightCount != 0 && !isDeltaLight )
-            {
-                float3 radiance;
-                float lightPdf;
-                float lightDistance = 0.0f;
-                EvaluateLightDirect( g_Lights[ lightIndex ], g_Vertices, g_Triangles, lastHitPosition, wi, lightDistance, radiance, lightPdf );
-                if ( lightPdf > 0.0f && lightDistance < hitDistance ) // hitDistance is inf if there is no hit
+                SLightSampleResult sampleResult = SampleLightDirect( intersection.position, g_Lights, g_LightCount, g_Vertices, g_Triangles, g_InstanceTransforms, rng );
+                bool isDeltaLight = sampleResult.isDeltaLight;
+                if ( any( sampleResult.radiance > 0.f ) && sampleResult.pdf > 0.f
+                    && !IsOcculuded( OffsetRayOrigin( intersection.position, intersection.geometryNormal, sampleResult.wi ), sampleResult.wi, sampleResult.distance, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceInvTransforms ) )
                 {
-                    float weight = !isDeltaBxdf ? PowerHeuristic( 1, bsdfPdf, 1, lightPdf ) : 1.0f;
-                    l += pathThroughput * radiance * weight * g_LightCount;
+                    float3 bsdf = EvaluateBSDF( sampleResult.wi, wo, intersection );
+                    float NdotWI = abs( dot( intersection.normal, sampleResult.wi ) );
+                    float bsdfPdf = EvaluateBSDFPdf( sampleResult.wi, wo, intersection );
+                    float weight = isDeltaLight ? 1.0f : PowerHeuristic( 1, sampleResult.pdf, 1, bsdfPdf );
+                    l += pathThroughput * sampleResult.radiance * bsdf * NdotWI * weight;
                 }
             }
-        }
 
-        ++iBounce;
+            // Sample BSDF
+            {
+                float bsdfSelectionSample = GetNextSample1D( rng );
+                float2 bsdfSample = GetNextSample2D( rng );
+
+                float3 bsdf;
+                float bsdfPdf;
+                bool isDeltaBxdf;
+                SampleBSDF( wo, bsdfSample, bsdfSelectionSample, intersection, wi, bsdf, bsdfPdf, isDeltaBxdf );
+
+                if ( all( bsdf == 0.0f ) || bsdfPdf == 0.0f )
+                    break;
+
+                float NdotWI = abs( dot( intersection.normal, wi ) );
+                pathThroughput = pathThroughput * bsdf * NdotWI / bsdfPdf;
+
+                hasHit = IntersectScene( OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi ), wi, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceTransforms, g_InstanceInvTransforms, g_InstanceLightIndices, g_MaterialIds, g_Materials, intersection, hitDistance, iterationCounter );
+
+                if ( intersection.lightIndex != LIGHT_INDEX_INVALID )
+                {
+                    float3 radiance;
+                    float lightPdf;
+                    EvaluateLightDirect( intersection.lightIndex, intersection.triangleIndex, intersection.geometryNormal, wi, hitDistance, g_Lights, g_LightCount, g_Vertices, g_Triangles, g_InstanceTransforms, radiance, lightPdf );
+                    if ( lightPdf > 0.0f )
+                    {
+                        float weight = !isDeltaBxdf ? PowerHeuristic( 1, bsdfPdf, 1, lightPdf ) : 1.0f;
+                        l += pathThroughput * radiance * weight;
+                    }
+                }
+            }
+
+            ++iBounce;
+        }
+    }
+    else
+    {
+        l = pathThroughput * EnvironmentShader( wi, g_Background.xyz, g_EnvTexture, UVClampSampler );
     }
 
     WriteSample( l, pixelSample, pixelPos, g_SamplePositionTexture, g_SampleValueTexture );
@@ -965,6 +994,7 @@ StructuredBuffer<float4x3> g_InstanceTransforms : register( t14 );
 StructuredBuffer<float4x3> g_InstanceInvTransforms : register( t15 );
 StructuredBuffer<uint> g_MaterialIds    : register( t16 );
 StructuredBuffer<Material> g_Materials  : register( t17 );
+Buffer<uint> g_InstanceLightIndices     : register( t18 );
 RWTexture2D<float2> g_SamplePositionTexture : register( u0 );
 RWTexture2D<float3> g_SampleValueTexture    : register( u1 );
 
@@ -988,7 +1018,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 
     float hitDistance = 0.0f;
     uint iterationCounter;
-    if ( IntersectScene( intersection.position, wo, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceTransforms, g_InstanceInvTransforms, g_MaterialIds, g_Materials, intersection, hitDistance, iterationCounter ) )
+    if ( IntersectScene( intersection.position, wo, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceTransforms, g_InstanceInvTransforms, g_InstanceLightIndices, g_MaterialIds, g_Materials, intersection, hitDistance, iterationCounter ) )
     {
 #if defined( OUTPUT_NORMAL )
         l = intersection.normal * 0.5f + 0.5f;

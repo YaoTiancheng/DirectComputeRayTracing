@@ -145,6 +145,7 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
         , m_Scene->m_InstanceTransformsBuffer->GetSRV( (uint32_t)m_Scene->m_InstanceTransforms.size(), (uint32_t)m_Scene->m_InstanceTransforms.size() )
         , m_Scene->m_MaterialIdsBuffer->GetSRV()
         , m_Scene->m_MaterialsBuffer->GetSRV()
+        , m_Scene->m_InstanceLightIndicesBuffer->GetSRV()
         , m_Scene->m_EnvironmentTexture ? m_Scene->m_EnvironmentTexture->GetSRV() : nullptr
     };
 

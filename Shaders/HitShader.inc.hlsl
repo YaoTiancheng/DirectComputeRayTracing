@@ -20,7 +20,7 @@ void HitShader( float3 rayOrigin
     , bool backface
     , StructuredBuffer<uint> materialIds
     , StructuredBuffer<Material> materials
-    , out Intersection intersection )
+    , inout Intersection intersection )
 {
     intersection.position   = VectorBaryCentric3( v0.position, v1.position, v2.position, u, v );
     intersection.normal     = normalize( VectorBaryCentric3( v0.normal, v1.normal, v2.normal, u, v ) );
@@ -43,12 +43,9 @@ void HitShader( float3 rayOrigin
            albedo *= ( materialFlags & MATERIAL_FLAG_ALBEDO_TEXTURE ) != 0 ? checkerboard : 1.0f;
     float  roughness = materials[ materialId ].roughness;
            roughness *= ( materialFlags & MATERIAL_FLAG_ROUGHNESS_TEXTURE ) != 0 ? checkerboard : 1.0f;
-    float3 emission = materials[ materialId ].emission;
-           emission *= ( materialFlags & MATERIAL_FLAG_EMISSION_TEXTURE ) != 0 ? checkerboard : 1.0f;
 
     intersection.albedo     = albedo;
     intersection.specular   = 1.0f;
-    intersection.emission   = emission;
     intersection.alpha      = roughness * roughness;
     intersection.ior        = materials[ materialId ].ior;
     intersection.transmission = materials[ materialId ].transmission;

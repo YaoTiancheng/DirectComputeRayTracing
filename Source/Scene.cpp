@@ -43,7 +43,6 @@ bool CScene::CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, c
         {
             SMaterial destMaterial;
             destMaterial.m_Albedo = DirectX::XMFLOAT3( iterSrcMat.diffuse[ 0 ], iterSrcMat.diffuse[ 1 ], iterSrcMat.diffuse[ 2 ] );
-            destMaterial.m_Emission = DirectX::XMFLOAT3( iterSrcMat.emission[ 0 ], iterSrcMat.emission[ 1 ], iterSrcMat.emission[ 2 ] );
             destMaterial.m_Roughness = iterSrcMat.roughness;
             destMaterial.m_IOR = XMFLOAT3( std::clamp( iterSrcMat.ior, 1.0f, MAX_MATERIAL_IOR ), 1.f, 1.f );
             destMaterial.m_K = XMFLOAT3( 1.0f, 1.0f, 1.0f );
@@ -64,7 +63,6 @@ bool CScene::CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, c
 static void GetDefaultMaterial(SMaterial* material)
 {
     material->m_Albedo = XMFLOAT3( 1.f, 0.f, 1.f );
-    material->m_Emission = XMFLOAT3( 0.f, 0.f, 0.f );
     material->m_Roughness = 1.f;
     material->m_IOR = XMFLOAT3( 1.f, 1.f, 1.f );
     material->m_K = XMFLOAT3( 1.0f, 1.0f, 1.0f );
@@ -418,7 +416,44 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
         }
         else 
         {
-            LOG_STRING( "Failed to instance transform buffer.\n" );
+            LOG_STRING( "Failed to create instance transform buffer.\n" );
+            return false;
+        }
+    }
+
+    {
+        std::vector<uint32_t> instanceLightIndices; // Instance to light index mapping
+        instanceLightIndices.resize( m_InstanceTransforms.size(), LIGHT_INDEX_INVALID );
+
+        // Update mesh light instance indices since they are reordered by TLAS
+        uint32_t lightIndex = 0;
+        for ( auto& light : m_MeshLights )
+        {
+            uint32_t originalInstanceIndex = light.m_InstanceIndex;
+            uint32_t newInstanceIndex = (uint32_t)std::distance( m_ReorderedInstanceIndices.begin(), std::find( m_ReorderedInstanceIndices.begin(), m_ReorderedInstanceIndices.end(), originalInstanceIndex ) );
+            light.m_InstanceIndex = newInstanceIndex;
+
+            instanceLightIndices[ newInstanceIndex ] = lightIndex;
+            ++lightIndex;
+        }
+
+        // Create instance light indices buffer
+        m_InstanceLightIndicesBuffer.reset( GPUBuffer::Create( 
+              sizeof( uint32_t ) * (uint32_t)m_InstanceTransforms.size()
+            , sizeof( uint32_t )
+            , DXGI_FORMAT_R32_UINT
+            , D3D11_USAGE_IMMUTABLE
+            , D3D11_BIND_SHADER_RESOURCE
+            , 0
+            , instanceLightIndices.data() ) );
+
+        if ( m_InstanceLightIndicesBuffer )
+        {
+            LOG_STRING_FORMAT( "Instance light indices buffer created, size %d\n", sizeof( uint32_t ) * m_InstanceTransforms.size() );
+        }
+        else 
+        {
+            LOG_STRING( "Failed to create instance light indices buffer.\n" );
             return false;
         }
     }
@@ -482,7 +517,8 @@ void CScene::Reset()
     m_FilterRadius = 1.0f;
 
     m_Meshes.clear();
-    m_Lights.clear();
+    m_PointLights.clear();
+    m_MeshLights.clear();
     m_Materials.clear();
     m_MaterialNames.clear();
     m_TLAS.clear();
@@ -505,42 +541,38 @@ void CScene::UpdateLightGPUData()
     {
         GPU::SLight* GPULight = (GPU::SLight*)address;
 
-        for ( uint32_t i = 0; i < (uint32_t)m_Lights.size(); ++i )
+        // todo: cache the offsets somewhere so it does not need to be calculated every time
+        std::vector<uint32_t> meshTriangleOffsets;
+        meshTriangleOffsets.reserve( m_Meshes.size() );
+        uint32_t triangleCount = 0;
+        for ( auto& mesh : m_Meshes )
         {
-            SLight* CPULight = m_Lights.data() + i;
+            meshTriangleOffsets.emplace_back( triangleCount );
+            triangleCount += mesh.GetTriangleCount();
+        }
+        
+        for ( uint32_t i = 0; i < (uint32_t)m_MeshLights.size(); ++i )
+        {
+            SMeshLight* CPULight = m_MeshLights.data() + i;
 
-            XMVECTOR xmPosition = XMLoadFloat3( &CPULight->position );
-            XMVECTOR xmQuat = XMQuaternionRotationRollPitchYaw( CPULight->rotation.x, CPULight->rotation.y, CPULight->rotation.z );
-            XMFLOAT3 size3 = XMFLOAT3( CPULight->size.x, CPULight->size.y, 1.0f );
-            XMVECTOR xmScale = XMLoadFloat3( &size3 );
-            XMMATRIX xmTransform = XMMatrixAffineTransformation( xmScale, g_XMZero, xmQuat, xmPosition );
+            GPULight->radiance = CPULight->color;
+            uint32_t originalInstanceIndex = m_ReorderedInstanceIndices[ CPULight->m_InstanceIndex ];
+            GPULight->position_or_triangleRange.x = *(float*)&meshTriangleOffsets[ originalInstanceIndex ];
+            uint32_t triangleCount = m_Meshes[ originalInstanceIndex ].GetTriangleCount();
+            GPULight->position_or_triangleRange.y = *(float*)&triangleCount;
+            GPULight->position_or_triangleRange.z = *(float*)&CPULight->m_InstanceIndex;
+            GPULight->flags = LIGHT_FLAGS_MESH_LIGHT;
 
-            // Shader uses column major
-            xmTransform = XMMatrixTranspose( xmTransform );
-            XMFLOAT4X4 transform44;
-            XMStoreFloat4x4( &transform44, xmTransform );
-            GPULight->transform = XMFLOAT4X3( (float*)&transform44 );
+            ++GPULight;
+        }
 
-            GPULight->color = CPULight->color;
+        for ( uint32_t i = 0; i < (uint32_t)m_PointLights.size(); ++i )
+        {
+            SPointLight* CPULight = m_PointLights.data() + i;
 
-            switch ( CPULight->lightType )
-            {
-            case ELightType::Point:
-            {
-                GPULight->flags = LIGHT_FLAGS_POINT_LIGHT;
-                break;
-            }
-            case ELightType::Rectangle:
-            {
-                GPULight->flags = 0;
-                break;
-            }
-            default:
-            {
-                GPULight->flags = 0;
-                break;
-            }
-            }
+            GPULight->radiance = CPULight->color;
+            GPULight->position_or_triangleRange = CPULight->position;
+            GPULight->flags = LIGHT_FLAGS_POINT_LIGHT;    
 
             ++GPULight;
         }
@@ -558,7 +590,6 @@ void CScene::UpdateMaterialGPUData()
             SMaterial* materialSetting = m_Materials.data() + i;
             GPU::Material* material = ( (GPU::Material*)address ) + i;
             material->albedo = materialSetting->m_Albedo;
-            material->emission = materialSetting->m_Emission;
             material->ior = materialSetting->m_IOR;
             material->k = materialSetting->m_K;
             material->roughness = std::clamp( materialSetting->m_Roughness, 0.0f, 1.0f );
@@ -566,7 +597,6 @@ void CScene::UpdateMaterialGPUData()
             material->transmission = materialSetting->m_IsMetal ? 0.0f : materialSetting->m_Transmission;
             material->flags = materialSetting->m_IsMetal ? MATERIAL_FLAG_IS_METAL : 0;
             material->flags |= materialSetting->m_HasAlbedoTexture ? MATERIAL_FLAG_ALBEDO_TEXTURE : 0;
-            material->flags |= materialSetting->m_HasEmissionTexture ? MATERIAL_FLAG_EMISSION_TEXTURE : 0;
             material->flags |= materialSetting->m_HasRoughnessTexture ? MATERIAL_FLAG_ROUGHNESS_TEXTURE : 0;
         }
         m_MaterialsBuffer->Unmap();

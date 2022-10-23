@@ -5,7 +5,6 @@
 
 #define MATERIAL_FLAG_ALBEDO_TEXTURE    0x1
 #define MATERIAL_FLAG_ROUGHNESS_TEXTURE 0x2
-#define MATERIAL_FLAG_EMISSION_TEXTURE  0x4
 #define MATERIAL_FLAG_IS_METAL          0x8
 
 GPU_STRUCTURE_NAMESPACE_BEGIN
@@ -13,7 +12,6 @@ GPU_STRUCTURE_NAMESPACE_BEGIN
 struct Material
 {
     float3 albedo;
-    float3 emission;
     float  roughness;
     float3 ior;
     float3 k;

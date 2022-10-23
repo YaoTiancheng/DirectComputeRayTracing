@@ -736,36 +736,20 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
             {
                 if ( ImGui::BeginMenu( "Create" ) )
                 {
-                    ELightType lightType = ELightType::Point;
                     bool menuItemClicked = false;
-                    if ( ImGui::MenuItem( "Point Light", "", false, m_Scene.m_Lights.size() < m_Scene.s_MaxLightsCount ) )
+                    if ( ImGui::MenuItem( "Point Light", "", false, m_Scene.m_PointLights.size() < m_Scene.s_MaxLightsCount ) )
                     {
-                        lightType = ELightType::Point;
-                        menuItemClicked = true;
-                    }
-                    if ( ImGui::MenuItem( "Rectangle Light", "", false, m_Scene.m_Lights.size() < m_Scene.s_MaxLightsCount ) )
-                    {
-                        lightType = ELightType::Rectangle;
-                        menuItemClicked = true;
-                    }
-
-                    if ( menuItemClicked )
-                    {
-                        m_Scene.m_Lights.emplace_back();
-                        m_Scene.m_Lights.back().color = XMFLOAT3( 1.0f, 1.0f, 1.0f );
-                        m_Scene.m_Lights.back().position = XMFLOAT3( 0.0f, 0.0f, 0.0f );
-                        m_Scene.m_Lights.back().rotation = XMFLOAT3( 0.0f, 0.0f, 0.0f );
-                        m_Scene.m_Lights.back().size = XMFLOAT2( 1.0f, 1.0f );
-                        m_Scene.m_Lights.back().lightType = lightType;
+                        m_Scene.m_PointLights.emplace_back();
+                        m_Scene.m_PointLights.back().color = XMFLOAT3( 1.0f, 1.0f, 1.0f );
+                        m_Scene.m_PointLights.back().position = XMFLOAT3( 0.0f, 0.0f, 0.0f );
                         m_IsLightGPUBufferDirty = true;
                         m_IsFilmDirty = true;
                     }
-
                     ImGui::EndMenu();
                 }
                 if ( ImGui::MenuItem( "Delete", "", false, m_Scene.m_ObjectSelection.m_LightSelectionIndex != -1 ) )
                 {
-                    m_Scene.m_Lights.erase( m_Scene.m_Lights.begin() + m_Scene.m_ObjectSelection.m_LightSelectionIndex );
+                    m_Scene.m_PointLights.erase( m_Scene.m_PointLights.begin() + m_Scene.m_ObjectSelection.m_LightSelectionIndex );
                     m_Scene.m_ObjectSelection.m_LightSelectionIndex = -1;
                     m_IsLightGPUBufferDirty = true;
                     m_IsFilmDirty = true;;
@@ -787,7 +771,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
         if ( ImGui::CollapsingHeader( "Lights" ) )
         {
             char label[ 32 ];
-            for ( size_t iLight = 0; iLight < m_Scene.m_Lights.size(); ++iLight )
+            for ( size_t iLight = 0; iLight < m_Scene.m_PointLights.size(); ++iLight )
             {
                 bool isSelected = ( iLight == m_Scene.m_ObjectSelection.m_LightSelectionIndex );
                 sprintf( label, "Light %d", uint32_t( iLight ) );
@@ -823,39 +807,12 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
         if ( m_Scene.m_ObjectSelection.m_LightSelectionIndex >= 0 )
         {
             ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
-            if ( m_Scene.m_ObjectSelection.m_LightSelectionIndex < m_Scene.m_Lights.size() )
+            if ( m_Scene.m_ObjectSelection.m_LightSelectionIndex < m_Scene.m_PointLights.size() )
             {
-                SLight* selection = m_Scene.m_Lights.data() + m_Scene.m_ObjectSelection.m_LightSelectionIndex;
+                SPointLight* selection = m_Scene.m_PointLights.data() + m_Scene.m_ObjectSelection.m_LightSelectionIndex;
 
                 if ( ImGui::DragFloat3( "Position", (float*)&selection->position, 1.0f ) )
                     m_IsLightGPUBufferDirty = true;
-
-                if ( selection->lightType == ELightType::Rectangle )
-                {
-                    XMFLOAT3 eulerAnglesDeg;
-                    eulerAnglesDeg.x = XMConvertToDegrees( selection->rotation.x );
-                    eulerAnglesDeg.y = XMConvertToDegrees( selection->rotation.y );
-                    eulerAnglesDeg.z = XMConvertToDegrees( selection->rotation.z );
-                    if ( ImGui::DragFloat3( "Rotation", (float*)&eulerAnglesDeg, 1.0f ) )
-                    {
-                        selection->rotation.x = XMConvertToRadians( eulerAnglesDeg.x );
-                        selection->rotation.y = XMConvertToRadians( eulerAnglesDeg.y );
-                        selection->rotation.z = XMConvertToRadians( eulerAnglesDeg.z );
-                        m_IsLightGPUBufferDirty = true;
-                    }
-                }
-
-                static const char* s_LightTypeNames[] = { "Point", "Rectangle" };
-                if ( ImGui::Combo( "Type", (int*)&selection->lightType, s_LightTypeNames, IM_ARRAYSIZE( s_LightTypeNames ) ) )
-                {
-                    m_IsLightGPUBufferDirty = true;
-                }
-
-                if ( selection->lightType == ELightType::Rectangle )
-                {
-                    if ( ImGui::DragFloat2( "Size", (float*)&selection->size, 0.1f, 0.0001f, 10000000.0f ) )
-                        m_IsLightGPUBufferDirty = true;
-                }
 
                 if ( ImGui::ColorEdit3( "Color", (float*)&selection->color ) )
                     m_IsLightGPUBufferDirty = true;
@@ -870,8 +827,6 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 if ( ImGui::ColorEdit3( "Albedo", (float*)&selection->m_Albedo ) )
                     m_IsMaterialGPUBufferDirty = true;
                 ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
-                if ( ImGui::ColorEdit3( "Emission", (float*)&selection->m_Emission ) )
-                    m_IsMaterialGPUBufferDirty = true;
                 if ( ImGui::DragFloat( "Roughness", &selection->m_Roughness, 0.01f, 0.0f, 1.0f ) )
                     m_IsMaterialGPUBufferDirty = true;
                 if ( ImGui::Checkbox( "Is Metal", &selection->m_IsMetal ) )

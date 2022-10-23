@@ -493,7 +493,6 @@ namespace
         assert( !isTransmissive || hasDielectricIOR );
 
         material->m_Albedo = { 0.0f, 0.0f, 0.0f };
-        material->m_Emission = { 0.0f, 0.0f, 0.0f };
         material->m_Roughness = 0.0f;
         material->m_IOR = { 1.0f, 1.0f, 1.0f };
         material->m_K = { 1.0f, 1.0f, 1.0f };
@@ -909,7 +908,45 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
 
                 if ( meshCreated )
                 {
+                    uint32_t instanceIndex = (uint32_t)m_InstanceTransforms.size();
                     m_InstanceTransforms.push_back( XMFLOAT4X3( transform._11, transform._12, transform._13, transform._21, transform._22, transform._23, transform._31, transform._32, transform._33, transform._41, transform._42, transform._43 ) );
+
+                    if ( isALight )
+                    {
+                        const SValue* typeValue = emitterValue->FindValue( "type" );
+                        if ( typeValue && typeValue->m_Type == EValueType::eString )
+                        {
+                            if ( strncmp( "area", typeValue->m_String.data(), typeValue->m_String.length() ) == 0 )
+                            {
+                                XMFLOAT3 radiance = XMFLOAT3( 1.f, 1.f, 1.f );
+                                const SValue* radianceValue = emitterValue->FindValue( "radiance" );
+                                if ( radianceValue )
+                                {
+                                    if ( radianceValue->m_Type == EValueType::eRGB )
+                                    {
+                                        radiance = XMFLOAT3( radianceValue->m_RGB.x, radianceValue->m_RGB.y, radianceValue->m_RGB.z );
+                                    }
+                                    else
+                                    {
+                                        LOG_STRING_FORMAT( "Non-RGB radiance type is not supported.\n" );
+                                    }
+                                }
+
+                                SMeshLight light;
+                                light.color = radiance;
+                                light.m_InstanceIndex = instanceIndex;
+                                m_MeshLights.emplace_back( light );
+                            }
+                            else
+                            {
+                                LOG_STRING_FORMAT( "Unsupported emitter type nested in a shape \'%.*s\'.\n", typeValue->m_String.length(), typeValue->m_String.data() );
+                            }
+                        }
+                        else
+                        {
+                            LOG_STRING( "Cannot determine emitter type.\n" );
+                        }
+                    }
                 }
             }
         }

@@ -3,16 +3,41 @@
 
 #include "CppTypes.h"
 
+#define LIGHT_INDEX_INVALID -1
+
 #define LIGHT_FLAGS_POINT_LIGHT 0x1
+#define LIGHT_FLAGS_MESH_LIGHT 0x2
 
 GPU_STRUCTURE_NAMESPACE_BEGIN
 
 struct SLight
 {
-    float4x3 transform;
-    float3 color;
+    float3 radiance;
+    float3 position_or_triangleRange;
     uint flags;
 };
+
+#ifndef __cplusplus
+float3 Light_GetPosition( SLight light )
+{
+    return light.position_or_triangleRange;
+}
+
+uint Light_GetTriangleOffset( SLight light )
+{
+    return asuint( light.position_or_triangleRange.x );
+}
+
+uint Light_GetTriangleCount( SLight light )
+{
+    return asuint( light.position_or_triangleRange.y );
+}
+
+uint Light_GetInstanceIndex( SLight light )
+{
+    return asuint( light.position_or_triangleRange.z );
+}
+#endif
 
 GPU_STRUCTURE_NAMESPACE_END
 

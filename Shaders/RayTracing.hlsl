@@ -232,8 +232,8 @@ void EvaluateLightDirect( uint lightIndex, uint triangleIndex, float3 normal, fl
 struct SRay
 {
     float3 origin;
-    float3 direction;
     float  tMax;
+    float3 direction;
     float  tMin;
 };
 
@@ -245,38 +245,51 @@ struct SRayHit
     uint instanceIndex;
 };
 
-struct SMISResults
-{
-    float3 lightResult;
-    float3 bsdfResult;
-    float lightDistance;
-};
-
 struct SPathAccumulation
 {
     float3 pathThroughput;
+    float bsdfPdf;
     float3 Li;
+    bool isDeltaBxdf;
 };
 
-void UnpackPathFlags( uint flags, out bool isIdle, out bool hasShadowRayHit, out uint bounce )
+void UnpackPathFlags( uint flags, out bool isIdle, out bool hasShadowRayHit, out bool shouldTerminate, out uint bounce )
 {
     isIdle = ( flags & 0x80000000 ) != 0;
     hasShadowRayHit = ( flags & 0x40000000 ) != 0;
+    shouldTerminate = ( flags & 0x20000000 ) != 0;
     bounce = flags & 0xFF;
 }
 
-uint PackPathFlags( bool isIdle, bool hasShadowRayHit, uint bounce )
+uint PackPathFlags( bool isIdle, bool hasShadowRayHit, bool shouldTerminate, uint bounce )
 {
     uint flags = isIdle ? 0x80000000 : 0;
     flags |= hasShadowRayHit ? 0x40000000 : 0;
+    flags |= shouldTerminate ? 0x20000000 : 0;
     flags |= bounce & 0xFF;
     return flags;
 }
 
-uint SetPathFlagsBit_HasShadowRayHit( uint flags, bool value )
+uint PathFlags_SetHasShadowRayHit( uint flags, bool value )
 {
     flags = ( value ? 0x40000000 : 0 ) | ( flags & 0xBFFFFFFF );
     return flags;
+}
+
+uint PathFlags_SetShouldTerminate( uint flags )
+{
+    flags |= 0x20000000;
+    return flags;
+}
+
+uint PathFlags_GetBounce( uint flags )
+{
+    return flags & 0xFF;
+}
+
+uint PathFlags_SetBounce( uint flags, uint bounce )
+{
+    return ( flags & 0xFFFFFF00 ) | ( bounce & 0xFF );
 }
 
 #if defined( EXTENSION_RAY_CAST )
@@ -360,7 +373,7 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
         , g_BVHNodes
         , g_InstanceInvTransforms );
 
-    uint flags = SetPathFlagsBit_HasShadowRayHit( g_Flags[ pathIndex ], hasHit );
+    uint flags = PathFlags_SetHasShadowRayHit( g_Flags[ pathIndex ], hasHit );
     g_Flags[ pathIndex ] = flags;
 }
 
@@ -391,7 +404,7 @@ Buffer<uint> g_PathIndices                      : register( t0 );
 StructuredBuffer<uint2> g_PixelPositions        : register( t1 );
 RWStructuredBuffer<SRay> g_Rays                 : register( u0 );
 RWStructuredBuffer<float2> g_PixelSamples       : register( u1 );
-RWStructuredBuffer<SMISResults> g_MISResults    : register( u2 );
+RWBuffer<float4> g_LightSamplingResults         : register( u2 );
 RWStructuredBuffer<Xoshiro128StarStar> g_Rngs   : register( u3 );
 RWBuffer<uint> g_ExtensionRayQueue              : register( u4 );
 RWBuffer<uint> g_RayCounter                     : register( u5 );
@@ -415,7 +428,7 @@ void main( uint threadId : SV_DispatchThreadID, uint3 groupId : SV_GroupID, uint
     GenerateRay( filmSample, apertureSample, g_FilmSize, g_ApertureRadius, g_FocalDistance, g_FilmDistance, g_BladeCount, g_BladeVertexPos, g_ApertureBaseAngle, g_CameraTransform, origin, direction );
 
     g_PixelSamples[ pathIndex ] = pixelSample;
-    g_MISResults[ pathIndex ] = (SMISResults)0;
+    g_LightSamplingResults[ pathIndex ] = 0.f;
     g_Rngs[ pathIndex ] = rng;
 
     SRay ray;
@@ -454,6 +467,7 @@ cbuffer QueueConstants : register( b0 )
 cbuffer MaterialConstants : register( b1 )
 {
     uint               g_LightCount;
+    uint               g_MaxBounceCount;
 }
 
 Buffer<uint>                                g_PathIndices                       : register( t0 );
@@ -464,25 +478,27 @@ StructuredBuffer<SLight>                    g_Lights                            
 StructuredBuffer<float4x3>                  g_InstanceTransforms                : register( t5 );
 StructuredBuffer<uint>                      g_MaterialIds                       : register( t6 );
 StructuredBuffer<Material>                  g_Materials                         : register( t7 );
-Texture2D<float>                            g_CookTorranceCompETexture          : register( t8 );
-Texture2D<float>                            g_CookTorranceCompEAvgTexture       : register( t9 );
-Texture2D<float>                            g_CookTorranceCompInvCDFTexture     : register( t10 );
-Texture2D<float>                            g_CookTorranceCompPdfScaleTexture   : register( t11 );
-Texture2DArray<float>                       g_CookTorranceCompEFresnelTexture   : register( t12 );
-Texture2DArray<float>                       g_CookTorranceBSDFETexture          : register( t13 );
-Texture2DArray<float>                       g_CookTorranceBSDFAvgETexture       : register( t14 );
-Texture2DArray<float>                       g_CookTorranceBTDFETexture          : register( t15 );
-Texture2DArray<float>                       g_CookTorranceBSDFInvCDFTexture     : register( t16 );
-Texture2DArray<float>                       g_CookTorranceBSDFPDFScaleTexture   : register( t17 );
+Buffer<uint>                                g_InstanceLightIndices              : register( t8 );
+Texture2D<float>                            g_CookTorranceCompETexture          : register( t9 );
+Texture2D<float>                            g_CookTorranceCompEAvgTexture       : register( t10 );
+Texture2D<float>                            g_CookTorranceCompInvCDFTexture     : register( t11 );
+Texture2D<float>                            g_CookTorranceCompPdfScaleTexture   : register( t12 );
+Texture2DArray<float>                       g_CookTorranceCompEFresnelTexture   : register( t13 );
+Texture2DArray<float>                       g_CookTorranceBSDFETexture          : register( t14 );
+Texture2DArray<float>                       g_CookTorranceBSDFAvgETexture       : register( t15 );
+Texture2DArray<float>                       g_CookTorranceBTDFETexture          : register( t16 );
+Texture2DArray<float>                       g_CookTorranceBSDFInvCDFTexture     : register( t17 );
+Texture2DArray<float>                       g_CookTorranceBSDFPDFScaleTexture   : register( t18 );
 
 RWStructuredBuffer<SRay>                    g_Rays                              : register( u0 );
 RWStructuredBuffer<SRay>                    g_ShadowRays                        : register( u1 );
-RWStructuredBuffer<Xoshiro128StarStar>      g_Rngs                              : register( u2 );
-RWStructuredBuffer<SMISResults>             g_MISResults                        : register( u3 );
-RWStructuredBuffer<SPathAccumulation>       g_PathAccumulation                  : register( u4 );
-RWBuffer<uint>                              g_RayCounters                       : register( u5 );
-RWBuffer<uint>                              g_ExtensionRayQueue                 : register( u6 );
-RWBuffer<uint>                              g_ShadowRayQueue                    : register( u7 );
+RWBuffer<uint>                              g_Flags                             : register( u2 );
+RWStructuredBuffer<Xoshiro128StarStar>      g_Rngs                              : register( u3 );
+RWBuffer<float4>                            g_LightSamplingResults              : register( u4 );
+RWStructuredBuffer<SPathAccumulation>       g_PathAccumulation                  : register( u5 );
+RWBuffer<uint>                              g_RayCounters                       : register( u6 );
+RWBuffer<uint>                              g_ExtensionRayQueue                 : register( u7 );
+RWBuffer<uint>                              g_ShadowRayQueue                    : register( u8 );
 
 #include "BSDFs.inc.hlsl"
 
@@ -507,107 +523,105 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
     float3 origin = ray.origin;
     float3 direction = ray.direction;
     Intersection intersection;
-    HitInfoToIntersection( origin, direction, hitInfo, g_Vertices, g_Triangles, g_MaterialIds, g_Materials, g_InstanceTransforms, intersection );
+    HitInfoToIntersection( origin, direction, hitInfo, g_Vertices, g_Triangles, g_MaterialIds, g_Materials, g_InstanceTransforms, g_InstanceLightIndices, intersection );
 
     Xoshiro128StarStar rng = g_Rngs[ pathIndex ];
-
     SPathAccumulation pathAccumulation = g_PathAccumulation[ pathIndex ];
-    float3 pathThroughput = pathAccumulation.pathThroughput;
 
-    pathAccumulation.Li += pathThroughput * intersection.emission;
-
-    float3 wo = -direction;
-
-    // Sample light
-    bool isDeltaLight = false;
-    uint lightIndex = 0;
-    float3 lightResult = 0.0f;
-    bool hasShadowRay = false;
-    if ( g_LightCount != 0 )
+    // Evaluate light
+    if ( intersection.lightIndex != LIGHT_INDEX_INVALID )
     {
-        float lightSelectionSample = GetNextSample1D( rng );
-        float2 lightSamples = GetNextSample2D( rng );
-
-        lightIndex = floor( lightSelectionSample * g_LightCount );
-        SLightSampleResult sampleResult = SampleLightDirect( g_Lights[ lightIndex ], intersection.position, g_Vertices, g_Triangles, lightSamples );
-        isDeltaLight = sampleResult.isDeltaLight;
-
-        if ( any( sampleResult.radiance > 0.0f ) && sampleResult.pdf > 0.0f )
+        float3 radiance;
+        float lightPdf;
+        EvaluateLightDirect( intersection.lightIndex, intersection.triangleIndex, intersection.geometryNormal, direction, hitInfo.t, g_Lights, g_LightCount, g_Vertices, g_Triangles, g_InstanceTransforms, radiance, lightPdf );
+        if ( lightPdf > 0.0f )
         {
-            float3 bsdf = EvaluateBSDF( sampleResult.wi, wo, intersection );
-            float NdotWI = abs( dot( intersection.normal, sampleResult.wi ) );
-            float bsdfPdf = EvaluateBSDFPdf( sampleResult.wi, wo, intersection );
-            float weight = isDeltaLight ? 1.0f : PowerHeuristic( 1, sampleResult.pdf, 1, bsdfPdf );
-            lightResult = pathThroughput * sampleResult.radiance * bsdf * NdotWI * weight * g_LightCount / sampleResult.pdf;
-
-            SRay shadowRay;
-            shadowRay.direction = sampleResult.wi;
-            shadowRay.origin = OffsetRayOrigin( intersection.position, intersection.geometryNormal, sampleResult.wi );
-            shadowRay.tMin = 0.0f;
-            shadowRay.tMax = sampleResult.distance;
-            g_ShadowRays[ pathIndex ] = shadowRay;
-            
-            hasShadowRay = true;
+            float weight = !pathAccumulation.isDeltaBxdf ? PowerHeuristic( 1, pathAccumulation.bsdfPdf, 1, lightPdf ) : 1.0f;
+            pathAccumulation.Li += pathAccumulation.pathThroughput * radiance * weight;
         }
     }
 
-    // Sample BSDF
-    float3 bsdfResult = 0.0f;
-    float3 wi;
-    float lightDistance = FLT_INF;
-    bool hasExtensionRay = false;
+    float3 lightSamplingResult = 0.0f;
+    bool shouldTerminate = false;
+    bool hasShadowRay = false;
+
+    uint pathFlags = g_Flags[ pathIndex ];
+    uint bounce = PathFlags_GetBounce( pathFlags );
+    if ( bounce > g_MaxBounceCount || hitInfo.t == FLT_INF )
     {
-        float bsdfSelectionSample = GetNextSample1D( rng );
-        float2 bsdfSample = GetNextSample2D( rng );
+        g_Flags[ pathIndex ] = PathFlags_SetShouldTerminate( pathFlags );
+        shouldTerminate = true;
+    }
+    else
+    {
+        float3 wo = -direction;
 
-        float3 bsdf;
-        float bsdfPdf;
-        bool isDeltaBxdf;
-        SampleBSDF( wo, bsdfSample, bsdfSelectionSample, intersection, wi, bsdf, bsdfPdf, isDeltaBxdf );
-
-        if ( any( bsdf != 0.0f ) && bsdfPdf != 0.0f )
+        // Sample light
+        if ( g_LightCount != 0 )
         {
-            float NdotWI = abs( dot( intersection.normal, wi ) );
-            pathThroughput = pathThroughput * bsdf * NdotWI / bsdfPdf;
-
-            ray.direction = wi;
-            ray.origin = OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi );
-            ray.tMin = 0.0f;
-            ray.tMax = FLT_INF;
-            g_Rays[ pathIndex ] = ray;
-            hasExtensionRay = true;
-
-            if ( g_LightCount != 0 && !isDeltaLight )
+            SLightSampleResult sampleResult = SampleLightDirect( intersection.position, g_Lights, g_LightCount, g_Vertices, g_Triangles, g_InstanceTransforms, rng );
+            bool isDeltaLight = sampleResult.isDeltaLight;
+            if ( any( sampleResult.radiance > 0.0f ) && sampleResult.pdf > 0.0f )
             {
-                float3 radiance;
-                float lightPdf;
-                EvaluateLightDirect( g_Lights[ lightIndex ], g_Vertices, g_Triangles, intersection.position, wi, lightDistance, radiance, lightPdf );
-                if ( lightPdf > 0.0f )
-                {
-                    float weight = !isDeltaBxdf ? PowerHeuristic( 1, bsdfPdf, 1, lightPdf ) : 1.0f;
-                    bsdfResult = pathThroughput * radiance * weight * g_LightCount;
-                }
+                float3 bsdf = EvaluateBSDF( sampleResult.wi, wo, intersection );
+                float NdotWI = abs( dot( intersection.normal, sampleResult.wi ) );
+                float bsdfPdf = EvaluateBSDFPdf( sampleResult.wi, wo, intersection );
+                float weight = isDeltaLight ? 1.0f : PowerHeuristic( 1, sampleResult.pdf, 1, bsdfPdf );
+                lightSamplingResult = pathAccumulation.pathThroughput * sampleResult.radiance * bsdf * NdotWI * weight;
+
+                SRay shadowRay;
+                shadowRay.direction = sampleResult.wi;
+                shadowRay.origin = OffsetRayOrigin( intersection.position, intersection.geometryNormal, sampleResult.wi );
+                shadowRay.tMin = 0.0f;
+                shadowRay.tMax = sampleResult.distance;
+                g_ShadowRays[ pathIndex ] = shadowRay;
+
+                hasShadowRay = true;
             }
         }
-        else
+
+        // Sample BSDF
+        float bsdfPdf = 0.f;
+        bool isDeltaBxdf = false;
         {
-            pathThroughput = 0.0f;
+            float bsdfSelectionSample = GetNextSample1D( rng );
+            float2 bsdfSample = GetNextSample2D( rng );
+
+            float3 wi;
+            float3 bsdf;
+            SampleBSDF( wo, bsdfSample, bsdfSelectionSample, intersection, wi, bsdf, bsdfPdf, isDeltaBxdf );
+
+            if ( any( bsdf != 0.0f ) && bsdfPdf != 0.0f )
+            {
+                float NdotWI = abs( dot( intersection.normal, wi ) );
+                pathAccumulation.pathThroughput = pathAccumulation.pathThroughput * bsdf * NdotWI / bsdfPdf;
+
+                ray.direction = wi;
+                ray.origin = OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi );
+                ray.tMin = 0.0f;
+                ray.tMax = FLT_INF;
+                g_Rays[ pathIndex ] = ray;
+
+                g_Flags[ pathIndex ] = PathFlags_SetBounce( pathFlags, bounce + 1 );
+            }
+            else
+            {
+                g_Flags[ pathIndex ] = PathFlags_SetShouldTerminate( pathFlags );
+                shouldTerminate = true;
+            }
         }
+        pathAccumulation.bsdfPdf = bsdfPdf;
+        pathAccumulation.isDeltaBxdf = isDeltaBxdf;
     }
 
-    SMISResults misResults;
-    misResults.lightResult = lightResult;
-    misResults.bsdfResult = bsdfResult;
-    misResults.lightDistance = lightDistance;
-    g_MISResults[ pathIndex ] = misResults;
     g_Rngs[ pathIndex ] = rng;
-    pathAccumulation.pathThroughput = pathThroughput;
     g_PathAccumulation[ pathIndex ] = pathAccumulation;
+    g_LightSamplingResults[ pathIndex ] = float4( lightSamplingResult, 0.f );
 
     uint laneIndex = WaveGetLaneIndex( gtid );
     // Write extension ray indices
     {
-        uint rayMask = WaveActiveBallot32( laneIndex, hasExtensionRay );
+        uint rayMask = WaveActiveBallot32( laneIndex, !shouldTerminate );
         uint rayCount = countbits( rayMask );
         uint rayIndexBase = 0;
         if ( laneIndex == 0 )
@@ -617,7 +631,7 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
 
         rayIndexBase = WaveReadLaneFirst32( laneIndex, rayIndexBase );
         uint rayIndexOffset = WavePrefixCountBits32( laneIndex, rayMask );
-        if ( hasExtensionRay )
+        if ( !shouldTerminate )
         {
             g_ExtensionRayQueue[ rayIndexBase + rayIndexOffset ] = pathIndex;
         }
@@ -655,11 +669,8 @@ cbuffer ControlConstants : register( b0 )
     uint2              g_FilmDimension;
 }
 
-StructuredBuffer<SRayHit>       g_RayHits           : register( t0 );
-StructuredBuffer<SRay>          g_Rays              : register( t1 );
-StructuredBuffer<float2>        g_PixelSamples      : register( t2 );
-StructuredBuffer<SMISResults>   g_MISResults        : register( t3 );
-TextureCube<float3>             g_EnvTexture        : register( t4 );
+StructuredBuffer<float2>        g_PixelSamples      : register( t0 );
+Buffer<float4>                  g_LightSamplingResults : register( t1 );
 
 RWStructuredBuffer<uint2>       g_PixelPositions    : register( u0 );
 RWStructuredBuffer<SPathAccumulation> g_PathAccumulation : register( u1 );
@@ -674,46 +685,30 @@ RWTexture2D<float3>             g_SampleValueTexture : register( u8 );
 [numthreads( 32, 1, 1 )]
 void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
 {
-    uint iBounce = 0;
     bool isIdle = false;
+    bool shouldTerminate = false;
     bool hasShadowRayHit = false;
-    UnpackPathFlags( g_Flags[ threadId ], isIdle, hasShadowRayHit, iBounce );
+    uint bounce = 0;
+    UnpackPathFlags( g_Flags[ threadId ], isIdle, hasShadowRayHit, shouldTerminate, bounce );
     isIdle = isIdle || threadId >= g_PathCount;
 
     if ( !isIdle )
     {
-        float3 wi = g_Rays[ threadId ].direction;
         SPathAccumulation pathAccumulation = g_PathAccumulation[ threadId ];
-        SRayHit rayHit = g_RayHits[ threadId ];
-        SMISResults misResults = g_MISResults[ threadId ];
 
-        float3 lightResult = misResults.lightResult;
-        pathAccumulation.Li += !hasShadowRayHit ? lightResult : 0.0f;
+        float4 lightSamplingResults = g_LightSamplingResults[ threadId ];
+        pathAccumulation.Li += !hasShadowRayHit ? lightSamplingResults.xyz : 0.0f;
 
-        float3 bsdfResult = misResults.bsdfResult;
-        float lightDistance = misResults.lightDistance;
-        pathAccumulation.Li += lightDistance < rayHit.t ? bsdfResult : 0.0f;
-
-        if ( iBounce > g_MaxBounceCount || all( pathAccumulation.pathThroughput == 0.0f ) )
+        if ( shouldTerminate )
         {
-            isIdle = true;
-        }
-        else if ( rayHit.t == FLT_INF )
-        {
-            pathAccumulation.Li += pathAccumulation.pathThroughput * EnvironmentShader( wi, g_Background.xyz, g_EnvTexture, UVClampSampler );
+            uint2 pixelPosition = g_PixelPositions[ threadId ];
+            float2 pixelSample = g_PixelSamples[ threadId ];
+            WriteSample( pathAccumulation.Li, pixelSample, pixelPosition, g_SamplePositionTexture, g_SampleValueTexture );
             isIdle = true;
         }
         else
         {
             g_PathAccumulation[ threadId ] = pathAccumulation;
-            ++iBounce;
-        }
-
-        if ( isIdle )
-        {
-            uint2 pixelPosition = g_PixelPositions[ threadId ];
-            float2 pixelSample = g_PixelSamples[ threadId ];
-            WriteSample( pathAccumulation.Li, pixelSample, pixelPosition, g_SamplePositionTexture, g_SampleValueTexture );
         }
     }
 
@@ -772,15 +767,17 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
                 SPathAccumulation pathAccumulation;
                 pathAccumulation.Li = 0.0f;
                 pathAccumulation.pathThroughput = 1.0f;
+                pathAccumulation.bsdfPdf = 0.f;
+                pathAccumulation.isDeltaBxdf = true;
                 g_PathAccumulation[ threadId ] = pathAccumulation;
                 g_NewPathQueue[ rayIndexBase + rayIndexOffset ] = threadId;
                 isIdle = false;
-                iBounce = 0;
+                bounce = 0;
             }
         }
     }
 
-    g_Flags[ threadId ] = PackPathFlags( isIdle, false, iBounce );
+    g_Flags[ threadId ] = PackPathFlags( isIdle, false, false, bounce );
 }
 
 #endif
@@ -824,7 +821,7 @@ void main( uint3 threadId : SV_DispatchThreadID )
     if ( threadId.x >= g_PathCount )
         return;
 
-    g_Flags[ threadId.x ] = PackPathFlags( true, false, 0 );
+    g_Flags[ threadId.x ] = PackPathFlags( true, false, false, 0 );
 }
 
 #endif

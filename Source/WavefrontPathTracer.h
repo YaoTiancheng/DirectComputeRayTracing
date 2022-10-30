@@ -62,7 +62,7 @@ private:
     GPUBufferPtr m_PixelPositionBuffer;
     GPUBufferPtr m_PixelSampleBuffer;
     GPUBufferPtr m_RngBuffer;
-    GPUBufferPtr m_MISResultBuffer;
+    GPUBufferPtr m_LightSamplingResultsBuffer;
     GPUBufferPtr m_PathAccumulationBuffer;
     GPUBufferPtr m_FlagsBuffer;
     GPUBufferPtr m_NextBlockIndexBuffer;

@@ -48,7 +48,8 @@ struct SNewPathConstants
 struct SMaterialConstants
 {
     uint32_t g_LightCount;
-    uint32_t padding[ 3 ];
+    uint32_t g_MaxBounceCount;
+    uint32_t padding[ 2 ];
 };
 
 bool CWavefrontPathTracer::Create()
@@ -101,17 +102,18 @@ bool CWavefrontPathTracer::Create()
     if ( !m_RngBuffer )
         return false;
 
-    m_MISResultBuffer.reset( GPUBuffer::CreateStructured(
-          s_PathPoolLaneCount * 28
-        , 28
+    m_LightSamplingResultsBuffer.reset( GPUBuffer::Create(
+          s_PathPoolLaneCount * 16
+        , 16
+        , DXGI_FORMAT_R32G32B32A32_FLOAT
         , D3D11_USAGE_DEFAULT
         , D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS ) );
-    if ( !m_MISResultBuffer )
+    if ( !m_LightSamplingResultsBuffer )
         return false;
 
     m_PathAccumulationBuffer.reset( GPUBuffer::CreateStructured(
-          s_PathPoolLaneCount * 24
-        , 24
+          s_PathPoolLaneCount * 32
+        , 32
         , D3D11_USAGE_DEFAULT
         , D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS ) );
     if ( !m_PathAccumulationBuffer )
@@ -232,7 +234,7 @@ void CWavefrontPathTracer::Destroy()
     m_PixelPositionBuffer.reset();
     m_PixelSampleBuffer.reset();
     m_RngBuffer.reset();
-    m_MISResultBuffer.reset();
+    m_LightSamplingResultsBuffer.reset();
     m_PathAccumulationBuffer.reset();
     m_FlagsBuffer.reset();
     m_NextBlockIndexBuffer.reset();
@@ -334,6 +336,7 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SR
     {
         SMaterialConstants* constants = (SMaterialConstants*)address;
         constants->g_LightCount = m_Scene->GetLightCount();
+        constants->g_MaxBounceCount = m_Scene->m_MaxBounceCount;
         m_MaterialConstantBuffer->Unmap();
     }
 
@@ -363,20 +366,20 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SR
 
     // Copy ray counter to the staging buffer
     {
-        SCOPED_RENDER_ANNOTATION( L"Copy ray counter to staging buffer" );
+        SCOPED_RENDER_ANNOTATION( L"Copy counters to staging buffer" );
 
         if ( m_NewImage )
         {
             // For new image, initialize all staging buffer
             for ( uint32_t i = 0; i < s_QueueCounterStagingBufferCount; ++i )
             {
-                deviceContext->CopyResource( m_QueueCounterStagingBuffer[ i ]->GetBuffer(), m_QueueCounterBuffers[ 0 ]->GetBuffer() );
+                deviceContext->CopyResource( m_QueueCounterStagingBuffer[ i ]->GetBuffer(), m_QueueCounterBuffers[ 1 ]->GetBuffer() );
                 m_QueueCounterStagingBufferIndex = 0;
             }
         }
         else
         {
-            deviceContext->CopyResource( m_QueueCounterStagingBuffer[ m_QueueCounterStagingBufferIndex ]->GetBuffer(), m_QueueCounterBuffers[ 0 ]->GetBuffer() );
+            deviceContext->CopyResource( m_QueueCounterStagingBuffer[ m_QueueCounterStagingBufferIndex ]->GetBuffer(), m_QueueCounterBuffers[ 1 ]->GetBuffer() );
             m_QueueCounterStagingBufferIndex = ( m_QueueCounterStagingBufferIndex + 1 ) % s_QueueCounterStagingBufferCount;
         }
     }
@@ -393,9 +396,10 @@ bool CWavefrontPathTracer::IsImageComplete()
 {
     if ( void* address = m_QueueCounterStagingBuffer[ m_QueueCounterStagingBufferIndex ]->Map( D3D11_MAP_READ, 0 ) )
     {
-        uint32_t extensionRayCount = *(uint32_t*)address;
+        uint32_t* counters = (uint32_t*)address;
+        bool areAllQueuesEmpty = !counters[ 0 ] && !counters[ 1 ];
         m_QueueCounterStagingBuffer[ m_QueueCounterStagingBufferIndex ]->Unmap();
-        return extensionRayCount == 0;
+        return areAllQueuesEmpty;
     }
     return false;
 }
@@ -495,11 +499,8 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
         job.m_Shader = m_Shaders[ (int)EShaderKernel::Control ].get();
         job.m_SRVs =
         {
-              m_RayHitBuffer->GetSRV()
-            , m_RayBuffer->GetSRV()
-            , m_PixelSampleBuffer->GetSRV()
-            , m_MISResultBuffer->GetSRV()
-            , m_Scene->m_EnvironmentTexture ? m_Scene->m_EnvironmentTexture->GetSRV() : nullptr
+              m_PixelSampleBuffer->GetSRV()
+            , m_LightSamplingResultsBuffer->GetSRV()
         };
         job.m_UAVs =
         {
@@ -570,7 +571,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
         {
               m_RayBuffer->GetUAV()
             , m_PixelSampleBuffer->GetUAV()
-            , m_MISResultBuffer->GetUAV()
+            , m_LightSamplingResultsBuffer->GetUAV()
             , m_RngBuffer->GetUAV()
             , m_QueueBuffers[ (int)EShaderKernel::ExtensionRayCast ]->GetUAV()
             , m_QueueCounterBuffers[ 0 ]->GetUAV()
@@ -613,6 +614,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
             , m_Scene->m_InstanceTransformsBuffer->GetSRV( 0, (uint32_t)m_Scene->m_InstanceTransforms.size() )
             , m_Scene->m_MaterialIdsBuffer->GetSRV()
             , m_Scene->m_MaterialsBuffer->GetSRV()
+            , m_Scene->m_InstanceLightIndicesBuffer->GetSRV()
             , renderData.m_CookTorranceCompETexture->GetSRV()
             , renderData.m_CookTorranceCompEAvgTexture->GetSRV()
             , renderData.m_CookTorranceCompInvCDFTexture->GetSRV()
@@ -628,8 +630,9 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
         {
               m_RayBuffer->GetUAV()
             , m_ShadowRayBuffer->GetUAV()
+            , m_FlagsBuffer->GetUAV()
             , m_RngBuffer->GetUAV()
-            , m_MISResultBuffer->GetUAV()
+            , m_LightSamplingResultsBuffer->GetUAV()
             , m_PathAccumulationBuffer->GetUAV()
             , m_QueueCounterBuffers[ 0 ]->GetUAV()
             , m_QueueBuffers[ (int)EShaderKernel::ExtensionRayCast ]->GetUAV()

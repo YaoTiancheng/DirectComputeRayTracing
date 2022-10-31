@@ -554,7 +554,7 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
 
     if ( bounce > g_MaxBounceCount || hitInfo.t == FLT_INF )
     {
-        g_Flags[ pathIndex ] = PathFlags_SetShouldTerminate( pathFlags );
+        pathFlags = PathFlags_SetShouldTerminate( pathFlags );
         shouldTerminate = true;
     }
     else
@@ -607,11 +607,11 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
                 ray.tMax = FLT_INF;
                 g_Rays[ pathIndex ] = ray;
 
-                g_Flags[ pathIndex ] = PathFlags_SetBounce( pathFlags, bounce + 1 );
+                pathFlags = PathFlags_SetBounce( pathFlags, bounce + 1 );
             }
             else
             {
-                g_Flags[ pathIndex ] = PathFlags_SetShouldTerminate( pathFlags );
+                pathFlags = PathFlags_SetShouldTerminate( pathFlags );
                 shouldTerminate = true;
             }
         }
@@ -619,6 +619,13 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
         pathAccumulation.isDeltaBxdf = isDeltaBxdf;
     }
 
+    // If no shadow ray is spawned then set HasShadowRayHit to false so the control kernel will not load the light sampling result.
+    if ( !hasShadowRay )
+    {
+        pathFlags = PathFlags_SetHasShadowRayHit( pathFlags, false );
+    }
+
+    g_Flags[ pathIndex ] = pathFlags;
     g_Rngs[ pathIndex ] = rng;
     g_PathAccumulation[ pathIndex ] = pathAccumulation;
     g_LightSamplingResults[ pathIndex ] = float4( lightSamplingResult, 0.f );

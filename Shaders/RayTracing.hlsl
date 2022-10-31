@@ -528,8 +528,15 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
     Xoshiro128StarStar rng = g_Rngs[ pathIndex ];
     SPathAccumulation pathAccumulation = g_PathAccumulation[ pathIndex ];
 
+    uint pathFlags = g_Flags[pathIndex];
+    uint bounce = PathFlags_GetBounce(pathFlags);
+
     // Evaluate light
+#if defined( LIGHT_VISIBLE )
     if ( intersection.lightIndex != LIGHT_INDEX_INVALID )
+#else
+    if ( bounce > 0 && intersection.lightIndex != LIGHT_INDEX_INVALID )
+#endif
     {
         float3 radiance;
         float lightPdf;
@@ -545,8 +552,6 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
     bool shouldTerminate = false;
     bool hasShadowRay = false;
 
-    uint pathFlags = g_Flags[ pathIndex ];
-    uint bounce = PathFlags_GetBounce( pathFlags );
     if ( bounce > g_MaxBounceCount || hitInfo.t == FLT_INF )
     {
         g_Flags[ pathIndex ] = PathFlags_SetShouldTerminate( pathFlags );

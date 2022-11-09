@@ -7,6 +7,7 @@
 #include "GPUBuffer.h"
 #include "GPUTexture.h"
 #include "Constants.h"
+#include "StringConversion.h"
 #include "../Shaders/LightSharedDef.inc.hlsl"
 #include "imgui/imgui.h"
 
@@ -513,10 +514,10 @@ void CScene::Reset()
     m_ApertureRotation = 0.0f;
     m_ShutterTime = 1.0f;
     m_ISO = 100;
-    m_BackgroundColor = { 0.0f, 0.0f, 0.0f, 0.f };
     m_FilterRadius = 1.0f;
 
     m_Meshes.clear();
+    m_EnvironmentLight.reset();
     m_PointLights.clear();
     m_MeshLights.clear();
     m_Materials.clear();
@@ -527,12 +528,6 @@ void CScene::Reset()
 
     m_HasValidScene = false;
     m_ObjectSelection.DeselectAll();
-}
-
-bool CScene::LoadEnvironmentTextureFromFile( const wchar_t* filepath )
-{
-    m_EnvironmentTexture.reset( GPUTexture::CreateFromFile( filepath ) );
-    return m_EnvironmentTexture.get() != nullptr;
 }
 
 void CScene::UpdateLightGPUData()
@@ -562,6 +557,15 @@ void CScene::UpdateLightGPUData()
             GPULight->position_or_triangleRange.y = *(float*)&triangleCount;
             GPULight->position_or_triangleRange.z = *(float*)&CPULight->m_InstanceIndex;
             GPULight->flags = LIGHT_FLAGS_MESH_LIGHT;
+
+            ++GPULight;
+        }
+
+        if ( m_EnvironmentLight )
+        {
+            SEnvironmentLight* CPULight = m_EnvironmentLight.get();
+            GPULight->radiance = CPULight->m_Color;
+            GPULight->flags = LIGHT_FLAGS_ENVIRONMENT_LIGHT;
 
             ++GPULight;
         }
@@ -629,3 +633,9 @@ float CScene::CalculateFilmDistanceNormalized() const
     return CalculateFilmDistance() / m_FocalLength;
 }
 
+bool SEnvironmentLight::CreateTextureFromFile()
+{
+    std::wstring filename = StringConversion::UTF8StringToUTF16WString( m_TextureFileName );
+    m_Texture.reset( GPUTexture::CreateFromFile( filename.c_str() ) );
+    return m_Texture.get() != nullptr;
+}

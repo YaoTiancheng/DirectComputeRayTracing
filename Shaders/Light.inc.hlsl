@@ -64,4 +64,37 @@ void TriangleLight_Sample( SLight light, float4x3 transform, float3 v0, float3 v
     pdf = WIdotN > 0.f ? pdf : 0.f;
 }
 
+float3 EnvironmentLight_Evaluate( SLight light, float3 direction, TextureCube<float3> envTexture, SamplerState envTextureSampler )
+{
+#if defined( HAS_ENV_TEXTURE )
+    return envTexture.SampleLevel( envTextureSampler, direction, 0 ).rgb * light.radiance;
+#else 
+    return light.radiance;
+#endif
+}
+
+void EnvironmentLight_EvaluateWithPDF( SLight light, float3 wi, TextureCube<float3> envTexture, SamplerState envTextureSampler, out float3 radiance, out float pdf )
+{
+#if defined( HAS_ENV_TEXTURE )
+    radiance = envTexture.SampleLevel( envTextureSampler, wi, 0 ).rgb * light.radiance;
+#else 
+    radiance = light.radiance;
+#endif
+    pdf = UniformSpherePDF();
+}
+
+void EnvironmentLight_Sample( SLight light, float2 samples, TextureCube<float3> envTexture, SamplerState envTextureSampler, out float3 radiance, out float3 wi, out float distance, out float pdf )
+{
+    wi = SampleSphere( samples );
+    pdf = UniformSpherePDF();
+#if defined( HAS_ENV_TEXTURE )
+    radiance = envTexture.SampleLevel( envTextureSampler, wi, 0 ).rgb * light.radiance;
+#else 
+    radiance = light.radiance;
+#endif
+    distance = FLT_INF;
+}
+
+
+
 #endif

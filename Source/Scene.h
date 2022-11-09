@@ -26,6 +26,15 @@ struct SMeshLight
     DirectX::XMFLOAT3 color;
 };
 
+struct SEnvironmentLight
+{
+    DirectX::XMFLOAT3 m_Color;
+    GPUTexturePtr m_Texture;
+    std::string m_TextureFileName;
+
+    bool CreateTextureFromFile();
+};
+
 struct SMaterial
 {
     DirectX::XMFLOAT3 m_Albedo;
@@ -52,10 +61,10 @@ struct SRayHit
 
 struct SSceneObjectSelection
 {
-    void SelectLight( int index )
+    void SelectPointLight( int index )
     {
         DeselectAll();
-        m_LightSelectionIndex = index;
+        m_PointLightSelectionIndex = index;
     }
 
     void SelectMaterial( int index )
@@ -70,16 +79,24 @@ struct SSceneObjectSelection
         m_IsCameraSelected = true;
     }
 
-    void DeselectAll()
+    void SelectEnvironmentLight()
     {
-        m_LightSelectionIndex = -1;
-        m_MaterialSelectionIndex = -1;
-        m_IsCameraSelected = false;
+        DeselectAll();
+        m_IsEnvironmentLightSelected = true;
     }
 
-    int m_LightSelectionIndex = -1;
+    void DeselectAll()
+    {
+        m_PointLightSelectionIndex = -1;
+        m_MaterialSelectionIndex = -1;
+        m_IsCameraSelected = false;
+        m_IsEnvironmentLightSelected = false;
+    }
+
+    int m_PointLightSelectionIndex = -1;
     int m_MaterialSelectionIndex = -1;
     bool m_IsCameraSelected = false;
+    bool m_IsEnvironmentLightSelected = false;
 };
 
 class CScene
@@ -89,15 +106,13 @@ public:
 
     void Reset();
 
-    bool LoadEnvironmentTextureFromFile( const wchar_t* filepath );
-
     void UpdateLightGPUData();
 
     void UpdateMaterialGPUData();
 
     float GetFilmDistance() const;
 
-    uint32_t GetLightCount() const { return (uint32_t)m_MeshLights.size() + (uint32_t)m_PointLights.size(); }
+    uint32_t GetLightCount() const { return (uint32_t)m_MeshLights.size() + (uint32_t)m_PointLights.size() + ( m_EnvironmentLight ? 1 : 0 ); }
 
     float CalculateFocalDistance() const;
 
@@ -123,8 +138,6 @@ private:
     bool CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, const char* MTLBaseDir, bool applyTransform, const DirectX::XMFLOAT4X4& transform, bool changeWindingOrder, uint32_t materialIdOverride );
 
 public:
-    std::string m_EnvironmentImageFilepath;
-
     DirectX::XMFLOAT2 m_FilmSize;
     float m_FilmDistanceNormalized;
     float m_FocalLength;
@@ -135,7 +148,6 @@ public:
     float m_ShutterTime;
     float m_ISO;
     bool m_IsManualFilmDistanceEnabled = false;
-    DirectX::XMFLOAT4 m_BackgroundColor;
     uint32_t m_MaxBounceCount;
     float m_FilterRadius = 1.0f;
     EFilter m_Filter = EFilter::Box;
@@ -150,6 +162,7 @@ public:
     bool m_IsLightVisible = true;
 
     Camera m_Camera;
+    std::shared_ptr<SEnvironmentLight> m_EnvironmentLight;
     std::vector<SPointLight> m_PointLights;
     std::vector<SMeshLight> m_MeshLights;
     std::vector<SMaterial> m_Materials;
@@ -160,7 +173,6 @@ public:
     std::vector<DirectX::XMFLOAT4X3> m_InstanceTransforms;
     uint32_t m_BVHTraversalStackSize;
 
-    GPUTexturePtr m_EnvironmentTexture;
     GPUBufferPtr m_VerticesBuffer;
     GPUBufferPtr m_TrianglesBuffer;
     GPUBufferPtr m_BVHNodesBuffer;

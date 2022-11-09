@@ -296,7 +296,6 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SR
     if ( void* address = m_ControlConstantBuffer->Map() )
     {
         SControlConstants* constants = (SControlConstants*)address;
-        constants->g_Background = m_Scene->m_BackgroundColor;
         constants->g_PathCount = s_PathPoolLaneCount;
         constants->g_MaxBounceCount = m_Scene->m_MaxBounceCount;
         constants->g_BlockCounts[ 0 ] = renderContext.m_CurrentResolutionWidth / blockWidth;
@@ -449,9 +448,9 @@ bool CWavefrontPathTracer::CompileAndCreateShader( EShaderKernel kernel )
     {
         rayTracingShaderDefines.push_back( { "LIGHT_VISIBLE", "0" } );
     }
-    if ( m_Scene->m_EnvironmentTexture.get() == nullptr )
+    if ( m_Scene->m_EnvironmentLight && m_Scene->m_EnvironmentLight->m_Texture )
     {
-        rayTracingShaderDefines.push_back( { "NO_ENV_TEXTURE", "0" } );
+        rayTracingShaderDefines.push_back( { "HAS_ENV_TEXTURE", "0" } );
     }
     rayTracingShaderDefines.push_back( { NULL, NULL } );
 

@@ -218,8 +218,6 @@ bool SRenderer::Init()
         return false;
     }
 
-    m_Scene.m_EnvironmentImageFilepath = StringConversion::UTF16WStringToUTF8String( CommandLineArgs::Singleton()->GetEnvironmentTextureFilename() );
-
     m_ResolutionWidth = CommandLineArgs::Singleton()->ResolutionX();
     m_ResolutionHeight = CommandLineArgs::Singleton()->ResolutionY();
 
@@ -646,57 +644,6 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
             }
         }
 
-        if ( ImGui::CollapsingHeader( "Environment" ) )
-        {
-            ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
-            if ( ImGui::ColorEdit3( "Background Color", (float*)&m_Scene.m_BackgroundColor ) )
-                m_IsFilmDirty = true;
-
-            ImGui::InputText( "Image File", const_cast<char*>( m_Scene.m_EnvironmentImageFilepath.c_str() ), m_Scene.m_EnvironmentImageFilepath.size(), ImGuiInputTextFlags_ReadOnly );
-            if ( ImGui::Button( "Browse##BrowseEnvImage" ) )
-            {
-                OPENFILENAMEA ofn;
-                char filepath[ MAX_PATH ];
-                ZeroMemory( &ofn, sizeof( ofn ) );
-                ofn.lStructSize = sizeof( ofn );
-                ofn.hwndOwner = m_hWnd;
-                ofn.lpstrFile = filepath;
-                ofn.lpstrFile[ 0 ] = '\0';
-                ofn.nMaxFile = sizeof( filepath );
-                ofn.lpstrFilter = "DDS\0*.DDS\0";
-                ofn.nFilterIndex = 1;
-                ofn.lpstrFileTitle = NULL;
-                ofn.nMaxFileTitle = 0;
-                ofn.lpstrInitialDir = NULL;
-                ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
-
-                if ( GetOpenFileNameA( &ofn ) == TRUE )
-                {
-                    m_Scene.m_EnvironmentImageFilepath = filepath;
-                    bool hasEnvTexturePreviously = m_Scene.m_EnvironmentTexture.get() != nullptr;
-                    std::wstring filepath = StringConversion::UTF8StringToUTF16WString( m_Scene.m_EnvironmentImageFilepath );
-                    m_Scene.LoadEnvironmentTextureFromFile( filepath.c_str() );
-                    bool hasEnvTextureCurrently = m_Scene.m_EnvironmentTexture.get() != nullptr;
-                    if ( hasEnvTexturePreviously != hasEnvTextureCurrently )
-                    {
-                        m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
-                    }
-                    m_IsFilmDirty = true;
-                }
-            }
-            if ( m_Scene.m_EnvironmentTexture )
-            {
-                ImGui::SameLine();
-                if ( ImGui::Button( "Clear##ClearEnvImage" ) )
-                {
-                    m_Scene.m_EnvironmentImageFilepath = "";
-                    m_Scene.m_EnvironmentTexture.reset();
-                    m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
-                    m_IsFilmDirty = true;
-                }
-            }
-        }
-
         m_PathTracer[ m_ActivePathTracerIndex ]->OnImGUI();
 
         m_PostProcessing.OnImGUI();
@@ -742,7 +689,6 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
             {
                 if ( ImGui::BeginMenu( "Create" ) )
                 {
-                    bool menuItemClicked = false;
                     if ( ImGui::MenuItem( "Point Light", "", false, m_Scene.m_PointLights.size() < m_Scene.s_MaxLightsCount ) )
                     {
                         m_Scene.m_PointLights.emplace_back();
@@ -751,12 +697,34 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                         m_IsLightGPUBufferDirty = true;
                         m_IsFilmDirty = true;
                     }
+                    if ( ImGui::MenuItem( "Environment Light", "", false, m_Scene.m_EnvironmentLight == nullptr ) )
+                    {
+                        m_Scene.m_EnvironmentLight = std::make_shared<SEnvironmentLight>();
+                        m_Scene.m_EnvironmentLight->m_Color = XMFLOAT3( 1.0f, 1.0f, 1.0f );
+                        m_IsLightGPUBufferDirty = true;
+                        m_IsFilmDirty = true;
+                    }
                     ImGui::EndMenu();
                 }
-                if ( ImGui::MenuItem( "Delete", "", false, m_Scene.m_ObjectSelection.m_LightSelectionIndex != -1 ) )
+                if ( ImGui::MenuItem( "Delete", "", false, m_Scene.m_ObjectSelection.m_PointLightSelectionIndex != -1 || m_Scene.m_ObjectSelection.m_IsEnvironmentLightSelected ) )
                 {
-                    m_Scene.m_PointLights.erase( m_Scene.m_PointLights.begin() + m_Scene.m_ObjectSelection.m_LightSelectionIndex );
-                    m_Scene.m_ObjectSelection.m_LightSelectionIndex = -1;
+                    if ( m_Scene.m_ObjectSelection.m_PointLightSelectionIndex != -1 )
+                    {
+                        m_Scene.m_PointLights.erase( m_Scene.m_PointLights.begin() + m_Scene.m_ObjectSelection.m_PointLightSelectionIndex );
+                        m_Scene.m_ObjectSelection.m_PointLightSelectionIndex = -1;
+                    }
+                    else
+                    {
+                        bool hadEnvironmentTexture = m_Scene.m_EnvironmentLight->m_Texture != nullptr;
+                        m_Scene.m_EnvironmentLight.reset();
+                        if ( hadEnvironmentTexture )
+                        {
+                            // Allow the path tracer switching to a kernel without sampling the environment texture
+                            m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
+                        }
+
+                        m_Scene.m_ObjectSelection.m_IsEnvironmentLightSelected = false;
+                    }
                     m_IsLightGPUBufferDirty = true;
                     m_IsFilmDirty = true;;
                 }
@@ -774,16 +742,27 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
             }
         }
 
-        if ( ImGui::CollapsingHeader( "Lights" ) )
+        if ( ImGui::CollapsingHeader( "Point Lights" ) )
         {
             char label[ 32 ];
             for ( size_t iLight = 0; iLight < m_Scene.m_PointLights.size(); ++iLight )
             {
-                bool isSelected = ( iLight == m_Scene.m_ObjectSelection.m_LightSelectionIndex );
+                bool isSelected = ( iLight == m_Scene.m_ObjectSelection.m_PointLightSelectionIndex );
                 sprintf( label, "Light %d", uint32_t( iLight ) );
                 if ( ImGui::Selectable( label, isSelected ) )
                 {
-                    m_Scene.m_ObjectSelection.SelectLight( (int)iLight );
+                    m_Scene.m_ObjectSelection.SelectPointLight( (int)iLight );
+                }
+            }
+        }
+
+        if ( ImGui::CollapsingHeader( "Environment Light" ) )
+        {
+            if ( m_Scene.m_EnvironmentLight )
+            {
+                if ( ImGui::Selectable( "Light##EnvLight", m_Scene.m_ObjectSelection.m_IsEnvironmentLightSelected ) )
+                {
+                    m_Scene.m_ObjectSelection.SelectEnvironmentLight();
                 }
             }
         }
@@ -810,18 +789,67 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
         ImGui::PushItemWidth( ImGui::GetFontSize() * -9 );
 
-        if ( m_Scene.m_ObjectSelection.m_LightSelectionIndex >= 0 )
+        if ( m_Scene.m_ObjectSelection.m_PointLightSelectionIndex >= 0 )
         {
             ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
-            if ( m_Scene.m_ObjectSelection.m_LightSelectionIndex < m_Scene.m_PointLights.size() )
+            if ( m_Scene.m_ObjectSelection.m_PointLightSelectionIndex < m_Scene.m_PointLights.size() )
             {
-                SPointLight* selection = m_Scene.m_PointLights.data() + m_Scene.m_ObjectSelection.m_LightSelectionIndex;
+                SPointLight* selection = m_Scene.m_PointLights.data() + m_Scene.m_ObjectSelection.m_PointLightSelectionIndex;
 
                 if ( ImGui::DragFloat3( "Position", (float*)&selection->position, 1.0f ) )
                     m_IsLightGPUBufferDirty = true;
 
                 if ( ImGui::ColorEdit3( "Color", (float*)&selection->color ) )
                     m_IsLightGPUBufferDirty = true;
+            }
+        }
+        else if ( m_Scene.m_ObjectSelection.m_IsEnvironmentLightSelected )
+        {
+            ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
+            if ( ImGui::ColorEdit3( "Radiance", (float*)&m_Scene.m_EnvironmentLight->m_Color ) )
+                m_IsLightGPUBufferDirty = true;
+
+            ImGui::InputText( "Image File", const_cast<char*>( m_Scene.m_EnvironmentLight->m_TextureFileName.c_str() ), m_Scene.m_EnvironmentLight->m_TextureFileName.size(), ImGuiInputTextFlags_ReadOnly );
+            if ( ImGui::Button( "Browse##BrowseEnvImage" ) )
+            {
+                OPENFILENAMEA ofn;
+                char filepath[ MAX_PATH ];
+                ZeroMemory( &ofn, sizeof( ofn ) );
+                ofn.lStructSize = sizeof( ofn );
+                ofn.hwndOwner = m_hWnd;
+                ofn.lpstrFile = filepath;
+                ofn.lpstrFile[ 0 ] = '\0';
+                ofn.nMaxFile = sizeof( filepath );
+                ofn.lpstrFilter = "DDS\0*.DDS\0";
+                ofn.nFilterIndex = 1;
+                ofn.lpstrFileTitle = NULL;
+                ofn.nMaxFileTitle = 0;
+                ofn.lpstrInitialDir = NULL;
+                ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+
+                if ( GetOpenFileNameA( &ofn ) == TRUE )
+                {
+                    m_Scene.m_EnvironmentLight->m_TextureFileName = filepath;
+                    bool hasEnvTexturePreviously = m_Scene.m_EnvironmentLight->m_Texture.get() != nullptr;
+                    m_Scene.m_EnvironmentLight->CreateTextureFromFile();
+                    bool hasEnvTextureCurrently = m_Scene.m_EnvironmentLight->m_Texture.get() != nullptr;
+                    if ( hasEnvTexturePreviously != hasEnvTextureCurrently )
+                    {
+                        m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
+                    }
+                    m_IsFilmDirty = true;
+                }
+            }
+            if ( m_Scene.m_EnvironmentLight->m_Texture )
+            {
+                ImGui::SameLine();
+                if ( ImGui::Button( "Clear##ClearEnvImage" ) )
+                {
+                    m_Scene.m_EnvironmentLight->m_TextureFileName = "";
+                    m_Scene.m_EnvironmentLight->m_Texture.reset();
+                    m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
+                    m_IsFilmDirty = true;
+                }
             }
         }
         else if ( m_Scene.m_ObjectSelection.m_MaterialSelectionIndex >= 0 )

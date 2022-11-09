@@ -53,6 +53,19 @@ float2 SampleTriangle( float2 sample )
     return float2( 1.0f - s, sample.y * s );
 }
 
+float3 SampleSphere( float2 sample )
+{
+    float z = 1 - 2 * sample.x;
+    float r = SafeSqrt( 1 - z * z );
+    float phi = 2 * PI * sample.y;
+    return float3( r * cos( phi ), r * sin( phi ), z );
+}
+
+float UniformSpherePDF()
+{
+    return 1 / ( 4 * PI );
+}
+
 float PowerHeuristic( uint nf, float fPdf, uint ng, float gPdf )
 {
     float f = nf * fPdf;

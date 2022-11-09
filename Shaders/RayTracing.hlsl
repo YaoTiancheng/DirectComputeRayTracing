@@ -170,7 +170,15 @@ struct SLightSampleResult
     bool isDeltaLight;
 };
 
-SLightSampleResult SampleLightDirect( float3 p, StructuredBuffer<SLight> lights, uint lightCount, StructuredBuffer<Vertex> vertices, StructuredBuffer<uint> triangles, StructuredBuffer<float4x3> instanceTransforms, inout Xoshiro128StarStar rng )
+SLightSampleResult SampleLightDirect( float3 p
+    , StructuredBuffer<SLight> lights
+    , uint lightCount
+    , StructuredBuffer<Vertex> vertices
+    , StructuredBuffer<uint> triangles
+    , StructuredBuffer<float4x3> instanceTransforms
+    , TextureCube<float3> envTexture
+    , SamplerState envTextureSampler
+    , inout Xoshiro128StarStar rng )
 {
     SLightSampleResult result;
 
@@ -201,16 +209,36 @@ SLightSampleResult SampleLightDirect( float3 p, StructuredBuffer<SLight> lights,
         result.pdf /= Light_GetTriangleCount( light );
         result.radiance *= Light_GetTriangleCount( light );
     }
+    else if ( light.flags & LIGHT_FLAGS_ENVIRONMENT_LIGHT )
+    {
+        float2 samples = GetNextSample2D( rng );
+        EnvironmentLight_Sample( light, samples, envTexture, envTextureSampler, result.radiance, result.wi, result.distance, result.pdf );
+    }
 
     result.pdf /= lightCount;
     result.radiance *= lightCount;
 
-    result.distance *= 1 - SHADOW_EPSILON;
+    if ( result.distance != FLT_INF )
+    {
+        result.distance *= 1 - SHADOW_EPSILON;
+    }
     return result;
 }
 
-void EvaluateLightDirect( uint lightIndex, uint triangleIndex, float3 normal, float3 wi, float distance, StructuredBuffer<SLight> lights, uint lightCount
-    , StructuredBuffer<Vertex> vertices, StructuredBuffer<uint> triangles, StructuredBuffer<float4x3> instanceTransforms, out float3 radiance, out float pdf )
+void EvaluateLightDirect( uint lightIndex
+    , uint triangleIndex
+    , float3 normal
+    , float3 wi
+    , float distance
+    , StructuredBuffer<SLight> lights
+    , uint lightCount
+    , StructuredBuffer<Vertex> vertices
+    , StructuredBuffer<uint> triangles
+    , StructuredBuffer<float4x3> instanceTransforms
+    , TextureCube<float3> envTexture
+    , SamplerState envTextureSampler
+    , out float3 radiance
+    , out float pdf )
 {
     radiance = 0.f;
     pdf = 0.f;
@@ -224,6 +252,10 @@ void EvaluateLightDirect( uint lightIndex, uint triangleIndex, float3 normal, fl
         float4x3 instanceTransform = instanceTransforms[ Light_GetInstanceIndex( light ) ];
         TriangleLight_EvaluateWithPDF( light, instanceTransform, v0, v1, v2, wi, normal, distance, radiance, pdf );
         pdf /= Light_GetTriangleCount( light );
+    }
+    else if ( light.flags & LIGHT_FLAGS_ENVIRONMENT_LIGHT )
+    {
+        EnvironmentLight_EvaluateWithPDF( light, wi, envTexture, envTextureSampler, radiance, pdf );
     }
     
     pdf /= lightCount;
@@ -845,7 +877,6 @@ cbuffer RayTracingConstants : register( b0 )
     row_major float4x4 g_CameraTransform;
     float2 g_FilmSize;
     uint2 g_Resolution;
-    float4 g_Background;
     uint g_MaxBounceCount;
     uint g_LightCount;
     float g_ApertureRadius;
@@ -855,6 +886,7 @@ cbuffer RayTracingConstants : register( b0 )
     uint g_BladeCount;
     float g_ApertureBaseAngle;
     uint2 g_TileOffset;
+    uint g_EnvironmentLightIndex;
 }
 
 StructuredBuffer<Vertex> g_Vertices                     : register( t0 );
@@ -922,7 +954,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
             // Sample light
             if ( g_LightCount != 0 )
             {
-                SLightSampleResult sampleResult = SampleLightDirect( intersection.position, g_Lights, g_LightCount, g_Vertices, g_Triangles, g_InstanceTransforms, rng );
+                SLightSampleResult sampleResult = SampleLightDirect( intersection.position, g_Lights, g_LightCount, g_Vertices, g_Triangles, g_InstanceTransforms, g_EnvTexture, UVClampSampler, rng );
                 bool isDeltaLight = sampleResult.isDeltaLight;
                 if ( any( sampleResult.radiance > 0.f ) && sampleResult.pdf > 0.f
                     && !IsOcculuded( OffsetRayOrigin( intersection.position, intersection.geometryNormal, sampleResult.wi ), sampleResult.wi, sampleResult.distance, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceInvTransforms ) )
@@ -953,11 +985,12 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
 
                 hasHit = IntersectScene( OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi ), wi, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceTransforms, g_InstanceInvTransforms, g_InstanceLightIndices, g_MaterialIds, g_Materials, intersection, hitDistance, iterationCounter );
 
-                if ( intersection.lightIndex != LIGHT_INDEX_INVALID )
+                uint lightIndex = hasHit ? intersection.lightIndex : g_EnvironmentLightIndex;
+                if ( lightIndex != LIGHT_INDEX_INVALID )
                 {
                     float3 radiance;
                     float lightPdf;
-                    EvaluateLightDirect( intersection.lightIndex, intersection.triangleIndex, intersection.geometryNormal, wi, hitDistance, g_Lights, g_LightCount, g_Vertices, g_Triangles, g_InstanceTransforms, radiance, lightPdf );
+                    EvaluateLightDirect( lightIndex, intersection.triangleIndex, intersection.geometryNormal, wi, hitDistance, g_Lights, g_LightCount, g_Vertices, g_Triangles, g_InstanceTransforms, g_EnvTexture, UVClampSampler, radiance, lightPdf );
                     if ( lightPdf > 0.0f )
                     {
                         float weight = !isDeltaBxdf ? PowerHeuristic( 1, bsdfPdf, 1, lightPdf ) : 1.0f;
@@ -969,10 +1002,12 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
             ++iBounce;
         }
     }
-    else
+#if defined( LIGHT_VISIBLE )
+    else if ( g_EnvironmentLightIndex != LIGHT_INDEX_INVALID )
     {
-        l = pathThroughput * EnvironmentShader( wi, g_Background.xyz, g_EnvTexture, UVClampSampler );
+        l = EnvironmentLight_Evaluate( g_Lights[ g_EnvironmentLightIndex ], wi, g_EnvTexture, UVClampSampler );
     }
+#endif
 
     WriteSample( l, pixelSample, pixelPos, g_SamplePositionTexture, g_SampleValueTexture );
 }
@@ -986,7 +1021,6 @@ cbuffer RayTracingConstants : register( b0 )
     row_major float4x4 g_CameraTransform;
     float2 g_FilmSize;
     uint2 g_Resolution;
-    float4 g_Background;
     uint g_MaxBounceCount;
     uint g_LightCount;
     float g_ApertureRadius;
@@ -996,6 +1030,7 @@ cbuffer RayTracingConstants : register( b0 )
     uint g_BladeCount;
     float g_ApertureBaseAngle;
     uint2 g_TileOffset;
+    uint g_EnvironmentLightIndex;
 }
 
 cbuffer DebugConstants : register( b2 )

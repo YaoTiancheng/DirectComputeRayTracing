@@ -962,7 +962,15 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     {
                         if ( radianceValue->m_Type == EValueType::eRGB )
                         {
-                            m_BackgroundColor = XMFLOAT4( radianceValue->m_RGB.x, radianceValue->m_RGB.y, radianceValue->m_RGB.z, 1.0f );
+                            if ( !m_EnvironmentLight )
+                            {
+                                m_EnvironmentLight = std::make_shared<SEnvironmentLight>();
+                                m_EnvironmentLight->m_Color = XMFLOAT3( radianceValue->m_RGB.x, radianceValue->m_RGB.y, radianceValue->m_RGB.z );
+                            }
+                            else
+                            {
+                                LOG_STRING( "Having more than 1 constant emitter is not supported.\n" );
+                            }
                         }
                         else
                         {

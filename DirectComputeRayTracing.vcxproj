@@ -167,9 +167,6 @@
     <None Include="Shaders\Vertex.inc.hlsl">
       <FileType>Document</FileType>
     </None>
-    <None Include="Shaders\EnvironmentShader.inc.hlsl">
-      <FileType>Document</FileType>
-    </None>
     <ClInclude Include="Source\BxDFTexturesBuilder.h" />
     <ClInclude Include="Source\BVHAccel.h" />
     <ClInclude Include="Source\Camera.h" />

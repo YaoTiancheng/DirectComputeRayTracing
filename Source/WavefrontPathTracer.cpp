@@ -11,6 +11,7 @@
 #include "RenderData.h"
 #include "ScopedRenderAnnotation.h"
 #include "imgui/imgui.h"
+#include "../Shaders/LightSharedDef.inc.hlsl"
 
 using namespace DirectX;
 
@@ -49,7 +50,8 @@ struct SMaterialConstants
 {
     uint32_t g_LightCount;
     uint32_t g_MaxBounceCount;
-    uint32_t padding[ 2 ];
+    uint32_t g_EnvironmentLightIndex;
+    uint32_t padding;
 };
 
 bool CWavefrontPathTracer::Create()
@@ -336,6 +338,7 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SR
         SMaterialConstants* constants = (SMaterialConstants*)address;
         constants->g_LightCount = m_Scene->GetLightCount();
         constants->g_MaxBounceCount = m_Scene->m_MaxBounceCount;
+        constants->g_EnvironmentLightIndex = m_Scene->m_EnvironmentLight ? (uint32_t)m_Scene->m_MeshLights.size() : LIGHT_INDEX_INVALID; // Environment light is right after the mesh lights.
         m_MaterialConstantBuffer->Unmap();
     }
 
@@ -513,7 +516,6 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
             , renderData.m_SamplePositionTexture->GetUAV()
             , renderData.m_SampleValueTexture->GetUAV()
         };
-        job.m_SamplerStates.push_back( renderData.m_UVClampSamplerState.Get() );
         job.m_DispatchSizeX = CalculateDispatchGroupCount( s_PathPoolLaneCount );
         job.m_DispatchSizeY = 1;
         job.m_DispatchSizeZ = 1;
@@ -596,6 +598,12 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
     {
         SCOPED_RENDER_ANNOTATION( L"Material" );
 
+        ID3D11ShaderResourceView* environmentTextureSRV = nullptr;
+        if ( m_Scene->m_EnvironmentLight && m_Scene->m_EnvironmentLight->m_Texture )
+        {
+            environmentTextureSRV = m_Scene->m_EnvironmentLight->m_Texture->GetSRV();
+        }
+
         ComputeJob job;
         job.m_ConstantBuffers =
         {
@@ -624,6 +632,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
             , renderData.m_CookTorranceBTDFETexture->GetSRV()
             , renderData.m_CookTorranceBSDFInvCDFTexture->GetSRV()
             , renderData.m_CookTorranceBSDFPDFScaleTexture->GetSRV()
+            , environmentTextureSRV
         };
         job.m_UAVs =
         {
@@ -637,6 +646,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
             , m_QueueBuffers[ (int)EShaderKernel::ExtensionRayCast ]->GetUAV()
             , m_QueueBuffers[ (int)EShaderKernel::ShadowRayCast ]->GetUAV()
         };
+        job.m_SamplerStates.push_back( renderData.m_UVClampSamplerState.Get() );
         job.DispatchIndirect( m_IndirectArgumentBuffer[ (int)EShaderKernel::Material ]->GetBuffer() );
     }
 

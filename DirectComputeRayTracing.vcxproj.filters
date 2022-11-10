@@ -297,7 +297,6 @@
     <None Include="Shaders\Vertex.inc.hlsl" />
     <None Include="Shaders\Material.inc.hlsl" />
     <None Include="Shaders\BVHNode.inc.hlsl" />
-    <None Include="Shaders\EnvironmentShader.inc.hlsl" />
     <None Include="Shaders\SumLuminance.hlsl" />
     <None Include="Shaders\SumLuminanceDef.inc.hlsl" />
     <None Include="Shaders\LightingContext.inc.hlsl" />

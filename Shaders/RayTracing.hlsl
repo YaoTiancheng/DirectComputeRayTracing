@@ -14,7 +14,6 @@
 #include "Samples.inc.hlsl"
 #include "BVHAccel.inc.hlsl"
 #include "HitShader.inc.hlsl"
-#include "EnvironmentShader.inc.hlsl"
 #include "Intrinsics.inc.hlsl"
 
 SamplerState UVClampSampler;
@@ -500,6 +499,7 @@ cbuffer MaterialConstants : register( b1 )
 {
     uint               g_LightCount;
     uint               g_MaxBounceCount;
+    uint               g_EnvironmentLightIndex;
 }
 
 Buffer<uint>                                g_PathIndices                       : register( t0 );
@@ -521,6 +521,7 @@ Texture2DArray<float>                       g_CookTorranceBSDFAvgETexture       
 Texture2DArray<float>                       g_CookTorranceBTDFETexture          : register( t16 );
 Texture2DArray<float>                       g_CookTorranceBSDFInvCDFTexture     : register( t17 );
 Texture2DArray<float>                       g_CookTorranceBSDFPDFScaleTexture   : register( t18 );
+TextureCube<float3>                         g_EnvTexture                        : register( t19 );
 
 RWStructuredBuffer<SRay>                    g_Rays                              : register( u0 );
 RWStructuredBuffer<SRay>                    g_ShadowRays                        : register( u1 );
@@ -564,19 +565,22 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
     uint bounce = PathFlags_GetBounce(pathFlags);
 
     // Evaluate light
-#if defined( LIGHT_VISIBLE )
-    if ( intersection.lightIndex != LIGHT_INDEX_INVALID )
-#else
-    if ( bounce > 0 && intersection.lightIndex != LIGHT_INDEX_INVALID )
-#endif
     {
-        float3 radiance;
-        float lightPdf;
-        EvaluateLightDirect( intersection.lightIndex, intersection.triangleIndex, intersection.geometryNormal, direction, hitInfo.t, g_Lights, g_LightCount, g_Vertices, g_Triangles, g_InstanceTransforms, radiance, lightPdf );
-        if ( lightPdf > 0.0f )
+        uint lightIndex = hitInfo.t != FLT_INF ? intersection.lightIndex : g_EnvironmentLightIndex;
+#if defined( LIGHT_VISIBLE )
+        if ( lightIndex != LIGHT_INDEX_INVALID )
+#else
+        if ( bounce > 0 && lightIndex != LIGHT_INDEX_INVALID )
+#endif
         {
-            float weight = !pathAccumulation.isDeltaBxdf ? PowerHeuristic( 1, pathAccumulation.bsdfPdf, 1, lightPdf ) : 1.0f;
-            pathAccumulation.Li += pathAccumulation.pathThroughput * radiance * weight;
+            float3 radiance;
+            float lightPdf;
+            EvaluateLightDirect( lightIndex, intersection.triangleIndex, intersection.geometryNormal, direction, hitInfo.t, g_Lights, g_LightCount, g_Vertices, g_Triangles, g_InstanceTransforms, g_EnvTexture, UVClampSampler, radiance, lightPdf );
+            if ( lightPdf > 0.0f )
+            {
+                float weight = !pathAccumulation.isDeltaBxdf ? PowerHeuristic( 1, pathAccumulation.bsdfPdf, 1, lightPdf ) : 1.0f;
+                pathAccumulation.Li += pathAccumulation.pathThroughput * radiance * weight;
+            }
         }
     }
 
@@ -596,7 +600,7 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
         // Sample light
         if ( g_LightCount != 0 )
         {
-            SLightSampleResult sampleResult = SampleLightDirect( intersection.position, g_Lights, g_LightCount, g_Vertices, g_Triangles, g_InstanceTransforms, rng );
+            SLightSampleResult sampleResult = SampleLightDirect( intersection.position, g_Lights, g_LightCount, g_Vertices, g_Triangles, g_InstanceTransforms, g_EnvTexture, UVClampSampler, rng );
             bool isDeltaLight = sampleResult.isDeltaLight;
             if ( any( sampleResult.radiance > 0.0f ) && sampleResult.pdf > 0.0f )
             {

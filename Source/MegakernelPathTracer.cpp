@@ -220,7 +220,7 @@ bool CMegakernelPathTracer::CompileAndCreateRayTracingKernel()
     }
     rayTracingShaderDefines.push_back( { NULL, NULL } );
 
-    m_RayTracingShader.reset( ComputeShader::CreateFromFile( L"Shaders\\RayTracing.hlsl", rayTracingShaderDefines ) );
+    m_RayTracingShader.reset( ComputeShader::CreateFromFile( L"Shaders\\MegakernelPathTracing.hlsl", rayTracingShaderDefines ) );
     if ( !m_RayTracingShader )
     {
         CMessagebox::GetSingleton().Append( "Failed to compile ray tracing shader.\n" );

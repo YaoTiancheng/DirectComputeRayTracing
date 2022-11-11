@@ -285,7 +285,7 @@
     <None Include="Shaders\Samples.inc.hlsl">
       <Filter>Shaders</Filter>
     </None>
-    <None Include="Shaders\RayTracing.hlsl" />
+    <None Include="Shaders\RayTracingCommon.inc.hlsl" />
     <None Include="Shaders\LambertBRDF.inc.hlsl" />
     <None Include="Shaders\Math.inc.hlsl" />
     <None Include="Shaders\BVHAccel.inc.hlsl" />
@@ -312,6 +312,8 @@
     <None Include="Shaders\BxDFTextures.inc.hlsl" />
     <None Include="Shaders\Intrinsics.inc.hlsl" />
     <None Include="Shaders\SampleConvolution.hlsl" />
+    <None Include="Shaders\MegakernelPathtracing.hlsl" />
+    <None Include="Shaders\WavefrontPathTracing.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resources\DirectComputeRayTracing.rc">

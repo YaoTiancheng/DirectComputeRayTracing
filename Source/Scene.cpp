@@ -8,6 +8,7 @@
 #include "GPUTexture.h"
 #include "Constants.h"
 #include "StringConversion.h"
+#include "MathHelper.h"
 #include "../Shaders/LightSharedDef.inc.hlsl"
 #include "imgui/imgui.h"
 
@@ -518,7 +519,7 @@ void CScene::Reset()
 
     m_Meshes.clear();
     m_EnvironmentLight.reset();
-    m_PointLights.clear();
+    m_PunctualLights.clear();
     m_MeshLights.clear();
     m_Materials.clear();
     m_MaterialNames.clear();
@@ -570,13 +571,13 @@ void CScene::UpdateLightGPUData()
             ++GPULight;
         }
 
-        for ( uint32_t i = 0; i < (uint32_t)m_PointLights.size(); ++i )
+        for ( uint32_t i = 0; i < (uint32_t)m_PunctualLights.size(); ++i )
         {
-            SPointLight* CPULight = m_PointLights.data() + i;
+            SPunctualLight* CPULight = m_PunctualLights.data() + i;
 
-            GPULight->radiance = CPULight->color;
-            GPULight->position_or_triangleRange = CPULight->position;
-            GPULight->flags = LIGHT_FLAGS_POINT_LIGHT;    
+            GPULight->radiance = CPULight->m_Color;
+            GPULight->position_or_triangleRange = CPULight->m_IsDirectionalLight ? CPULight->CalculateDirection() : CPULight->m_Position;
+            GPULight->flags = CPULight->m_IsDirectionalLight ? LIGHT_FLAGS_DIRECTIONAL_LIGHT : LIGHT_FLAGS_POINT_LIGHT;    
 
             ++GPULight;
         }
@@ -639,3 +640,48 @@ bool SEnvironmentLight::CreateTextureFromFile()
     m_Texture.reset( GPUTexture::CreateFromFile( filename.c_str() ) );
     return m_Texture.get() != nullptr;
 }
+
+void SPunctualLight::SetEulerAnglesFromDirection( const DirectX::XMFLOAT3& scalarDirection )
+{
+    XMVECTOR initialDirection = g_XMIdentityR0;
+    XMVECTOR direction = XMLoadFloat3( &scalarDirection );
+    XMVECTOR axis = XMVector3Cross( initialDirection, direction );
+    XMVECTOR axisLength = XMVector3Length( axis );
+    float scalarAxisLength;
+    XMStoreFloat( &scalarAxisLength, axisLength );
+    XMVECTOR dot = XMVector3Dot( direction, initialDirection );
+    float scalarDot;
+    XMStoreFloat( &scalarDot, dot );
+    if ( scalarAxisLength < 1e-7f )
+    {
+        if ( scalarDot >= 0.f )
+        {
+            m_EulerAngles = XMFLOAT3( 0.f, 0.f, 0.f );
+        }
+        else
+        {
+            m_EulerAngles = XMFLOAT3( 0.f, (float)M_PI, 0.f );
+        }
+    }
+    else
+    {
+        axis = XMVectorDivide( axis, axisLength );
+        float scalarAngle = (float)acos( scalarDot );
+        XMMATRIX rotationMatrix = XMMatrixRotationAxis( axis, scalarAngle );
+        XMFLOAT3X3 scalarRotationMatrix;
+        XMStoreFloat3x3( &scalarRotationMatrix, rotationMatrix );
+        m_EulerAngles = MathHelper::MatrixRotationToRollPitchYall( scalarRotationMatrix );
+    }
+}
+
+DirectX::XMFLOAT3 SPunctualLight::CalculateDirection() const
+{
+    XMVECTOR rollPitchYall = XMLoadFloat3( &m_EulerAngles );
+    XMMATRIX matrix = XMMatrixRotationRollPitchYawFromVector( rollPitchYall );
+    XMVECTOR initialDirection = g_XMIdentityR0;
+    XMVECTOR direction = XMVector3Transform( initialDirection, matrix );
+    XMFLOAT3 scalarDirection;
+    XMStoreFloat3( &scalarDirection, direction );
+    return scalarDirection;
+}
+

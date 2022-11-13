@@ -102,6 +102,7 @@
     <ClInclude Include="Source\CommandLineArgs.h" />
     <ClInclude Include="Source\ComputeJob.h" />
     <ClInclude Include="Source\Constants.h" />
+    <ClInclude Include="Source\ImGuiHelper.h" />
     <ClInclude Include="Source\MathHelper.h" />
     <ClInclude Include="Source\SampleConvolutionRenderer.h" />
     <ClInclude Include="Source\D3D11RenderSystem.h" />
@@ -148,6 +149,7 @@
     <ClCompile Include="Source\Camera.cpp" />
     <ClCompile Include="Source\CommandLineArgs.cpp" />
     <ClCompile Include="Source\ComputeJob.cpp" />
+    <ClCompile Include="Source\ImGuiHelper.cpp" />
     <ClCompile Include="Source\MathHelper.cpp" />
     <ClCompile Include="Source\SceneRayTrace.cpp" />
     <ClCompile Include="Source\SceneXMLLoading.cpp" />

@@ -14,10 +14,15 @@ enum class EFilter
     LanczosSinc = 4,
 };
 
-struct SPointLight
+struct SPunctualLight
 {
-    DirectX::XMFLOAT3 position;
-    DirectX::XMFLOAT3 color;
+    DirectX::XMFLOAT3 m_Position;
+    DirectX::XMFLOAT3 m_EulerAngles;
+    DirectX::XMFLOAT3 m_Color;
+    bool m_IsDirectionalLight;
+
+    void SetEulerAnglesFromDirection( const DirectX::XMFLOAT3& direction );
+    DirectX::XMFLOAT3 CalculateDirection() const;
 };
 
 struct SMeshLight
@@ -61,10 +66,10 @@ struct SRayHit
 
 struct SSceneObjectSelection
 {
-    void SelectPointLight( int index )
+    void SelectPunctualLight( int index )
     {
         DeselectAll();
-        m_PointLightSelectionIndex = index;
+        m_PunctualLightSelectionIndex = index;
     }
 
     void SelectMaterial( int index )
@@ -87,13 +92,13 @@ struct SSceneObjectSelection
 
     void DeselectAll()
     {
-        m_PointLightSelectionIndex = -1;
+        m_PunctualLightSelectionIndex = -1;
         m_MaterialSelectionIndex = -1;
         m_IsCameraSelected = false;
         m_IsEnvironmentLightSelected = false;
     }
 
-    int m_PointLightSelectionIndex = -1;
+    int m_PunctualLightSelectionIndex = -1;
     int m_MaterialSelectionIndex = -1;
     bool m_IsCameraSelected = false;
     bool m_IsEnvironmentLightSelected = false;
@@ -112,7 +117,7 @@ public:
 
     float GetFilmDistance() const;
 
-    uint32_t GetLightCount() const { return (uint32_t)m_MeshLights.size() + (uint32_t)m_PointLights.size() + ( m_EnvironmentLight ? 1 : 0 ); }
+    uint32_t GetLightCount() const { return (uint32_t)m_MeshLights.size() + (uint32_t)m_PunctualLights.size() + ( m_EnvironmentLight ? 1 : 0 ); }
 
     float CalculateFocalDistance() const;
 
@@ -163,7 +168,7 @@ public:
 
     Camera m_Camera;
     std::shared_ptr<SEnvironmentLight> m_EnvironmentLight;
-    std::vector<SPointLight> m_PointLights;
+    std::vector<SPunctualLight> m_PunctualLights;
     std::vector<SMeshLight> m_MeshLights;
     std::vector<SMaterial> m_Materials;
     std::vector<std::string> m_MaterialNames;

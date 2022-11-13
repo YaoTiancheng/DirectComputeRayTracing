@@ -23,7 +23,7 @@ cbuffer RayTracingFrameConstants : register( b1 )
     uint g_FrameSeed;
 }
 
-// Based on "A Fast and Robust Method for Avoiding Self Intersection" by Carsten Wächter and Nikolaus Binder
+// Based on "A Fast and Robust Method for Avoiding Self Intersection" by Carsten WÃ¤chter and Nikolaus Binder
 float3 OffsetRayOrigin( float3 p, float3 n, float3 d )
 {
     static float s_Origin = 1.0f / 32.0f;
@@ -190,6 +190,11 @@ SLightSampleResult SampleLightDirect( float3 p
     if ( light.flags & LIGHT_FLAGS_POINT_LIGHT )
     {
         PointLight_Sample( light, p, result.radiance, result.wi, result.distance, result.pdf );
+        result.isDeltaLight = true;
+    }
+    else if ( light.flags & LIGHT_FLAGS_DIRECTIONAL_LIGHT )
+    {
+        DirectionalLight_Sample( light, result.radiance, result.wi, result.distance, result.pdf );
         result.isDeltaLight = true;
     }
     else if ( light.flags & LIGHT_FLAGS_MESH_LIGHT )

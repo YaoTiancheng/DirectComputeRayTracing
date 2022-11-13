@@ -23,6 +23,7 @@
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_dx11.h"
 #include "imgui/imgui_impl_win32.h"
+#include "ImGuiHelper.h"
 #include "../Shaders/SumLuminanceDef.inc.hlsl"
 
 using namespace DirectX;
@@ -689,15 +690,27 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
             {
                 if ( ImGui::BeginMenu( "Create" ) )
                 {
-                    if ( ImGui::MenuItem( "Point Light", "", false, m_Scene.m_PointLights.size() < m_Scene.s_MaxLightsCount ) )
+                    if ( ImGui::MenuItem( "Point Light", "", false, m_Scene.GetLightCount() < m_Scene.s_MaxLightsCount ) )
                     {
-                        m_Scene.m_PointLights.emplace_back();
-                        m_Scene.m_PointLights.back().color = XMFLOAT3( 1.0f, 1.0f, 1.0f );
-                        m_Scene.m_PointLights.back().position = XMFLOAT3( 0.0f, 0.0f, 0.0f );
+                        m_Scene.m_PunctualLights.emplace_back();
+                        SPunctualLight& newLight = m_Scene.m_PunctualLights.back();
+                        newLight.m_Color = XMFLOAT3( 1.0f, 1.0f, 1.0f );
+                        newLight.m_Position = XMFLOAT3( 0.0f, 0.0f, 0.0f );
+                        newLight.m_IsDirectionalLight = false;
                         m_IsLightGPUBufferDirty = true;
                         m_IsFilmDirty = true;
                     }
-                    if ( ImGui::MenuItem( "Environment Light", "", false, m_Scene.m_EnvironmentLight == nullptr ) )
+                    if ( ImGui::MenuItem( "Directional Light", "", false, m_Scene.GetLightCount() < m_Scene.s_MaxLightsCount ) )
+                    {
+                        m_Scene.m_PunctualLights.emplace_back();
+                        SPunctualLight& newLight = m_Scene.m_PunctualLights.back();
+                        newLight.m_Color = XMFLOAT3( 1.0f, 1.0f, 1.0f );
+                        newLight.SetEulerAnglesFromDirection( XMFLOAT3( 0.f, -1.f, 0.f ) );
+                        newLight.m_IsDirectionalLight = true;
+                        m_IsLightGPUBufferDirty = true;
+                        m_IsFilmDirty = true;
+                    }
+                    if ( ImGui::MenuItem( "Environment Light", "", false, m_Scene.m_EnvironmentLight == nullptr && m_Scene.GetLightCount() < m_Scene.s_MaxLightsCount ) )
                     {
                         m_Scene.m_EnvironmentLight = std::make_shared<SEnvironmentLight>();
                         m_Scene.m_EnvironmentLight->m_Color = XMFLOAT3( 1.0f, 1.0f, 1.0f );
@@ -706,12 +719,12 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                     }
                     ImGui::EndMenu();
                 }
-                if ( ImGui::MenuItem( "Delete", "", false, m_Scene.m_ObjectSelection.m_PointLightSelectionIndex != -1 || m_Scene.m_ObjectSelection.m_IsEnvironmentLightSelected ) )
+                if ( ImGui::MenuItem( "Delete", "", false, m_Scene.m_ObjectSelection.m_PunctualLightSelectionIndex != -1 || m_Scene.m_ObjectSelection.m_IsEnvironmentLightSelected ) )
                 {
-                    if ( m_Scene.m_ObjectSelection.m_PointLightSelectionIndex != -1 )
+                    if ( m_Scene.m_ObjectSelection.m_PunctualLightSelectionIndex != -1 )
                     {
-                        m_Scene.m_PointLights.erase( m_Scene.m_PointLights.begin() + m_Scene.m_ObjectSelection.m_PointLightSelectionIndex );
-                        m_Scene.m_ObjectSelection.m_PointLightSelectionIndex = -1;
+                        m_Scene.m_PunctualLights.erase( m_Scene.m_PunctualLights.begin() + m_Scene.m_ObjectSelection.m_PunctualLightSelectionIndex );
+                        m_Scene.m_ObjectSelection.m_PunctualLightSelectionIndex = -1;
                     }
                     else
                     {
@@ -742,16 +755,16 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
             }
         }
 
-        if ( ImGui::CollapsingHeader( "Point Lights" ) )
+        if ( ImGui::CollapsingHeader( "Punctual Lights" ) )
         {
             char label[ 32 ];
-            for ( size_t iLight = 0; iLight < m_Scene.m_PointLights.size(); ++iLight )
+            for ( size_t iLight = 0; iLight < m_Scene.m_PunctualLights.size(); ++iLight )
             {
-                bool isSelected = ( iLight == m_Scene.m_ObjectSelection.m_PointLightSelectionIndex );
+                bool isSelected = ( iLight == m_Scene.m_ObjectSelection.m_PunctualLightSelectionIndex );
                 sprintf( label, "Light %d", uint32_t( iLight ) );
                 if ( ImGui::Selectable( label, isSelected ) )
                 {
-                    m_Scene.m_ObjectSelection.SelectPointLight( (int)iLight );
+                    m_Scene.m_ObjectSelection.SelectPunctualLight( (int)iLight );
                 }
             }
         }
@@ -789,17 +802,28 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
         ImGui::PushItemWidth( ImGui::GetFontSize() * -9 );
 
-        if ( m_Scene.m_ObjectSelection.m_PointLightSelectionIndex >= 0 )
+        if ( m_Scene.m_ObjectSelection.m_PunctualLightSelectionIndex >= 0 )
         {
             ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
-            if ( m_Scene.m_ObjectSelection.m_PointLightSelectionIndex < m_Scene.m_PointLights.size() )
+            if ( m_Scene.m_ObjectSelection.m_PunctualLightSelectionIndex < m_Scene.m_PunctualLights.size() )
             {
-                SPointLight* selection = m_Scene.m_PointLights.data() + m_Scene.m_ObjectSelection.m_PointLightSelectionIndex;
+                SPunctualLight* selection = m_Scene.m_PunctualLights.data() + m_Scene.m_ObjectSelection.m_PunctualLightSelectionIndex;
 
-                if ( ImGui::DragFloat3( "Position", (float*)&selection->position, 1.0f ) )
-                    m_IsLightGPUBufferDirty = true;
+                if ( selection->m_IsDirectionalLight )
+                {
+                    if ( ImGuiHelper::DragFloat3RadianInDegree( "Euler Angles", (float*)&selection->m_EulerAngles, 1.f ) )
+                        m_IsLightGPUBufferDirty = true;
 
-                if ( ImGui::ColorEdit3( "Color", (float*)&selection->color ) )
+                    XMFLOAT3 direction = selection->CalculateDirection();
+                    ImGui::LabelText( "Direction", "%.3f, %.3f, %.3f", direction.x, direction.y, direction.z );
+                }
+                else
+                {
+                    if ( ImGui::DragFloat3( "Position", (float*)&selection->m_Position, 1.0f ) )
+                        m_IsLightGPUBufferDirty = true;
+                }
+
+                if ( ImGui::ColorEdit3( "Color", (float*)&selection->m_Color ) )
                     m_IsLightGPUBufferDirty = true;
             }
         }

@@ -11,6 +11,14 @@ void PointLight_Sample( SLight light, float3 p, out float3 radiance, out float3 
     pdf = 1.0f;
 }
 
+void DirectionalLight_Sample( SLight light, out float3 radiance, out float3 wi, out float distance, out float pdf )
+{
+    wi = -Light_GetPosition( light );
+    distance = FLT_INF;
+    radiance = light.radiance;
+    pdf = 1.0f;
+}
+
 float3 TriangleLight_Evaluate( SLight light, float3 direction, float3 normal )
 {
     return dot( direction, normal ) > 0.f ? light.radiance : 0.f;

@@ -18,6 +18,7 @@ enum EValueType
     eString,
     eRGB,
     eMatrix,
+    eVector,
     eObject
 };
 
@@ -49,7 +50,11 @@ struct SValue
         int32_t m_Integer;
         bool m_Boolean;
         std::string_view m_String;
-        XMFLOAT3 m_RGB;
+        union
+        {
+            XMFLOAT3 m_RGB;
+            XMFLOAT3 m_Vector;
+        };
         XMFLOAT4X4 m_Matrix;
         std::unordered_map<std::string_view, SValue*>* m_Object;
     };
@@ -270,6 +275,30 @@ namespace
 
                     childNode = childNode->next_sibling();
                 }
+
+                currentNode = currentNode->next_sibling();
+            }
+            else if ( strncmp( currentNode->name(), "vector", currentNode->name_size() ) == 0 )
+            {
+                xml_attribute<>* nameAttribute = currentNode->first_attribute( "name", 0 );
+                if ( !nameAttribute )
+                {
+                    LOG_STRING_FORMAT( "Expect a name attribute from tag \'%.*s\'.\n", currentNode->name_size(), currentNode->name() );
+                    return nullptr;
+                }
+                currentValue = valueList->AllocateValue();
+                parentValue->InsertObjectField( { nameAttribute->value(), nameAttribute->value_size() }, currentValue );
+                currentValue->m_Type = EValueType::eVector;
+                
+                xml_attribute<>* valueXAttribute = currentNode->first_attribute( "x", 0 );
+                xml_attribute<>* valueYAttribute = currentNode->first_attribute( "y", 0 );
+                xml_attribute<>* valueZAttribute = currentNode->first_attribute( "z", 0 );
+
+                currentValue->m_Vector.x = valueXAttribute ? (float)atof( valueXAttribute->value() ) : 0.f;
+                currentValue->m_Vector.y = valueYAttribute ? (float)atof( valueYAttribute->value() ) : 0.f;
+                currentValue->m_Vector.z = valueZAttribute ? (float)atof( valueZAttribute->value() ) : 0.f;
+                // Mitsuba scene is in right handed coordinate system, convert to left handed one.
+                currentValue->m_Vector.x = -currentValue->m_Vector.x;
 
                 currentNode = currentNode->next_sibling();
             }
@@ -976,6 +1005,44 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                         {
                             LOG_STRING_FORMAT( "Non-RGB radiance type is not supported.\n" );
                         }
+                    }
+                }
+                else if ( strncmp( "directional", emitterTypeValue->m_String.data(), emitterTypeValue->m_String.length() ) == 0 )
+                {
+                    if ( GetLightCount() < s_MaxLightsCount )
+                    { 
+                        SPunctualLight newLight;
+                        newLight.m_Color = XMFLOAT3( 1.f, 1.f, 1.f );
+                        newLight.m_IsDirectionalLight = true;
+                        newLight.SetEulerAnglesFromDirection( XMFLOAT3( 0.f, -1.f, 0.f ) );
+
+                        SValue* irradianceValue = rootObjectValue.second->FindValue( "irradiance" );
+                        if ( irradianceValue )
+                        {
+                            if ( irradianceValue->m_Type == EValueType::eRGB )
+                            {
+                                newLight.m_Color = irradianceValue->m_RGB;
+                            }
+                            else
+                            {
+                                LOG_STRING_FORMAT( "Non-RGB radiance type is not supported.\n" );
+                            }
+                        }
+
+                        SValue* directionValue = rootObjectValue.second->FindValue( "direction" );
+                        if ( directionValue )
+                        {
+                            if ( directionValue->m_Type == EValueType::eVector )
+                            {
+                                newLight.SetEulerAnglesFromDirection( directionValue->m_Vector );
+                            }
+                            else
+                            {
+                                LOG_STRING_FORMAT( "Non-vector direction type is not supported.\n" );
+                            }
+                        }
+
+                        m_PunctualLights.emplace_back( newLight );
                     }
                 }
                 else

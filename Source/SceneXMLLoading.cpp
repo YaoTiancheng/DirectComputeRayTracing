@@ -108,6 +108,15 @@ private:
 
 namespace
 {
+    XMFLOAT3 GetRGB( const SValue* value, XMFLOAT3 defaultValue )
+    {
+        if ( value )
+        {
+            return value->m_Type == EValueType::eRGB ? value->m_RGB : defaultValue;
+        }
+        return defaultValue;
+    }
+
     void SplitByDelimeter( std::string_view string, char delimeter, std::vector<std::string_view>* subStrings )
     {
         const char* p = string.data();
@@ -940,6 +949,12 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     uint32_t instanceIndex = (uint32_t)m_InstanceTransforms.size();
                     m_InstanceTransforms.push_back( XMFLOAT4X3( transform._11, transform._12, transform._13, transform._21, transform._22, transform._23, transform._31, transform._32, transform._33, transform._41, transform._42, transform._43 ) );
 
+                    if ( GetLightCount() >= s_MaxLightsCount )
+                    {
+                        LOG_STRING( "An emitter is discarded since maximum light count is hit." );
+                        continue;
+                    }
+
                     if ( isALight )
                     {
                         const SValue* typeValue = emitterValue->FindValue( "type" );
@@ -947,23 +962,12 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                         {
                             if ( strncmp( "area", typeValue->m_String.data(), typeValue->m_String.length() ) == 0 )
                             {
-                                XMFLOAT3 radiance = XMFLOAT3( 1.f, 1.f, 1.f );
-                                const SValue* radianceValue = emitterValue->FindValue( "radiance" );
-                                if ( radianceValue )
-                                {
-                                    if ( radianceValue->m_Type == EValueType::eRGB )
-                                    {
-                                        radiance = XMFLOAT3( radianceValue->m_RGB.x, radianceValue->m_RGB.y, radianceValue->m_RGB.z );
-                                    }
-                                    else
-                                    {
-                                        LOG_STRING_FORMAT( "Non-RGB radiance type is not supported.\n" );
-                                    }
-                                }
-
                                 SMeshLight light;
-                                light.color = radiance;
                                 light.m_InstanceIndex = instanceIndex;
+
+                                const SValue* radianceValue = emitterValue->FindValue( "radiance" );
+                                light.color = GetRGB( radianceValue, XMFLOAT3( 1.f, 1.f, 1.f ) );
+
                                 m_MeshLights.emplace_back( light );
                             }
                             else
@@ -984,66 +988,50 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
             SValue* emitterTypeValue = rootObjectValue.second->FindValue( "type" );
             if ( emitterTypeValue && emitterTypeValue->m_Type == EValueType::eString )
             {
+                if ( GetLightCount() >= s_MaxLightsCount )
+                {
+                    LOG_STRING( "An emitter is discarded since maximum light count is hit." );
+                    continue;
+                }
+
                 if ( strncmp( "constant", emitterTypeValue->m_String.data(), emitterTypeValue->m_String.length() ) == 0 )
                 {
-                    SValue* radianceValue = rootObjectValue.second->FindValue( "radiance" );
-                    if ( radianceValue )
+                    if ( !m_EnvironmentLight )
                     {
-                        if ( radianceValue->m_Type == EValueType::eRGB )
-                        {
-                            if ( !m_EnvironmentLight )
-                            {
-                                m_EnvironmentLight = std::make_shared<SEnvironmentLight>();
-                                m_EnvironmentLight->m_Color = XMFLOAT3( radianceValue->m_RGB.x, radianceValue->m_RGB.y, radianceValue->m_RGB.z );
-                            }
-                            else
-                            {
-                                LOG_STRING( "Having more than 1 constant emitter is not supported.\n" );
-                            }
-                        }
-                        else
-                        {
-                            LOG_STRING_FORMAT( "Non-RGB radiance type is not supported.\n" );
-                        }
+                        m_EnvironmentLight = std::make_shared<SEnvironmentLight>();
                     }
+                    else
+                    {
+                        LOG_STRING( "Having more than 1 constant emitter is not supported.\n" );
+                        continue;
+                    }
+
+                    SValue* radianceValue = rootObjectValue.second->FindValue( "radiance" );
+                    m_EnvironmentLight->m_Color = GetRGB( radianceValue, XMFLOAT3( 1.f, 1.f, 1.f ) );
                 }
                 else if ( strncmp( "directional", emitterTypeValue->m_String.data(), emitterTypeValue->m_String.length() ) == 0 )
                 {
-                    if ( GetLightCount() < s_MaxLightsCount )
-                    { 
-                        SPunctualLight newLight;
-                        newLight.m_Color = XMFLOAT3( 1.f, 1.f, 1.f );
-                        newLight.m_IsDirectionalLight = true;
-                        newLight.SetEulerAnglesFromDirection( XMFLOAT3( 0.f, -1.f, 0.f ) );
+                    SPunctualLight newLight;
+                    newLight.m_IsDirectionalLight = true;
+                    newLight.SetEulerAnglesFromDirection( XMFLOAT3( 0.f, -1.f, 0.f ) );
 
-                        SValue* irradianceValue = rootObjectValue.second->FindValue( "irradiance" );
-                        if ( irradianceValue )
+                    SValue* irradianceValue = rootObjectValue.second->FindValue( "irradiance" );
+                    newLight.m_Color = GetRGB( irradianceValue, XMFLOAT3( 1.f, 1.f, 1.f ) );
+
+                    SValue* directionValue = rootObjectValue.second->FindValue( "direction" );
+                    if ( directionValue )
+                    {
+                        if ( directionValue->m_Type == EValueType::eVector )
                         {
-                            if ( irradianceValue->m_Type == EValueType::eRGB )
-                            {
-                                newLight.m_Color = irradianceValue->m_RGB;
-                            }
-                            else
-                            {
-                                LOG_STRING_FORMAT( "Non-RGB radiance type is not supported.\n" );
-                            }
+                            newLight.SetEulerAnglesFromDirection( directionValue->m_Vector );
                         }
-
-                        SValue* directionValue = rootObjectValue.second->FindValue( "direction" );
-                        if ( directionValue )
+                        else
                         {
-                            if ( directionValue->m_Type == EValueType::eVector )
-                            {
-                                newLight.SetEulerAnglesFromDirection( directionValue->m_Vector );
-                            }
-                            else
-                            {
-                                LOG_STRING_FORMAT( "Non-vector direction type is not supported.\n" );
-                            }
+                            LOG_STRING_FORMAT( "Non-vector direction type is not supported.\n" );
                         }
-
-                        m_PunctualLights.emplace_back( newLight );
                     }
+
+                    m_PunctualLights.emplace_back( newLight );
                 }
                 else
                 {

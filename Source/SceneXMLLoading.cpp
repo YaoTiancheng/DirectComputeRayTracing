@@ -423,7 +423,7 @@ namespace
         return parentValue;
     }
 
-    bool TranslateMaterialFromBSDF( const SValue& BSDF, const std::unordered_map<std::string_view, EMaterialType>& materialNameToEnumMap, SMaterial* material, std::string_view* name )
+    bool TranslateMaterialFromBSDF( const SValue& BSDF, const std::unordered_map<std::string_view, EMaterialType>& materialNameToEnumMap, SMaterial* material, std::string_view* name, bool isTwoSided = false )
     {
         EMaterialType materialType = EMaterialType::eUnsupported;
 
@@ -456,7 +456,7 @@ namespace
                 LOG_STRING( "Cannot find child BSDF inside a twosided BSDF.\n" );
                 return false;
             }
-            return TranslateMaterialFromBSDF( *childBSDF, materialNameToEnumMap, material, name );
+            return TranslateMaterialFromBSDF( *childBSDF, materialNameToEnumMap, material, name, true );
         }
 
         bool hasDielectricIOR = false;
@@ -537,7 +537,7 @@ namespace
         material->m_Transmission = 0.0f;
         material->m_Tiling = { 1.0f, 1.0f };
         material->m_IsMetal = hasConductorIOR;
-        material->m_IsTwoSided = false;
+        material->m_IsTwoSided = isTwoSided;
         material->m_HasAlbedoTexture = false;
         material->m_HasEmissionTexture = false;
         material->m_HasRoughnessTexture = false;

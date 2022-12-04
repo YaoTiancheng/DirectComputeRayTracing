@@ -537,6 +537,7 @@ namespace
         material->m_Transmission = 0.0f;
         material->m_Tiling = { 1.0f, 1.0f };
         material->m_IsMetal = hasConductorIOR;
+        material->m_IsTwoSided = false;
         material->m_HasAlbedoTexture = false;
         material->m_HasEmissionTexture = false;
         material->m_HasRoughnessTexture = false;

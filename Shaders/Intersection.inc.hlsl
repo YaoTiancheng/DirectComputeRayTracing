@@ -15,6 +15,7 @@ struct Intersection
     bool    isMetal;
     float   transmission;
     bool    backface;
+    bool    isTwoSided;
     uint    lightIndex;
     uint    triangleIndex;
 };

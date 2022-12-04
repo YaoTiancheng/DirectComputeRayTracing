@@ -49,6 +49,7 @@ struct SMaterial
     float m_Transmission;
     DirectX::XMFLOAT2 m_Tiling;
     bool m_IsMetal;
+    bool m_IsTwoSided;
     bool m_HasAlbedoTexture;
     bool m_HasRoughnessTexture;
     bool m_HasEmissionTexture;

@@ -17,10 +17,6 @@ float SpecularWeight( float cosTheta, float alpha, float ior )
 
 float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
 {
-    float WOdotN = dot( wo, intersection.normal );
-    bool invert = WOdotN < 0.0f;
-    intersection.normal = invert ? -intersection.normal : intersection.normal;
-
     float3 biNormal = cross( intersection.normal, intersection.tangent );
     float3x3 tbn2world = float3x3( intersection.tangent, biNormal, intersection.normal );
     float3x3 world2tbn = transpose( tbn2world );
@@ -28,10 +24,17 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
     wo = mul( wo, world2tbn );
     wi = mul( wi, world2tbn );
 
-    LightingContext lightingContext = LightingContextInit( wo, wi, invert );
+    bool isInverted = wo.z < 0.0f;
+    if ( isInverted )
+    {
+        wo.z = -wo.z;
+        wi.z = -wi.z;
+    }
 
-    float3 etaI = invert ? intersection.ior : 1.0f;
-    float3 etaT = invert ? 1.0f : intersection.ior;
+    LightingContext lightingContext = LightingContextInit( wo, wi, isInverted );
+
+    float3 etaI = 1.0f;
+    float3 etaT = intersection.ior;
     float3 eta = etaT / etaI;
 
     bool isMetal = intersection.isMetal;
@@ -52,14 +55,20 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
           Ems         *= opacity;
     float Ediffuse    = !isMetal ? ( 1 - Emicrofacet - Ems ) : 0.0f;
     float Et          = transmission;
-    float3 value = !isMetal ? EvaluateCookTorranceMircofacetBRDF_Dielectric( wi, wo, intersection.specular, intersection.alpha, etaI.r, etaT.r, lightingContext )
-                            : EvaluateCookTorranceMircofacetBRDF_Conductor( wi, wo, intersection.specular, intersection.alpha, 1.0f, intersection.ior, intersection.k, lightingContext );
-    value += EvaluateCookTorranceMultiscatteringBRDF( wi, wo, intersection.specular, intersection.alpha, E, EAvg, Fms, lightingContext );
-    value += EvaluateLambertBRDF( wi, wo, intersection.albedo, lightingContext ) * Ediffuse;
-    value = value * opacity;
+    float3 value = 0.0f;
+    if ( !isInverted || intersection.isTwoSided )
+    {
+        value += !isMetal ? EvaluateCookTorranceMircofacetBRDF_Dielectric( wi, wo, intersection.specular, intersection.alpha, etaI.r, etaT.r, lightingContext )
+                          : EvaluateCookTorranceMircofacetBRDF_Conductor( wi, wo, intersection.specular, intersection.alpha, 1.0f, intersection.ior, intersection.k, lightingContext );
+        value += EvaluateCookTorranceMultiscatteringBRDF( wi, wo, intersection.specular, intersection.alpha, E, EAvg, Fms, lightingContext );
+        value += EvaluateLambertBRDF( wi, wo, intersection.albedo, lightingContext ) * Ediffuse;
+        value = value * opacity;
+    }
     if ( transmission > 0.0f )
     {
-        value += EvaluateCookTorranceMicrofacetMultiscatteringBSDF( wi, wo, intersection.specular, intersection.alpha, etaI.r, etaT.r, lightingContext ) * Et;
+        float etaI_t = isInverted ? intersection.ior.r : 1.0f;
+        float etaT_t = isInverted ? 1.0f : intersection.ior.r;
+        value += EvaluateCookTorranceMicrofacetMultiscatteringBSDF( wi, wo, intersection.specular, intersection.alpha, etaI_t, etaT_t, lightingContext ) * Et;
     }
 
     return value;
@@ -67,10 +76,6 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
 
 float EvaluateBSDFPdf( float3 wi, float3 wo, Intersection intersection )
 {
-    float WOdotN = dot( wo, intersection.normal );
-    bool invert = WOdotN < 0.0f;
-    intersection.normal = invert ? -intersection.normal : intersection.normal;
-
     float3 biNormal = cross( intersection.normal, intersection.tangent );
     float3x3 tbn2world = float3x3( intersection.tangent, biNormal, intersection.normal );
     float3x3 world2tbn = transpose( tbn2world );
@@ -78,10 +83,17 @@ float EvaluateBSDFPdf( float3 wi, float3 wo, Intersection intersection )
     wo = mul( wo, world2tbn );
     wi = mul( wi, world2tbn );
 
-    LightingContext lightingContext = LightingContextInit( wo, wi, invert );
+    bool isInverted = wo.z < 0.0f;
+    if ( isInverted )
+    {
+        wo.z = -wo.z;
+        wi.z = -wi.z;
+    }
 
-    float3 etaI = invert ? intersection.ior : 1.0f;
-    float3 etaT = invert ? 1.0f : intersection.ior;
+    LightingContext lightingContext = LightingContextInit( wo, wi, isInverted );
+
+    float3 etaI = 1.0f;
+    float3 etaT = intersection.ior;
     float3 eta = etaT / etaI;
 
     bool isMetal = intersection.isMetal;
@@ -103,17 +115,24 @@ float EvaluateBSDFPdf( float3 wi, float3 wo, Intersection intersection )
     float Ediffuse    = !isMetal ? ( 1 - Emicrofacet - Ems ) * opacity : 0.0f;
     float Et          = transmission;
     float Etotal      = Emicrofacet + Ems + Ediffuse + Et;
-    float Wmicrofacet = Emicrofacet / Etotal;
-    float Wms         = Ems / Etotal;
-    float Wdiffuse    = Ediffuse / Etotal;
-    float Wt          = Et / Etotal;
+    bool hasBrdfs = !isInverted || intersection.isTwoSided;
+    float Wmicrofacet = hasBrdfs ? Emicrofacet / Etotal : 0.0f;
+    float Wms         = hasBrdfs ? Ems / Etotal : 0.0f;
+    float Wdiffuse    = hasBrdfs ? Ediffuse / Etotal : 0.0f;
+    float Wt          = hasBrdfs ? Et / Etotal : 1.0f;
 
-    float pdf = EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * Wmicrofacet;
-    pdf += EvaluateCookTorranceMultiscatteringBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * Wms;
-    pdf += EvaluateLambertBRDFPdf( wi, wo, lightingContext ) * Wdiffuse;
+    float pdf = 0.0f;
+    if ( hasBrdfs )
+    {
+        pdf += EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * Wmicrofacet;
+        pdf += EvaluateCookTorranceMultiscatteringBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * Wms;
+        pdf += EvaluateLambertBRDFPdf( wi, wo, lightingContext ) * Wdiffuse;
+    }
     if ( transmission > 0.0f )
     {
-        pdf += EvaluateCookTorranceMicrofacetMultiscatteringBSDFPdf( wi, wo, intersection.alpha, etaI.r, etaT.r, lightingContext ) * Wt;
+        float etaI_t = isInverted ? intersection.ior.r : 1.0f;
+        float etaT_t = isInverted ? 1.0f : intersection.ior.r;
+        pdf += EvaluateCookTorranceMicrofacetMultiscatteringBSDFPdf( wi, wo, intersection.alpha, etaI_t, etaT_t, lightingContext ) * Wt;
     }
 
     return pdf;
@@ -128,9 +147,8 @@ void SampleBSDF( float3 wo
     , out float pdf
     , out bool isDeltaBxdf )
 {
-    float WOdotN = dot( wo, intersection.normal );
-    bool invert = WOdotN < 0.0f;
-    intersection.normal = invert ? -intersection.normal : intersection.normal;
+    value = 0.0f;
+    pdf = 0.0f;
 
     float3 biNormal = cross( intersection.normal, intersection.tangent );
     float3x3 tbn2world = float3x3( intersection.tangent, biNormal, intersection.normal );
@@ -138,11 +156,19 @@ void SampleBSDF( float3 wo
 
     wo = mul( wo, world2tbn );
 
-    LightingContext lightingContext = LightingContextInit( wo, invert );
+    bool isInverted = wo.z < 0.0f;
+    if ( isInverted )
+    {
+        wo.z = -wo.z;
+    }
 
-    float3 etaI = invert ? intersection.ior : 1.0f;
-    float3 etaT = invert ? 1.0f : intersection.ior;
+    LightingContext lightingContext = LightingContextInit( wo, isInverted );
+
+    float3 etaI = 1.0f;
+    float3 etaT = intersection.ior;
     float3 eta = etaT / etaI;
+    float etaI_t = isInverted ? intersection.ior.r : 1.0f;
+    float etaT_t = isInverted ? 1.0f : intersection.ior.r;
 
     bool isMetal      = intersection.isMetal;
     float transmission = intersection.transmission;
@@ -161,10 +187,11 @@ void SampleBSDF( float3 wo
     float Ediffuse    = !isMetal ? ( 1 - Emicrofacet - Ems ) * opacity : 0.0f;
     float Et          = transmission;
     float Etotal      = Emicrofacet + Ems + Ediffuse + Et;
-    float Wmicrofacet = Emicrofacet / Etotal;
-    float Wms         = Ems / Etotal;
-    float Wdiffuse    = Ediffuse / Etotal;
-    float Wt          = Et / Etotal;
+    bool hasBrdfs = !isInverted || intersection.isTwoSided;
+    float Wmicrofacet = hasBrdfs ? Emicrofacet / Etotal : 0.0f;
+    float Wms         = hasBrdfs ? Ems / Etotal : 0.0f;
+    float Wdiffuse    = hasBrdfs ? Ediffuse / Etotal : 0.0f;
+    float Wt          = hasBrdfs ? Et / Etotal : 1.0f;
 
     static const uint BxDF_INDEX_LAMBERT_BRDF = 0;
     static const uint BxDF_INDEX_COOKTORRANCE_MICROFACET_BRDF = 1;
@@ -209,7 +236,7 @@ void SampleBSDF( float3 wo
     case BxDF_INDEX_COOKTORRANCE_BSDF:
     {
         float sample = ( BRDFSelectionSample - opacity ) / transmission;
-        SampleCookTorranceMicrofacetMultiscatteringBSDF( wo, sample, BRDFSample, intersection.specular, intersection.alpha, etaI.r, etaT.r, wi, value, pdf, isDeltaBxdf, lightingContext );
+        SampleCookTorranceMicrofacetMultiscatteringBSDF( wo, sample, BRDFSample, intersection.specular, intersection.alpha, etaI_t, etaT_t, wi, value, pdf, isDeltaBxdf, lightingContext );
         value *= Et;
         pdf *= Wt;
         break;
@@ -218,28 +245,33 @@ void SampleBSDF( float3 wo
 
     if ( !isDeltaBxdf )
     {
-        if ( bxdfIndex != BxDF_INDEX_COOKTORRANCE_MICROFACET_BRDF && opacity > 0.0f )
+        if ( hasBrdfs && bxdfIndex != BxDF_INDEX_COOKTORRANCE_MICROFACET_BRDF && opacity > 0.0f )
         {
             float3 brdf = !isMetal ? EvaluateCookTorranceMircofacetBRDF_Dielectric( wi, wo, intersection.specular, intersection.alpha, etaI.r, etaT.r, lightingContext )
                 : EvaluateCookTorranceMircofacetBRDF_Conductor( wi, wo, intersection.specular, intersection.alpha, 1.0f, intersection.ior, intersection.k, lightingContext );
             value += brdf * opacity;
             pdf += EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * Wmicrofacet;
         }
-        if ( bxdfIndex != BxDF_INDEX_COOKTORRANCE_MULTISCATTERING_BRDF && opacity > 0.0f )
+        if ( hasBrdfs && bxdfIndex != BxDF_INDEX_COOKTORRANCE_MULTISCATTERING_BRDF && opacity > 0.0f )
         {
             value += EvaluateCookTorranceMultiscatteringBRDF( wi, wo, intersection.specular, intersection.alpha, E, EAvg, Fms, lightingContext ) * opacity;
             pdf += EvaluateCookTorranceMultiscatteringBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * Wms;
         }
-        if ( bxdfIndex != BxDF_INDEX_LAMBERT_BRDF && opacity > 0.0f )
+        if ( hasBrdfs && bxdfIndex != BxDF_INDEX_LAMBERT_BRDF && opacity > 0.0f )
         {
             value += EvaluateLambertBRDF( wi, wo, intersection.albedo, lightingContext ) * Ediffuse;
             pdf += EvaluateLambertBRDFPdf( wi, wo, lightingContext ) * Wdiffuse;
         }
         if ( bxdfIndex != BxDF_INDEX_COOKTORRANCE_BSDF && transmission > 0.0f )
         {
-            value += EvaluateCookTorranceMicrofacetMultiscatteringBSDF( wi, wo, intersection.specular, intersection.alpha, etaI.r, etaT.r, lightingContext ) * Et;
-            pdf += EvaluateCookTorranceMicrofacetMultiscatteringBSDFPdf( wi, wo, intersection.alpha, etaI.r, etaT.r, lightingContext ) * Wt;
+            value += EvaluateCookTorranceMicrofacetMultiscatteringBSDF( wi, wo, intersection.specular, intersection.alpha, etaI_t, etaT_t, lightingContext ) * Et;
+            pdf += EvaluateCookTorranceMicrofacetMultiscatteringBSDFPdf( wi, wo, intersection.alpha, etaI_t, etaT_t, lightingContext ) * Wt;
         }
+    }
+
+    if ( isInverted )
+    {
+        wi.z = -wi.z;
     }
 
     wi = mul( wi, tbn2world );

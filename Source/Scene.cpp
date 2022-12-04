@@ -51,6 +51,7 @@ bool CScene::CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, c
             destMaterial.m_Transmission = 1.0f - iterSrcMat.dissolve;
             destMaterial.m_Tiling = XMFLOAT2( 1.0f, 1.0f );
             destMaterial.m_IsMetal = false;
+            destMaterial.m_IsTwoSided = false;
             destMaterial.m_HasAlbedoTexture = false;
             destMaterial.m_HasEmissionTexture = false;
             destMaterial.m_HasRoughnessTexture = false;
@@ -601,6 +602,7 @@ void CScene::UpdateMaterialGPUData()
             material->texTiling = materialSetting->m_Tiling;
             material->transmission = materialSetting->m_IsMetal ? 0.0f : materialSetting->m_Transmission;
             material->flags = materialSetting->m_IsMetal ? MATERIAL_FLAG_IS_METAL : 0;
+            material->flags |= materialSetting->m_IsTwoSided ? MATERIAL_FLAG_IS_TWOSIDED : 0;
             material->flags |= materialSetting->m_HasAlbedoTexture ? MATERIAL_FLAG_ALBEDO_TEXTURE : 0;
             material->flags |= materialSetting->m_HasRoughnessTexture ? MATERIAL_FLAG_ROUGHNESS_TEXTURE : 0;
         }

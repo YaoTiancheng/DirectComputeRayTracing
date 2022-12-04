@@ -910,6 +910,8 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                     if ( ImGui::DragFloat( "Transmission", &selection->m_Transmission, 0.01f, 0.0f, 1.0f ) )
                         m_IsMaterialGPUBufferDirty = true;
                 }
+                if ( ImGui::Checkbox( "Two Sided", &selection->m_IsTwoSided ) )
+                    m_IsMaterialGPUBufferDirty = true;
                 if ( ImGui::DragFloat2( "Texture Tiling", (float*)&selection->m_Tiling, 0.01f, 0.0f, 100000.0f ) )
                     m_IsMaterialGPUBufferDirty = true;
                 if ( ImGui::Checkbox( "Albedo Texture", &selection->m_HasAlbedoTexture ) )

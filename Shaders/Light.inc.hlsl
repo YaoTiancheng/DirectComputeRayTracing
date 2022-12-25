@@ -68,7 +68,7 @@ void TriangleLight_Sample( SLight light, float4x3 transform, float3 v0, float3 v
     float WIdotN = -dot( wi, normal );
     pdf *= distance * distance / WIdotN;
 
-    radiance = WIdotN > 0.f && pdf > 0.f ? light.radiance / pdf : 0.f;
+    radiance = WIdotN > 0.f && pdf > 0.f ? light.radiance : 0.f;
     pdf = WIdotN > 0.f ? pdf : 0.f;
 }
 

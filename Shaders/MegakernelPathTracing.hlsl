@@ -93,7 +93,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
                     float NdotWI = abs( dot( intersection.normal, sampleResult.wi ) );
                     float bsdfPdf = EvaluateBSDFPdf( sampleResult.wi, wo, intersection );
                     float weight = isDeltaLight ? 1.0f : PowerHeuristic( 1, sampleResult.pdf, 1, bsdfPdf );
-                    l += pathThroughput * sampleResult.radiance * bsdf * NdotWI * weight;
+                    l += pathThroughput * sampleResult.radiance * bsdf * NdotWI * weight / sampleResult.pdf;
                 }
             }
 

@@ -211,7 +211,6 @@ SLightSampleResult SampleLightDirect( float3 p
         TriangleLight_Sample( light, instanceTransform, v0, v1, v2, triangleSample, p, result.radiance, result.wi, result.distance, result.pdf );
 
         result.pdf /= Light_GetTriangleCount( light );
-        result.radiance *= Light_GetTriangleCount( light );
     }
     else if ( light.flags & LIGHT_FLAGS_ENVIRONMENT_LIGHT )
     {
@@ -220,7 +219,6 @@ SLightSampleResult SampleLightDirect( float3 p
     }
 
     result.pdf /= lightCount;
-    result.radiance *= lightCount;
 
     if ( result.distance != FLT_INF )
     {

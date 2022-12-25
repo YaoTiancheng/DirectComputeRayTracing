@@ -256,7 +256,7 @@ void SampleBSDF( float3 wo
     }
     case BxDF_INDEX_COOKTORRANCE_BSDF:
     {
-        float sample = ( BRDFSelectionSample - opacity ) / transmission;
+        float sample = ( BRDFSelectionSample - 1.0f + Wt ) / Wt;
         SampleCookTorranceMicrofacetMultiscatteringBSDF( wo, sample, BRDFSample, intersection.specular, intersection.alpha, etaI_t, etaT_t, wi, value, pdf, isDeltaBxdf, lightingContext );
         value *= Et;
         pdf *= Wt;

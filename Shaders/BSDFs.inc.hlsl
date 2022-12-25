@@ -56,7 +56,8 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
     float Ediffuse    = !isMetal ? ( 1 - Emicrofacet - Ems ) : 0.0f;
     float Et          = transmission;
     float3 value = 0.0f;
-    if ( !isInverted || intersection.isTwoSided )
+    bool hasAnyBrdf = !isInverted || intersection.isTwoSided;
+    if ( hasAnyBrdf )
     {
         value += !isMetal ? EvaluateCookTorranceMircofacetBRDF_Dielectric( wi, wo, intersection.specular, intersection.alpha, etaI.r, etaT.r, lightingContext )
                           : EvaluateCookTorranceMircofacetBRDF_Conductor( wi, wo, intersection.specular, intersection.alpha, 1.0f, intersection.ior, intersection.k, lightingContext );
@@ -106,23 +107,32 @@ float EvaluateBSDFPdf( float3 wi, float3 wo, Intersection intersection )
     float3 Favg       = !isMetal ? MultiscatteringFavgDielectric( eta.r ) : MultiscatteringFavgConductor( intersection.ior, intersection.k );
     float3 Fms        = MultiscatteringFresnel( EAvg, Favg );
     float cosThetaO   = wo.z;
+
+    bool hasAnyBrdf = !isInverted || intersection.isTwoSided;
     // Energy for conductor microfacet BRDF is not available, hence we cannot importance sample between microfacet and multiscattering
     // and assume both energy is 0.5 in such case
     float Emicrofacet = !isMetal ? SpecularWeight( cosThetaO, intersection.alpha, intersection.ior.r ) : 0.5f;
           Emicrofacet *= opacity;
+          Emicrofacet *= hasAnyBrdf ? 1.0f : 0.0f;
     float Ems         = !isMetal ? Fms.r * ( 1.0f - E ) : 0.5f;
           Ems         *= opacity;
+          Ems         *= hasAnyBrdf ? 1.0f : 0.0f;
     float Ediffuse    = !isMetal ? ( 1 - Emicrofacet - Ems ) * opacity : 0.0f;
+          Ediffuse    *= hasAnyBrdf ? 1.0f : 0.0f;
     float Et          = transmission;
     float Etotal      = Emicrofacet + Ems + Ediffuse + Et;
-    bool hasBrdfs = !isInverted || intersection.isTwoSided;
-    float Wmicrofacet = hasBrdfs ? Emicrofacet / Etotal : 0.0f;
-    float Wms         = hasBrdfs ? Ems / Etotal : 0.0f;
-    float Wdiffuse    = hasBrdfs ? Ediffuse / Etotal : 0.0f;
-    float Wt          = hasBrdfs ? Et / Etotal : 1.0f;
+    if ( Etotal == 0.0f )
+    {
+        return 0.0f;
+    }
+
+    float Wmicrofacet = Emicrofacet / Etotal;
+    float Wms         = Ems / Etotal;
+    float Wdiffuse    = Ediffuse / Etotal;
+    float Wt          = Et / Etotal;
 
     float pdf = 0.0f;
-    if ( hasBrdfs )
+    if ( hasAnyBrdf )
     {
         pdf += EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * Wmicrofacet;
         pdf += EvaluateCookTorranceMultiscatteringBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * Wms;
@@ -147,8 +157,10 @@ void SampleBSDF( float3 wo
     , out float pdf
     , out bool isDeltaBxdf )
 {
+    wi = 0.0f;
     value = 0.0f;
     pdf = 0.0f;
+    isDeltaBxdf = false;
 
     float3 biNormal = cross( intersection.normal, intersection.tangent );
     float3x3 tbn2world = float3x3( intersection.tangent, biNormal, intersection.normal );
@@ -178,20 +190,29 @@ void SampleBSDF( float3 wo
     float EAvg        = SampleCookTorranceMicrofacetBRDFAverageEnergyTexture( intersection.alpha );
     float3 Favg       = !isMetal ? MultiscatteringFavgDielectric( eta.r ) : MultiscatteringFavgConductor( intersection.ior, intersection.k );
     float3 Fms        = MultiscatteringFresnel( EAvg, Favg );
+
+    bool hasAnyBrdf = !isInverted || intersection.isTwoSided;
     // Energy for conductor microfacet BRDF is not available, hence we cannot importance sample between microfacet and multiscattering
     // and assume both energy is 0.5 in such case
     float Emicrofacet = !isMetal ? SpecularWeight( cosThetaO, intersection.alpha, intersection.ior.r ) : 0.5f;
           Emicrofacet *= opacity;
+          Emicrofacet *= hasAnyBrdf ? 1.0f : 0.0f;
     float Ems         = !isMetal ? Fms.r * ( 1.0f - E ) : 0.5f;
           Ems         *= opacity;
+          Ems         *= hasAnyBrdf ? 1.0f : 0.0f;
     float Ediffuse    = !isMetal ? ( 1 - Emicrofacet - Ems ) * opacity : 0.0f;
+          Ediffuse    *= hasAnyBrdf ? 1.0f : 0.0f;
     float Et          = transmission;
     float Etotal      = Emicrofacet + Ems + Ediffuse + Et;
-    bool hasBrdfs = !isInverted || intersection.isTwoSided;
-    float Wmicrofacet = hasBrdfs ? Emicrofacet / Etotal : 0.0f;
-    float Wms         = hasBrdfs ? Ems / Etotal : 0.0f;
-    float Wdiffuse    = hasBrdfs ? Ediffuse / Etotal : 0.0f;
-    float Wt          = hasBrdfs ? Et / Etotal : 1.0f;
+    if ( Etotal == 0.0f )
+    {
+        return;
+    }
+
+    float Wmicrofacet = Emicrofacet / Etotal;
+    float Wms         = Ems / Etotal;
+    float Wdiffuse    = Ediffuse / Etotal;
+    float Wt          = Et / Etotal;
 
     static const uint BxDF_INDEX_LAMBERT_BRDF = 0;
     static const uint BxDF_INDEX_COOKTORRANCE_MICROFACET_BRDF = 1;
@@ -245,19 +266,19 @@ void SampleBSDF( float3 wo
 
     if ( !isDeltaBxdf )
     {
-        if ( hasBrdfs && bxdfIndex != BxDF_INDEX_COOKTORRANCE_MICROFACET_BRDF && opacity > 0.0f )
+        if ( hasAnyBrdf && bxdfIndex != BxDF_INDEX_COOKTORRANCE_MICROFACET_BRDF && opacity > 0.0f )
         {
             float3 brdf = !isMetal ? EvaluateCookTorranceMircofacetBRDF_Dielectric( wi, wo, intersection.specular, intersection.alpha, etaI.r, etaT.r, lightingContext )
                 : EvaluateCookTorranceMircofacetBRDF_Conductor( wi, wo, intersection.specular, intersection.alpha, 1.0f, intersection.ior, intersection.k, lightingContext );
             value += brdf * opacity;
             pdf += EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * Wmicrofacet;
         }
-        if ( hasBrdfs && bxdfIndex != BxDF_INDEX_COOKTORRANCE_MULTISCATTERING_BRDF && opacity > 0.0f )
+        if ( hasAnyBrdf && bxdfIndex != BxDF_INDEX_COOKTORRANCE_MULTISCATTERING_BRDF && opacity > 0.0f )
         {
             value += EvaluateCookTorranceMultiscatteringBRDF( wi, wo, intersection.specular, intersection.alpha, E, EAvg, Fms, lightingContext ) * opacity;
             pdf += EvaluateCookTorranceMultiscatteringBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * Wms;
         }
-        if ( hasBrdfs && bxdfIndex != BxDF_INDEX_LAMBERT_BRDF && opacity > 0.0f )
+        if ( hasAnyBrdf && bxdfIndex != BxDF_INDEX_LAMBERT_BRDF && opacity > 0.0f )
         {
             value += EvaluateLambertBRDF( wi, wo, intersection.albedo, lightingContext ) * Ediffuse;
             pdf += EvaluateLambertBRDFPdf( wi, wo, lightingContext ) * Wdiffuse;

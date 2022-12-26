@@ -511,17 +511,18 @@ float MultiscatteringFavgDielectric( float eta )
 
 float3 MultiscatteringFavgConductor( float3 eta, float3 k )
 {
-    bool3 inverted = eta < 1.0f;
-    float3 a = inverted ?  1.0730319483037318E+00 :  1.2906068840404181E-01;
-    float3 b = inverted ? -1.4424892386431563E+00 : -2.2502873421002770E-01;
-    float3 c = inverted ? -1.7880356839900174E-01 :  3.6355156689118834E-01;
-    float3 d = inverted ?  4.9941630717596613E-01 :  1.4509426507611925E-01;
-    float3 f = inverted ?  8.3747526332840494E-02 : -1.0842465045263060E-02;
-    float3 g = inverted ? -5.6799759243677271E-02 : -1.7227454032982224E-02;
-    float3 h = inverted ? -1.0434153756507136E-02 : -4.2914966507140717E-03;
-    float3 i = inverted ?  4.1168574863539992E-01 : -1.2299514363466055E-01;
-    float3 j = inverted ? -8.2763070813679118E-02 : -5.8190185274472478E-04;
-    float3 k_ = inverted ? -3.2613627035451204E-02 :  1.6831028995738198E-02;
+    // Full cubic 3D polynomial fitting
+    /*bool3 smallEta = eta < 1.0f;
+    float3 a = smallEta ?  9.4555597433543637E-01 :  1.0246918453560364E-01;
+    float3 b = smallEta ? -1.2553345230422654E+00 : -2.8053691279081833E-02;
+    float3 c = smallEta ?  5.0376101078453521E-02 :  2.3334989012529267E-01;
+    float3 d = smallEta ?  3.6819267468471062E-01 :  2.5793790574058471E-02;
+    float3 f = smallEta ? -1.0930166711608846E-02 : -1.1253806018681275E-02;
+    float3 g = smallEta ? -2.8365267538531167E-02 : -1.7015953550076728E-03;
+    float3 h = smallEta ?  6.6875946203492909E-04 : -2.5759179444232935E-04;
+    float3 i = smallEta ?  2.8032399654992435E-01 : -3.8746959437472639E-02;
+    float3 j = smallEta ? -4.4320434429047734E-02 :  3.0787666065079829E-04;
+    float3 k_ = smallEta ? -1.6063213773073390E-02 :  2.6796891787734967E-03;
     float3 eta2 = eta * eta;
     float3 eta3 = eta2 * eta;
     float3 k2 = k * k;
@@ -537,7 +538,12 @@ float3 MultiscatteringFavgConductor( float3 eta, float3 k )
     temp += i * eta * k;
     temp += j * eta2 * k;
     temp += k_ * eta * k2;
-    return temp;
+    return saturate( temp );*/
+
+    // Approximation for the hemispherical albedo of a smooth conductor ( Hitchikers Guide to Multiple Scattering ), Eq.(12.9)
+    float3 numerator   = eta * ( 133.736f - 98.9833f * eta ) + k * ( eta * ( 59.5617f - 3.98288f * eta ) - 182.37f ) + ( ( 0.30818f * eta - 13.1093f ) * eta - 62.5919f ) * k * k - 8.21474f;
+    float3 denominator = k * ( eta * ( 94.6517f - 15.8558f * eta ) - 187.166f ) + ( -78.476 * eta - 395.268f ) * eta + ( eta * ( eta - 15.4387f ) - 62.0752f ) * k * k;
+    return numerator / denominator;
 }
 
 float3 MultiscatteringFresnel( float Eavg, float3 Favg )

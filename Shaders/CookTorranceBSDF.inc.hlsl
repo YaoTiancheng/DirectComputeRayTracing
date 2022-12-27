@@ -543,7 +543,7 @@ float3 MultiscatteringFavgConductor( float3 eta, float3 k )
     // Approximation for the hemispherical albedo of a smooth conductor ( Hitchikers Guide to Multiple Scattering ), Eq.(12.9)
     float3 numerator   = eta * ( 133.736f - 98.9833f * eta ) + k * ( eta * ( 59.5617f - 3.98288f * eta ) - 182.37f ) + ( ( 0.30818f * eta - 13.1093f ) * eta - 62.5919f ) * k * k - 8.21474f;
     float3 denominator = k * ( eta * ( 94.6517f - 15.8558f * eta ) - 187.166f ) + ( -78.476 * eta - 395.268f ) * eta + ( eta * ( eta - 15.4387f ) - 62.0752f ) * k * k;
-    return numerator / denominator;
+    return saturate( numerator / denominator );
 }
 
 float3 MultiscatteringFresnel( float Eavg, float3 Favg )

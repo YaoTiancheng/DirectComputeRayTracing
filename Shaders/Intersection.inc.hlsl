@@ -11,7 +11,6 @@ struct Intersection
     float3  tangent;
     float3  geometryNormal;
     float3  ior;
-    float3  k;
     bool    isMetal;
     float   transmission;
     bool    backface;

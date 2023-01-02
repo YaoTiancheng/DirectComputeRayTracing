@@ -595,9 +595,8 @@ void CScene::UpdateMaterialGPUData()
         {
             SMaterial* materialSetting = m_Materials.data() + i;
             GPU::Material* material = ( (GPU::Material*)address ) + i;
-            material->albedo = materialSetting->m_Albedo;
+            material->albedo = !materialSetting->m_IsMetal ? materialSetting->m_Albedo : materialSetting->m_K;
             material->ior = materialSetting->m_IOR;
-            material->k = materialSetting->m_K;
             material->roughness = std::clamp( materialSetting->m_Roughness, 0.0f, 1.0f );
             material->texTiling = materialSetting->m_Tiling;
             material->transmission = materialSetting->m_IsMetal ? 0.0f : materialSetting->m_Transmission;

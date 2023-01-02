@@ -15,7 +15,6 @@ struct Material
     float3 albedo;
     float  roughness;
     float3 ior;
-    float3 k;
     float  transmission;
     float2 texTiling;
     uint   flags;

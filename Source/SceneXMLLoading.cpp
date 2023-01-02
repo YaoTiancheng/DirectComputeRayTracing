@@ -662,9 +662,9 @@ namespace
             material->m_Transmission = specularTransmittance;
         }
 
-        material->m_IOR.x = ClampValueToValidRange( "Material IOR.x", material->m_IOR.x, material->m_IsMetal ? 0.0f : 1.0f, MAX_MATERIAL_IOR );
-        material->m_IOR.y = ClampValueToValidRange( "Material IOR.y", material->m_IOR.y, material->m_IsMetal ? 0.0f : 1.0f, MAX_MATERIAL_IOR );
-        material->m_IOR.z = ClampValueToValidRange( "Material IOR.z", material->m_IOR.z, material->m_IsMetal ? 0.0f : 1.0f, MAX_MATERIAL_IOR );
+        material->m_IOR.x = ClampValueToValidRange( "Material IOR.x", material->m_IOR.x, material->m_IsMetal ? 0.0f : 1.0f, material->m_IsMetal ? MAX_MATERIAL_ETA : MAX_MATERIAL_IOR );
+        material->m_IOR.y = ClampValueToValidRange( "Material IOR.y", material->m_IOR.y, material->m_IsMetal ? 0.0f : 1.0f, material->m_IsMetal ? MAX_MATERIAL_ETA : MAX_MATERIAL_IOR );
+        material->m_IOR.z = ClampValueToValidRange( "Material IOR.z", material->m_IOR.z, material->m_IsMetal ? 0.0f : 1.0f, material->m_IsMetal ? MAX_MATERIAL_ETA : MAX_MATERIAL_IOR );
         material->m_K.x = ClampValueToValidRange( "Material K.x", material->m_K.x, 0.0f, MAX_MATERIAL_K );
         material->m_K.y = ClampValueToValidRange( "Material K.y", material->m_K.y, 0.0f, MAX_MATERIAL_K );
         material->m_K.z = ClampValueToValidRange( "Material K.z", material->m_K.z, 0.0f, MAX_MATERIAL_K );

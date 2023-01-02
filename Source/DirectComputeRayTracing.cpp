@@ -898,14 +898,14 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 }
                 if ( selection->m_IsMetal )
                 {
-                    if ( ImGui::DragFloat3( "IOR", (float*)&selection->m_IOR, 0.01f, 0.0f, MAX_MATERIAL_IOR, "%.3f", ImGuiSliderFlags_AlwaysClamp ) )
+                    if ( ImGui::DragFloat3( "eta", (float*)&selection->m_IOR, 0.01f, 0.0f, MAX_MATERIAL_ETA, "%.3f", ImGuiSliderFlags_AlwaysClamp ) )
                         m_IsMaterialGPUBufferDirty = true;
                     if ( ImGui::DragFloat3( "k", (float*)&selection->m_K, 0.01f, 0.0f, MAX_MATERIAL_K, "%.3f", ImGuiSliderFlags_AlwaysClamp ) )
                         m_IsMaterialGPUBufferDirty = true;
                 }
                 else
                 {
-                    if ( ImGui::DragFloat( "IOR", (float*)&selection->m_IOR, 0.01f, 1.0f, MAX_MATERIAL_IOR ) )
+                    if ( ImGui::DragFloat( "IOR", (float*)&selection->m_IOR, 0.01f, 1.0f, MAX_MATERIAL_IOR, "%.3f", ImGuiSliderFlags_AlwaysClamp ) )
                         m_IsMaterialGPUBufferDirty = true;
                     if ( ImGui::DragFloat( "Transmission", &selection->m_Transmission, 0.01f, 0.0f, 1.0f ) )
                         m_IsMaterialGPUBufferDirty = true;

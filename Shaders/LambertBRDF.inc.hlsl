@@ -11,9 +11,9 @@ float3 ConsineSampleHemisphere( float2 sample )
     return float3( sample.xy, sqrt( max( 0.0f, 1.0f - dot( sample.xy, sample.xy ) ) ) );
 }
 
-float3 EvaluateLambertBRDF( float3 wi, float3 wo, float3 albedo, LightingContext lightingContext )
+float EvaluateLambertBRDF( float3 wi, float3 wo, LightingContext lightingContext )
 {
-    return wi.z > 0.0f && wo.z > 0.0f ? albedo * INV_PI : 0.0f;
+    return wi.z > 0.0f && wo.z > 0.0f ? INV_PI : 0.0f;
 }
 
 float EvaluateLambertBRDFPdf( float3 wi, float3 wo, LightingContext lightingContext )
@@ -23,10 +23,8 @@ float EvaluateLambertBRDFPdf( float3 wi, float3 wo, LightingContext lightingCont
 
 void SampleLambertBRDF( float3 wo
 	, float2 sample
-    , float3 albedo
-    , bool backface
     , out float3 wi
-    , out float3 value
+    , out float value
     , out float pdf
     , inout LightingContext lightingContext )
 {
@@ -34,7 +32,7 @@ void SampleLambertBRDF( float3 wo
 
     LightingContextCalculateH( wo, wi, lightingContext );
 
-    value = wo.z > 0.0f ? albedo * INV_PI : 0.0f;
+    value = wo.z > 0.0f ? INV_PI : 0.0f;
     pdf = wo.z > 0.0f ? wi.z * INV_PI : 0.0f;
 }
 

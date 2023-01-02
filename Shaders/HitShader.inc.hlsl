@@ -45,7 +45,6 @@ void HitShader( float3 rayOrigin
            roughness *= ( materialFlags & MATERIAL_FLAG_ROUGHNESS_TEXTURE ) != 0 ? checkerboard : 1.0f;
 
     intersection.albedo     = albedo;
-    intersection.specular   = 1.0f;
     intersection.alpha      = roughness * roughness;
     intersection.ior        = materials[ materialId ].ior;
     intersection.transmission = materials[ materialId ].transmission;

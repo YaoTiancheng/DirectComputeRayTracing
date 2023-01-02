@@ -4,7 +4,6 @@
 struct Intersection
 {
     float3  albedo;
-    float3  specular;
     float   alpha;
     float3  position;
     float3  normal;

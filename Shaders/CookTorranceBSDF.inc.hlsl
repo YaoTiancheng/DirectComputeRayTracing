@@ -112,7 +112,7 @@ void SampleGGXMicrofacetDistribution( float3 wo, float2 sample, float alpha, out
 // Cook-Torrance microfacet BRDF
 //
 
-float3 EvaluateCookTorranceMircofacetBRDF( float3 wi, float3 wo, float3 reflectance, float alpha, float3 F, LightingContext lightingContext )
+float EvaluateCookTorranceMircofacetBRDF( float3 wi, float3 wo, float alpha, LightingContext lightingContext )
 {
     float WIdotN = wi.z;
     float WOdotN = wo.z;
@@ -124,16 +124,16 @@ float3 EvaluateCookTorranceMircofacetBRDF( float3 wi, float3 wo, float3 reflecta
     if ( all( m == 0.0f ) )
         return 0.0f;
 
-    return reflectance * EvaluateGGXMicrofacetDistribution( m, alpha ) * EvaluateGGXGeometricShadowing( wi, wo, m, alpha ) * F / ( 4.0f * WIdotN * WOdotN );
+    return EvaluateGGXMicrofacetDistribution( m, alpha ) * EvaluateGGXGeometricShadowing( wi, wo, m, alpha ) / ( 4.0f * WIdotN * WOdotN );
 }
 
-float3 EvaluateCookTorranceMircofacetBRDF_Dielectric( float3 wi, float3 wo, float3 reflectance, float alpha, float etaI, float etaT, LightingContext lightingContext )
+float EvaluateCookTorranceMircofacetBRDF_Dielectric( float3 wi, float3 wo, float alpha, float etaI, float etaT, LightingContext lightingContext )
 {
     if ( alpha >= ALPHA_THRESHOLD )
     {
         float WOdotM = lightingContext.WOdotH;
         float F = FresnelDielectric( WOdotM, etaI, etaT );
-        return EvaluateCookTorranceMircofacetBRDF( wi, wo, reflectance, alpha, F, lightingContext );
+        return EvaluateCookTorranceMircofacetBRDF( wi, wo, alpha, lightingContext ) * F;
     }
     else
     {
@@ -141,13 +141,13 @@ float3 EvaluateCookTorranceMircofacetBRDF_Dielectric( float3 wi, float3 wo, floa
     }
 }
 
-float3 EvaluateCookTorranceMircofacetBRDF_Conductor( float3 wi, float3 wo, float3 reflectance, float alpha, float3 etaI, float3 etaT, float3 k, LightingContext lightingContext )
+float3 EvaluateCookTorranceMircofacetBRDF_Conductor( float3 wi, float3 wo, float alpha, float3 etaI, float3 etaT, float3 k, LightingContext lightingContext )
 {
     if ( alpha >= ALPHA_THRESHOLD )
     {
         float WOdotM = lightingContext.WOdotH;
         float3 F = FresnelConductor( WOdotM, etaI, etaT, k );
-        return EvaluateCookTorranceMircofacetBRDF( wi, wo, reflectance, alpha, F, lightingContext );
+        return EvaluateCookTorranceMircofacetBRDF( wi, wo, alpha, lightingContext ) * F;
     }
     else
     {
@@ -155,13 +155,13 @@ float3 EvaluateCookTorranceMircofacetBRDF_Conductor( float3 wi, float3 wo, float
     }
 }
 
-float3 EvaluateCookTorranceMircofacetBRDF_Schlick( float3 wi, float3 wo, float3 reflectance, float alpha, float3 F0, LightingContext lightingContext )
+float3 EvaluateCookTorranceMircofacetBRDF_Schlick( float3 wi, float3 wo, float alpha, float3 F0, LightingContext lightingContext )
 {
     if ( alpha >= ALPHA_THRESHOLD )
     {
         float WOdotM = lightingContext.WOdotH;
         float3 F = FresnelSchlick( WOdotM, F0 );
-        return EvaluateCookTorranceMircofacetBRDF( wi, wo, reflectance, alpha, F, lightingContext );
+        return EvaluateCookTorranceMircofacetBRDF( wi, wo, alpha, lightingContext ) * F;
     }
     else
     {
@@ -189,7 +189,7 @@ float EvaluateCookTorranceMicrofacetBRDFPdf( float3 wi, float3 wo, float alpha, 
     }
 }
 
-void SampleCookTorranceMicrofacetBRDF_Dielectric( float3 wo, float2 sample, float3 reflectance, float alpha, float etaI, float etaT, out float3 wi, inout float3 value, inout float pdf, out bool isDeltaBrdf, inout LightingContext lightingContext )
+void SampleCookTorranceMicrofacetBRDF_Dielectric( float3 wo, float2 sample, float alpha, float etaI, float etaT, out float3 wi, inout float value, inout float pdf, out bool isDeltaBrdf, inout LightingContext lightingContext )
 {
     if ( alpha >= ALPHA_THRESHOLD )
     {
@@ -202,19 +202,19 @@ void SampleCookTorranceMicrofacetBRDF_Dielectric( float3 wo, float2 sample, floa
         float WOdotM = lightingContext.WOdotH;
         float F = FresnelDielectric( WOdotM, etaI, etaT );
 
-        value = EvaluateCookTorranceMircofacetBRDF( wi, wo, reflectance, alpha, F, lightingContext );
+        value = EvaluateCookTorranceMircofacetBRDF( wi, wo, alpha, lightingContext ) * F;
         pdf = EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, alpha, lightingContext );
 
         isDeltaBrdf = false;
     }
     else
     {
-        SampleSpecularBRDF_Dielectric( wo, reflectance, etaI, etaT, wi, value, pdf, lightingContext );
+        SampleSpecularBRDF_Dielectric( wo, etaI, etaT, wi, value, pdf, lightingContext );
         isDeltaBrdf = true;
     }
 }
 
-void SampleCookTorranceMicrofacetBRDF_Conductor( float3 wo, float2 sample, float3 reflectance, float alpha, float3 etaI, float3 etaT, float3 k, out float3 wi, inout float3 value, inout float pdf, out bool isDeltaBrdf, inout LightingContext lightingContext )
+void SampleCookTorranceMicrofacetBRDF_Conductor( float3 wo, float2 sample, float alpha, float3 etaI, float3 etaT, float3 k, out float3 wi, inout float3 value, inout float pdf, out bool isDeltaBrdf, inout LightingContext lightingContext )
 {
     if ( alpha >= ALPHA_THRESHOLD )
     {
@@ -227,19 +227,19 @@ void SampleCookTorranceMicrofacetBRDF_Conductor( float3 wo, float2 sample, float
         float WOdotM = lightingContext.WOdotH;
         float3 F = FresnelConductor( WOdotM, etaI, etaT, k );
 
-        value = EvaluateCookTorranceMircofacetBRDF( wi, wo, reflectance, alpha, F, lightingContext );
+        value = EvaluateCookTorranceMircofacetBRDF( wi, wo, alpha, lightingContext ) * F;
         pdf = EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, alpha, lightingContext );
 
         isDeltaBrdf = false;
     }
     else
     {
-        SampleSpecularBRDF_Conductor( wo, reflectance, etaI, etaT, k, wi, value, pdf, lightingContext );
+        SampleSpecularBRDF_Conductor( wo, etaI, etaT, k, wi, value, pdf, lightingContext );
         isDeltaBrdf = true;
     }
 }
 
-void SampleCookTorranceMicrofacetBRDF_Schlick( float3 wo, float2 sample, float3 reflectance, float alpha, float3 F0, out float3 wi, inout float3 value, inout float pdf, out bool isDeltaBrdf, inout LightingContext lightingContext )
+void SampleCookTorranceMicrofacetBRDF_Schlick( float3 wo, float2 sample, float alpha, float3 F0, out float3 wi, inout float3 value, inout float pdf, out bool isDeltaBrdf, inout LightingContext lightingContext )
 {
     if ( alpha >= ALPHA_THRESHOLD )
     {
@@ -252,14 +252,14 @@ void SampleCookTorranceMicrofacetBRDF_Schlick( float3 wo, float2 sample, float3 
         float WOdotM = lightingContext.WOdotH;
         float3 F = FresnelSchlick( WOdotM, F0 );
 
-        value = EvaluateCookTorranceMircofacetBRDF( wi, wo, reflectance, alpha, F, lightingContext );
+        value = EvaluateCookTorranceMircofacetBRDF( wi, wo, alpha, lightingContext ) * F;
         pdf = EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, alpha, lightingContext );
 
         isDeltaBrdf = false;
     }
     else
     {
-        SampleSpecularBRDF_Schlick( wo, reflectance, F0, wi, value, pdf, lightingContext );
+        SampleSpecularBRDF_Schlick( wo, F0, wi, value, pdf, lightingContext );
         isDeltaBrdf = true;
     }
 }
@@ -279,7 +279,7 @@ float CookTorranceMicrofacetBTDF( float3 wi, float3 wo, float3 m, float alpha, f
         1.0f;
 }
 
-float3 EvaluateCookTorranceMircofacetBTDF( float3 wi, float3 wo, float3 transmittance, float alpha, float etaI, float etaT, LightingContext lightingContext )
+float EvaluateCookTorranceMircofacetBTDF( float3 wi, float3 wo, float alpha, float etaI, float etaT, LightingContext lightingContext )
 {
     if ( alpha >= ALPHA_THRESHOLD )
     {
@@ -294,7 +294,7 @@ float3 EvaluateCookTorranceMircofacetBTDF( float3 wi, float3 wo, float3 transmit
         float WOdotM = dot( wo, m );
         float sqrtDenom = etaI * WOdotM + etaT * WIdotM;
 
-        return CookTorranceMicrofacetBTDF( wi, wo, m, alpha, etaI, etaT, WIdotN, WOdotN, WIdotM, WOdotM, sqrtDenom ) * transmittance;
+        return CookTorranceMicrofacetBTDF( wi, wo, m, alpha, etaI, etaT, WIdotN, WOdotN, WIdotM, WOdotM, sqrtDenom );
     }
     else
     {
@@ -321,7 +321,7 @@ float EvaluateCookTorranceMicrofacetBTDFPdf( float3 wi, float3 wo, float alpha, 
     }
 }
 
-void SampleCookTorranceMicrofacetBTDF( float3 wo, float2 sample, float3 transmittance, float alpha, float etaI, float etaT, out float3 wi, inout float3 value, inout float pdf, out bool isDeltaBtdf, inout LightingContext lightingContext )
+void SampleCookTorranceMicrofacetBTDF( float3 wo, float2 sample, float alpha, float etaI, float etaT, out float3 wi, inout float value, inout float pdf, out bool isDeltaBtdf, inout LightingContext lightingContext )
 {
     if ( alpha >= ALPHA_THRESHOLD )
     {
@@ -343,7 +343,7 @@ void SampleCookTorranceMicrofacetBTDF( float3 wo, float2 sample, float3 transmit
         float WOdotM = lightingContext.WOdotH;
         float sqrtDenom = etaI * WOdotM + etaT * WIdotM;
 
-        value = CookTorranceMicrofacetBTDF( wi, wo, m, alpha, etaI, etaT, WIdotN, WOdotN, WIdotM, WOdotM, sqrtDenom ) * transmittance;
+        value = CookTorranceMicrofacetBTDF( wi, wo, m, alpha, etaI, etaT, WIdotN, WOdotN, WIdotM, WOdotM, sqrtDenom );
 
         float dwh_dwi = abs( ( etaT * etaT * WIdotM ) / ( sqrtDenom * sqrtDenom ) );
         pdf = sqrtDenom != 0.0f ? EvaluateGGXMicrofacetDistributionPdf( wo, m, alpha ) * dwh_dwi : 1.0f;
@@ -352,7 +352,7 @@ void SampleCookTorranceMicrofacetBTDF( float3 wo, float2 sample, float3 transmit
     }
     else
     {
-        SampleSpecularBTDF( wo, transmittance, etaI, etaT, wi, value, pdf, lightingContext );
+        SampleSpecularBTDF( wo, etaI, etaT, wi, value, pdf, lightingContext );
         isDeltaBtdf = true;
     }
 }
@@ -361,15 +361,15 @@ void SampleCookTorranceMicrofacetBTDF( float3 wo, float2 sample, float3 transmit
 // Microfacet BSDF
 //
 
-float3 EvaluateCookTorranceMicrofacetBSDF( float3 wi, float3 wo, float3 color, float alpha, float etaI, float etaT, LightingContext lightingContext )
+float EvaluateCookTorranceMicrofacetBSDF( float3 wi, float3 wo, float alpha, float etaI, float etaT, LightingContext lightingContext )
 {
     if ( wi.z < 0.0f )
     {
-        return EvaluateCookTorranceMircofacetBTDF( wi, wo, color, alpha, etaI, etaT, lightingContext );
+        return EvaluateCookTorranceMircofacetBTDF( wi, wo, alpha, etaI, etaT, lightingContext );
     }
     else
     {
-        return EvaluateCookTorranceMircofacetBRDF_Dielectric( wi, wo, color, alpha, etaI, etaT, lightingContext );
+        return EvaluateCookTorranceMircofacetBRDF_Dielectric( wi, wo, alpha, etaI, etaT, lightingContext );
     }
 }
 
@@ -385,7 +385,7 @@ float EvaluateCookTorranceMicrofacetBSDFPdf( float3 wi, float3 wo, float alpha, 
     }
 }
 
-void SampleCookTorranceMicrofacetBSDF( float3 wo, float selectionSample, float2 bxdfSample, float3 color, float alpha, float etaI, float etaT, out float3 wi, inout float3 value, inout float pdf, out bool isDeltaBxdf, inout LightingContext lightingContext )
+void SampleCookTorranceMicrofacetBSDF( float3 wo, float selectionSample, float2 bxdfSample, float alpha, float etaI, float etaT, out float3 wi, inout float value, inout float pdf, out bool isDeltaBxdf, inout LightingContext lightingContext )
 {
     wi = 0.0f;
     isDeltaBxdf = alpha < ALPHA_THRESHOLD;
@@ -395,7 +395,7 @@ void SampleCookTorranceMicrofacetBSDF( float3 wo, float selectionSample, float2 
 
     if ( etaI == etaT )
     {
-        value = color / wo.z;
+        value = 1.0f / wo.z;
         pdf = 1.0f;
         wi = -wo;
         return;
@@ -493,8 +493,6 @@ void SampleCookTorranceMicrofacetBSDF( float3 wo, float selectionSample, float2 
             value = ( 1.0f - F ) * ( etaI * etaI ) / ( etaT * etaT ) / ( -wi.z );
         }
     }
-    
-    value *= color;
 }
 
 //
@@ -570,14 +568,14 @@ float3 CookTorranceMultiscatteringBSDFSampleHemisphere( float2 sample, float alp
     return float3( cos( phi ) * s, sin( phi ) * s, cosThetaI );
 }
 
-float EvaluateCookTorranceMultiscatteringBSDF( float3 wi, float3 color, float alpha, float eta, float Eo, float Eavg, float factor )
+float EvaluateCookTorranceMultiscatteringBSDF( float3 wi, float alpha, float eta, float Eo, float Eavg, float factor )
 {
     float cosThetaI = abs( wi.z );
     if ( cosThetaI == 0.0f )
         return 0.0f;
 
     float Ei = SampleCookTorranceMicrofacetBSDFEnergyTexture( cosThetaI, alpha, eta );
-    return MultiscatteringBxDF( Ei, Eo, Eavg ) * factor * color;
+    return MultiscatteringBxDF( Ei, Eo, Eavg ) * factor;
 }
 
 float EvaluateCookTorranceMultiscatteringBSDFPdf( float3 wi, float alpha, float eta )
@@ -593,7 +591,7 @@ float EvaluateCookTorranceMultiscatteringBSDFPdf( float3 wi, float alpha, float 
         : 0.0f;
 }
 
-void SampleCookTorranceMultiscatteringBSDF( float3 wo, float selectionSample, float2 bxdfSample, float3 color, float alpha, float Ems_r, float Ems_t, float Eo, float eta, float invEta, float Eavg, float Eavg_inv, float Favg, float reciprocalFactor, out float3 wi, inout float3 value, inout float pdf, LightingContext lightingContext )
+void SampleCookTorranceMultiscatteringBSDF( float3 wo, float selectionSample, float2 bxdfSample, float alpha, float Ems_r, float Ems_t, float Eo, float eta, float invEta, float Eavg, float Eavg_inv, float Favg, float reciprocalFactor, out float3 wi, inout float value, inout float pdf, LightingContext lightingContext )
 {
     wi = 0.0f;
 
@@ -619,7 +617,7 @@ void SampleCookTorranceMultiscatteringBSDF( float3 wo, float selectionSample, fl
     float factor = sampleReflection ? Favg : ( 1 - Favg ) * reciprocalFactor;
     float Ei = SampleCookTorranceMicrofacetBSDFEnergyTexture( cosThetaI, alpha, eta );
     Eavg = sampleReflection ? Eavg : Eavg_inv;
-    value = MultiscatteringBxDF( Ei, Eo, Eavg ) * factor * color;
+    value = MultiscatteringBxDF( Ei, Eo, Eavg ) * factor;
 
     float pdfScale = SampleCookTorranceMicrofacetBSDFPDFScaleTexture( alpha, eta );
     pdf = pdfScale > 0.0f
@@ -655,7 +653,7 @@ float ReciprocalFactor( float Favg, float Favg_inv, float Eavg, float Eavg_inv, 
     return isInverted ? ( 1.0f - x ) : x;
 }
 
-float3 EvaluateCookTorranceMicrofacetMultiscatteringBSDF( float3 wi, float3 wo, float3 color, float alpha, float etaI, float etaT, LightingContext lightingContext )
+float EvaluateCookTorranceMicrofacetMultiscatteringBSDF( float3 wi, float3 wo, float alpha, float etaI, float etaT, LightingContext lightingContext )
 {
     float cosThetaO  = wo.z;
     float eta        = etaT / etaI;
@@ -667,16 +665,16 @@ float3 EvaluateCookTorranceMicrofacetMultiscatteringBSDF( float3 wi, float3 wo, 
     float Eavg       = SampleCookTorranceMicrofacetBSDFAverageEnergyTexture( alpha, eta );
     float reciprocalFactor = ReciprocalFactor( Favg, Favg_inv, Eavg, Eavg_inv, lightingContext.isInverted ? invEta : eta, lightingContext.isInverted );
 
-    float3 value;
+    float value;
     if ( wi.z < 0.0f )
     {
-        value = EvaluateCookTorranceMircofacetBTDF( wi, wo, color, alpha, etaI, etaT, lightingContext )
-              + EvaluateCookTorranceMultiscatteringBSDF( wi, color, alpha, invEta, Ebsdf, Eavg_inv, reciprocalFactor * ( 1.0f - Favg ) );
+        value = EvaluateCookTorranceMircofacetBTDF( wi, wo, alpha, etaI, etaT, lightingContext )
+              + EvaluateCookTorranceMultiscatteringBSDF( wi, alpha, invEta, Ebsdf, Eavg_inv, reciprocalFactor * ( 1.0f - Favg ) );
     }
     else
     {
-        value = EvaluateCookTorranceMircofacetBRDF_Dielectric( wi, wo, color, alpha, etaI, etaT, lightingContext )
-              + EvaluateCookTorranceMultiscatteringBSDF( wi, color, alpha, eta, Ebsdf, Eavg, Favg );
+        value = EvaluateCookTorranceMircofacetBRDF_Dielectric( wi, wo, alpha, etaI, etaT, lightingContext )
+              + EvaluateCookTorranceMultiscatteringBSDF( wi, alpha, eta, Ebsdf, Eavg, Favg );
     }
     return value;
 }
@@ -690,7 +688,7 @@ float EvaluateCookTorranceMicrofacetMultiscatteringBSDFPdf( float3 wi, float3 wo
     return pdf;
 }
 
-void SampleCookTorranceMicrofacetMultiscatteringBSDF( float3 wo, float selectionSample, float2 bxdfSample, float3 color, float alpha, float etaI, float etaT, out float3 wi, inout float3 value, inout float pdf, out bool isDeltaBxdf, inout LightingContext lightingContext )
+void SampleCookTorranceMicrofacetMultiscatteringBSDF( float3 wo, float selectionSample, float2 bxdfSample, float alpha, float etaI, float etaT, out float3 wi, inout float value, inout float pdf, out bool isDeltaBxdf, inout LightingContext lightingContext )
 {
     float cosThetaO  = wo.z;
     float eta        = etaT / etaI;
@@ -710,12 +708,12 @@ void SampleCookTorranceMicrofacetMultiscatteringBSDF( float3 wo, float selection
     bool sampleMicrofacet = selectionSample < weight;
     if ( sampleMicrofacet )
     {
-        SampleCookTorranceMicrofacetBSDF( wo, selectionSample / weight, bxdfSample, color, alpha, etaI, etaT, wi, value, pdf, isDeltaBxdf, lightingContext );
+        SampleCookTorranceMicrofacetBSDF( wo, selectionSample / weight, bxdfSample, alpha, etaI, etaT, wi, value, pdf, isDeltaBxdf, lightingContext );
         pdf *= weight;
     }
     else
     {
-        SampleCookTorranceMultiscatteringBSDF( wo, ( selectionSample - weight ) / ( 1 - weight ), bxdfSample, color, alpha, Ems_r, Ems_t, Ebsdf, eta, invEta, Eavg, Eavg_inv, Favg, reciprocalFactor, wi, value, pdf, lightingContext );
+        SampleCookTorranceMultiscatteringBSDF( wo, ( selectionSample - weight ) / ( 1 - weight ), bxdfSample, alpha, Ems_r, Ems_t, Ebsdf, eta, invEta, Eavg, Eavg_inv, Favg, reciprocalFactor, wi, value, pdf, lightingContext );
         pdf *= 1 - weight;
         isDeltaBxdf = false;
     }
@@ -733,7 +731,7 @@ float3 CookTorranceMultiscatteringBRDFSampleHemisphere( float2 sample, float alp
     return float3( cos( phi ) * s, sin( phi ) * s, cosThetaI );
 }
 
-float3 EvaluateCookTorranceMultiscatteringBRDF( float3 wi, float3 wo, float3 color, float alpha, float Eo, float Eavg, float3 factor, LightingContext lightingContext )
+float3 EvaluateCookTorranceMultiscatteringBRDF( float3 wi, float3 wo, float alpha, float Eo, float Eavg, float3 factor, LightingContext lightingContext )
 {
     float cosThetaO = wo.z;
     float cosThetaI = wi.z;
@@ -741,7 +739,7 @@ float3 EvaluateCookTorranceMultiscatteringBRDF( float3 wi, float3 wo, float3 col
         return 0.0f;
 
     float Ei = SampleCookTorranceMicrofacetBRDFEnergyTexture( cosThetaI, alpha );
-    return MultiscatteringBxDF( Ei, Eo, Eavg ) * factor * color;
+    return MultiscatteringBxDF( Ei, Eo, Eavg ) * factor;
 }
 
 float EvaluateCookTorranceMultiscatteringBRDFPdf( float3 wi, float3 wo, float alpha, LightingContext lightingContext )
@@ -758,7 +756,7 @@ float EvaluateCookTorranceMultiscatteringBRDFPdf( float3 wi, float3 wo, float al
         : 0.0f;
 }
 
-void SampleCookTorranceMultiscatteringBRDF( float3 wo, float2 bxdfSample, float3 color, float alpha, float Eo, float Eavg, float3 Fms, out float3 wi, inout float3 value, inout float pdf, inout LightingContext lightingContext )
+void SampleCookTorranceMultiscatteringBRDF( float3 wo, float2 bxdfSample, float alpha, float Eo, float Eavg, float3 Fms, out float3 wi, inout float3 value, inout float pdf, inout LightingContext lightingContext )
 {
     wi = CookTorranceMultiscatteringBRDFSampleHemisphere( bxdfSample, alpha );
 
@@ -770,7 +768,7 @@ void SampleCookTorranceMultiscatteringBRDF( float3 wo, float2 bxdfSample, float3
         return;
 
     float Ei = SampleCookTorranceMicrofacetBRDFEnergyTexture( cosThetaI, alpha );
-    value = MultiscatteringBxDF( Ei, Eo, Eavg ) * Fms * color;
+    value = MultiscatteringBxDF( Ei, Eo, Eavg ) * Fms;
 
     float pdfScale = SampleCookTorranceMicrofacetBRDFPDFScaleTexture( alpha );
     pdf = pdfScale > 0.0f

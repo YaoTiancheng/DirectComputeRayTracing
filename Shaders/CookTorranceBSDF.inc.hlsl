@@ -189,6 +189,27 @@ float EvaluateCookTorranceMicrofacetBRDFPdf( float3 wi, float3 wo, float alpha, 
     }
 }
 
+void SampleCookTorranceMicrofacetBRDF( float3 wo, float2 sample, float alpha, out float3 wi, inout LightingContext lightingContext )
+{
+    float3 m;
+    SampleGGXMicrofacetDistribution( wo, sample, alpha, m );
+    wi = -reflect( wo, m );
+
+    LightingContextAssignH( wo, m, lightingContext );
+}
+
+void SampleCookTorranceMicrofacetBRDF( float3 wo, float2 sample, float alpha, out float3 wi, inout float value, inout float pdf, inout LightingContext lightingContext )
+{
+    float3 m;
+    SampleGGXMicrofacetDistribution( wo, sample, alpha, m );
+    wi = -reflect( wo, m );
+
+    LightingContextAssignH( wo, m, lightingContext );
+
+    value = EvaluateCookTorranceMircofacetBRDF( wi, wo, alpha, lightingContext );
+    pdf = EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, alpha, lightingContext );
+}
+
 void SampleCookTorranceMicrofacetBRDF_Dielectric( float3 wo, float2 sample, float alpha, float etaI, float etaT, out float3 wi, inout float value, inout float pdf, out bool isDeltaBrdf, inout LightingContext lightingContext )
 {
     if ( alpha >= ALPHA_THRESHOLD )
@@ -544,6 +565,11 @@ float3 MultiscatteringFavgConductor( float3 eta, float3 k )
     return saturate( numerator / denominator );
 }
 
+float MultiscatteringFresnel( float Eavg, float Favg )
+{
+    return Favg * Favg * Eavg / ( 1.0f - Favg * ( 1.0f - Eavg ) );
+}
+
 float3 MultiscatteringFresnel( float Eavg, float3 Favg )
 {
     return Favg * Favg * Eavg / ( 1.0f - Favg * ( 1.0f - Eavg ) );
@@ -774,6 +800,13 @@ void SampleCookTorranceMultiscatteringBRDF( float3 wo, float2 bxdfSample, float 
     pdf = pdfScale > 0.0f
         ? ( 1.0f - Ei ) * cosThetaI / pdfScale
         : 0.0f;
+}
+
+void SampleCookTorranceMultiscatteringBRDF( float3 wo, float2 bxdfSample, float alpha, out float3 wi, inout LightingContext lightingContext )
+{
+    wi = CookTorranceMultiscatteringBRDFSampleHemisphere( bxdfSample, alpha );
+
+    LightingContextCalculateH( wo, wi, lightingContext );
 }
 
 #endif

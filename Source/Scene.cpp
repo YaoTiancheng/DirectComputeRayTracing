@@ -48,12 +48,11 @@ bool CScene::CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, c
             destMaterial.m_Roughness = iterSrcMat.roughness;
             destMaterial.m_IOR = XMFLOAT3( std::clamp( iterSrcMat.ior, 1.0f, MAX_MATERIAL_IOR ), 1.f, 1.f );
             destMaterial.m_K = XMFLOAT3( 1.0f, 1.0f, 1.0f );
-            destMaterial.m_Transmission = 1.0f - iterSrcMat.dissolve;
             destMaterial.m_Tiling = XMFLOAT2( 1.0f, 1.0f );
-            destMaterial.m_IsMetal = false;
+            destMaterial.m_MaterialType = EMaterialType::Plastic;
+            destMaterial.m_Multiscattering = false;
             destMaterial.m_IsTwoSided = false;
             destMaterial.m_HasAlbedoTexture = false;
-            destMaterial.m_HasEmissionTexture = false;
             destMaterial.m_HasRoughnessTexture = false;
             m_Materials.emplace_back( destMaterial );
             m_MaterialNames.emplace_back( iterSrcMat.name );
@@ -69,11 +68,10 @@ static void GetDefaultMaterial(SMaterial* material)
     material->m_Roughness = 1.f;
     material->m_IOR = XMFLOAT3( 1.f, 1.f, 1.f );
     material->m_K = XMFLOAT3( 1.0f, 1.0f, 1.0f );
-    material->m_Transmission = 0.f;
     material->m_Tiling = XMFLOAT2( 1.0f, 1.0f );
-    material->m_IsMetal = false;
+    material->m_MaterialType = EMaterialType::Diffuse;
+    material->m_Multiscattering = false;
     material->m_HasAlbedoTexture = false;
-    material->m_HasEmissionTexture = false;
     material->m_HasRoughnessTexture = false;
 }
 
@@ -587,6 +585,11 @@ void CScene::UpdateLightGPUData()
     }
 }
 
+static uint32_t TranslateToMaterialType( EMaterialType materialType )
+{
+    return (uint32_t)materialType;
+}
+
 void CScene::UpdateMaterialGPUData()
 {
     if ( void* address = m_MaterialsBuffer->Map() )
@@ -595,12 +598,12 @@ void CScene::UpdateMaterialGPUData()
         {
             SMaterial* materialSetting = m_Materials.data() + i;
             GPU::Material* material = ( (GPU::Material*)address ) + i;
-            material->albedo = !materialSetting->m_IsMetal ? materialSetting->m_Albedo : materialSetting->m_K;
+            material->albedo = materialSetting->m_MaterialType == EMaterialType::Conductor ? materialSetting->m_K : materialSetting->m_Albedo;
             material->ior = materialSetting->m_IOR;
             material->roughness = std::clamp( materialSetting->m_Roughness, 0.0f, 1.0f );
             material->texTiling = materialSetting->m_Tiling;
-            material->transmission = materialSetting->m_IsMetal ? 0.0f : materialSetting->m_Transmission;
-            material->flags = materialSetting->m_IsMetal ? MATERIAL_FLAG_IS_METAL : 0;
+            material->flags = TranslateToMaterialType( materialSetting->m_MaterialType ) & MATERIAL_FLAG_TYPE_MASK;
+            material->flags |= materialSetting->m_Multiscattering ? MATERIAL_FLAG_MULTISCATTERING : 0;
             material->flags |= materialSetting->m_IsTwoSided ? MATERIAL_FLAG_IS_TWOSIDED : 0;
             material->flags |= materialSetting->m_HasAlbedoTexture ? MATERIAL_FLAG_ALBEDO_TEXTURE : 0;
             material->flags |= materialSetting->m_HasRoughnessTexture ? MATERIAL_FLAG_ROUGHNESS_TEXTURE : 0;

@@ -40,19 +40,26 @@ struct SEnvironmentLight
     bool CreateTextureFromFile();
 };
 
+enum class EMaterialType
+{
+    Diffuse = 0,
+    Plastic = 1,
+    Conductor = 2,
+    Dielectric = 3
+};
+
 struct SMaterial
 {
     DirectX::XMFLOAT3 m_Albedo;
     float m_Roughness;
     DirectX::XMFLOAT3 m_IOR;
     DirectX::XMFLOAT3 m_K;
-    float m_Transmission;
     DirectX::XMFLOAT2 m_Tiling;
-    bool m_IsMetal;
+    EMaterialType m_MaterialType;
+    bool m_Multiscattering;
     bool m_IsTwoSided;
     bool m_HasAlbedoTexture;
     bool m_HasRoughnessTexture;
-    bool m_HasEmissionTexture;
 };
 
 struct SRayHit

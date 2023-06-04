@@ -10,10 +10,10 @@ struct Intersection
     float3  tangent;
     float3  geometryNormal;
     float3  ior;
-    bool    isMetal;
-    float   transmission;
-    bool    backface;
     bool    isTwoSided;
+    bool    backface;
+    bool    multiscattering;
+    uint    materialType;
     uint    lightIndex;
     uint    triangleIndex;
 };

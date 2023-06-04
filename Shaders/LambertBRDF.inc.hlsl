@@ -36,4 +36,14 @@ void SampleLambertBRDF( float3 wo
     pdf = wo.z > 0.0f ? wi.z * INV_PI : 0.0f;
 }
 
+void SampleLambertBRDF( float3 wo
+    , float2 sample
+    , out float3 wi
+    , inout LightingContext lightingContext )
+{
+    wi = ConsineSampleHemisphere( sample );
+
+    LightingContextCalculateH( wo, wi, lightingContext );
+}
+
 #endif

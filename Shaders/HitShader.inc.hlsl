@@ -47,11 +47,11 @@ void HitShader( float3 rayOrigin
     intersection.albedo     = albedo;
     intersection.alpha      = roughness * roughness;
     intersection.ior        = materials[ materialId ].ior;
-    intersection.transmission = materials[ materialId ].transmission;
-    intersection.isMetal    = ( materialFlags & MATERIAL_FLAG_IS_METAL ) != 0;
-    intersection.isTwoSided = ( materialFlags & MATERIAL_FLAG_IS_TWOSIDED ) != 0;
 
-    intersection.backface   = backface;
+    intersection.materialType = materialFlags & MATERIAL_FLAG_TYPE_MASK;
+    intersection.isTwoSided = (materialFlags & MATERIAL_FLAG_IS_TWOSIDED) != 0;
+    intersection.multiscattering = (materialFlags & MATERIAL_FLAG_MULTISCATTERING) != 0;
+    intersection.backface = backface;
 }
 
 #endif

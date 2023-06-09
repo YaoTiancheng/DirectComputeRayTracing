@@ -332,12 +332,7 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Shaders\SpecularBRDF.inc.hlsl">
-      <FileType>Document</FileType>
-    </None>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="Shaders\SpecularBTDF.inc.hlsl">
+    <None Include="Shaders\SpecularBxDF.inc.hlsl">
       <FileType>Document</FileType>
     </None>
   </ItemGroup>

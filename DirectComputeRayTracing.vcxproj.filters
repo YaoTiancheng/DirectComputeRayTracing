@@ -312,8 +312,7 @@
     <None Include="Shaders\Light.inc.hlsl" />
     <None Include="Shaders\BxDFTextureDef.inc.hlsl" />
     <None Include="Shaders\Fresnel.inc.hlsl" />
-    <None Include="Shaders\SpecularBRDF.inc.hlsl" />
-    <None Include="Shaders\SpecularBTDF.inc.hlsl" />
+    <None Include="Shaders\SpecularBxDF.inc.hlsl" />
     <None Include="Shaders\CookTorranceBSDF.inc.hlsl" />
     <None Include="Shaders\BxDFTextures.inc.hlsl" />
     <None Include="Shaders\Intrinsics.inc.hlsl" />

@@ -2,9 +2,12 @@
 #define _BSDF_H_
 
 #include "LambertBRDF.inc.hlsl"
+#include "SpecularBxDF.inc.hlsl"
 #include "CookTorranceBSDF.inc.hlsl"
 #include "Intersection.inc.hlsl"
 #include "LightingContext.inc.hlsl"
+
+#define ALPHA_THRESHOLD 0.00052441f
 
 float SpecularWeight( float cosTheta, float alpha, float ior )
 {
@@ -87,7 +90,7 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
             F_ms = MultiscatteringFresnel( E_avg, F_avg );
         }
     }
-    else if ( intersection.materialType == MATERIAL_TYPE_DIELECTRIC )
+    else if ( intersection.materialType == MATERIAL_TYPE_DIELECTRIC && !perfectSmooth )
     {
         hasCookTorranceBsdf = true;
     }
@@ -112,7 +115,7 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
     {
         float etaI = isInverted ? intersection.ior.r : 1.0f;
         float etaT = isInverted ? 1.0f : intersection.ior.r;
-        value += EvaluateCookTorranceMicrofacetMultiscatteringBSDF( wi, wo, intersection.alpha, etaI, etaT, lightingContext );
+        value += EvaluateCookTorranceMicrofacetBSDF( wi, wo, intersection.alpha, etaI, etaT, lightingContext );
     }
 
     return value;
@@ -185,7 +188,7 @@ float EvaluateBSDFPdf( float3 wi, float3 wo, Intersection intersection )
             weight_cookTorranceMultiscatteringBrdf = 0.5f;
         }
     }
-    else if ( intersection.materialType == MATERIAL_TYPE_DIELECTRIC )
+    else if ( intersection.materialType == MATERIAL_TYPE_DIELECTRIC && !perfectSmooth )
     {
         hasCookTorranceBsdf = true;
     }
@@ -208,7 +211,7 @@ float EvaluateBSDFPdf( float3 wi, float3 wo, Intersection intersection )
     {
         float etaI = isInverted ? intersection.ior.r : 1.0f;
         float etaT = isInverted ? 1.0f : intersection.ior.r;
-        pdf += EvaluateCookTorranceMicrofacetMultiscatteringBSDFPdf( wi, wo, intersection.alpha, etaI, etaT, lightingContext );
+        pdf += EvaluateCookTorranceMicrofacetBSDFPdf( wi, wo, intersection.alpha, etaI, etaT, lightingContext );
     }
 
     return pdf;
@@ -363,7 +366,14 @@ void SampleBSDF( float3 wo
     {
         float etaI = isInverted ? intersection.ior.r : 1.0f;
         float etaT = isInverted ? 1.0f : intersection.ior.r;
-        SampleCookTorranceMicrofacetMultiscatteringBSDF( wo, BRDFSelectionSample, BRDFSample, intersection.alpha, etaI, etaT, wi, value.r, pdf, isDeltaBxdf, lightingContext );
+        if ( !perfectSmooth )
+        {
+            SampleCookTorranceMicrofacetBSDF( wo, BRDFSelectionSample, BRDFSample, intersection.alpha, etaI, etaT, wi, value.r, pdf, lightingContext );
+        }
+        else
+        {
+            SampleSpecularBSDF( wo, BRDFSelectionSample, etaI, etaT, wi, value.r, pdf, lightingContext );
+        }
         value = value.r;
     }
 

@@ -37,85 +37,104 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
     float cosThetaO = wo.z;
     LightingContext lightingContext = LightingContextInit( wo, wi, isInverted );
 
-    bool hasLambertBrdf = false;
-    bool hasCookTorranceBrdf = false;
-    bool hasCookTorranceMultiscatteringBrdf = false;
-    bool hasCookTorranceBsdf = false;
-    bool dielectricFresnel = false;
-    float ratio_lambertBrdf = 0.f;
-    float E = 0.f;
-    float E_avg = 0.f;
-    float3 F_ms = 0.f;
-
-    bool hasAnyBrdf = !isInverted || intersection.isTwoSided;
     bool perfectSmooth = intersection.alpha < ALPHA_THRESHOLD;
 
-    if ( intersection.multiscattering && ( intersection.materialType == MATERIAL_TYPE_PLASTIC || intersection.materialType == MATERIAL_TYPE_CONDUCTOR ) && hasAnyBrdf && !perfectSmooth )
-    {
-        E = SampleCookTorranceMicrofacetBRDFEnergyTexture( cosThetaO, intersection.alpha );
-        E_avg = SampleCookTorranceMicrofacetBRDFAverageEnergyTexture( intersection.alpha );
-    }
-
-    if ( intersection.materialType == MATERIAL_TYPE_DIFFUSE && hasAnyBrdf )
-    {
-        hasLambertBrdf = true;
-
-        ratio_lambertBrdf = 1.f;
-    }
-    else if ( intersection.materialType == MATERIAL_TYPE_PLASTIC && hasAnyBrdf )
-    {
-        hasLambertBrdf = true;
-        hasCookTorranceBrdf = !perfectSmooth;
-        hasCookTorranceMultiscatteringBrdf = intersection.multiscattering && !perfectSmooth;
-        dielectricFresnel = true;
-
-        ratio_lambertBrdf = 1.f - SpecularWeight( cosThetaO, intersection.alpha, intersection.ior.r );
-        if ( hasCookTorranceMultiscatteringBrdf )
-        {
-            float F_avg = MultiscatteringFavgDielectric( intersection.ior.r );
-            F_ms = MultiscatteringFresnel( E_avg, F_avg );
-            ratio_lambertBrdf = max( ratio_lambertBrdf - F_ms * ( 1.f - E ), 0.f );
-        }
-    }
-    else if ( intersection.materialType == MATERIAL_TYPE_CONDUCTOR && hasAnyBrdf && !perfectSmooth )
-    {
-        hasCookTorranceBrdf = true;
-        hasCookTorranceMultiscatteringBrdf = intersection.multiscattering;
-        dielectricFresnel = false;
-
-        if ( hasCookTorranceMultiscatteringBrdf )
-        {
-            float3 k = intersection.albedo;
-            float3 F_avg = MultiscatteringFavgConductor( intersection.ior, k );
-            F_ms = MultiscatteringFresnel( E_avg, F_avg );
-        }
-    }
-    else if ( intersection.materialType == MATERIAL_TYPE_DIELECTRIC && !perfectSmooth )
-    {
-        hasCookTorranceBsdf = true;
-    }
-
     float3 value = 0.0f;
+
+    if ( intersection.materialType != MATERIAL_TYPE_DIELECTRIC )
+    { 
+        bool hasLambertBrdf = false;
+        bool hasCookTorranceBrdf = false;
+        bool hasCookTorranceMultiscatteringBrdf = false;
+        bool dielectricFresnel = false;
+        float ratio_lambertBrdf = 0.f;
+        float E = 0.f;
+        float E_avg = 0.f;
+        float3 F_ms = 0.f;
+
+        bool hasAnyBrdf = !isInverted || intersection.isTwoSided;
+
+        if ( intersection.multiscattering && ( intersection.materialType == MATERIAL_TYPE_PLASTIC || intersection.materialType == MATERIAL_TYPE_CONDUCTOR ) && hasAnyBrdf && !perfectSmooth )
+        {
+            E = SampleCookTorranceMicrofacetBRDFEnergyTexture( cosThetaO, intersection.alpha );
+            E_avg = SampleCookTorranceMicrofacetBRDFAverageEnergyTexture( intersection.alpha );
+        }
+
+        if ( intersection.materialType == MATERIAL_TYPE_DIFFUSE && hasAnyBrdf )
+        {
+            hasLambertBrdf = true;
+
+            ratio_lambertBrdf = 1.f;
+        }
+        else if ( intersection.materialType == MATERIAL_TYPE_PLASTIC && hasAnyBrdf )
+        {
+            hasLambertBrdf = true;
+            hasCookTorranceBrdf = !perfectSmooth;
+            hasCookTorranceMultiscatteringBrdf = intersection.multiscattering && !perfectSmooth;
+            dielectricFresnel = true;
+
+            ratio_lambertBrdf = 1.f - SpecularWeight( cosThetaO, intersection.alpha, intersection.ior.r );
+            if ( hasCookTorranceMultiscatteringBrdf )
+            {
+                float F_avg = MultiscatteringFavgDielectric( intersection.ior.r );
+                F_ms = MultiscatteringFresnel( E_avg, F_avg );
+                ratio_lambertBrdf = max( ratio_lambertBrdf - F_ms * ( 1.f - E ), 0.f );
+            }
+        }
+        else if ( intersection.materialType == MATERIAL_TYPE_CONDUCTOR && hasAnyBrdf && !perfectSmooth )
+        {
+            hasCookTorranceBrdf = true;
+            hasCookTorranceMultiscatteringBrdf = intersection.multiscattering;
+            dielectricFresnel = false;
+
+            if ( hasCookTorranceMultiscatteringBrdf )
+            {
+                float3 k = intersection.albedo;
+                float3 F_avg = MultiscatteringFavgConductor( intersection.ior, k );
+                F_ms = MultiscatteringFresnel( E_avg, F_avg );
+            }
+        }
     
-    if ( hasLambertBrdf )
-    {
-        value += EvaluateLambertBRDF( wi, wo, lightingContext ) * ratio_lambertBrdf * intersection.albedo;
+        if ( hasLambertBrdf )
+        {
+            value += EvaluateLambertBRDF( wi, wo, lightingContext ) * ratio_lambertBrdf * intersection.albedo;
+        }
+        if ( hasCookTorranceBrdf )
+        {
+            float3 brdfValue = EvaluateCookTorranceMircofacetBRDF( wi, wo, intersection.alpha, lightingContext );
+            brdfValue *= dielectricFresnel ? (float3)FresnelDielectric( lightingContext.WOdotH, 1.f, intersection.ior.r ) : FresnelConductor( lightingContext.WOdotH, 1.f, intersection.ior, intersection.albedo );
+            value += brdfValue;
+        }
+        if ( hasCookTorranceMultiscatteringBrdf )
+        {
+            value += EvaluateCookTorranceMultiscatteringBRDF( wi, wo, intersection.alpha, E, E_avg, F_ms, lightingContext );
+        }
     }
-    if ( hasCookTorranceBrdf )
-    {
-        float3 brdfValue = EvaluateCookTorranceMircofacetBRDF( wi, wo, intersection.alpha, lightingContext );
-        brdfValue *= dielectricFresnel ? (float3)FresnelDielectric( lightingContext.WOdotH, 1.f, intersection.ior.r ) : FresnelConductor( lightingContext.WOdotH, 1.f, intersection.ior, intersection.albedo );
-        value += brdfValue;
-    }
-    if ( hasCookTorranceMultiscatteringBrdf )
-    {
-        value += EvaluateCookTorranceMultiscatteringBRDF( wi, wo, intersection.alpha, E, E_avg, F_ms, lightingContext );
-    }
-    if ( hasCookTorranceBsdf )
+    else
     {
         float etaI = isInverted ? intersection.ior.r : 1.0f;
         float etaT = isInverted ? 1.0f : intersection.ior.r;
-        value += EvaluateCookTorranceMicrofacetBSDF( wi, wo, intersection.alpha, etaI, etaT, lightingContext );
+
+        if ( !perfectSmooth )
+        { 
+            value += EvaluateCookTorranceMicrofacetBSDF( wi, wo, intersection.alpha, etaI, etaT, lightingContext );
+        }
+
+        if ( intersection.multiscattering && !perfectSmooth )
+        {
+            float eta = etaT / etaI;
+            float inv_eta = etaI / etaT;
+
+            float E = SampleCookTorranceMicrofacetBSDFEnergyTexture( cosThetaO, intersection.alpha, eta );
+            float E_avg = SampleCookTorranceMicrofacetBSDFAverageEnergyTexture( intersection.alpha, eta );
+            float F_avg = MultiscatteringFavgDielectric( eta );
+            float E_inv_avg = SampleCookTorranceMicrofacetBSDFAverageEnergyTexture( intersection.alpha, inv_eta );
+            float F_inv_avg = MultiscatteringFavgDielectric( inv_eta );
+            float reciprocalFactor = ReciprocalFactor( F_avg, F_inv_avg, E_avg, E_inv_avg, eta );
+            reciprocalFactor = isInverted ? 1.f - reciprocalFactor : reciprocalFactor;
+
+            value += EvaluateCookTorranceMultiscatteringBSDF( wi, intersection.alpha, F_avg, eta, inv_eta, E, E_avg, reciprocalFactor );
+        }
     }
 
     return value;
@@ -140,78 +159,107 @@ float EvaluateBSDFPdf( float3 wi, float3 wo, Intersection intersection )
     float cosThetaO = wo.z;
     LightingContext lightingContext = LightingContextInit( wo, wi, isInverted );
 
-    bool hasLambertBrdf = false;
-    bool hasCookTorranceBrdf = false;
-    bool hasCookTorranceMultiscatteringBrdf = false;
-    bool hasCookTorranceBsdf = false;
-    float weight_lambertBrdf = 0.f;
-    float weight_cookTorranceBrdf = 0.f;
-    float weight_cookTorranceMultiscatteringBrdf = 0.f;
-
-    bool hasAnyBrdf = !isInverted || intersection.isTwoSided;
     bool perfectSmooth = intersection.alpha < ALPHA_THRESHOLD;
 
-    if ( intersection.materialType == MATERIAL_TYPE_DIFFUSE && hasAnyBrdf )
-    {
-        hasLambertBrdf = true;
-
-        weight_lambertBrdf = 1.f;
-    }
-    else if ( intersection.materialType == MATERIAL_TYPE_PLASTIC && hasAnyBrdf )
-    {
-        hasLambertBrdf = true;
-        hasCookTorranceBrdf = !perfectSmooth;
-        hasCookTorranceMultiscatteringBrdf = intersection.multiscattering && !perfectSmooth;
-
-        weight_cookTorranceBrdf = SpecularWeight( cosThetaO, intersection.alpha, intersection.ior.r );
-        weight_lambertBrdf = 1.f - weight_cookTorranceBrdf;
-        if ( hasCookTorranceMultiscatteringBrdf )
-        {
-            float E = SampleCookTorranceMicrofacetBRDFEnergyTexture( cosThetaO, intersection.alpha );
-            float E_avg = SampleCookTorranceMicrofacetBRDFAverageEnergyTexture( intersection.alpha );
-            float F_avg = MultiscatteringFavgDielectric( intersection.ior.r );
-            float F_ms = MultiscatteringFresnel( E_avg, F_avg );
-            weight_cookTorranceMultiscatteringBrdf = F_ms * ( 1.f - E );
-            weight_lambertBrdf = max( weight_lambertBrdf - weight_cookTorranceMultiscatteringBrdf, 0.f );
-        }
-    }
-    else if ( intersection.materialType == MATERIAL_TYPE_CONDUCTOR && hasAnyBrdf && !perfectSmooth )
-    {
-        hasCookTorranceBrdf = true;
-        hasCookTorranceMultiscatteringBrdf = intersection.multiscattering;
-
-        weight_cookTorranceBrdf = 1.f;
-        if ( hasCookTorranceMultiscatteringBrdf )
-        {
-            // Don't know the brdf energy for conductor, hence uniformly sample it.
-            weight_cookTorranceBrdf = 0.5f;
-            weight_cookTorranceMultiscatteringBrdf = 0.5f;
-        }
-    }
-    else if ( intersection.materialType == MATERIAL_TYPE_DIELECTRIC && !perfectSmooth )
-    {
-        hasCookTorranceBsdf = true;
-    }
-
     float pdf = 0.0f;
+
+    if ( intersection.materialType != MATERIAL_TYPE_DIELECTRIC )
+    { 
+        bool hasLambertBrdf = false;
+        bool hasCookTorranceBrdf = false;
+        bool hasCookTorranceMultiscatteringBrdf = false;
+        float weight_lambertBrdf = 0.f;
+        float weight_cookTorranceBrdf = 0.f;
+        float weight_cookTorranceMultiscatteringBrdf = 0.f;
+
+        bool hasAnyBrdf = !isInverted || intersection.isTwoSided;
+
+        if ( intersection.materialType == MATERIAL_TYPE_DIFFUSE && hasAnyBrdf )
+        {
+            hasLambertBrdf = true;
+
+            weight_lambertBrdf = 1.f;
+        }
+        else if ( intersection.materialType == MATERIAL_TYPE_PLASTIC && hasAnyBrdf )
+        {
+            hasLambertBrdf = true;
+            hasCookTorranceBrdf = !perfectSmooth;
+            hasCookTorranceMultiscatteringBrdf = intersection.multiscattering && !perfectSmooth;
+
+            weight_cookTorranceBrdf = SpecularWeight( cosThetaO, intersection.alpha, intersection.ior.r );
+            weight_lambertBrdf = 1.f - weight_cookTorranceBrdf;
+            if ( hasCookTorranceMultiscatteringBrdf )
+            {
+                float E = SampleCookTorranceMicrofacetBRDFEnergyTexture( cosThetaO, intersection.alpha );
+                float E_avg = SampleCookTorranceMicrofacetBRDFAverageEnergyTexture( intersection.alpha );
+                float F_avg = MultiscatteringFavgDielectric( intersection.ior.r );
+                float F_ms = MultiscatteringFresnel( E_avg, F_avg );
+                weight_cookTorranceMultiscatteringBrdf = F_ms * ( 1.f - E );
+                weight_lambertBrdf = max( weight_lambertBrdf - weight_cookTorranceMultiscatteringBrdf, 0.f );
+            }
+        }
+        else if ( intersection.materialType == MATERIAL_TYPE_CONDUCTOR && hasAnyBrdf && !perfectSmooth )
+        {
+            hasCookTorranceBrdf = true;
+            hasCookTorranceMultiscatteringBrdf = intersection.multiscattering;
+
+            weight_cookTorranceBrdf = 1.f;
+            if ( hasCookTorranceMultiscatteringBrdf )
+            {
+                // Don't know the brdf energy for conductor, hence uniformly sample it.
+                weight_cookTorranceBrdf = 0.5f;
+                weight_cookTorranceMultiscatteringBrdf = 0.5f;
+            }
+        }
     
-    if ( hasLambertBrdf )
+        if ( hasLambertBrdf )
+        {
+            pdf += EvaluateLambertBRDFPdf( wi, wo, lightingContext ) * weight_lambertBrdf;
+        }
+        if ( hasCookTorranceBrdf )
+        { 
+            pdf += EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * weight_cookTorranceBrdf;
+        }
+        if ( hasCookTorranceMultiscatteringBrdf )
+        { 
+            pdf += EvaluateCookTorranceMultiscatteringBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * weight_cookTorranceMultiscatteringBrdf;
+        }
+    }
+    else
     {
-        pdf += EvaluateLambertBRDFPdf( wi, wo, lightingContext ) * weight_lambertBrdf;
-    }
-    if ( hasCookTorranceBrdf )
-    { 
-        pdf += EvaluateCookTorranceMicrofacetBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * weight_cookTorranceBrdf;
-    }
-    if ( hasCookTorranceMultiscatteringBrdf )
-    { 
-        pdf += EvaluateCookTorranceMultiscatteringBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * weight_cookTorranceMultiscatteringBrdf;
-    }
-    if ( hasCookTorranceBsdf )
-    {
+        bool hasCookTorranceBsdf = !perfectSmooth;
+        bool hasCookTorranceMultiscatteringBsdf = intersection.multiscattering && !perfectSmooth;
+
+        float weight_cookTorranceBsdf = 1.f;
+        float weight_cookTorranceMultiscatteringBsdf = 0.f;
+
+        float F_avg = 0.f;
+
         float etaI = isInverted ? intersection.ior.r : 1.0f;
         float etaT = isInverted ? 1.0f : intersection.ior.r;
-        pdf += EvaluateCookTorranceMicrofacetBSDFPdf( wi, wo, intersection.alpha, etaI, etaT, lightingContext );
+        float eta = 0.f;
+        float inv_eta = 0.f;
+
+        if ( hasCookTorranceMultiscatteringBsdf )
+        {
+            eta = etaT / etaI;
+            inv_eta = etaI / etaT;
+
+            float E = SampleCookTorranceMicrofacetBSDFEnergyTexture( cosThetaO, intersection.alpha, eta );
+            F_avg = MultiscatteringFavgDielectric( eta );
+
+            weight_cookTorranceBsdf = E;
+            weight_cookTorranceMultiscatteringBsdf = 1.f - E;
+        }
+
+        if ( hasCookTorranceBsdf )
+        {
+            pdf += EvaluateCookTorranceMicrofacetBSDFPdf( wi, wo, intersection.alpha, etaI, etaT, lightingContext ) * weight_cookTorranceBsdf;
+        }
+        if ( hasCookTorranceMultiscatteringBsdf )
+        {
+            pdf += EvaluateCookTorranceMultiscatteringBSDFPdf( wi, intersection.alpha, F_avg, eta, inv_eta ) * weight_cookTorranceMultiscatteringBsdf;
+        }
     }
 
     return pdf;
@@ -246,75 +294,73 @@ void SampleBSDF( float3 wo
     float cosThetaO = wo.z;
     LightingContext lightingContext = LightingContextInit( wo, isInverted );
 
-    bool hasLambertBrdf = false;
-    bool hasCookTorranceBrdf = false;
-    bool hasCookTorranceMultiscatteringBrdf = false;
-    bool hasCookTorranceBsdf = false;
-    bool dielectricFresnel = false;
-    float weight_lambertBrdf = 0.f;
-    float weight_cookTorranceBrdf = 0.f;
-    float weight_cookTorranceMultiscatteringBrdf = 0.f;
-    float E = 0.f;
-    float E_avg = 0.f;
-    float3 F_ms = 0.f;
-
-    bool hasAnyBrdf = !isInverted || intersection.isTwoSided;
     bool perfectSmooth = intersection.alpha < ALPHA_THRESHOLD;
 
-    if ( intersection.multiscattering && ( intersection.materialType == MATERIAL_TYPE_PLASTIC || intersection.materialType == MATERIAL_TYPE_CONDUCTOR ) && hasAnyBrdf )
-    {
-        E = SampleCookTorranceMicrofacetBRDFEnergyTexture( cosThetaO, intersection.alpha );
-        E_avg = SampleCookTorranceMicrofacetBRDFAverageEnergyTexture( intersection.alpha );
-    }
+    if ( intersection.materialType != MATERIAL_TYPE_DIELECTRIC )
+    { 
+        bool hasLambertBrdf = false;
+        bool hasCookTorranceBrdf = false;
+        bool hasCookTorranceMultiscatteringBrdf = false;
+        
+        bool dielectricFresnel = false;
+        float weight_lambertBrdf = 0.f;
+        float weight_cookTorranceBrdf = 0.f;
+        float weight_cookTorranceMultiscatteringBrdf = 0.f;
+        
+        float E = 0.f;
+        float E_avg = 0.f;
+        float3 F_ms = 0.f;
 
-    if ( intersection.materialType == MATERIAL_TYPE_DIFFUSE && hasAnyBrdf )
-    {
-        hasLambertBrdf = true;
+        bool hasAnyBrdf = !isInverted || intersection.isTwoSided;
 
-        weight_lambertBrdf = 1.f;
-    }
-    else if ( intersection.materialType == MATERIAL_TYPE_PLASTIC && hasAnyBrdf )
-    {
-        hasLambertBrdf = true;
-        hasCookTorranceBrdf = true;
-        hasCookTorranceMultiscatteringBrdf = intersection.multiscattering && !perfectSmooth;
-        dielectricFresnel = true;
-
-        weight_cookTorranceBrdf = SpecularWeight( cosThetaO, intersection.alpha, intersection.ior.r );
-        weight_lambertBrdf = 1.f - weight_cookTorranceBrdf;
-        if ( hasCookTorranceMultiscatteringBrdf )
+        if ( intersection.multiscattering && ( intersection.materialType == MATERIAL_TYPE_PLASTIC || intersection.materialType == MATERIAL_TYPE_CONDUCTOR ) && hasAnyBrdf )
         {
-            float F_avg = MultiscatteringFavgDielectric( intersection.ior.r );
-            F_ms = MultiscatteringFresnel( E_avg, F_avg );
-            weight_cookTorranceMultiscatteringBrdf = F_ms * ( 1.f - E );
-            weight_lambertBrdf = max( weight_lambertBrdf - weight_cookTorranceMultiscatteringBrdf, 0.f );
+            E = SampleCookTorranceMicrofacetBRDFEnergyTexture( cosThetaO, intersection.alpha );
+            E_avg = SampleCookTorranceMicrofacetBRDFAverageEnergyTexture( intersection.alpha );
         }
-    }
-    else if ( intersection.materialType == MATERIAL_TYPE_CONDUCTOR && hasAnyBrdf )
-    {
-        hasCookTorranceBrdf = true;
-        hasCookTorranceMultiscatteringBrdf = intersection.multiscattering && !perfectSmooth;
-        dielectricFresnel = false;
 
-        weight_cookTorranceBrdf = 1.f;
-        if ( hasCookTorranceMultiscatteringBrdf )
+        if ( intersection.materialType == MATERIAL_TYPE_DIFFUSE && hasAnyBrdf )
         {
-            float3 k = intersection.albedo;
-            float3 F_avg = MultiscatteringFavgConductor( intersection.ior, k );
-            F_ms = MultiscatteringFresnel( E_avg, F_avg );
+            hasLambertBrdf = true;
 
-            // Don't know the brdf energy for conductor, hence uniformly sample it.
-            weight_cookTorranceBrdf = 0.5f;
-            weight_cookTorranceMultiscatteringBrdf = 0.5f;
+            weight_lambertBrdf = 1.f;
         }
-    }
-    else if ( intersection.materialType == MATERIAL_TYPE_DIELECTRIC )
-    {
-        hasCookTorranceBsdf = true;
-    }
+        else if ( intersection.materialType == MATERIAL_TYPE_PLASTIC && hasAnyBrdf )
+        {
+            hasLambertBrdf = true;
+            hasCookTorranceBrdf = true;
+            hasCookTorranceMultiscatteringBrdf = intersection.multiscattering && !perfectSmooth;
+            dielectricFresnel = true;
 
-    if ( !hasCookTorranceBsdf )
-    {
+            weight_cookTorranceBrdf = SpecularWeight( cosThetaO, intersection.alpha, intersection.ior.r );
+            weight_lambertBrdf = 1.f - weight_cookTorranceBrdf;
+            if ( hasCookTorranceMultiscatteringBrdf )
+            {
+                float F_avg = MultiscatteringFavgDielectric( intersection.ior.r );
+                F_ms = MultiscatteringFresnel( E_avg, F_avg );
+                weight_cookTorranceMultiscatteringBrdf = F_ms * ( 1.f - E );
+                weight_lambertBrdf = max( weight_lambertBrdf - weight_cookTorranceMultiscatteringBrdf, 0.f );
+            }
+        }
+        else if ( intersection.materialType == MATERIAL_TYPE_CONDUCTOR && hasAnyBrdf )
+        {
+            hasCookTorranceBrdf = true;
+            hasCookTorranceMultiscatteringBrdf = intersection.multiscattering && !perfectSmooth;
+            dielectricFresnel = false;
+
+            weight_cookTorranceBrdf = 1.f;
+            if ( hasCookTorranceMultiscatteringBrdf )
+            {
+                float3 k = intersection.albedo;
+                float3 F_avg = MultiscatteringFavgConductor( intersection.ior, k );
+                F_ms = MultiscatteringFresnel( E_avg, F_avg );
+
+                // Don't know the brdf energy for conductor, hence uniformly sample it.
+                weight_cookTorranceBrdf = 0.5f;
+                weight_cookTorranceMultiscatteringBrdf = 0.5f;
+            }
+        }
+        
         if ( BRDFSelectionSample < weight_lambertBrdf )
         {
             SampleLambertBRDF( wo, BRDFSample, wi, lightingContext );
@@ -364,17 +410,71 @@ void SampleBSDF( float3 wo
     }
     else
     {
+        bool hasCookTorranceBsdf = true;
+        bool hasCookTorranceMultiscatteringBsdf = intersection.multiscattering && !perfectSmooth;
+
+        float weight_cookTorranceBsdf = 1.f;
+        float weight_cookTorranceMultiscatteringBsdf = 0.f;
+
+        float E = 0.f;
+        float E_avg = 0.f;
+        float F_avg = 0.f;
+        float reciprocalFactor = 0.f;
+
         float etaI = isInverted ? intersection.ior.r : 1.0f;
         float etaT = isInverted ? 1.0f : intersection.ior.r;
+        float eta = 0.f;
+        float inv_eta = 0.f;
+
+        if ( hasCookTorranceMultiscatteringBsdf )
+        {
+            eta = etaT / etaI;
+            inv_eta = etaI / etaT;
+
+            E = SampleCookTorranceMicrofacetBSDFEnergyTexture( cosThetaO, intersection.alpha, eta );
+            E_avg = SampleCookTorranceMicrofacetBSDFAverageEnergyTexture( intersection.alpha, eta );
+            F_avg = MultiscatteringFavgDielectric( eta );
+            float E_inv_avg = SampleCookTorranceMicrofacetBSDFAverageEnergyTexture( intersection.alpha, inv_eta );
+            float F_inv_avg = MultiscatteringFavgDielectric( inv_eta );
+            reciprocalFactor = ReciprocalFactor( F_avg, F_inv_avg, E_avg, E_inv_avg, eta );
+            reciprocalFactor = isInverted ? 1.f - reciprocalFactor : reciprocalFactor;
+
+            weight_cookTorranceBsdf = E;
+            weight_cookTorranceMultiscatteringBsdf = 1.f - E;
+        }
+
         if ( !perfectSmooth )
         {
-            SampleCookTorranceMicrofacetBSDF( wo, BRDFSelectionSample, BRDFSample, intersection.alpha, etaI, etaT, wi, value.r, pdf, lightingContext );
+            if ( BRDFSelectionSample < weight_cookTorranceBsdf )
+            { 
+                SampleCookTorranceMicrofacetBSDF( wo, BRDFSelectionSample, BRDFSample, intersection.alpha, etaI, etaT, wi, lightingContext );
+            }
+            else /*if ( BRDFSelectionSample < weight_cookTorranceBsdf + weight_cookTorranceMultiscatteringBsdf )*/ // Equals 1
+            {
+                SampleCookTorranceMultiscatteringBSDF( wo, BRDFSelectionSample, BRDFSample, intersection.alpha, F_avg, eta, inv_eta, wi, lightingContext );
+            }
         }
         else
         {
             SampleSpecularBSDF( wo, BRDFSelectionSample, etaI, etaT, wi, value.r, pdf, lightingContext );
+            value = value.r;
+            pdf *= weight_cookTorranceBsdf;
+
+            isDeltaBxdf = true;
+            hasCookTorranceBsdf = false;
+            hasCookTorranceMultiscatteringBsdf = false;
         }
-        value = value.r;
+
+        if ( hasCookTorranceBsdf )
+        {
+            value += EvaluateCookTorranceMicrofacetBSDF( wi, wo, intersection.alpha, etaI, etaT, lightingContext );
+            pdf += EvaluateCookTorranceMicrofacetBSDFPdf( wi, wo, intersection.alpha, etaI, etaT, lightingContext ) * weight_cookTorranceBsdf;
+        }
+        if ( hasCookTorranceMultiscatteringBsdf )
+        {
+            value += EvaluateCookTorranceMultiscatteringBSDF( wi, intersection.alpha, F_avg, eta, inv_eta, E, E_avg, reciprocalFactor );
+            pdf += EvaluateCookTorranceMultiscatteringBSDFPdf( wi, intersection.alpha, F_avg, eta, inv_eta ) * weight_cookTorranceMultiscatteringBsdf;
+        }
     }
 
     if ( isInverted )

@@ -133,7 +133,7 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
             float reciprocalFactor = ReciprocalFactor( F_avg, F_inv_avg, E_avg, E_inv_avg, eta );
             reciprocalFactor = isInverted ? 1.f - reciprocalFactor : reciprocalFactor;
 
-            value += EvaluateCookTorranceMultiscatteringBSDF( wi, intersection.alpha, F_avg, eta, inv_eta, E, E_avg, reciprocalFactor );
+            value += EvaluateCookTorranceMultiscatteringBSDF( wi, intersection.alpha, F_avg, eta, inv_eta, E, E_avg, E_inv_avg, reciprocalFactor );
         }
     }
 
@@ -418,6 +418,7 @@ void SampleBSDF( float3 wo
 
         float E = 0.f;
         float E_avg = 0.f;
+        float E_inv_avg = 0.f;
         float F_avg = 0.f;
         float reciprocalFactor = 0.f;
 
@@ -434,7 +435,7 @@ void SampleBSDF( float3 wo
             E = SampleCookTorranceMicrofacetBSDFEnergyTexture( cosThetaO, intersection.alpha, eta );
             E_avg = SampleCookTorranceMicrofacetBSDFAverageEnergyTexture( intersection.alpha, eta );
             F_avg = MultiscatteringFavgDielectric( eta );
-            float E_inv_avg = SampleCookTorranceMicrofacetBSDFAverageEnergyTexture( intersection.alpha, inv_eta );
+            E_inv_avg = SampleCookTorranceMicrofacetBSDFAverageEnergyTexture( intersection.alpha, inv_eta );
             float F_inv_avg = MultiscatteringFavgDielectric( inv_eta );
             reciprocalFactor = ReciprocalFactor( F_avg, F_inv_avg, E_avg, E_inv_avg, eta );
             reciprocalFactor = isInverted ? 1.f - reciprocalFactor : reciprocalFactor;
@@ -472,7 +473,7 @@ void SampleBSDF( float3 wo
         }
         if ( hasCookTorranceMultiscatteringBsdf )
         {
-            value += EvaluateCookTorranceMultiscatteringBSDF( wi, intersection.alpha, F_avg, eta, inv_eta, E, E_avg, reciprocalFactor );
+            value += EvaluateCookTorranceMultiscatteringBSDF( wi, intersection.alpha, F_avg, eta, inv_eta, E, E_avg, E_inv_avg, reciprocalFactor );
             pdf += EvaluateCookTorranceMultiscatteringBSDFPdf( wi, intersection.alpha, F_avg, eta, inv_eta ) * weight_cookTorranceMultiscatteringBsdf;
         }
     }

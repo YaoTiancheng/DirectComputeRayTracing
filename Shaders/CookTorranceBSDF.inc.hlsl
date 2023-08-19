@@ -329,7 +329,7 @@ float3 CookTorranceMultiscatteringBSDFSampleHemisphere( float2 sample, float alp
     return float3( cos( phi ) * s, sin( phi ) * s, cosThetaI );
 }
 
-float EvaluateCookTorranceMultiscatteringBSDF( float3 wi, float alpha, float ratio, float eta, float invEta, float Eo, float Eavg, float reciprocalFactor )
+float EvaluateCookTorranceMultiscatteringBSDF( float3 wi, float alpha, float ratio, float eta, float invEta, float Eo, float Eavg, float Eavg_inv, float reciprocalFactor )
 {
     float cosThetaI = abs( wi.z );
     if ( cosThetaI == 0.0f )
@@ -338,7 +338,7 @@ float EvaluateCookTorranceMultiscatteringBSDF( float3 wi, float alpha, float rat
     bool evaluateReflection = wi.z > 0.0f;
     float Ei = SampleCookTorranceMicrofacetBSDFEnergyTexture( cosThetaI, alpha, evaluateReflection ? eta : invEta );
     float factor = evaluateReflection ? ratio : ( 1.0f - ratio ) * reciprocalFactor;
-    return MultiscatteringBxDF( Ei, Eo, Eavg ) * factor;
+    return MultiscatteringBxDF( Ei, Eo, evaluateReflection ? Eavg : Eavg_inv ) * factor;
 }
 
 float EvaluateCookTorranceMultiscatteringBSDFPdf( float3 wi, float alpha, float ratio, float eta, float invEta )

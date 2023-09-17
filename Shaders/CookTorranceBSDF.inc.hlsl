@@ -329,7 +329,7 @@ float3 CookTorranceMultiscatteringBSDFSampleHemisphere( float2 sample, float alp
     return float3( cos( phi ) * s, sin( phi ) * s, cosThetaI );
 }
 
-float EvaluateCookTorranceMultiscatteringBSDF( float3 wi, float alpha, float ratio, float eta, float invEta, float Eo, float Eavg, float Eavg_inv, float reciprocalFactor )
+float EvaluateCookTorranceMultiscatteringBSDF( float3 wi, float alpha, float ratio, float eta, float invEta, float Eo, float Eavg, float Eavg_inv )
 {
     float cosThetaI = abs( wi.z );
     if ( cosThetaI == 0.0f )
@@ -337,7 +337,7 @@ float EvaluateCookTorranceMultiscatteringBSDF( float3 wi, float alpha, float rat
 
     bool evaluateReflection = wi.z > 0.0f;
     float Ei = SampleCookTorranceMicrofacetBSDFEnergyTexture( cosThetaI, alpha, evaluateReflection ? eta : invEta );
-    float factor = evaluateReflection ? ratio : ( 1.0f - ratio ) * reciprocalFactor;
+    float factor = evaluateReflection ? ( 1.0f - ratio ) : ratio;
     return MultiscatteringBxDF( Ei, Eo, evaluateReflection ? Eavg : Eavg_inv ) * factor;
 }
 
@@ -353,7 +353,7 @@ float EvaluateCookTorranceMultiscatteringBSDFPdf( float3 wi, float alpha, float 
     float pdf = pdfScale > 0.0f 
         ? ( 1.0f - Ei ) * cosThetaI / pdfScale 
         : 0.0f;
-    pdf *= sampleReflection ? ratio : 1.0f - ratio;
+    pdf *= sampleReflection ? 1.0f - ratio : ratio;
     return pdf;
 }
 
@@ -364,7 +364,7 @@ void SampleCookTorranceMultiscatteringBSDF( float3 wo, float selectionSample, fl
     if ( wo.z == 0.0f )
         return;
 
-    bool sampleReflection = selectionSample < ratio;
+    bool sampleReflection = selectionSample >= ratio;
 
     wi = CookTorranceMultiscatteringBSDFSampleHemisphere( bxdfSample, alpha, sampleReflection ? eta : invEta );
 
@@ -374,15 +374,12 @@ void SampleCookTorranceMultiscatteringBSDF( float3 wo, float selectionSample, fl
     LightingContextCalculateH( wo, wi, lightingContext );
 }
 
-float ReciprocalFactor( float Favg, float Favg_inv, float Eavg, float Eavg_inv, float eta )
+float ReciprocalFactor( float Favg, float Favg_inv, float Eavg, float Eavg_inv, float invEta )
 {
-    if ( Eavg == 1.0f || Eavg_inv == 1.0f )
-        return 0.0f;
-
-    float eta2 = eta * eta;
-    float factor = ( 1.0f - Eavg_inv ) * ( 1.0f - Favg_inv );
-    float factor1 = ( 1.0f - Eavg ) * ( 1.0f - Favg ) * eta2;
-    float x = factor / ( factor + factor1 );
+    float numerator = ( 1.0f - Favg_inv ) * ( 1.0f - Eavg_inv );
+    float denominator = ( 1.0f - Favg ) * ( 1.0f - Eavg );
+    float factor = numerator * invEta * invEta / max( 0.00001f, denominator );
+    float x = factor / ( 1.0f + factor );
     return x;
 }
 

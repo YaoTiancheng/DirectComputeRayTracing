@@ -149,13 +149,13 @@ void SampleCookTorranceMicrofacetBRDF( float3 wo, float2 sample, float alpha, ou
 // Microfacet BSDF
 //
 
-float EvaluateCookTorranceMicrofacetBSDF( float3 wi, float3 wo, float alpha, float etaI, float etaT, LightingContext lightingContext )
+float EvaluateCookTorranceMicrofacetBSDF( float3 wi, float3 wo, float alpha, float etaO, float etaI, LightingContext lightingContext )
 {
     bool active = wo.z != 0.0f && wi.z != 0.0f;
 
     bool reflect = wi.z * wo.z > 0.0f;
 
-    float3 m = normalize( wo * ( reflect ? 1.0f : etaI ) + wi * ( reflect ? 1.0f : etaT ) );
+    float3 m = normalize( wo * ( reflect ? 1.0f : etaO ) + wi * ( reflect ? 1.0f : etaI ) );
 
     m = m.z < 0.0f ? -m : m;
 
@@ -163,7 +163,7 @@ float EvaluateCookTorranceMicrofacetBSDF( float3 wi, float3 wo, float alpha, flo
     float WOdotM = dot( wo, m );
 
     float D = EvaluateGGXMicrofacetDistribution( m, alpha );
-    float F = FresnelDielectric( WOdotM, etaI, etaT );
+    float F = FresnelDielectric( WOdotM, etaO, etaI );
     float G = EvaluateGGXGeometricShadowing( wi, wo, m, alpha );
 
     float WIdotN = wi.z;
@@ -175,22 +175,22 @@ float EvaluateCookTorranceMicrofacetBSDF( float3 wi, float3 wo, float alpha, flo
     }
     else
     {
-        float sqrtDenom = etaI * WOdotM + etaT * WIdotM;
+        float sqrtDenom = etaO * WOdotM + etaI * WIdotM;
         float value = ( 1.0f - F ) * abs( D * G
                       * abs( WIdotM ) * abs( WOdotM ) 
-                      * etaI * etaI // etaT * etaT * ( ( etaI * etaI ) / ( etaT * etaT ) )
+                      * etaO * etaO // etaI * etaI * ( ( etaO * etaO ) / ( etaI * etaI ) )
                       / ( WOdotN * WIdotN * sqrtDenom * sqrtDenom ) );
         return active ? value : 0.0f;
     }
 }
 
-float EvaluateCookTorranceMicrofacetBSDFPdf( float3 wi, float3 wo, float alpha, float etaI, float etaT, LightingContext lightingContext )
+float EvaluateCookTorranceMicrofacetBSDFPdf( float3 wi, float3 wo, float alpha, float etaO, float etaI, LightingContext lightingContext )
 {
     bool active = wo.z != 0.0f && wi.z != 0.0f;
 
     bool reflect = wi.z * wo.z > 0.0f;
 
-    float3 m = normalize( wo * ( reflect ? 1.0f : etaI ) + wi * ( reflect ? 1.0f : etaT ) );
+    float3 m = normalize( wo * ( reflect ? 1.0f : etaO ) + wi * ( reflect ? 1.0f : etaI ) );
 
     m = m.z < 0.0f ? -m : m;
 
@@ -201,17 +201,17 @@ float EvaluateCookTorranceMicrofacetBSDFPdf( float3 wi, float3 wo, float alpha, 
     // (Can't see backfacing microfacet normal from the front and vice versa)
     active = active && ( WIdotM * wi.z > 0.0f && WOdotM * wo.z > 0.0f );
 
-    float sqrtDenom = etaI * WOdotM + etaT * WIdotM;
-    float dwh_dwi = reflect ? 1.0f / ( 4.0f * WIdotM ) : abs( ( etaT * etaT * WIdotM ) / ( sqrtDenom * sqrtDenom ) );
+    float sqrtDenom = etaO * WOdotM + etaI * WIdotM;
+    float dwh_dwi = reflect ? 1.0f / ( 4.0f * WIdotM ) : abs( ( etaI * etaI * WIdotM ) / ( sqrtDenom * sqrtDenom ) );
 
     float pdf = EvaluateGGXMicrofacetDistributionPdf( wo, m, alpha );
 
-    float F = FresnelDielectric( WOdotM, etaI, etaT );
+    float F = FresnelDielectric( WOdotM, etaO, etaI );
 
     return active ? pdf * ( reflect ? F : 1.0f - F ) * dwh_dwi : 0.0f;
 }
 
-void SampleCookTorranceMicrofacetBSDF( float3 wo, float selectionSample, float2 bxdfSample, float alpha, float etaI, float etaT, out float3 wi, inout LightingContext lightingContext )
+void SampleCookTorranceMicrofacetBSDF( float3 wo, float selectionSample, float2 bxdfSample, float alpha, float etaO, float etaI, out float3 wi, inout LightingContext lightingContext )
 {
     wi = 0.0f;
 
@@ -220,7 +220,7 @@ void SampleCookTorranceMicrofacetBSDF( float3 wo, float selectionSample, float2 
         return;
     }
 
-    if ( etaI == etaT )
+    if ( etaO == etaI )
     {
         wi = -wo;
         return;
@@ -239,7 +239,7 @@ void SampleCookTorranceMicrofacetBSDF( float3 wo, float selectionSample, float2 
         return;
     }
 
-    float F = FresnelDielectric( WOdotM, etaI, etaT );
+    float F = FresnelDielectric( WOdotM, etaO, etaI );
     bool sampleReflection = selectionSample < F;
     if ( sampleReflection )
     {
@@ -247,7 +247,7 @@ void SampleCookTorranceMicrofacetBSDF( float3 wo, float selectionSample, float2 
     }
     else
     {
-        wi = refract( -wo, m, etaI / etaT );
+        wi = refract( -wo, m, etaO / etaI );
     }
 }
 

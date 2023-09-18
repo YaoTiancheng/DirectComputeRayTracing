@@ -38,14 +38,14 @@ float EvaluateSpecularBSDFPdf( float3 wi, float3 wo )
     return 0.0f;
 }
 
-void SampleSpecularBSDF( float3 wo, float sample, float etaI, float etaT, out float3 wi, inout float value, inout float pdf, inout LightingContext lightingContext )
+void SampleSpecularBSDF( float3 wo, float sample, float etaO, float etaI, out float3 wi, inout float value, inout float pdf, inout LightingContext lightingContext )
 {
     wi = 0.0f;
 
     lightingContext.H = float3( 0.0f, 0.0f, 1.0f );
     lightingContext.WOdotH = wo.z;
 
-    if ( etaI == etaT )
+    if ( etaO == etaI )
     {
         value = 1.0f / wo.z;
         pdf = 1.0f;
@@ -56,7 +56,7 @@ void SampleSpecularBSDF( float3 wo, float sample, float etaI, float etaT, out fl
     if ( wo.z == 0.0f )
         return;
 
-    float F = FresnelDielectric( wo.z, etaI, etaT );
+    float F = FresnelDielectric( wo.z, etaO, etaI );
     bool sampleReflection = sample < F;
     if ( sampleReflection )
     {
@@ -68,13 +68,13 @@ void SampleSpecularBSDF( float3 wo, float sample, float etaI, float etaT, out fl
     }
     else
     {
-        wi = refract( -wo, float3( 0.0f, 0.0f, 1.0f ), etaI / etaT );
+        wi = refract( -wo, float3( 0.0f, 0.0f, 1.0f ), etaO / etaI );
 
         if ( wi.z == 0.0f )
             return;
 
         value = ( 1.0f - F )
-              * ( etaI * etaI ) / ( etaT * etaT ) 
+              * ( etaO * etaO ) / ( etaI * etaI ) 
               / ( -wi.z );
 
         pdf = 1.0f - F;

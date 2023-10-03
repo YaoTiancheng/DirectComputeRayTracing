@@ -4,6 +4,7 @@
 #include "LambertBRDF.inc.hlsl"
 #include "SpecularBxDF.inc.hlsl"
 #include "CookTorranceBSDF.inc.hlsl"
+#include "KullaConty.inc.hlsl"
 #include "Intersection.inc.hlsl"
 #include "LightingContext.inc.hlsl"
 

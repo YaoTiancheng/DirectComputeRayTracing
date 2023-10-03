@@ -11,6 +11,7 @@
 #include "Timers.h"
 #include "Rectangle.h"
 #include "BxDFTexturesBuilder.h"
+#include "BxDFTexturesBuilding.h"
 #include "RenderContext.h"
 #include "RenderData.h"
 #include "MegakernelPathTracer.h"
@@ -224,6 +225,8 @@ bool SRenderer::Init()
 
     ID3D11Device* device = GetDevice();
 
+    BxDFTexturesBuilding::STextures BxdfTextures = BxDFTexturesBuilding::Build();
+
     m_RenderData.m_FilmTexture.reset( GPUTexture::Create(
           m_ResolutionWidth
         , m_ResolutionHeight
@@ -248,11 +251,13 @@ bool SRenderer::Init()
     if ( !m_RenderData.m_SampleValueTexture )
         return false;
 
-    m_RenderData.m_CookTorranceCompETexture.reset( BxDFTexturesBuilder::CreateCoorkTorranceBRDFEnergyTexture() );
+    m_RenderData.m_CookTorranceCompETexture = BxdfTextures.m_CookTorranceBRDF;
+    //m_RenderData.m_CookTorranceCompETexture.reset( BxDFTexturesBuilder::CreateCoorkTorranceBRDFEnergyTexture() );
     if ( !m_RenderData.m_CookTorranceCompETexture )
         return false;
 
-    m_RenderData.m_CookTorranceCompEAvgTexture.reset( BxDFTexturesBuilder::CreateCookTorranceBRDFAverageEnergyTexture() );
+    m_RenderData.m_CookTorranceCompEAvgTexture = BxdfTextures.m_CookTorranceBRDFAverage;
+    //m_RenderData.m_CookTorranceCompEAvgTexture.reset( BxDFTexturesBuilder::CreateCookTorranceBRDFAverageEnergyTexture() );
     if ( !m_RenderData.m_CookTorranceCompEAvgTexture )
         return false;
 

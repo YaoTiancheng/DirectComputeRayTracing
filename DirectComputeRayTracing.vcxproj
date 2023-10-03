@@ -98,6 +98,7 @@
     </None>
     <ClInclude Include="Source\BxDFTexturesBuilder.h" />
     <ClInclude Include="Source\BVHAccel.h" />
+    <ClInclude Include="Source\BxDFTexturesBuilding.h" />
     <ClInclude Include="Source\Camera.h" />
     <ClInclude Include="Source\CommandLineArgs.h" />
     <ClInclude Include="Source\ComputeJob.h" />
@@ -146,6 +147,7 @@
   <ItemGroup>
     <ClCompile Include="Source\BxDFTexturesBuilder.cpp" />
     <ClCompile Include="Source\BVHAccel.cpp" />
+    <ClCompile Include="Source\BxDFTexturesBuilding.cpp" />
     <ClCompile Include="Source\Camera.cpp" />
     <ClCompile Include="Source\CommandLineArgs.cpp" />
     <ClCompile Include="Source\ComputeJob.cpp" />
@@ -387,6 +389,24 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4.0</ShaderModel>
+      <FileType>Document</FileType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Shaders\BxDFTexturesBuilding.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Domain</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Domain</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <FileType>Document</FileType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Shaders\KullaConty.inc.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4.0</ShaderModel>
       <FileType>Document</FileType>
     </None>
   </ItemGroup>

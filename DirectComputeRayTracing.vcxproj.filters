@@ -159,6 +159,9 @@
     <ClInclude Include="Source\ImGuiHelper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Source\BxDFTexturesBuilding.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\Application.cpp">
@@ -269,6 +272,9 @@
     <ClCompile Include="Source\ImGuiHelper.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Source\BxDFTexturesBuilding.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Image Include="Resources\small.ico">
@@ -319,6 +325,8 @@
     <None Include="Shaders\SampleConvolution.hlsl" />
     <None Include="Shaders\MegakernelPathtracing.hlsl" />
     <None Include="Shaders\WavefrontPathTracing.hlsl" />
+    <None Include="Shaders\BxDFTexturesBuilding.hlsl" />
+    <None Include="Shaders\KullaConty.inc.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resources\DirectComputeRayTracing.rc">

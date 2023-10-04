@@ -3,7 +3,7 @@
 #include "D3D11RenderSystem.h"
 #include "DDSTextureLoader.h"
 
-GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT format, uint32_t flags, uint32_t arraySize, const D3D11_SUBRESOURCE_DATA* initialData )
+GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT format, uint32_t flags, uint32_t arraySize, const D3D11_SUBRESOURCE_DATA* initialData, const char* debugName )
 {
     bool hasUAV         = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_HasUAV ) != 0;
     bool isRenderTarget = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_IsRenderTarget ) != 0;
@@ -62,6 +62,11 @@ GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT for
             texture->Release();
             return nullptr;
         }
+    }
+
+    if ( debugName )
+    {
+        texture->SetPrivateData( WKPDID_D3DDebugObjectName, (UINT)strlen( debugName ), debugName );
     }
 
     GPUTexture* gpuTexture = new GPUTexture();

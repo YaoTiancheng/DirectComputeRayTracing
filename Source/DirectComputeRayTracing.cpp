@@ -269,7 +269,8 @@ bool SRenderer::Init()
     if ( !m_RenderData.m_CookTorranceCompPdfScaleTexture )
         return false;
 
-    m_RenderData.m_CookTorranceCompEFresnelTexture.reset( BxDFTexturesBuilder::CreateCoorkTorranceBRDFEnergyFresnelDielectricTexture() );
+    m_RenderData.m_CookTorranceCompEFresnelTexture = BxdfTextures.m_CookTorranceBRDFDielectric;
+    //m_RenderData.m_CookTorranceCompEFresnelTexture.reset( BxDFTexturesBuilder::CreateCoorkTorranceBRDFEnergyFresnelDielectricTexture() );
     if ( !m_RenderData.m_CookTorranceCompEFresnelTexture )
         return false;
 

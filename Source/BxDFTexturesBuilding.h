@@ -6,6 +6,7 @@ namespace BxDFTexturesBuilding
     {
         GPUTexturePtr m_CookTorranceBRDF;
         GPUTexturePtr m_CookTorranceBRDFAverage;
+        GPUTexturePtr m_CookTorranceBRDFDielectric;
     };
 
     STextures Build();

@@ -45,7 +45,7 @@ GPUTexture* BxDFTexturesBuilder::CreateCoorkTorranceBRDFEnergyTexture()
     initialData.pSysMem          = s_CookTorranceBRDFEnergyData;
     initialData.SysMemPitch      = sizeof( uint16_t ) * BXDFTEX_COOKTORRANCE_E_SIZE_X;
     initialData.SysMemSlicePitch = 0;
-    return GPUTexture::Create( BXDFTEX_COOKTORRANCE_E_SIZE_X, BXDFTEX_COOKTORRANCE_E_SIZE_Y, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_IsImmutable, 1, &initialData );
+    return GPUTexture::Create( BXDFTEX_COOKTORRANCE_E_SIZE_X, BXDFTEX_COOKTORRANCE_E_SIZE_Y, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_IsImmutable, 1, &initialData, "CookTorranceBRDFEnergy" );
 }
 
 static uint16_t s_CookTorranceBRDFEnergyFresnelDielectricData[ BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X * BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y * BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z * 2 ] =
@@ -607,7 +607,7 @@ GPUTexture* BxDFTexturesBuilder::CreateCoorkTorranceBRDFEnergyFresnelDielectricT
         initialData[ i ].SysMemPitch      = pitch;
         initialData[ i ].SysMemSlicePitch = slicePitch;
     }
-    return GPUTexture::Create( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_IsImmutable, sliceCount, initialData );
+    return GPUTexture::Create( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_IsImmutable, sliceCount, initialData, "CookTorranceBRDFEnergyFresnelDielectric" );
 }
 
 static uint16_t s_CookTorranceBSDFEnergyFresnelDielectricData[ BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X * BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y * BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z * 2 ] =
@@ -1169,7 +1169,7 @@ GPUTexture* BxDFTexturesBuilder::CreateCookTorranceBSDFEnergyFresnelDielectricTe
         initialData[ i ].SysMemPitch      = pitch;
         initialData[ i ].SysMemSlicePitch = slicePitch;
     }
-    return GPUTexture::Create( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_IsImmutable, sliceCount, initialData );
+    return GPUTexture::Create( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_IsImmutable, sliceCount, initialData, "CookTorranceBSDFEnergy" );
 }
 
 static uint16_t s_CookTorranceBRDFAverageEnergyData[ BXDFTEX_COOKTORRANCE_E_AVG_SIZE_X ] =
@@ -1183,7 +1183,7 @@ GPUTexture* BxDFTexturesBuilder::CreateCookTorranceBRDFAverageEnergyTexture()
     initialData.pSysMem = s_CookTorranceBRDFAverageEnergyData;
     initialData.SysMemPitch = sizeof( uint16_t ) * BXDFTEX_COOKTORRANCE_E_AVG_SIZE_X;
     initialData.SysMemSlicePitch = 0;
-    return GPUTexture::Create( BXDFTEX_COOKTORRANCE_E_AVG_SIZE_X, 1, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_IsImmutable, 1, &initialData );
+    return GPUTexture::Create( BXDFTEX_COOKTORRANCE_E_AVG_SIZE_X, 1, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_IsImmutable, 1, &initialData, "CookTorranceBRDFAverageEnergy" );
 }
 
 static uint16_t s_CookTorranceBSDFAverageEnergyData[ BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y * BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z * 2 ] =
@@ -1235,7 +1235,7 @@ GPUTexture* BxDFTexturesBuilder::CreateCookTorranceBSDFAverageEnergyTexture()
         initialData[ i ].SysMemPitch      = pitch;
         initialData[ i ].SysMemSlicePitch = slicePitch;
     }
-    return GPUTexture::Create( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_IsImmutable, sliceCount, initialData );
+    return GPUTexture::Create( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_IsImmutable, sliceCount, initialData, "CookTorranceBSDFAverageEnergy" );
 }
 
 static uint16_t s_CookTorranceBTDFEnergyData[ BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X * BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y * BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z * 2 ] =
@@ -1797,7 +1797,7 @@ GPUTexture* BxDFTexturesBuilder::CreateCookTorranceBTDFEnergyTexture()
         initialData[ i ].SysMemPitch      = pitch;
         initialData[ i ].SysMemSlicePitch = slicePitch;
     }
-    return GPUTexture::Create( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_IsImmutable, sliceCount, initialData );
+    return GPUTexture::Create( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_IsImmutable, sliceCount, initialData, "CookTorranceBTDFEnergy" );
 }
 
 static uint16_t s_CookTorranceMultiscatteringBRDFInvCDFData[ BXDFTEX_COOKTORRANCE_MULTISCATTERING_INV_CDF_X * BXDFTEX_COOKTORRANCE_MULTISCATTERING_INV_CDF_Y ] =

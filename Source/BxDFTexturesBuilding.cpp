@@ -43,8 +43,15 @@ static ComputeShaderPtr CompileAndCreateKernel( const char* kernelName, const SK
     if ( sharedBufferStart < sharedBufferSize - 1 ) \
     { \
         int len = sprintf_s( sharedBuffer + sharedBufferStart, sharedBufferSize - sharedBufferStart, format, value ); \
-        shaderDefines.push_back( { name, sharedBuffer + sharedBufferStart } ); \
-        sharedBufferStart += len + 1; \
+        if ( len > 0 ) \
+        { \
+            shaderDefines.push_back( { name, sharedBuffer + sharedBufferStart } ); \
+            sharedBufferStart += len + 1; \
+        } \
+        else \
+        { \
+            assert( "Failed to format the parameter to shared buffer!" ); \
+        } \
     } \
     else \
     { \

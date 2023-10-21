@@ -74,7 +74,9 @@ void SampleSpecularBSDF( float3 wo, float sample, float etaO, float etaI, out fl
             return;
 
         value = ( 1.0f - F )
+#if !defined( REFRACTION_NO_SCALE_FACTOR )
               * ( etaO * etaO ) / ( etaI * etaI ) 
+#endif
               / ( -wi.z );
 
         pdf = 1.0f - F;

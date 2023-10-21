@@ -274,7 +274,8 @@ bool SRenderer::Init()
     if ( !m_RenderData.m_CookTorranceCompEFresnelTexture )
         return false;
 
-    m_RenderData.m_CookTorranceBSDFETexture.reset( BxDFTexturesBuilder::CreateCookTorranceBSDFEnergyFresnelDielectricTexture() );
+    m_RenderData.m_CookTorranceBSDFETexture = BxdfTextures.m_CookTorranceBSDF;
+    //m_RenderData.m_CookTorranceBSDFETexture.reset( BxDFTexturesBuilder::CreateCookTorranceBSDFEnergyFresnelDielectricTexture() );
     if ( !m_RenderData.m_CookTorranceBSDFETexture )
         return false;
 

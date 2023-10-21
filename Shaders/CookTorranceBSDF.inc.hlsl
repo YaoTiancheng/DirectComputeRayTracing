@@ -178,7 +178,11 @@ float EvaluateCookTorranceMicrofacetBSDF( float3 wi, float3 wo, float alpha, flo
         float sqrtDenom = etaO * WOdotM + etaI * WIdotM;
         float value = ( 1.0f - F ) * abs( D * G
                       * abs( WIdotM ) * abs( WOdotM ) 
+#if defined( REFRACTION_NO_SCALE_FACTOR )
+                      * etaI * etaI
+#else
                       * etaO * etaO // etaI * etaI * ( ( etaO * etaO ) / ( etaI * etaI ) )
+#endif
                       / ( WOdotN * WIdotN * sqrtDenom * sqrtDenom ) );
         return active ? value : 0.0f;
     }

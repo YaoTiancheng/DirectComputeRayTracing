@@ -7,7 +7,7 @@
 
 #define ALPHA_THRESHOLD 0.00052441
 
-#if defined( INTEGRATE_COOKTORRANCE_BRDF )
+#if defined( INTEGRATE_COOKTORRANCE_BXDF )
 
 cbuffer Constants : register( b0 )
 {
@@ -60,6 +60,7 @@ void main(
 		LightingContext lightingContext = (LightingContext)0;
 
 		float sampleValue, samplePdf;
+#if BXDF_TYPE == 0
 		if ( perfectSmooth )
 		{
 			SampleSpecularBRDF( wo, wi, sampleValue, samplePdf, lightingContext );
@@ -82,6 +83,29 @@ void main(
 #endif
 			result += sampleWeight * sampleValue * abs( wi.z ) / samplePdf;
 		}
+
+#elif BXDF_TYPE == 1
+		const float etaO = g_Entering == 1 ? Ior : 1.0;
+		const float etaI = g_Entering == 1 ? 1.0 : Ior;
+		float selectionSample = GetNextSample1D( rng );
+
+		if ( perfectSmooth )
+		{
+			SampleSpecularBSDF( wo, selectionSample, etaO, etaI, wi, sampleValue, samplePdf, lightingContext );
+		}
+		else
+		{
+			float2 sample = GetNextSample2D( rng );
+			SampleCookTorranceMicrofacetBSDF( wo, selectionSample, sample, alpha, etaO, etaI, wi, lightingContext );
+			sampleValue = EvaluateCookTorranceMicrofacetBSDF( wi, wo, alpha, etaO, etaI, lightingContext );
+			samplePdf = EvaluateCookTorranceMicrofacetBSDFPdf( wi, wo, alpha, etaO, etaI, lightingContext );
+		}
+
+		if ( samplePdf > 0.0 )
+		{
+			result += sampleWeight * sampleValue * abs( wi.z ) / samplePdf;
+		}
+#endif
 	}
 
 	g_OutputTexture[ pixelPos ] = (float)result;

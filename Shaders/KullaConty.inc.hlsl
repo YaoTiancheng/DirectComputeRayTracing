@@ -76,14 +76,6 @@ float MultiscatteringBxDF( float Ei, float Eo, float Eavg )
 // Multiscattering BSDF
 //
 
-float3 CookTorranceMultiscatteringBSDFSampleHemisphere( float2 sample, float alpha, float eta )
-{
-    float cosThetaI = SampleCookTorranceMicrofacetBSDFInvCDFTexture( sample.x, alpha, eta );
-    float phi = 2.0f * PI * sample.y;
-    float s = sqrt( 1 - cosThetaI * cosThetaI );
-    return float3( cos( phi ) * s, sin( phi ) * s, cosThetaI );
-}
-
 float EvaluateCookTorranceMultiscatteringBSDF( float3 wi, float alpha, float ratio, float eta, float invEta, float Eo, float Eavg, float Eavg_inv )
 {
     float cosThetaI = abs( wi.z );
@@ -96,23 +88,19 @@ float EvaluateCookTorranceMultiscatteringBSDF( float3 wi, float alpha, float rat
     return MultiscatteringBxDF( Ei, Eo, evaluateReflection ? Eavg : Eavg_inv ) * factor;
 }
 
-float EvaluateCookTorranceMultiscatteringBSDFPdf( float3 wi, float alpha, float ratio, float eta, float invEta )
+float EvaluateCookTorranceMultiscatteringBSDFPdf( float3 wi, float ratio )
 {
     float cosThetaI = abs( wi.z );
     if ( cosThetaI == 0.0f )
         return 0.0f;
 
     bool sampleReflection = wi.z > 0.0f;
-    float pdfScale = SampleCookTorranceMicrofacetBSDFPDFScaleTexture( alpha, sampleReflection ? eta : invEta );
-    float Ei = SampleCookTorranceMicrofacetBSDFEnergyTexture( cosThetaI, alpha, sampleReflection ? eta : invEta );
-    float pdf = pdfScale > 0.0f 
-        ? ( 1.0f - Ei ) * cosThetaI / pdfScale 
-        : 0.0f;
+    float pdf = abs( wi.z ) * INV_PI;
     pdf *= sampleReflection ? 1.0f - ratio : ratio;
     return pdf;
 }
 
-void SampleCookTorranceMultiscatteringBSDF( float3 wo, float selectionSample, float2 bxdfSample, float alpha, float ratio, float eta, float invEta, out float3 wi, LightingContext lightingContext )
+void SampleCookTorranceMultiscatteringBSDF( float3 wo, float selectionSample, float2 bxdfSample, float ratio, out float3 wi, LightingContext lightingContext )
 {
     wi = 0.0f;
 
@@ -121,7 +109,7 @@ void SampleCookTorranceMultiscatteringBSDF( float3 wo, float selectionSample, fl
 
     bool sampleReflection = selectionSample >= ratio;
 
-    wi = CookTorranceMultiscatteringBSDFSampleHemisphere( bxdfSample, alpha, sampleReflection ? eta : invEta );
+    wi = ConsineSampleHemisphere( bxdfSample );
 
     if ( !sampleReflection )
         wi.z = -wi.z;
@@ -142,14 +130,6 @@ float ReciprocalFactor( float Favg, float Favg_inv, float Eavg, float Eavg_inv, 
 // Multiscattering BRDF
 //
 
-float3 CookTorranceMultiscatteringBRDFSampleHemisphere( float2 sample, float alpha )
-{
-    float cosThetaI = SampleCookTorranceMicrofacetBRDFInvCDFTexture( sample.x, alpha );
-    float phi = 2.0f * PI * sample.y;
-    float s = sqrt( 1 - cosThetaI * cosThetaI );
-    return float3( cos( phi ) * s, sin( phi ) * s, cosThetaI );
-}
-
 float3 EvaluateCookTorranceMultiscatteringBRDF( float3 wi, float3 wo, float alpha, float Eo, float Eavg, float3 factor, LightingContext lightingContext )
 {
     float cosThetaO = wo.z;
@@ -161,43 +141,19 @@ float3 EvaluateCookTorranceMultiscatteringBRDF( float3 wi, float3 wo, float alph
     return MultiscatteringBxDF( Ei, Eo, Eavg ) * factor;
 }
 
-float EvaluateCookTorranceMultiscatteringBRDFPdf( float3 wi, float3 wo, float alpha, LightingContext lightingContext )
+float EvaluateCookTorranceMultiscatteringBRDFPdf( float3 wi, float3 wo, LightingContext lightingContext )
 {
     float cosThetaO = wo.z;
     float cosThetaI = wi.z;
     if ( cosThetaO <= 0.0f || cosThetaI <= 0.0f )
         return 0.0f;
 
-    float pdfScale = SampleCookTorranceMicrofacetBRDFPDFScaleTexture( alpha );
-    float Ei = SampleCookTorranceMicrofacetBRDFEnergyTexture( cosThetaI, alpha );
-    return pdfScale > 0.0f
-        ? ( 1.0f - Ei ) * cosThetaI / pdfScale
-        : 0.0f;
+    return wi.z * INV_PI;
 }
 
-void SampleCookTorranceMultiscatteringBRDF( float3 wo, float2 bxdfSample, float alpha, float Eo, float Eavg, float3 Fms, out float3 wi, inout float3 value, inout float pdf, inout LightingContext lightingContext )
+void SampleCookTorranceMultiscatteringBRDF( float3 wo, float2 bxdfSample, out float3 wi, inout LightingContext lightingContext )
 {
-    wi = CookTorranceMultiscatteringBRDFSampleHemisphere( bxdfSample, alpha );
-
-    LightingContextCalculateH( wo, wi, lightingContext );
-
-    float cosThetaO = wo.z;
-    float cosThetaI = wi.z;
-    if ( cosThetaO <= 0.0f || cosThetaI <= 0.0f )
-        return;
-
-    float Ei = SampleCookTorranceMicrofacetBRDFEnergyTexture( cosThetaI, alpha );
-    value = MultiscatteringBxDF( Ei, Eo, Eavg ) * Fms;
-
-    float pdfScale = SampleCookTorranceMicrofacetBRDFPDFScaleTexture( alpha );
-    pdf = pdfScale > 0.0f
-        ? ( 1.0f - Ei ) * cosThetaI / pdfScale
-        : 0.0f;
-}
-
-void SampleCookTorranceMultiscatteringBRDF( float3 wo, float2 bxdfSample, float alpha, out float3 wi, inout LightingContext lightingContext )
-{
-    wi = CookTorranceMultiscatteringBRDFSampleHemisphere( bxdfSample, alpha );
+    wi = ConsineSampleHemisphere( bxdfSample );
 
     LightingContextCalculateH( wo, wi, lightingContext );
 }

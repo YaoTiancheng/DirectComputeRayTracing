@@ -227,7 +227,7 @@ float EvaluateBSDFPdf( float3 wi, float3 wo, Intersection intersection )
         }
         if ( hasCookTorranceMultiscatteringBrdf )
         { 
-            pdf += EvaluateCookTorranceMultiscatteringBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * weight_cookTorranceMultiscatteringBrdf;
+            pdf += EvaluateCookTorranceMultiscatteringBRDFPdf( wi, wo, lightingContext ) * weight_cookTorranceMultiscatteringBrdf;
         }
     }
     else
@@ -270,7 +270,7 @@ float EvaluateBSDFPdf( float3 wi, float3 wo, Intersection intersection )
         }
         if ( hasCookTorranceMultiscatteringBsdf )
         {
-            pdf += EvaluateCookTorranceMultiscatteringBSDFPdf( wi, intersection.alpha, ratio, eta, inv_eta ) * weight_cookTorranceMultiscatteringBsdf;
+            pdf += EvaluateCookTorranceMultiscatteringBSDFPdf( wi, ratio ) * weight_cookTorranceMultiscatteringBsdf;
         }
     }
 
@@ -399,7 +399,7 @@ void SampleBSDF( float3 wo
         }
         else /*if ( BRDFSelectionSample < weight_lambertBrdf + weight_cookTorranceBrdf + weight_cookTorranceMultiscatteringBrdf )*/ // Equals to 1
         {
-            SampleCookTorranceMultiscatteringBRDF( wo, BRDFSample, intersection.alpha, wi, lightingContext );
+            SampleCookTorranceMultiscatteringBRDF( wo, BRDFSample, wi, lightingContext );
         }
 
         if ( hasLambertBrdf )
@@ -417,7 +417,7 @@ void SampleBSDF( float3 wo
         if ( hasCookTorranceMultiscatteringBrdf )
         {
             value += EvaluateCookTorranceMultiscatteringBRDF( wi, wo, intersection.alpha, E, E_avg, F_ms, lightingContext );
-            pdf += EvaluateCookTorranceMultiscatteringBRDFPdf( wi, wo, intersection.alpha, lightingContext ) * weight_cookTorranceMultiscatteringBrdf;
+            pdf += EvaluateCookTorranceMultiscatteringBRDFPdf( wi, wo, lightingContext ) * weight_cookTorranceMultiscatteringBrdf;
         }
     }
     else
@@ -467,7 +467,7 @@ void SampleBSDF( float3 wo
             }
             else /*if ( BRDFSelectionSample < weight_cookTorranceBsdf + weight_cookTorranceMultiscatteringBsdf )*/ // Equals 1
             {
-                SampleCookTorranceMultiscatteringBSDF( wo, BRDFSelectionSample, BRDFSample, intersection.alpha, ratio, eta, inv_eta, wi, lightingContext );
+                SampleCookTorranceMultiscatteringBSDF( wo, BRDFSelectionSample, BRDFSample, ratio, wi, lightingContext );
             }
         }
         else
@@ -489,7 +489,7 @@ void SampleBSDF( float3 wo
         if ( hasCookTorranceMultiscatteringBsdf )
         {
             value += EvaluateCookTorranceMultiscatteringBSDF( wi, intersection.alpha, ratio, eta, inv_eta, E, E_avg, E_inv_avg );
-            pdf += EvaluateCookTorranceMultiscatteringBSDFPdf( wi, intersection.alpha, ratio, eta, inv_eta ) * weight_cookTorranceMultiscatteringBsdf;
+            pdf += EvaluateCookTorranceMultiscatteringBSDFPdf( wi, ratio ) * weight_cookTorranceMultiscatteringBsdf;
         }
     }
 

@@ -5,12 +5,6 @@
 #include "Math.inc.hlsl"
 #include "LightingContext.inc.hlsl"
 
-float3 ConsineSampleHemisphere( float2 sample )
-{
-    sample = ConcentricSampleDisk( sample );
-    return float3( sample.xy, sqrt( max( 0.0f, 1.0f - dot( sample.xy, sample.xy ) ) ) );
-}
-
 float EvaluateLambertBRDF( float3 wi, float3 wo, LightingContext lightingContext )
 {
     return wi.z > 0.0f && wo.z > 0.0f ? INV_PI : 0.0f;

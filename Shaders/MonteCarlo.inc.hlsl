@@ -46,6 +46,12 @@ float2 ConcentricSampleDisk( float2 sample )
     return r * float2( cos( theta ), sin( theta ) );
 }
 
+float3 ConsineSampleHemisphere( float2 sample )
+{
+    sample = ConcentricSampleDisk( sample );
+    return float3( sample.xy, sqrt( max( 0.0f, 1.0f - dot( sample.xy, sample.xy ) ) ) );
+}
+
 // Returns barycentric coordinate
 float2 SampleTriangle( float2 sample )
 {

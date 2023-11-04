@@ -279,7 +279,8 @@ bool SRenderer::Init()
     if ( !m_RenderData.m_CookTorranceBSDFETexture )
         return false;
 
-    m_RenderData.m_CookTorranceBSDFAvgETexture.reset( BxDFTexturesBuilder::CreateCookTorranceBSDFAverageEnergyTexture() );
+    m_RenderData.m_CookTorranceBSDFAvgETexture = BxdfTextures.m_CookTorranceBSDFAverage;
+    //m_RenderData.m_CookTorranceBSDFAvgETexture.reset( BxDFTexturesBuilder::CreateCookTorranceBSDFAverageEnergyTexture() );
     if ( !m_RenderData.m_CookTorranceBSDFAvgETexture )
         return false;
 

@@ -116,25 +116,47 @@ void main(
 #if defined( INTEGRATE_AVERAGE )
 
 // Trapezoidal composition
-
+#if defined( HAS_FRESNEL )
+Texture2DArray<float> g_SrcTexture : register( t0 );
+RWTexture2DArray<unorm float> g_DestTexture : register( u0 );
+#else
 Texture2D<float> g_SrcTexture : register( t0 );
 RWTexture2D<unorm float> g_DestTexture : register( u0 );
+#endif
 
-[ numthreads( GROUP_SIZE_X, 1, 1 ) ]
-void main( uint threadId : SV_DispatchThreadID )
+[ numthreads( 1, GROUP_SIZE_Y, GROUP_SIZE_Z ) ]
+void main( uint3 threadId : SV_DispatchThreadID )
 {
-	const uint sampleCount = GROUP_SIZE_Y;
+	const uint sampleCount = SAMPLE_COUNT;
 	const uint n = sampleCount - 1;
-	double fa = g_SrcTexture[ uint2( 0, threadId ) ] * 0.0001; // cosTheta clamped to 0.0001
+#if defined( HAS_FRESNEL )
+	uint3 srcPixelPos = uint3( 0, threadId.y, threadId.z );
+#else
+	uint2 srcPixelPos = uint2( 0, threadId.y );
+#endif
+	double fa = g_SrcTexture[ srcPixelPos ] * 0.0001; // cosTheta clamped to 0.0001
 	double sum = 0;
 	for ( uint i = 1; i < n; ++i )
 	{
 		const double cosTheta = i * LUT_INTERVAL_X; // LUT_INTERVAL_X is cosTheta interval
-		sum += saturate( g_SrcTexture[ uint2( i, threadId ) ] ) * cosTheta;
+		srcPixelPos.x = i;
+		sum += saturate( g_SrcTexture[ srcPixelPos ] ) * cosTheta;
 	}
-	double fb = g_SrcTexture[ uint2( n, threadId ) ]; // cosTheta is 1
+	srcPixelPos.x = n;
+	double fb = g_SrcTexture[ srcPixelPos ]; // cosTheta is 1
 	double result = ( sum + ( fa + fb ) * 0.5 ) * ( 1.0 / n );
-	g_DestTexture[ uint2( threadId, 0 ) ] = result * 2.0;
+#if defined( HAS_FRESNEL )
+	uint destTextureWidth;
+	uint destTextureHeight;
+	uint destTextureElements;
+	g_DestTexture.GetDimensions( destTextureWidth, destTextureHeight, destTextureElements );
+	uint slice = threadId.z / destTextureHeight;
+	uint y = threadId.z % destTextureHeight;
+	uint3 destPixelPos = uint3( threadId.y, y, slice );
+#else
+	uint2 destPixelPos = threadId.yz;
+#endif
+	g_DestTexture[ destPixelPos ] = (float)( result * 2.0 );
 }
 
 #endif

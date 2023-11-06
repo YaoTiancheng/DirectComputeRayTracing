@@ -232,7 +232,7 @@ BxDFTexturesBuilding::STextures BxDFTexturesBuilding::Build()
 
     {
         const uint32_t sampleCountPerBatch = 4096;
-        const uint32_t batchCount = 8;
+        const uint32_t batchCount = 24;
         const uint32_t totalSampleCount = batchCount * sampleCountPerBatch;
         const uint32_t groupSizeX = 16;
         const uint32_t groupSizeY = 16;

@@ -250,24 +250,24 @@ bool SRenderer::Init()
     if ( !m_RenderData.m_SampleValueTexture )
         return false;
 
-    m_RenderData.m_CookTorranceCompETexture = BxdfTextures.m_CookTorranceBRDF;
-    if ( !m_RenderData.m_CookTorranceCompETexture )
+    m_RenderData.m_BRDFTexture = BxdfTextures.m_CookTorranceBRDF;
+    if ( !m_RenderData.m_BRDFTexture )
         return false;
 
-    m_RenderData.m_CookTorranceCompEAvgTexture = BxdfTextures.m_CookTorranceBRDFAverage;
-    if ( !m_RenderData.m_CookTorranceCompEAvgTexture )
+    m_RenderData.m_BRDFAvgTexture = BxdfTextures.m_CookTorranceBRDFAverage;
+    if ( !m_RenderData.m_BRDFAvgTexture )
         return false;
 
-    m_RenderData.m_CookTorranceCompEFresnelTexture = BxdfTextures.m_CookTorranceBRDFDielectric;
-    if ( !m_RenderData.m_CookTorranceCompEFresnelTexture )
+    m_RenderData.m_BRDFDielectricTexture = BxdfTextures.m_CookTorranceBRDFDielectric;
+    if ( !m_RenderData.m_BRDFDielectricTexture )
         return false;
 
-    m_RenderData.m_CookTorranceBSDFETexture = BxdfTextures.m_CookTorranceBSDF;
-    if ( !m_RenderData.m_CookTorranceBSDFETexture )
+    m_RenderData.m_BSDFTexture = BxdfTextures.m_CookTorranceBSDF;
+    if ( !m_RenderData.m_BSDFTexture )
         return false;
 
-    m_RenderData.m_CookTorranceBSDFAvgETexture = BxdfTextures.m_CookTorranceBSDFAverage;
-    if ( !m_RenderData.m_CookTorranceBSDFAvgETexture )
+    m_RenderData.m_BSDFAvgTexture = BxdfTextures.m_CookTorranceBSDFAverage;
+    if ( !m_RenderData.m_BSDFAvgTexture )
         return false;
 
     m_RenderData.m_RayTracingFrameConstantBuffer.reset( GPUBuffer::Create(

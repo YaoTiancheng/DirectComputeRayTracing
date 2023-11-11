@@ -22,11 +22,11 @@ cbuffer RayTracingConstants : register( b0 )
 StructuredBuffer<Vertex> g_Vertices                     : register( t0 );
 StructuredBuffer<uint> g_Triangles                      : register( t1 );
 StructuredBuffer<SLight> g_Lights                       : register( t2 );
-Texture2D<float> g_CookTorranceCompETexture             : register( t3 );
-Texture2D<float> g_CookTorranceCompEAvgTexture          : register( t4 );
-Texture2DArray<float> g_CookTorranceCompEFresnelTexture : register( t5 );
-Texture2DArray<float> g_CookTorranceBSDFETexture        : register( t6 );
-Texture2DArray<float> g_CookTorranceBSDFAvgETexture     : register( t7 );
+Texture2D<float> g_BRDFTexture                          : register( t3 );
+Texture2D<float> g_BRDFAvgTexture                       : register( t4 );
+Texture2DArray<float> g_BRDFDielectricTexture           : register( t5 );
+Texture2DArray<float> g_BSDFTexture                     : register( t6 );
+Texture2DArray<float> g_BSDFAvgTexture                  : register( t7 );
 StructuredBuffer<BVHNode> g_BVHNodes                    : register( t8 );
 StructuredBuffer<float4x3> g_InstanceTransforms         : register( t9 );
 StructuredBuffer<float4x3> g_InstanceInvTransforms      : register( t10 );
@@ -165,12 +165,12 @@ cbuffer DebugConstants : register( b2 )
 
 StructuredBuffer<Vertex> g_Vertices     : register( t0 );
 StructuredBuffer<uint> g_Triangles      : register( t1 );
-StructuredBuffer<BVHNode> g_BVHNodes    : register( t13 );
-StructuredBuffer<float4x3> g_InstanceTransforms : register( t14 );
-StructuredBuffer<float4x3> g_InstanceInvTransforms : register( t15 );
-StructuredBuffer<uint> g_MaterialIds    : register( t16 );
-StructuredBuffer<Material> g_Materials  : register( t17 );
-Buffer<uint> g_InstanceLightIndices     : register( t18 );
+StructuredBuffer<BVHNode> g_BVHNodes    : register( t8 );
+StructuredBuffer<float4x3> g_InstanceTransforms : register( t9 );
+StructuredBuffer<float4x3> g_InstanceInvTransforms : register( t10 );
+StructuredBuffer<uint> g_MaterialIds    : register( t11 );
+StructuredBuffer<Material> g_Materials  : register( t12 );
+Buffer<uint> g_InstanceLightIndices     : register( t13 );
 RWTexture2D<float2> g_SamplePositionTexture : register( u0 );
 RWTexture2D<float3> g_SampleValueTexture    : register( u1 );
 

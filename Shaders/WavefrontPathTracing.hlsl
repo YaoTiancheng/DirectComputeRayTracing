@@ -251,11 +251,11 @@ StructuredBuffer<float4x3> g_InstanceTransforms         : register( t5 );
 StructuredBuffer<uint> g_MaterialIds                    : register( t6 );
 StructuredBuffer<Material> g_Materials                  : register( t7 );
 Buffer<uint> g_InstanceLightIndices                     : register( t8 );
-Texture2D<float> g_CookTorranceCompETexture             : register( t9 );
-Texture2D<float> g_CookTorranceCompEAvgTexture          : register( t10 );
-Texture2DArray<float> g_CookTorranceCompEFresnelTexture : register( t11 );
-Texture2DArray<float> g_CookTorranceBSDFETexture        : register( t12 );
-Texture2DArray<float> g_CookTorranceBSDFAvgETexture     : register( t13 );
+Texture2D<float> g_BRDFTexture                          : register( t9 );
+Texture2D<float> g_BRDFAvgTexture                       : register( t10 );
+Texture2DArray<float> g_BRDFDielectricTexture           : register( t11 );
+Texture2DArray<float> g_BSDFTexture                     : register( t12 );
+Texture2DArray<float> g_BSDFAvgTexture                  : register( t13 );
 TextureCube<float3> g_EnvTexture                        : register( t14 );
 
 RWStructuredBuffer<SRay> g_Rays                         : register( u0 );

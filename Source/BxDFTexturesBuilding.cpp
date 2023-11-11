@@ -95,13 +95,13 @@ BxDFTexturesBuilding::STextures BxDFTexturesBuilding::Build()
         const uint32_t totalSampleCount = batchCount * sampleCountPerBatch;
 
         SKernelCompilationParams compilationParams;
-        compilationParams.m_LutIntervalX = 1.0f / ( BXDFTEX_COOKTORRANCE_E_SIZE_X - 1 );
-        compilationParams.m_LutIntervalY = 1.0f / ( BXDFTEX_COOKTORRANCE_E_SIZE_Y - 1 );
+        compilationParams.m_LutIntervalX = 1.0f / ( BXDFTEX_BRDF_SIZE_X - 1 );
+        compilationParams.m_LutIntervalY = 1.0f / ( BXDFTEX_BRDF_SIZE_Y - 1 );
         compilationParams.m_LutIntervalZ = 1.0f;
         compilationParams.m_SampleCount = sampleCountPerBatch;
         compilationParams.m_SampleWeight = 1.0f / totalSampleCount;
-        compilationParams.m_GroupSizeX = BXDFTEX_COOKTORRANCE_E_SIZE_X;
-        compilationParams.m_GroupSizeY = BXDFTEX_COOKTORRANCE_E_SIZE_Y;
+        compilationParams.m_GroupSizeX = BXDFTEX_BRDF_SIZE_X;
+        compilationParams.m_GroupSizeY = BXDFTEX_BRDF_SIZE_Y;
         compilationParams.m_GroupSizeZ = 1;
         compilationParams.m_BxDFType = 0;
         compilationParams.m_HasFresnel = false;
@@ -109,16 +109,16 @@ BxDFTexturesBuilding::STextures BxDFTexturesBuilding::Build()
         ComputeShaderPtr integralShader = CompileAndCreateKernel( "INTEGRATE_COOKTORRANCE_BXDF", compilationParams );
         ComputeShaderPtr copyShader = CompileAndCreateKernel( "COPY", compilationParams );
 
-        compilationParams.m_SampleCount = BXDFTEX_COOKTORRANCE_E_SIZE_X;
+        compilationParams.m_SampleCount = BXDFTEX_BRDF_SIZE_X;
         ComputeShaderPtr averageShader = CompileAndCreateKernel( "INTEGRATE_AVERAGE", compilationParams );
 
         if ( integralShader && copyShader && averageShader )
         {
             SCOPED_RENDER_ANNOTATION( L"Integrate CookTorrance BRDF" );
 
-            GPUTexturePtr accumulationTexture( GPUTexture::Create( BXDFTEX_COOKTORRANCE_E_SIZE_X, BXDFTEX_COOKTORRANCE_E_SIZE_Y, DXGI_FORMAT_R32_FLOAT, GPUResourceCreationFlags_HasUAV, 1, nullptr, "CookTorranceBRDF Accumulation" ) );
-            outputTextures.m_CookTorranceBRDF.reset( GPUTexture::Create( BXDFTEX_COOKTORRANCE_E_SIZE_X, BXDFTEX_COOKTORRANCE_E_SIZE_Y, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_HasUAV, 1, nullptr, "CookTorranceBRDF" ) );
-            outputTextures.m_CookTorranceBRDFAverage.reset( GPUTexture::Create( BXDFTEX_COOKTORRANCE_E_SIZE_Y, 1, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_HasUAV, 1, nullptr, "CookTorranceBRDFAverage" ) );
+            GPUTexturePtr accumulationTexture( GPUTexture::Create( BXDFTEX_BRDF_SIZE_X, BXDFTEX_BRDF_SIZE_Y, DXGI_FORMAT_R32_FLOAT, GPUResourceCreationFlags_HasUAV, 1, nullptr, "CookTorranceBRDF Accumulation" ) );
+            outputTextures.m_CookTorranceBRDF.reset( GPUTexture::Create( BXDFTEX_BRDF_SIZE_X, BXDFTEX_BRDF_SIZE_Y, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_HasUAV, 1, nullptr, "CookTorranceBRDF" ) );
+            outputTextures.m_CookTorranceBRDFAverage.reset( GPUTexture::Create( BXDFTEX_BRDF_SIZE_Y, 1, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_HasUAV, 1, nullptr, "CookTorranceBRDFAverage" ) );
 
             GPUBufferPtr batchConstantBuffers[ batchCount ];
             for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
@@ -128,8 +128,8 @@ BxDFTexturesBuilding::STextures BxDFTexturesBuilding::Build()
             }
 
             ComputeJob batchJob;
-            batchJob.m_DispatchSizeX = BXDFTEX_COOKTORRANCE_E_SIZE_X;
-            batchJob.m_DispatchSizeY = BXDFTEX_COOKTORRANCE_E_SIZE_Y;
+            batchJob.m_DispatchSizeX = BXDFTEX_BRDF_SIZE_X;
+            batchJob.m_DispatchSizeY = BXDFTEX_BRDF_SIZE_Y;
             batchJob.m_DispatchSizeZ = 1;
 
             batchJob.m_Shader = integralShader.get();
@@ -168,9 +168,9 @@ BxDFTexturesBuilding::STextures BxDFTexturesBuilding::Build()
         const float fresnelEnd = 3.0f;
 
         SKernelCompilationParams compilationParams;
-        compilationParams.m_LutIntervalX = 1.0f / ( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X - 1 );
-        compilationParams.m_LutIntervalY = 1.0f / ( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y - 1 );
-        compilationParams.m_LutIntervalZ = ( fresnelEnd - fresnelStart ) / ( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z - 1 );
+        compilationParams.m_LutIntervalX = 1.0f / ( BXDFTEX_BRDF_DIELECTRIC_SIZE_X - 1 );
+        compilationParams.m_LutIntervalY = 1.0f / ( BXDFTEX_BRDF_DIELECTRIC_SIZE_Y - 1 );
+        compilationParams.m_LutIntervalZ = ( fresnelEnd - fresnelStart ) / ( BXDFTEX_BRDF_DIELECTRIC_SIZE_Z - 1 );
         compilationParams.m_LutStartZ = fresnelStart;
         compilationParams.m_SampleCount = sampleCountPerBatch;
         compilationParams.m_SampleWeight = 1.0f / totalSampleCount;
@@ -186,8 +186,8 @@ BxDFTexturesBuilding::STextures BxDFTexturesBuilding::Build()
         {
             SCOPED_RENDER_ANNOTATION( L"Integrate CookTorrance BRDF Dielectric" );
 
-            GPUTexturePtr accumulationTexture( GPUTexture::Create( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R32_FLOAT, GPUResourceCreationFlags_HasUAV, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z * 2, nullptr, "CookTorranceBRDFDielectric Accumulation" ) );
-            outputTextures.m_CookTorranceBRDFDielectric.reset( GPUTexture::Create( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_HasUAV, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z * 2, nullptr, "CookTorranceBRDFDielectric" ) );
+            GPUTexturePtr accumulationTexture( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_X, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R32_FLOAT, GPUResourceCreationFlags_HasUAV, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, nullptr, "CookTorranceBRDFDielectric Accumulation" ) );
+            outputTextures.m_CookTorranceBRDFDielectric.reset( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_X, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_HasUAV, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, nullptr, "CookTorranceBRDFDielectric" ) );
             
             GPUBufferPtr batchConstantBuffers[ batchCount * 2 ];
             // Leaving
@@ -199,17 +199,17 @@ BxDFTexturesBuilding::STextures BxDFTexturesBuilding::Build()
             // Entering
             for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
             {
-                uint32_t initData[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 1, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z };
+                uint32_t initData[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 1, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z };
                 batchConstantBuffers[ batchIndex + batchCount ].reset( GPUBuffer::Create( sizeof( initData ), 1, DXGI_FORMAT_UNKNOWN, D3D11_USAGE_IMMUTABLE, D3D11_BIND_CONSTANT_BUFFER, GPUResourceCreationFlags_None, initData ) );
             }
 
             ComputeJob batchJob;
-            assert( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X % groupSizeX == 0 );
-            assert( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y % groupSizeY == 0 );
-            assert( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z % groupSizeZ == 0 );
-            batchJob.m_DispatchSizeX = BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X / groupSizeX;
-            batchJob.m_DispatchSizeY = BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y / groupSizeY;
-            batchJob.m_DispatchSizeZ = BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z / groupSizeZ;
+            assert( BXDFTEX_BRDF_DIELECTRIC_SIZE_X % groupSizeX == 0 );
+            assert( BXDFTEX_BRDF_DIELECTRIC_SIZE_Y % groupSizeY == 0 );
+            assert( BXDFTEX_BRDF_DIELECTRIC_SIZE_Z % groupSizeZ == 0 );
+            batchJob.m_DispatchSizeX = BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX;
+            batchJob.m_DispatchSizeY = BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY;
+            batchJob.m_DispatchSizeZ = BXDFTEX_BRDF_DIELECTRIC_SIZE_Z / groupSizeZ;
 
             batchJob.m_Shader = integralShader.get();
             for ( uint32_t jobIndex = 0; jobIndex < batchCount * 2; ++jobIndex )
@@ -222,7 +222,7 @@ BxDFTexturesBuilding::STextures BxDFTexturesBuilding::Build()
             }
 
             batchJob.m_Shader = copyShader.get();
-            batchJob.m_DispatchSizeZ = BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z * 2 / groupSizeZ;
+            batchJob.m_DispatchSizeZ = BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2 / groupSizeZ;
             batchJob.m_UAVs.clear();
             batchJob.m_UAVs.push_back( outputTextures.m_CookTorranceBRDFDielectric->GetUAV() );
             batchJob.m_SRVs.push_back( accumulationTexture->GetSRV() );
@@ -241,9 +241,9 @@ BxDFTexturesBuilding::STextures BxDFTexturesBuilding::Build()
         const float fresnelEnd = 3.0f;
 
         SKernelCompilationParams compilationParams;
-        compilationParams.m_LutIntervalX = 1.0f / ( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X - 1 );
-        compilationParams.m_LutIntervalY = 1.0f / ( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y - 1 );
-        compilationParams.m_LutIntervalZ = ( fresnelEnd - fresnelStart ) / ( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z - 1 );
+        compilationParams.m_LutIntervalX = 1.0f / ( BXDFTEX_BRDF_DIELECTRIC_SIZE_X - 1 );
+        compilationParams.m_LutIntervalY = 1.0f / ( BXDFTEX_BRDF_DIELECTRIC_SIZE_Y - 1 );
+        compilationParams.m_LutIntervalZ = ( fresnelEnd - fresnelStart ) / ( BXDFTEX_BRDF_DIELECTRIC_SIZE_Z - 1 );
         compilationParams.m_LutStartZ = fresnelStart;
         compilationParams.m_SampleCount = sampleCountPerBatch;
         compilationParams.m_SampleWeight = 1.0f / totalSampleCount;
@@ -256,16 +256,16 @@ BxDFTexturesBuilding::STextures BxDFTexturesBuilding::Build()
         ComputeShaderPtr integralShader = CompileAndCreateKernel( "INTEGRATE_COOKTORRANCE_BXDF", compilationParams );
         ComputeShaderPtr copyShader = CompileAndCreateKernel( "COPY", compilationParams );
 
-        compilationParams.m_SampleCount = BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X;
+        compilationParams.m_SampleCount = BXDFTEX_BRDF_DIELECTRIC_SIZE_X;
         ComputeShaderPtr averageShader = CompileAndCreateKernel( "INTEGRATE_AVERAGE", compilationParams );
 
         if ( integralShader && copyShader && averageShader )
         {
             SCOPED_RENDER_ANNOTATION( L"Integrate CookTorrance BSDF" );
 
-            GPUTexturePtr accumulationTexture( GPUTexture::Create( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R32_FLOAT, GPUResourceCreationFlags_HasUAV, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z * 2, nullptr, "CookTorranceBSDF Accumulation" ) );
-            outputTextures.m_CookTorranceBSDF.reset( GPUTexture::Create( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_HasUAV, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z * 2, nullptr, "CookTorranceBSDF" ) );
-            outputTextures.m_CookTorranceBSDFAverage.reset( GPUTexture::Create( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_HasUAV, 2, nullptr, "CookTorranceBSDFAverage" ) );
+            GPUTexturePtr accumulationTexture( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_X, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R32_FLOAT, GPUResourceCreationFlags_HasUAV, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, nullptr, "CookTorranceBSDF Accumulation" ) );
+            outputTextures.m_CookTorranceBSDF.reset( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_X, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_HasUAV, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, nullptr, "CookTorranceBSDF" ) );
+            outputTextures.m_CookTorranceBSDFAverage.reset( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_HasUAV, 2, nullptr, "CookTorranceBSDFAverage" ) );
 
             GPUBufferPtr batchConstantBuffers[ batchCount * 2 ];
             // Leaving
@@ -277,17 +277,17 @@ BxDFTexturesBuilding::STextures BxDFTexturesBuilding::Build()
             // Entering
             for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
             {
-                uint32_t initData[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 1, BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z };
+                uint32_t initData[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 1, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z };
                 batchConstantBuffers[ batchIndex + batchCount ].reset( GPUBuffer::Create( sizeof( initData ), 1, DXGI_FORMAT_UNKNOWN, D3D11_USAGE_IMMUTABLE, D3D11_BIND_CONSTANT_BUFFER, GPUResourceCreationFlags_None, initData ) );
             }
 
             ComputeJob batchJob;
-            assert( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X % groupSizeX == 0 );
-            assert( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y % groupSizeY == 0 );
-            assert( BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z % groupSizeZ == 0 );
-            batchJob.m_DispatchSizeX = BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_X / groupSizeX;
-            batchJob.m_DispatchSizeY = BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y / groupSizeY;
-            batchJob.m_DispatchSizeZ = BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z / groupSizeZ;
+            assert( BXDFTEX_BRDF_DIELECTRIC_SIZE_X % groupSizeX == 0 );
+            assert( BXDFTEX_BRDF_DIELECTRIC_SIZE_Y % groupSizeY == 0 );
+            assert( BXDFTEX_BRDF_DIELECTRIC_SIZE_Z % groupSizeZ == 0 );
+            batchJob.m_DispatchSizeX = BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX;
+            batchJob.m_DispatchSizeY = BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY;
+            batchJob.m_DispatchSizeZ = BXDFTEX_BRDF_DIELECTRIC_SIZE_Z / groupSizeZ;
 
             batchJob.m_Shader = integralShader.get();
             for ( uint32_t jobIndex = 0; jobIndex < batchCount * 2; ++jobIndex )
@@ -300,15 +300,15 @@ BxDFTexturesBuilding::STextures BxDFTexturesBuilding::Build()
             }
 
             batchJob.m_Shader = copyShader.get();
-            batchJob.m_DispatchSizeZ = BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z * 2 / groupSizeZ;
+            batchJob.m_DispatchSizeZ = BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2 / groupSizeZ;
             batchJob.m_UAVs.clear();
             batchJob.m_UAVs.push_back( outputTextures.m_CookTorranceBSDF->GetUAV() );
             batchJob.m_SRVs.push_back( accumulationTexture->GetSRV() );
             batchJob.Dispatch();
 
             batchJob.m_DispatchSizeX = 1;
-            batchJob.m_DispatchSizeY = MathHelper::DivideAndRoundUp( (uint32_t)BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Y, compilationParams.m_GroupSizeY );
-            batchJob.m_DispatchSizeZ = MathHelper::DivideAndRoundUp( (uint32_t)BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z * 2, compilationParams.m_GroupSizeZ );
+            batchJob.m_DispatchSizeY = MathHelper::DivideAndRoundUp( (uint32_t)BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, compilationParams.m_GroupSizeY );
+            batchJob.m_DispatchSizeZ = MathHelper::DivideAndRoundUp( (uint32_t)BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, compilationParams.m_GroupSizeZ );
             batchJob.m_Shader = averageShader.get();
             batchJob.m_UAVs.clear();
             batchJob.m_UAVs.push_back( outputTextures.m_CookTorranceBSDFAverage->GetUAV() );

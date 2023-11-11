@@ -83,7 +83,7 @@ float EvaluateCookTorranceMultiscatteringBSDF( float3 wi, float alpha, float rat
         return 0.0f;
 
     bool evaluateReflection = wi.z > 0.0f;
-    float Ei = SampleCookTorranceMicrofacetBSDFEnergyTexture( cosThetaI, alpha, evaluateReflection ? eta : invEta );
+    float Ei = SampleBSDFTexture( cosThetaI, alpha, evaluateReflection ? eta : invEta );
     float factor = evaluateReflection ? ( 1.0f - ratio ) : ratio;
     return MultiscatteringBxDF( Ei, Eo, evaluateReflection ? Eavg : Eavg_inv ) * factor;
 }
@@ -137,7 +137,7 @@ float3 EvaluateCookTorranceMultiscatteringBRDF( float3 wi, float3 wo, float alph
     if ( cosThetaO <= 0.0f || cosThetaI <= 0.0f )
         return 0.0f;
 
-    float Ei = SampleCookTorranceMicrofacetBRDFEnergyTexture( cosThetaI, alpha );
+    float Ei = SampleBRDFTexture( cosThetaI, alpha );
     return MultiscatteringBxDF( Ei, Eo, Eavg ) * factor;
 }
 

@@ -624,14 +624,9 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
             , m_Scene->m_InstanceLightIndicesBuffer->GetSRV()
             , renderData.m_CookTorranceCompETexture->GetSRV()
             , renderData.m_CookTorranceCompEAvgTexture->GetSRV()
-            , renderData.m_CookTorranceCompInvCDFTexture->GetSRV()
-            , renderData.m_CookTorranceCompPdfScaleTexture->GetSRV()
             , renderData.m_CookTorranceCompEFresnelTexture->GetSRV()
             , renderData.m_CookTorranceBSDFETexture->GetSRV()
             , renderData.m_CookTorranceBSDFAvgETexture->GetSRV()
-            , renderData.m_CookTorranceBTDFETexture->GetSRV()
-            , renderData.m_CookTorranceBSDFInvCDFTexture->GetSRV()
-            , renderData.m_CookTorranceBSDFPDFScaleTexture->GetSRV()
             , environmentTextureSRV
         };
         job.m_UAVs =

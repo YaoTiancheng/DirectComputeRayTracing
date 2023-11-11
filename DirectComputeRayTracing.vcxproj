@@ -96,7 +96,6 @@
     <None Include="Shaders\Vertex.inc.hlsl">
       <FileType>Document</FileType>
     </None>
-    <ClInclude Include="Source\BxDFTexturesBuilder.h" />
     <ClInclude Include="Source\BVHAccel.h" />
     <ClInclude Include="Source\BxDFTexturesBuilding.h" />
     <ClInclude Include="Source\Camera.h" />
@@ -145,7 +144,6 @@
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Source\BxDFTexturesBuilder.cpp" />
     <ClCompile Include="Source\BVHAccel.cpp" />
     <ClCompile Include="Source\BxDFTexturesBuilding.cpp" />
     <ClCompile Include="Source\Camera.cpp" />

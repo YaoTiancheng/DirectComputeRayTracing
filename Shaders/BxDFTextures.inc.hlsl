@@ -83,47 +83,4 @@ float SampleCookTorranceMicrofacetBSDFAverageEnergyTexture( float alpha, float e
     return SampleTextureArrayLinear( g_CookTorranceBSDFAvgETexture, uvw, BXDFTEX_COOKTORRANCE_BSDF_E_AVG_SIZE, sliceOffset );
 }
 
-float SampleCookTorranceMicrofacetBTDFEnergyTexture( float cosThetaO, float alpha, float eta )
-{
-    bool inverseEta = eta < 1.0f;
-    eta = inverseEta ? 1.0f / eta : eta;
-    uint sliceOffset = inverseEta ? BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z : 0;
-    float w = ( eta - 1.0f ) / 2.0f;
-    float3 uvw = float3( cosThetaO, alpha, w );
-    return SampleTextureArrayLinear( g_CookTorranceBTDFETexture, uvw, BXDFTEX_COOKTORRANCE_E_FRESNEL_SIZE, sliceOffset );
-}
-
-float SampleCookTorranceMicrofacetBSDFInvCDFTexture( float cosThetaO, float alpha, float eta )
-{
-    bool inverseEta = eta < 1.0f;
-    eta = inverseEta ? 1.0f / eta : eta;
-    uint sliceOffset = inverseEta ? BXDFTEX_COOKTORRANCE_E_FRESNEL_DIELECTRIC_SIZE_Z : 0;
-    float w = ( eta - 1.0f ) / 2.0f;
-    float3 uvw = float3( cosThetaO, alpha, w );
-    return SampleTextureArrayLinear( g_CookTorranceBSDFInvCDFTexture, uvw, BXDFTEX_COOKTORRANCE_E_FRESNEL_SIZE, sliceOffset );
-}
-
-float SampleCookTorranceMicrofacetBSDFPDFScaleTexture( float alpha, float eta )
-{
-    bool inverseEta = eta < 1.0f;
-    eta = inverseEta ? 1.0f / eta : eta;
-    uint sliceOffset = inverseEta ? 1 : 0;
-    float v = ( eta - 1.0f ) / 2.0f;
-    float3 uvw = float3( alpha, v, 0.0f );
-    float scale = SampleTextureArrayLinear( g_CookTorranceBSDFPDFScaleTexture, uvw, BXDFTEX_COOKTORRANCE_BSDF_PDF_SCALE_SIZE, sliceOffset );
-    return scale * 2.0f;
-}
-
-float SampleCookTorranceMicrofacetBRDFInvCDFTexture( float x, float alpha )
-{
-    float2 uv = float2( x, alpha );
-    return SampleTexture2DLinear( g_CookTorranceCompInvCDFTexture, uv, BXDFTEX_COOKTORRANCE_BRDF_INV_CDF_SIZE );
-}
-
-float SampleCookTorranceMicrofacetBRDFPDFScaleTexture( float alpha )
-{
-    return SampleTexture1DLinear( g_CookTorranceCompPdfScaleTexture, alpha, BXDFTEX_COOKTORRANCE_BRDF_PDF_SCALE_SIZE ) * 2.0f;
-}
-
-
 #endif

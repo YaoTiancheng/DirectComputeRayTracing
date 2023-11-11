@@ -10,7 +10,6 @@
 #include "PostProcessingRenderer.h"
 #include "Timers.h"
 #include "Rectangle.h"
-#include "BxDFTexturesBuilder.h"
 #include "BxDFTexturesBuilding.h"
 #include "RenderContext.h"
 #include "RenderData.h"
@@ -252,48 +251,23 @@ bool SRenderer::Init()
         return false;
 
     m_RenderData.m_CookTorranceCompETexture = BxdfTextures.m_CookTorranceBRDF;
-    //m_RenderData.m_CookTorranceCompETexture.reset( BxDFTexturesBuilder::CreateCoorkTorranceBRDFEnergyTexture() );
     if ( !m_RenderData.m_CookTorranceCompETexture )
         return false;
 
     m_RenderData.m_CookTorranceCompEAvgTexture = BxdfTextures.m_CookTorranceBRDFAverage;
-    //m_RenderData.m_CookTorranceCompEAvgTexture.reset( BxDFTexturesBuilder::CreateCookTorranceBRDFAverageEnergyTexture() );
     if ( !m_RenderData.m_CookTorranceCompEAvgTexture )
         return false;
 
-    m_RenderData.m_CookTorranceCompInvCDFTexture.reset( BxDFTexturesBuilder::CreateCookTorranceMultiscatteringBRDFInvCDFTexture() );
-    if ( !m_RenderData.m_CookTorranceCompInvCDFTexture )
-        return false;
-
-    m_RenderData.m_CookTorranceCompPdfScaleTexture.reset( BxDFTexturesBuilder::CreateCookTorranceMultiscatteringBRDFPDFScaleTexture() );
-    if ( !m_RenderData.m_CookTorranceCompPdfScaleTexture )
-        return false;
-
     m_RenderData.m_CookTorranceCompEFresnelTexture = BxdfTextures.m_CookTorranceBRDFDielectric;
-    //m_RenderData.m_CookTorranceCompEFresnelTexture.reset( BxDFTexturesBuilder::CreateCoorkTorranceBRDFEnergyFresnelDielectricTexture() );
     if ( !m_RenderData.m_CookTorranceCompEFresnelTexture )
         return false;
 
     m_RenderData.m_CookTorranceBSDFETexture = BxdfTextures.m_CookTorranceBSDF;
-    //m_RenderData.m_CookTorranceBSDFETexture.reset( BxDFTexturesBuilder::CreateCookTorranceBSDFEnergyFresnelDielectricTexture() );
     if ( !m_RenderData.m_CookTorranceBSDFETexture )
         return false;
 
     m_RenderData.m_CookTorranceBSDFAvgETexture = BxdfTextures.m_CookTorranceBSDFAverage;
-    //m_RenderData.m_CookTorranceBSDFAvgETexture.reset( BxDFTexturesBuilder::CreateCookTorranceBSDFAverageEnergyTexture() );
     if ( !m_RenderData.m_CookTorranceBSDFAvgETexture )
-        return false;
-
-    m_RenderData.m_CookTorranceBTDFETexture.reset( BxDFTexturesBuilder::CreateCookTorranceBTDFEnergyTexture() );
-    if ( !m_RenderData.m_CookTorranceBTDFETexture )
-        return false;
-
-    m_RenderData.m_CookTorranceBSDFInvCDFTexture.reset( BxDFTexturesBuilder::CreateCookTorranceBSDFMultiscatteringInvCDFTexture() );
-    if ( !m_RenderData.m_CookTorranceBSDFInvCDFTexture )
-        return false;
-
-    m_RenderData.m_CookTorranceBSDFPDFScaleTexture.reset( BxDFTexturesBuilder::CreateCookTorranceBSDFMultiscatteringPDFScaleTexture() );
-    if ( !m_RenderData.m_CookTorranceBSDFPDFScaleTexture )
         return false;
 
     m_RenderData.m_RayTracingFrameConstantBuffer.reset( GPUBuffer::Create(

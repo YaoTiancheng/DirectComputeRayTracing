@@ -10,9 +10,9 @@
 
 #define ALPHA_THRESHOLD 0.00052441f
 
-float SpecularWeight( float cosTheta, float alpha, float ior )
+float SpecularWeight( float cosTheta, float alpha, float ior, bool isEntering )
 {
-    return SampleBRDFDielectricTexture( cosTheta, alpha, ior );
+    return SampleBRDFDielectricTexture( cosTheta, alpha, ior, isEntering );
 }
 
 //
@@ -74,7 +74,7 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
             hasCookTorranceMultiscatteringBrdf = intersection.multiscattering && !perfectSmooth;
             dielectricFresnel = true;
 
-            ratio_lambertBrdf = 1.f - SpecularWeight( cosThetaO, intersection.alpha, intersection.ior.r );
+            ratio_lambertBrdf = 1.f - SpecularWeight( cosThetaO, intersection.alpha, intersection.ior.r, false );
             if ( hasCookTorranceMultiscatteringBrdf )
             {
                 float F_avg = MultiscatteringFavgDielectric( intersection.ior.r );
@@ -191,7 +191,7 @@ float EvaluateBSDFPdf( float3 wi, float3 wo, Intersection intersection )
             hasCookTorranceBrdf = !perfectSmooth;
             hasCookTorranceMultiscatteringBrdf = intersection.multiscattering && !perfectSmooth;
 
-            weight_cookTorranceBrdf = SpecularWeight( cosThetaO, intersection.alpha, intersection.ior.r );
+            weight_cookTorranceBrdf = SpecularWeight( cosThetaO, intersection.alpha, intersection.ior.r, false );
             weight_lambertBrdf = 1.f - weight_cookTorranceBrdf;
             if ( hasCookTorranceMultiscatteringBrdf )
             {
@@ -344,7 +344,7 @@ void SampleBSDF( float3 wo
             hasCookTorranceMultiscatteringBrdf = intersection.multiscattering && !perfectSmooth;
             dielectricFresnel = true;
 
-            weight_cookTorranceBrdf = SpecularWeight( cosThetaO, intersection.alpha, intersection.ior.r );
+            weight_cookTorranceBrdf = SpecularWeight( cosThetaO, intersection.alpha, intersection.ior.r, false );
             weight_lambertBrdf = 1.f - weight_cookTorranceBrdf;
             if ( hasCookTorranceMultiscatteringBrdf )
             {

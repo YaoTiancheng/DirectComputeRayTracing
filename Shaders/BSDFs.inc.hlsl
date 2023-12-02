@@ -123,22 +123,19 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
 
         if ( intersection.multiscattering && !perfectSmooth )
         {
-            float eta = etaI / etaO;
-            float inv_eta = etaO / etaI;
+            float E_avg_enter = SampleBSDFAverageTexture( intersection.alpha, intersection.ior, true );
+            float F_avg_enter = MultiscatteringFavgDielectric( 1.f / intersection.ior );
+            float E_avg_leave = SampleBSDFAverageTexture( intersection.alpha, intersection.ior, false );
+            float F_avg_leave = MultiscatteringFavgDielectric( intersection.ior );
+            float reciprocalFactor = ReciprocalFactor( F_avg_leave, F_avg_enter, E_avg_leave, E_avg_enter, intersection.ior );
 
-            float E_avg_enter = SampleBSDFAverageTexture( intersection.alpha, intersection.ior );
-            float F_avg_enter = MultiscatteringFavgDielectric( intersection.ior );
-            float E_avg_leave = SampleBSDFAverageTexture( intersection.alpha, 1.f / intersection.ior );
-            float F_avg_leave = MultiscatteringFavgDielectric( 1.f / intersection.ior );
-            float reciprocalFactor = ReciprocalFactor( F_avg_enter, F_avg_leave, E_avg_enter, E_avg_leave, 1.f / intersection.ior );
-
-            float E = SampleBSDFTexture( cosThetaO, intersection.alpha, eta );
-            float F_avg = isInverted ? F_avg_leave : F_avg_enter;
-            float E_avg = isInverted ? E_avg_leave : E_avg_enter;
-            float E_inv_avg = isInverted ? E_avg_enter : E_avg_leave;
+            float E = SampleBSDFTexture( cosThetaO, intersection.alpha, intersection.ior, isInverted );
+            float F_avg = isInverted ? F_avg_enter : F_avg_leave;
+            float E_avg = isInverted ? E_avg_enter : E_avg_leave;
+            float E_inv_avg = isInverted ? E_avg_leave : E_avg_enter;
             float ratio = ( isInverted ? 1.f - reciprocalFactor : reciprocalFactor ) * ( 1.f - F_avg );
 
-            value += EvaluateCookTorranceMultiscatteringBSDF( wi, intersection.alpha, ratio, eta, inv_eta, E, E_avg, E_inv_avg );
+            value += EvaluateCookTorranceMultiscatteringBSDF( wi, intersection.alpha, ratio, intersection.ior, E, E_avg, E_inv_avg, isInverted );
         }
     }
 
@@ -242,22 +239,17 @@ float EvaluateBSDFPdf( float3 wi, float3 wo, Intersection intersection )
 
         float etaO = isInverted ? intersection.ior.r : 1.0f;
         float etaI = isInverted ? 1.0f : intersection.ior.r;
-        float eta = 0.f;
-        float inv_eta = 0.f;
 
         if ( hasCookTorranceMultiscatteringBsdf )
         {
-            eta = etaI / etaO;
-            inv_eta = etaO / etaI;
+            float E_avg_enter = SampleBSDFAverageTexture( intersection.alpha, intersection.ior, true );
+            float F_avg_enter = MultiscatteringFavgDielectric( 1.f / intersection.ior );
+            float E_avg_leave = SampleBSDFAverageTexture( intersection.alpha, intersection.ior, false );
+            float F_avg_leave = MultiscatteringFavgDielectric( intersection.ior );
+            float reciprocalFactor = ReciprocalFactor( F_avg_leave, F_avg_enter, E_avg_leave, E_avg_enter, intersection.ior );
 
-            float E_avg_enter = SampleBSDFAverageTexture( intersection.alpha, intersection.ior );
-            float F_avg_enter = MultiscatteringFavgDielectric( intersection.ior );
-            float E_avg_leave = SampleBSDFAverageTexture( intersection.alpha, 1.f / intersection.ior );
-            float F_avg_leave = MultiscatteringFavgDielectric( 1.f / intersection.ior );
-            float reciprocalFactor = ReciprocalFactor( F_avg_enter, F_avg_leave, E_avg_enter, E_avg_leave, 1.f / intersection.ior );
-
-            float E = SampleBSDFTexture( cosThetaO, intersection.alpha, eta );
-            float F_avg = isInverted ? F_avg_leave : F_avg_enter;
+            float E = SampleBSDFTexture( cosThetaO, intersection.alpha, intersection.ior, isInverted );
+            float F_avg = isInverted ? F_avg_enter : F_avg_leave;
             ratio = ( isInverted ? 1.f - reciprocalFactor : reciprocalFactor ) * ( 1.f - F_avg );
 
             weight_cookTorranceBsdf = E;
@@ -435,24 +427,19 @@ void SampleBSDF( float3 wo
 
         float etaO = isInverted ? intersection.ior.r : 1.0f;
         float etaI = isInverted ? 1.0f : intersection.ior.r;
-        float eta = 0.f;
-        float inv_eta = 0.f;
 
         if ( hasCookTorranceMultiscatteringBsdf )
         {
-            eta = etaI / etaO;
-            inv_eta = etaO / etaI;
+            float E_avg_enter = SampleBSDFAverageTexture( intersection.alpha, intersection.ior, true );
+            float F_avg_enter = MultiscatteringFavgDielectric( 1.f / intersection.ior );
+            float E_avg_leave = SampleBSDFAverageTexture( intersection.alpha, intersection.ior, false );
+            float F_avg_leave = MultiscatteringFavgDielectric( intersection.ior );
+            float reciprocalFactor = ReciprocalFactor( F_avg_leave, F_avg_enter, E_avg_leave, E_avg_enter, intersection.ior );
 
-            float E_avg_enter = SampleBSDFAverageTexture( intersection.alpha, intersection.ior );
-            float F_avg_enter = MultiscatteringFavgDielectric( intersection.ior );
-            float E_avg_leave = SampleBSDFAverageTexture( intersection.alpha, 1.f / intersection.ior );
-            float F_avg_leave = MultiscatteringFavgDielectric( 1.f / intersection.ior );
-            float reciprocalFactor = ReciprocalFactor( F_avg_enter, F_avg_leave, E_avg_enter, E_avg_leave, 1.f / intersection.ior );
-
-            E = SampleBSDFTexture( cosThetaO, intersection.alpha, eta );
-            float F_avg = isInverted ? F_avg_leave : F_avg_enter;
-            E_avg = isInverted ? E_avg_leave : E_avg_enter;
-            E_inv_avg = isInverted ? E_avg_enter : E_avg_leave;
+            E = SampleBSDFTexture( cosThetaO, intersection.alpha, intersection.ior, isInverted );
+            float F_avg = isInverted ? F_avg_enter : F_avg_leave;
+            E_avg = isInverted ? E_avg_enter : E_avg_leave;
+            E_inv_avg = isInverted ? E_avg_leave : E_avg_enter;
             ratio = ( isInverted ? 1.f - reciprocalFactor : reciprocalFactor ) * ( 1.f - F_avg );
 
             weight_cookTorranceBsdf = E;
@@ -488,7 +475,7 @@ void SampleBSDF( float3 wo
         }
         if ( hasCookTorranceMultiscatteringBsdf )
         {
-            value += EvaluateCookTorranceMultiscatteringBSDF( wi, intersection.alpha, ratio, eta, inv_eta, E, E_avg, E_inv_avg );
+            value += EvaluateCookTorranceMultiscatteringBSDF( wi, intersection.alpha, ratio, intersection.ior, E, E_avg, E_inv_avg, isInverted );
             pdf += EvaluateCookTorranceMultiscatteringBSDFPdf( wi, ratio ) * weight_cookTorranceMultiscatteringBsdf;
         }
     }

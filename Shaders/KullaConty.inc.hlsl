@@ -76,14 +76,14 @@ float MultiscatteringBxDF( float Ei, float Eo, float Eavg )
 // Multiscattering BSDF
 //
 
-float EvaluateCookTorranceMultiscatteringBSDF( float3 wi, float alpha, float ratio, float eta, float invEta, float Eo, float Eavg, float Eavg_inv )
+float EvaluateCookTorranceMultiscatteringBSDF( float3 wi, float alpha, float ratio, float eta, float Eo, float Eavg, float Eavg_inv, bool isEntering )
 {
     float cosThetaI = abs( wi.z );
     if ( cosThetaI == 0.0f )
         return 0.0f;
 
     bool evaluateReflection = wi.z > 0.0f;
-    float Ei = SampleBSDFTexture( cosThetaI, alpha, evaluateReflection ? eta : invEta );
+    float Ei = SampleBSDFTexture( cosThetaI, alpha, eta, evaluateReflection ? isEntering : !isEntering );
     float factor = evaluateReflection ? ( 1.0f - ratio ) : ratio;
     return MultiscatteringBxDF( Ei, Eo, evaluateReflection ? Eavg : Eavg_inv ) * factor;
 }
@@ -117,12 +117,11 @@ void SampleCookTorranceMultiscatteringBSDF( float3 wo, float selectionSample, fl
     LightingContextCalculateH( wo, wi, lightingContext );
 }
 
-float ReciprocalFactor( float Favg, float Favg_inv, float Eavg, float Eavg_inv, float invEta )
+float ReciprocalFactor( float F_avg_leave, float F_avg_enter, float E_avg_leave, float E_avg_enter, float eta )
 {
-    float numerator = ( 1.0f - Favg_inv ) * ( 1.0f - Eavg_inv );
-    float denominator = ( 1.0f - Favg ) * ( 1.0f - Eavg );
-    float factor = numerator * invEta * invEta / max( 0.00001f, denominator );
-    float x = factor / ( 1.0f + factor );
+    float factor = ( 1.0f - F_avg_leave ) * ( 1.0f - E_avg_leave );
+    float factor1 = ( 1.0f - F_avg_enter ) * ( 1.0f - E_avg_enter ) * eta * eta;
+    float x = factor1 / max( 0.00001f, factor + factor1 );
     return x;
 }
 

@@ -119,8 +119,9 @@ void SampleCookTorranceMultiscatteringBSDF( float3 wo, float selectionSample, fl
 
 float ReciprocalFactor( float F_avg_leave, float F_avg_enter, float E_avg_leave, float E_avg_enter, float eta )
 {
+    float inv_eta = 1.0f / eta;
     float factor = ( 1.0f - F_avg_leave ) * ( 1.0f - E_avg_leave );
-    float factor1 = ( 1.0f - F_avg_enter ) * ( 1.0f - E_avg_enter ) * eta * eta;
+    float factor1 = ( 1.0f - F_avg_enter ) * ( 1.0f - E_avg_enter ) * inv_eta * inv_eta;
     float x = factor1 / max( 0.00001f, factor + factor1 );
     return x;
 }

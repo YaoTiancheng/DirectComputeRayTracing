@@ -57,21 +57,17 @@ float SampleBRDFDielectricTexture( float cosThetaO, float alpha, float eta, bool
     return SampleTextureArrayLinear( g_BRDFDielectricTexture, uvw, BXDFTEX_BRDF_DIELECTRIC_SIZE, sliceOffset );
 }
 
-float SampleBSDFTexture( float cosThetaO, float alpha, float eta )
+float SampleBSDFTexture( float cosThetaO, float alpha, float eta, bool isEntering )
 {
-    bool inverseEta = eta < 1.0f;
-    eta = inverseEta ? 1.0f / eta : eta;
-    uint sliceOffset = inverseEta ? BXDFTEX_BRDF_DIELECTRIC_SIZE_Z : 0;
+    uint sliceOffset = isEntering ? BXDFTEX_BRDF_DIELECTRIC_SIZE_Z : 0;
     float w = ( eta - 1.0f ) / 2.0f;
     float3 uvw = float3( cosThetaO, alpha, w );
     return SampleTextureArrayLinear( g_BSDFTexture, uvw, BXDFTEX_BRDF_DIELECTRIC_SIZE, sliceOffset );
 }
 
-float SampleBSDFAverageTexture( float alpha, float eta )
+float SampleBSDFAverageTexture( float alpha, float eta, bool isEntering )
 {
-    bool inverseEta = eta < 1.0f;
-    eta = inverseEta ? 1.0f / eta : eta;
-    uint sliceOffset = inverseEta ? 1 : 0;
+    uint sliceOffset = isEntering ? 1 : 0;
     float v = ( eta - 1.0f ) / 2.0f;
     float3 uvw = float3( alpha, v, 0.0f );
     return SampleTextureArrayLinear( g_BSDFAvgTexture, uvw, BXDFTEX_BSDF_AVG_SIZE, sliceOffset );

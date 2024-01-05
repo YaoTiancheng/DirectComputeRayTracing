@@ -62,7 +62,7 @@ private:
     GPUBufferPtr m_PixelPositionBuffer;
     GPUBufferPtr m_PixelSampleBuffer;
     GPUBufferPtr m_RngBuffer;
-    GPUBufferPtr m_MISResultBuffer;
+    GPUBufferPtr m_LightSamplingResultsBuffer;
     GPUBufferPtr m_PathAccumulationBuffer;
     GPUBufferPtr m_FlagsBuffer;
     GPUBufferPtr m_NextBlockIndexBuffer;
@@ -73,7 +73,6 @@ private:
     GPUBufferPtr m_ControlConstantBuffer;
     GPUBufferPtr m_NewPathConstantBuffer;
     GPUBufferPtr m_MaterialConstantBuffer;
-    GPUBufferPtr m_RayCastConstantBuffer;
 
     static const uint32_t s_QueueCounterStagingBufferCount = 2;
     GPUBufferPtr m_QueueCounterStagingBuffer[ s_QueueCounterStagingBufferCount ];

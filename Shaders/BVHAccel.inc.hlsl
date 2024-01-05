@@ -8,6 +8,16 @@ uint BVHNodeGetPrimitiveCount( BVHNode node )
     return ( node.misc & 0xFF );
 }
 
+uint BVHNodeHasBLAS( BVHNode node )
+{
+    return ( node.misc & 0x100 ) != 0;
+}
+
+uint BVHNodeGetSplitAxis( BVHNode node )
+{
+    return ( node.misc >> 9 ) & 0x3;
+}
+
 struct BVHTraversalStack
 {
     uint nodeIndex[ RT_BVH_TRAVERSAL_STACK_SIZE ];
@@ -16,16 +26,29 @@ struct BVHTraversalStack
 
 groupshared BVHTraversalStack gs_BVHTraversalStacks[ RT_BVH_TRAVERSAL_GROUP_SIZE ]; // Should match group size
 
-bool BVHTraversalStackPopback( uint dispatchThreadIndex, out uint nodeIndex )
+void BVHTraversalStackUnpackedNodeIndex( uint packedNodeIndex, out uint unpackedNodeIndex, out bool isBLAS )
+{
+    unpackedNodeIndex = packedNodeIndex & 0x7FFFFFFF;
+    isBLAS = ( packedNodeIndex & 0x80000000 ) != 0;
+}
+
+uint BVHTraversalStackPackNodeIndex( uint nodeIndex, bool isBLAS )
+{
+    return ( nodeIndex & 0x7FFFFFFF ) | ( isBLAS ? 0x80000000 : 0 );
+}
+
+bool BVHTraversalStackPopback( uint dispatchThreadIndex, out uint nodeIndex, out bool isBLAS )
 {
     bool isEmpty = ( gs_BVHTraversalStacks[ dispatchThreadIndex ].count == 0 );
-    nodeIndex = isEmpty ? 0 : gs_BVHTraversalStacks[ dispatchThreadIndex ].nodeIndex[ --gs_BVHTraversalStacks[ dispatchThreadIndex ].count ];
+    uint packedNodeIndex = isEmpty ? 0 : gs_BVHTraversalStacks[ dispatchThreadIndex ].nodeIndex[ --gs_BVHTraversalStacks[ dispatchThreadIndex ].count ];
+    BVHTraversalStackUnpackedNodeIndex( packedNodeIndex, nodeIndex, isBLAS );
     return !isEmpty;
 }
 
-void BVHTraversalStackPushback( uint dispatchThreadIndex, uint index )
+void BVHTraversalStackPushback( uint dispatchThreadIndex, uint nodeIndex, bool isBLAS )
 {
-    gs_BVHTraversalStacks[ dispatchThreadIndex ].nodeIndex[ gs_BVHTraversalStacks[ dispatchThreadIndex ].count++ ] = index;
+    uint packedNodeIndex = BVHTraversalStackPackNodeIndex( nodeIndex, isBLAS );
+    gs_BVHTraversalStacks[ dispatchThreadIndex ].nodeIndex[ gs_BVHTraversalStacks[ dispatchThreadIndex ].count++ ] = packedNodeIndex;
 }
 
 void BVHTraversalStackReset( uint dispatchThreadIndex )
@@ -39,6 +62,7 @@ struct SHitInfo
     float u;
     float v;
     uint triangleId;
+    uint instanceIndex;
     bool backface;
 };
 
@@ -49,75 +73,101 @@ bool BVHIntersectNoInterp( float3 origin
     , StructuredBuffer<Vertex> vertices
     , StructuredBuffer<uint> triangles
     , StructuredBuffer<BVHNode> BVHNodes
-    , uint primitiveCount
-    , inout SHitInfo hitInfo )
+    , StructuredBuffer<float4x3> Instances
+    , inout SHitInfo hitInfo
+    , out uint iterationCounter )
 {
     float tMax = FLT_INF;
     float t, u, v;
     bool backface;
-
-#if !defined( NO_BVH_ACCEL )
-    float3 invDir = 1.0f / direction;
+    iterationCounter = 0;
 
     BVHTraversalStackReset( dispatchThreadIndex );
 
     uint nodeIndex = 0;
+    uint instanceIndex = 0;
+    bool isBLAS = false;
+    float3 localRayOrigin = origin;
+    float3 localRayDirection = direction;
     while ( true )
     {
-        if ( RayAABBIntersect( origin, invDir, tMin, tMax, BVHNodes[ nodeIndex ].bboxMin, BVHNodes[ nodeIndex ].bboxMax ) )
+        ++iterationCounter;
+        bool popNode = false;
+        if ( RayAABBIntersect( localRayOrigin, 1.f / localRayDirection, tMin, tMax, BVHNodes[ nodeIndex ].bboxMin, BVHNodes[ nodeIndex ].bboxMax ) )
         {
-            uint primCount = BVHNodeGetPrimitiveCount( BVHNodes[ nodeIndex ] );
-            if ( primCount == 0 )
+            bool hasBLAS = BVHNodeHasBLAS( BVHNodes[ nodeIndex ] );
+            uint primCountOrInstanceIndex = BVHNodeGetPrimitiveCount( BVHNodes[ nodeIndex ] );
+            if ( hasBLAS )
             {
-                BVHTraversalStackPushback( dispatchThreadIndex, BVHNodes[ nodeIndex ].childOrPrimIndex );
-                nodeIndex++;
+                // Going in from TLAS to BLAS
+                float4x3 instanceInvTransform = Instances[ primCountOrInstanceIndex ];
+                localRayOrigin = mul( float4( origin, 1.f ), instanceInvTransform );
+                localRayDirection = mul( float4( direction, 0.f ), instanceInvTransform );
+                isBLAS = true;
+                instanceIndex = primCountOrInstanceIndex;
+                nodeIndex = BVHNodes[ nodeIndex ].rightChildOrPrimIndex;
             }
             else
             {
-                uint primBegin = BVHNodes[ nodeIndex ].childOrPrimIndex;
-                uint primEnd = primBegin + primCount;
-                for ( uint iPrim = primBegin; iPrim < primEnd; ++iPrim )
+                if ( primCountOrInstanceIndex == 0 )
                 {
-                    Vertex v0 = vertices[ triangles[ iPrim * 3 ] ];
-                    Vertex v1 = vertices[ triangles[ iPrim * 3 + 1 ] ];
-                    Vertex v2 = vertices[ triangles[ iPrim * 3 + 2 ] ];
-                    if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
-                    {
-                        tMax = t;
-                        hitInfo.t = t;
-                        hitInfo.u = u;
-                        hitInfo.v = v;
-                        hitInfo.backface = backface;
-                        hitInfo.triangleId = iPrim;
-                    }
+                    uint splitAxis = BVHNodeGetSplitAxis( BVHNodes[ nodeIndex ] );
+#if defined( BVH_NO_FRONT_TO_BACK_TRAVERSAL )
+                    bool isDirectionNegative = false;
+#else 
+                    bool isDirectionNegative = splitAxis == 0 ? localRayDirection.x < 0.f : ( splitAxis == 1 ? localRayDirection.y < 0.f : localRayDirection.z < 0.f );
+#endif
+                    uint pushNodeIndex = isDirectionNegative ? nodeIndex + 1 : BVHNodes[ nodeIndex ].rightChildOrPrimIndex;
+                    nodeIndex = isDirectionNegative ? BVHNodes[ nodeIndex ].rightChildOrPrimIndex : nodeIndex + 1;
+                    BVHTraversalStackPushback( dispatchThreadIndex, pushNodeIndex, isBLAS );
                 }
-                if ( !BVHTraversalStackPopback( dispatchThreadIndex, nodeIndex ) )
-                    break;
+                else
+                {
+                    uint primBegin = BVHNodes[ nodeIndex ].rightChildOrPrimIndex;
+                    uint primEnd = primBegin + primCountOrInstanceIndex;
+                    for ( uint iPrim = primBegin; iPrim < primEnd; ++iPrim )
+                    {
+                        float3 v0 = vertices[ triangles[ iPrim * 3 ] ].position;
+                        float3 v1 = vertices[ triangles[ iPrim * 3 + 1 ] ].position;
+                        float3 v2 = vertices[ triangles[ iPrim * 3 + 2 ] ].position;
+                        if ( RayTriangleIntersect( localRayOrigin, localRayDirection, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
+                        {
+                            tMax = t;
+                            hitInfo.t = t;
+                            hitInfo.u = u;
+                            hitInfo.v = v;
+                            hitInfo.backface = backface;
+                            hitInfo.triangleId = iPrim;
+                            hitInfo.instanceIndex = instanceIndex;
+                        }
+                    }
+                    popNode = true;
+                }
             }
         }
         else
         {
-            if ( !BVHTraversalStackPopback( dispatchThreadIndex, nodeIndex ) )
-                break;
+            popNode = true;
         }
-    }
-#else
-    for ( uint iPrim = 0; iPrim < primitiveCount; ++iPrim )
-    {
-        Vertex v0 = vertices[ triangles[ iPrim * 3 ] ];
-        Vertex v1 = vertices[ triangles[ iPrim * 3 + 1 ] ];
-        Vertex v2 = vertices[ triangles[ iPrim * 3 + 2 ] ];
-        if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
+        if ( popNode )
         {
-            tMax = t;
-            hitInfo.t = t;
-            hitInfo.u = u;
-            hitInfo.v = v;
-            hitInfo.backface = backface;
-            hitInfo.triangleId = iPrim;
+            bool lastNodeIsBLAS = isBLAS;
+            if ( BVHTraversalStackPopback( dispatchThreadIndex, nodeIndex, isBLAS ) )
+            {
+                // If last node is BLAS and the next one is not, then we are going to pop back to TLAS.
+                // The situation when last node is NOT BLAS and the next one is should never happen, there is no way to pop back from a TLAS to BLAS.
+                if ( lastNodeIsBLAS != isBLAS )
+                {
+                    localRayOrigin = origin;
+                    localRayDirection = direction;
+                }
+            }
+            else
+            {
+                break;
+            }
         }
     }
-#endif
 
     return !isinf( tMax );
 }
@@ -130,64 +180,87 @@ bool BVHIntersect( float3 origin
     , StructuredBuffer<Vertex> vertices
     , StructuredBuffer<uint> triangles
     , StructuredBuffer<BVHNode> BVHNodes
-    , uint primitiveCount )
+    , StructuredBuffer<float4x3> Instances )
 {
-#if !defined( NO_BVH_ACCEL )
-    float3 invDir = 1.0f / direction;
-
     BVHTraversalStackReset( dispatchThreadIndex );
 
     uint nodeIndex = 0;
+    bool isBLAS = false;
+    float3 localRayOrigin = origin;
+    float3 localRayDirection = direction;
     while ( true )
     {
-        if ( RayAABBIntersect( origin, invDir, tMin, tMax, BVHNodes[ nodeIndex ].bboxMin, BVHNodes[ nodeIndex ].bboxMax ) )
+        bool popNode = false;
+        if ( RayAABBIntersect( localRayOrigin, 1.f / localRayDirection, tMin, tMax, BVHNodes[ nodeIndex ].bboxMin, BVHNodes[ nodeIndex ].bboxMax ) )
         {
-            uint primCount = BVHNodeGetPrimitiveCount( BVHNodes[ nodeIndex ] );
-            if ( primCount == 0 )
+            bool hasBLAS = BVHNodeHasBLAS( BVHNodes[ nodeIndex ] );
+            uint primCountOrInstanceIndex = BVHNodeGetPrimitiveCount( BVHNodes[ nodeIndex ] );
+            if ( hasBLAS )
             {
-                BVHTraversalStackPushback( dispatchThreadIndex, BVHNodes[ nodeIndex ].childOrPrimIndex );
-                nodeIndex++;
+                // Going in from TLAS to BLAS
+                float4x3 instanceInvTransform = Instances[ primCountOrInstanceIndex ];
+                localRayOrigin = mul( float4( origin, 1.f ), instanceInvTransform );
+                localRayDirection = mul( float4( direction, 0.f ), instanceInvTransform );
+                isBLAS = true;
+                nodeIndex = BVHNodes[ nodeIndex ].rightChildOrPrimIndex;
             }
             else
             {
-                uint primBegin = BVHNodes[ nodeIndex ].childOrPrimIndex;
-                uint primEnd = primBegin + primCount;
-                for ( uint iPrim = primBegin; iPrim < primEnd; ++iPrim )
+                if ( primCountOrInstanceIndex == 0 )
                 {
-                    Vertex v0 = vertices[ triangles[ iPrim * 3 ] ];
-                    Vertex v1 = vertices[ triangles[ iPrim * 3 + 1 ] ];
-                    Vertex v2 = vertices[ triangles[ iPrim * 3 + 2 ] ];
-                    float t, u, v;
-                    bool backface;
-                    if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
-                    {
-                        return true;
-                    }
+                    uint splitAxis = BVHNodeGetSplitAxis( BVHNodes[ nodeIndex ] );
+#if defined( BVH_NO_FRONT_TO_BACK_TRAVERSAL )
+                    bool isDirectionNegative = false;
+#else 
+                    bool isDirectionNegative = splitAxis == 0 ? localRayDirection.x < 0.f : ( splitAxis == 1 ? localRayDirection.y < 0.f : localRayDirection.z < 0.f );
+#endif
+                    uint pushNodeIndex = isDirectionNegative ? nodeIndex + 1 : BVHNodes[ nodeIndex ].rightChildOrPrimIndex;
+                    nodeIndex = isDirectionNegative ? BVHNodes[ nodeIndex ].rightChildOrPrimIndex : nodeIndex + 1;
+                    BVHTraversalStackPushback( dispatchThreadIndex, pushNodeIndex, isBLAS );
                 }
-                if ( !BVHTraversalStackPopback( dispatchThreadIndex, nodeIndex ) )
-                    break;
+                else
+                {
+                    uint primBegin = BVHNodes[ nodeIndex ].rightChildOrPrimIndex;
+                    uint primEnd = primBegin + primCountOrInstanceIndex;
+                    for ( uint iPrim = primBegin; iPrim < primEnd; ++iPrim )
+                    {
+                        float3 v0 = vertices[ triangles[ iPrim * 3 ] ].position;
+                        float3 v1 = vertices[ triangles[ iPrim * 3 + 1 ] ].position;
+                        float3 v2 = vertices[ triangles[ iPrim * 3 + 2 ] ].position;
+                        float t, u, v;
+                        bool backface;
+                        if ( RayTriangleIntersect( localRayOrigin, localRayDirection, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
+                        {
+                            return true;
+                        }
+                    }
+                    popNode = true;
+                }
             }
         }
         else
         {
-            if ( !BVHTraversalStackPopback( dispatchThreadIndex, nodeIndex ) )
-                break;
+            popNode = true;
         }
-    }
-#else
-    float t, u, v;
-    bool backface;
-    for ( uint iPrim = 0; iPrim < primitiveCount; ++iPrim )
-    {
-        Vertex v0 = vertices[ triangles[ iPrim * 3 ] ];
-        Vertex v1 = vertices[ triangles[ iPrim * 3 + 1 ] ];
-        Vertex v2 = vertices[ triangles[ iPrim * 3 + 2 ] ];
-        if ( RayTriangleIntersect( origin, direction, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
+        if ( popNode )
         {
-            return true;
+            bool lastNodeIsBLAS = isBLAS;
+            if ( BVHTraversalStackPopback( dispatchThreadIndex, nodeIndex, isBLAS ) )
+            {
+                // If last node is BLAS and the next one is not, then we are going to pop back to TLAS.
+                // The situation when last node is NOT BLAS and the next one IS should never happen, there is no way to pop back from a TLAS to BLAS.
+                if ( lastNodeIsBLAS != isBLAS )
+                {
+                    localRayOrigin = origin;
+                    localRayDirection = direction;
+                }
+            }
+            else
+            {
+                break;
+            }
         }
     }
-#endif
 
     return false;
 }

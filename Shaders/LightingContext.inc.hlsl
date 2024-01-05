@@ -4,8 +4,8 @@
 struct LightingContext
 {
     float3 H;
-    float  WOdotH;
-    bool   isInverted;
+    float WOdotH;
+    bool isInverted;
 };
 
 void LightingContextCalculateH( float3 wo, float3 wi, inout LightingContext lightingContext )

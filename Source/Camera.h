@@ -21,6 +21,14 @@ public:
 
     void OnImGUI();
 
+    void SetPositionAndEulerAngles( const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& eulerAngles )
+    {
+        m_Position = { position.x, position.y, position.z, 1.0f };
+        m_EulerAngles.x = eulerAngles.x;
+        m_EulerAngles.y = eulerAngles.y;
+        m_EulerAngles.z = eulerAngles.z;
+    }
+
 private:
     DirectX::XMFLOAT4 m_Position;
     DirectX::XMFLOAT4 m_EulerAngles;

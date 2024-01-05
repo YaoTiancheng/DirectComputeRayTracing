@@ -3,28 +3,6 @@
 
 #include "Intersection.inc.hlsl"
 
-float2 VectorBaryCentric2( float2 p0, float2 p1, float2 p2, float u, float v )
-{
-    float2 r1 = p1 - p0;
-    float2 r2 = p2 - p0;
-    r1 = r1 * u;
-    r2 = r2 * v;
-    r1 = r1 + p0;
-    r1 = r1 + r2;
-    return r1;
-}
-
-float3 VectorBaryCentric3( float3 p0, float3 p1, float3 p2, float u, float v )
-{
-    float3 r1 = p1 - p0;
-    float3 r2 = p2 - p0;
-    r1 = r1 * u;
-    r2 = r2 * v;
-    r1 = r1 + p0;
-    r1 = r1 + r2;
-    return r1;
-}
-
 float CheckerboardTexture( float2 texcoord )
 {
     return ( ( uint( texcoord.x * 2 ) + uint( texcoord.y * 2 ) ) & 0x1 ) != 0 ? 1.0f : 0.0f;
@@ -42,7 +20,7 @@ void HitShader( float3 rayOrigin
     , bool backface
     , StructuredBuffer<uint> materialIds
     , StructuredBuffer<Material> materials
-    , out Intersection intersection )
+    , inout Intersection intersection )
 {
     intersection.position   = VectorBaryCentric3( v0.position, v1.position, v2.position, u, v );
     intersection.normal     = normalize( VectorBaryCentric3( v0.normal, v1.normal, v2.normal, u, v ) );
@@ -65,19 +43,15 @@ void HitShader( float3 rayOrigin
            albedo *= ( materialFlags & MATERIAL_FLAG_ALBEDO_TEXTURE ) != 0 ? checkerboard : 1.0f;
     float  roughness = materials[ materialId ].roughness;
            roughness *= ( materialFlags & MATERIAL_FLAG_ROUGHNESS_TEXTURE ) != 0 ? checkerboard : 1.0f;
-    float3 emission = materials[ materialId ].emission;
-           emission *= ( materialFlags & MATERIAL_FLAG_EMISSION_TEXTURE ) != 0 ? checkerboard : 1.0f;
 
     intersection.albedo     = albedo;
-    intersection.specular   = 1.0f;
-    intersection.emission   = emission;
     intersection.alpha      = roughness * roughness;
     intersection.ior        = materials[ materialId ].ior;
-    intersection.transmission = materials[ materialId ].transmission;
-    intersection.k          = materials[ materialId ].k;
-    intersection.isMetal    = ( materialFlags & MATERIAL_FLAG_IS_METAL ) != 0;
 
-    intersection.backface   = backface;
+    intersection.materialType = materialFlags & MATERIAL_FLAG_TYPE_MASK;
+    intersection.isTwoSided = (materialFlags & MATERIAL_FLAG_IS_TWOSIDED) != 0;
+    intersection.multiscattering = (materialFlags & MATERIAL_FLAG_MULTISCATTERING) != 0;
+    intersection.backface = backface;
 }
 
 #endif

@@ -13,3 +13,5 @@ bool                    InitRenderSystem( HWND hWnd );
 void                    FiniRenderSystem();
 
 void                    ResizeSwapChainBuffers( uint32_t width, uint32_t height );
+
+void                    Present( UINT syncInterval );

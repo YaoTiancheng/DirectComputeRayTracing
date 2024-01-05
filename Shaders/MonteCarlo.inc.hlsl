@@ -46,11 +46,30 @@ float2 ConcentricSampleDisk( float2 sample )
     return r * float2( cos( theta ), sin( theta ) );
 }
 
+float3 ConsineSampleHemisphere( float2 sample )
+{
+    sample = ConcentricSampleDisk( sample );
+    return float3( sample.xy, sqrt( max( 0.0f, 1.0f - dot( sample.xy, sample.xy ) ) ) );
+}
+
 // Returns barycentric coordinate
 float2 SampleTriangle( float2 sample )
 {
     float s = sqrt( sample.x );
     return float2( 1.0f - s, sample.y * s );
+}
+
+float3 SampleSphere( float2 sample )
+{
+    float z = 1 - 2 * sample.x;
+    float r = SafeSqrt( 1 - z * z );
+    float phi = 2 * PI * sample.y;
+    return float3( r * cos( phi ), r * sin( phi ), z );
+}
+
+float UniformSpherePDF()
+{
+    return 1 / ( 4 * PI );
 }
 
 float PowerHeuristic( uint nf, float fPdf, uint ng, float gPdf )

@@ -10,7 +10,7 @@
 #include "PostProcessingRenderer.h"
 #include "Timers.h"
 #include "Rectangle.h"
-#include "BxDFTexturesBuilder.h"
+#include "BxDFTexturesBuilding.h"
 #include "RenderContext.h"
 #include "RenderData.h"
 #include "MegakernelPathTracer.h"
@@ -19,11 +19,11 @@
 #include "MessageBox.h"
 #include "ScopedRenderAnnotation.h"
 #include "SampleConvolutionRenderer.h"
+#include "Constants.h"
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_dx11.h"
 #include "imgui/imgui_impl_win32.h"
-#include "../Shaders/Light.inc.hlsl"
-#include "../Shaders/Material.inc.hlsl"
+#include "ImGuiHelper.h"
 #include "../Shaders/SumLuminanceDef.inc.hlsl"
 
 using namespace DirectX;
@@ -41,7 +41,7 @@ struct SRenderer
 
     bool Init();
 
-    bool ResetScene( const char* filepath );
+    bool LoadScene( const char* filepath, bool reset );
 
     void DispatchRayTracing( SRenderContext* renderContext );
 
@@ -85,8 +85,16 @@ struct SRenderer
 
     SRectangle m_RenderViewport;
 
+    bool m_RayTracingHasHit = false;
+    SRayHit m_RayTracingHit;
+    uint32_t m_RayTracingPixelPos[ 2 ] = { 0, 0 };
+    float m_RayTracingSubPixelPos[ 2 ] = { 0.f, 0.f };
+
     uint32_t m_SPP;
+    uint32_t m_CursorPixelPosOnRenderViewport[ 2 ];
+    uint32_t m_CursorPixelPosOnFilm[ 2 ];
     bool m_ShowUI = true;
+    bool m_ShowRayTracingUI = false;
 };
 
 SRenderer* s_Renderer = nullptr;
@@ -211,12 +219,12 @@ bool SRenderer::Init()
         return false;
     }
 
-    m_Scene.m_EnvironmentImageFilepath = StringConversion::UTF16WStringToUTF8String( CommandLineArgs::Singleton()->GetEnvironmentTextureFilename() );
-
     m_ResolutionWidth = CommandLineArgs::Singleton()->ResolutionX();
     m_ResolutionHeight = CommandLineArgs::Singleton()->ResolutionY();
 
     ID3D11Device* device = GetDevice();
+
+    BxDFTexturesBuilding::STextures BxdfTextures = BxDFTexturesBuilding::Build();
 
     m_RenderData.m_FilmTexture.reset( GPUTexture::Create(
           m_ResolutionWidth
@@ -242,44 +250,24 @@ bool SRenderer::Init()
     if ( !m_RenderData.m_SampleValueTexture )
         return false;
 
-    m_RenderData.m_CookTorranceCompETexture.reset( BxDFTexturesBuilder::CreateCoorkTorranceBRDFEnergyTexture() );
-    if ( !m_RenderData.m_CookTorranceCompETexture )
+    m_RenderData.m_BRDFTexture = BxdfTextures.m_CookTorranceBRDF;
+    if ( !m_RenderData.m_BRDFTexture )
         return false;
 
-    m_RenderData.m_CookTorranceCompEAvgTexture.reset( BxDFTexturesBuilder::CreateCookTorranceBRDFAverageEnergyTexture() );
-    if ( !m_RenderData.m_CookTorranceCompEAvgTexture )
+    m_RenderData.m_BRDFAvgTexture = BxdfTextures.m_CookTorranceBRDFAverage;
+    if ( !m_RenderData.m_BRDFAvgTexture )
         return false;
 
-    m_RenderData.m_CookTorranceCompInvCDFTexture.reset( BxDFTexturesBuilder::CreateCookTorranceMultiscatteringBRDFInvCDFTexture() );
-    if ( !m_RenderData.m_CookTorranceCompInvCDFTexture )
+    m_RenderData.m_BRDFDielectricTexture = BxdfTextures.m_CookTorranceBRDFDielectric;
+    if ( !m_RenderData.m_BRDFDielectricTexture )
         return false;
 
-    m_RenderData.m_CookTorranceCompPdfScaleTexture.reset( BxDFTexturesBuilder::CreateCookTorranceMultiscatteringBRDFPDFScaleTexture() );
-    if ( !m_RenderData.m_CookTorranceCompPdfScaleTexture )
+    m_RenderData.m_BSDFTexture = BxdfTextures.m_CookTorranceBSDF;
+    if ( !m_RenderData.m_BSDFTexture )
         return false;
 
-    m_RenderData.m_CookTorranceCompEFresnelTexture.reset( BxDFTexturesBuilder::CreateCoorkTorranceBRDFEnergyFresnelDielectricTexture() );
-    if ( !m_RenderData.m_CookTorranceCompEFresnelTexture )
-        return false;
-
-    m_RenderData.m_CookTorranceBSDFETexture.reset( BxDFTexturesBuilder::CreateCookTorranceBSDFEnergyFresnelDielectricTexture() );
-    if ( !m_RenderData.m_CookTorranceBSDFETexture )
-        return false;
-
-    m_RenderData.m_CookTorranceBSDFAvgETexture.reset( BxDFTexturesBuilder::CreateCookTorranceBSDFAverageEnergyTexture() );
-    if ( !m_RenderData.m_CookTorranceBSDFAvgETexture )
-        return false;
-
-    m_RenderData.m_CookTorranceBTDFETexture.reset( BxDFTexturesBuilder::CreateCookTorranceBTDFEnergyTexture() );
-    if ( !m_RenderData.m_CookTorranceBTDFETexture )
-        return false;
-
-    m_RenderData.m_CookTorranceBSDFInvCDFTexture.reset( BxDFTexturesBuilder::CreateCookTorranceBSDFMultiscatteringInvCDFTexture() );
-    if ( !m_RenderData.m_CookTorranceBSDFInvCDFTexture )
-        return false;
-
-    m_RenderData.m_CookTorranceBSDFPDFScaleTexture.reset( BxDFTexturesBuilder::CreateCookTorranceBSDFMultiscatteringPDFScaleTexture() );
-    if ( !m_RenderData.m_CookTorranceBSDFPDFScaleTexture )
+    m_RenderData.m_BSDFAvgTexture = BxdfTextures.m_CookTorranceBSDFAverage;
+    if ( !m_RenderData.m_BSDFAvgTexture )
         return false;
 
     m_RenderData.m_RayTracingFrameConstantBuffer.reset( GPUBuffer::Create(
@@ -325,22 +313,32 @@ bool SRenderer::Init()
 
     UpdateRenderViewport( m_ResolutionWidth, m_ResolutionHeight );
 
-    ResetScene( CommandLineArgs::Singleton()->GetFilename().c_str() );
+    LoadScene( CommandLineArgs::Singleton()->GetFilename().c_str(), true );
 
     return true;
 }
 
-bool SRenderer::ResetScene( const char* filePath )
+bool SRenderer::LoadScene( const char* filepath, bool reset )
 {
     m_IsFilmDirty = true; // Clear film in case scene reset failed and ray tracing being disabled.
 
-    bool loadSceneResult = m_Scene.LoadFromFile( filePath );
+    if ( reset )
+    {
+        m_Scene.Reset();
+    }
+
+    bool loadSceneResult = m_Scene.LoadFromFile( filepath );
     if ( !loadSceneResult )
     {
         return false;
     }
 
     m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
+
+    m_IsMaterialGPUBufferDirty = true;
+    m_IsLightGPUBufferDirty = true;
+
+    m_RayTracingHasHit = false;
 
     return true;
 }
@@ -466,7 +464,7 @@ void SRenderer::RenderOneFrame()
     RTV = nullptr;
     GetDeviceContext()->OMSetRenderTargets( 1, &RTV, nullptr );
 
-    GetSwapChain()->Present( 0, 0 );
+    Present( 0 );
 }
 
 void SRenderer::UpdateGPUData()
@@ -519,6 +517,10 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
     if ( ImGui::GetIO().KeysDown[ VK_F1 ] && ImGui::GetIO().KeysDownDuration[ VK_F1 ] == 0.0f )
     {
         m_ShowUI = !m_ShowUI;
+    }
+    if ( ImGui::GetIO().KeysDown[ VK_F2 ] && ImGui::GetIO().KeysDownDuration[ VK_F2 ] == 0.0f )
+    {
+        m_ShowRayTracingUI = !m_ShowRayTracingUI;
     }
 
     if ( !m_ShowUI )
@@ -611,56 +613,17 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
                 m_IsFilmDirty = true;
             }
-        }
 
-        if ( ImGui::CollapsingHeader( "Environment" ) )
-        {
-            ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
-            if ( ImGui::ColorEdit3( "Background Color", (float*)&m_Scene.m_BackgroundColor ) )
+            if ( ImGui::Checkbox( "Traverse BVH Front-to-back", &m_Scene.m_TraverseBVHFrontToBack ) )
+            {
+                m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
                 m_IsFilmDirty = true;
-
-            ImGui::InputText( "Image File", const_cast<char*>( m_Scene.m_EnvironmentImageFilepath.c_str() ), m_Scene.m_EnvironmentImageFilepath.size(), ImGuiInputTextFlags_ReadOnly );
-            if ( ImGui::Button( "Browse##BrowseEnvImage" ) )
-            {
-                OPENFILENAMEA ofn;
-                char filepath[ MAX_PATH ];
-                ZeroMemory( &ofn, sizeof( ofn ) );
-                ofn.lStructSize = sizeof( ofn );
-                ofn.hwndOwner = m_hWnd;
-                ofn.lpstrFile = filepath;
-                ofn.lpstrFile[ 0 ] = '\0';
-                ofn.nMaxFile = sizeof( filepath );
-                ofn.lpstrFilter = "DDS\0*.DDS\0";
-                ofn.nFilterIndex = 1;
-                ofn.lpstrFileTitle = NULL;
-                ofn.nMaxFileTitle = 0;
-                ofn.lpstrInitialDir = NULL;
-                ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
-
-                if ( GetOpenFileNameA( &ofn ) == TRUE )
-                {
-                    m_Scene.m_EnvironmentImageFilepath = filepath;
-                    bool hasEnvTexturePreviously = m_Scene.m_EnvironmentTexture.get() != nullptr;
-                    std::wstring filepath = StringConversion::UTF8StringToUTF16WString( m_Scene.m_EnvironmentImageFilepath );
-                    m_Scene.LoadEnvironmentTextureFromFile( filepath.c_str() );
-                    bool hasEnvTextureCurrently = m_Scene.m_EnvironmentTexture.get() != nullptr;
-                    if ( hasEnvTexturePreviously != hasEnvTextureCurrently )
-                    {
-                        m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
-                    }
-                    m_IsFilmDirty = true;
-                }
             }
-            if ( m_Scene.m_EnvironmentTexture )
+
+            if ( ImGui::Checkbox( "Lights Visble to Camera", &m_Scene.m_IsLightVisible ) )
             {
-                ImGui::SameLine();
-                if ( ImGui::Button( "Clear##ClearEnvImage" ) )
-                {
-                    m_Scene.m_EnvironmentImageFilepath = "";
-                    m_Scene.m_EnvironmentTexture.reset();
-                    m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
-                    m_IsFilmDirty = true;
-                }
+                m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
+                m_IsFilmDirty = true;
             }
         }
 
@@ -677,63 +640,86 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
         if ( ImGui::BeginMenuBar() )
         {
-            if ( ImGui::MenuItem( "Load" ) )
+            if ( ImGui::BeginMenu( "File" ) )
             {
-                OPENFILENAMEA ofn;
-                char filepath[ MAX_PATH ];
-                ZeroMemory( &ofn, sizeof( ofn ) );
-                ofn.lStructSize = sizeof( ofn );
-                ofn.hwndOwner = m_hWnd;
-                ofn.lpstrFile = filepath;
-                ofn.lpstrFile[ 0 ] = '\0';
-                ofn.nMaxFile = sizeof( filepath );
-                ofn.lpstrFilter = "Wavefront OBJ\0*.OBJ\0";
-                ofn.nFilterIndex = 1;
-                ofn.lpstrFileTitle = NULL;
-                ofn.nMaxFileTitle = 0;
-                ofn.lpstrInitialDir = NULL;
-                ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
-
-                if ( GetOpenFileNameA( &ofn ) == TRUE )
+                bool loadScene = ImGui::MenuItem( "Load Scene" );
+                bool resetAndLoadScene = ImGui::MenuItem( "Reset & Load Scene" );
+                if ( loadScene || resetAndLoadScene )
                 {
-                    ResetScene( filepath );
+                    OPENFILENAMEA ofn;
+                    char filepath[ MAX_PATH ];
+                    ZeroMemory( &ofn, sizeof( ofn ) );
+                    ofn.lStructSize = sizeof( ofn );
+                    ofn.hwndOwner = m_hWnd;
+                    ofn.lpstrFile = filepath;
+                    ofn.lpstrFile[ 0 ] = '\0';
+                    ofn.nMaxFile = sizeof( filepath );
+                    ofn.lpstrFilter = "Wavefront OBJ\0*.OBJ\0XML\0*.XML\0";
+                    ofn.nFilterIndex = 1;
+                    ofn.lpstrFileTitle = NULL;
+                    ofn.nMaxFileTitle = 0;
+                    ofn.lpstrInitialDir = NULL;
+                    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+
+                    if ( GetOpenFileNameA( &ofn ) == TRUE )
+                    {
+                        LoadScene( filepath, resetAndLoadScene );
+                    }
                 }
+                ImGui::EndMenu();
             }
             if ( ImGui::BeginMenu( "Edit", m_Scene.m_HasValidScene ) )
             {
                 if ( ImGui::BeginMenu( "Create" ) )
                 {
-                    ELightType lightType = ELightType::Point;
-                    bool menuItemClicked = false;
-                    if ( ImGui::MenuItem( "Point Light", "", false, m_Scene.m_LightSettings.size() < m_Scene.s_MaxLightsCount ) )
+                    if ( ImGui::MenuItem( "Point Light", "", false, m_Scene.GetLightCount() < m_Scene.s_MaxLightsCount ) )
                     {
-                        lightType = ELightType::Point;
-                        menuItemClicked = true;
-                    }
-                    if ( ImGui::MenuItem( "Rectangle Light", "", false, m_Scene.m_LightSettings.size() < m_Scene.s_MaxLightsCount ) )
-                    {
-                        lightType = ELightType::Rectangle;
-                        menuItemClicked = true;
-                    }
-
-                    if ( menuItemClicked )
-                    {
-                        m_Scene.m_LightSettings.emplace_back();
-                        m_Scene.m_LightSettings.back().color = XMFLOAT3( 1.0f, 1.0f, 1.0f );
-                        m_Scene.m_LightSettings.back().position = XMFLOAT3( 0.0f, 0.0f, 0.0f );
-                        m_Scene.m_LightSettings.back().rotation = XMFLOAT3( 0.0f, 0.0f, 0.0f );
-                        m_Scene.m_LightSettings.back().size = XMFLOAT2( 1.0f, 1.0f );
-                        m_Scene.m_LightSettings.back().lightType = lightType;
+                        m_Scene.m_PunctualLights.emplace_back();
+                        SPunctualLight& newLight = m_Scene.m_PunctualLights.back();
+                        newLight.m_Color = XMFLOAT3( 1.0f, 1.0f, 1.0f );
+                        newLight.m_Position = XMFLOAT3( 0.0f, 0.0f, 0.0f );
+                        newLight.m_IsDirectionalLight = false;
                         m_IsLightGPUBufferDirty = true;
                         m_IsFilmDirty = true;
                     }
-
+                    if ( ImGui::MenuItem( "Directional Light", "", false, m_Scene.GetLightCount() < m_Scene.s_MaxLightsCount ) )
+                    {
+                        m_Scene.m_PunctualLights.emplace_back();
+                        SPunctualLight& newLight = m_Scene.m_PunctualLights.back();
+                        newLight.m_Color = XMFLOAT3( 1.0f, 1.0f, 1.0f );
+                        newLight.SetEulerAnglesFromDirection( XMFLOAT3( 0.f, -1.f, 0.f ) );
+                        newLight.m_IsDirectionalLight = true;
+                        m_IsLightGPUBufferDirty = true;
+                        m_IsFilmDirty = true;
+                    }
+                    if ( ImGui::MenuItem( "Environment Light", "", false, m_Scene.m_EnvironmentLight == nullptr && m_Scene.GetLightCount() < m_Scene.s_MaxLightsCount ) )
+                    {
+                        m_Scene.m_EnvironmentLight = std::make_shared<SEnvironmentLight>();
+                        m_Scene.m_EnvironmentLight->m_Color = XMFLOAT3( 1.0f, 1.0f, 1.0f );
+                        m_IsLightGPUBufferDirty = true;
+                        m_IsFilmDirty = true;
+                    }
                     ImGui::EndMenu();
                 }
-                if ( ImGui::MenuItem( "Delete", "", false, m_Scene.m_ObjectSelection.m_LightSelectionIndex != -1 ) )
+                if ( ImGui::MenuItem( "Delete", "", false, m_Scene.m_ObjectSelection.m_PunctualLightSelectionIndex != -1 || m_Scene.m_ObjectSelection.m_IsEnvironmentLightSelected ) )
                 {
-                    m_Scene.m_LightSettings.erase( m_Scene.m_LightSettings.begin() + m_Scene.m_ObjectSelection.m_LightSelectionIndex );
-                    m_Scene.m_ObjectSelection.m_LightSelectionIndex = -1;
+                    if ( m_Scene.m_ObjectSelection.m_PunctualLightSelectionIndex != -1 )
+                    {
+                        m_Scene.m_PunctualLights.erase( m_Scene.m_PunctualLights.begin() + m_Scene.m_ObjectSelection.m_PunctualLightSelectionIndex );
+                        m_Scene.m_ObjectSelection.m_PunctualLightSelectionIndex = -1;
+                    }
+                    else
+                    {
+                        bool hadEnvironmentTexture = m_Scene.m_EnvironmentLight->m_Texture != nullptr;
+                        m_Scene.m_EnvironmentLight.reset();
+                        if ( hadEnvironmentTexture )
+                        {
+                            // Allow the path tracer switching to a kernel without sampling the environment texture
+                            m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
+                        }
+
+                        m_Scene.m_ObjectSelection.m_IsEnvironmentLightSelected = false;
+                    }
                     m_IsLightGPUBufferDirty = true;
                     m_IsFilmDirty = true;;
                 }
@@ -751,16 +737,27 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
             }
         }
 
-        if ( ImGui::CollapsingHeader( "Lights" ) )
+        if ( ImGui::CollapsingHeader( "Punctual Lights" ) )
         {
             char label[ 32 ];
-            for ( size_t iLight = 0; iLight < m_Scene.m_LightSettings.size(); ++iLight )
+            for ( size_t iLight = 0; iLight < m_Scene.m_PunctualLights.size(); ++iLight )
             {
-                bool isSelected = ( iLight == m_Scene.m_ObjectSelection.m_LightSelectionIndex );
+                bool isSelected = ( iLight == m_Scene.m_ObjectSelection.m_PunctualLightSelectionIndex );
                 sprintf( label, "Light %d", uint32_t( iLight ) );
                 if ( ImGui::Selectable( label, isSelected ) )
                 {
-                    m_Scene.m_ObjectSelection.SelectLight( (int)iLight );
+                    m_Scene.m_ObjectSelection.SelectPunctualLight( (int)iLight );
+                }
+            }
+        }
+
+        if ( ImGui::CollapsingHeader( "Environment Light" ) )
+        {
+            if ( m_Scene.m_EnvironmentLight )
+            {
+                if ( ImGui::Selectable( "Light##EnvLight", m_Scene.m_ObjectSelection.m_IsEnvironmentLightSelected ) )
+                {
+                    m_Scene.m_ObjectSelection.SelectEnvironmentLight();
                 }
             }
         }
@@ -787,92 +784,128 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
         ImGui::PushItemWidth( ImGui::GetFontSize() * -9 );
 
-        if ( m_Scene.m_ObjectSelection.m_LightSelectionIndex >= 0 )
+        if ( m_Scene.m_ObjectSelection.m_PunctualLightSelectionIndex >= 0 )
         {
             ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
-            if ( m_Scene.m_ObjectSelection.m_LightSelectionIndex < m_Scene.m_LightSettings.size() )
+            if ( m_Scene.m_ObjectSelection.m_PunctualLightSelectionIndex < m_Scene.m_PunctualLights.size() )
             {
-                SLightSetting* selection = m_Scene.m_LightSettings.data() + m_Scene.m_ObjectSelection.m_LightSelectionIndex;
+                SPunctualLight* selection = m_Scene.m_PunctualLights.data() + m_Scene.m_ObjectSelection.m_PunctualLightSelectionIndex;
 
-                if ( ImGui::DragFloat3( "Position", (float*)&selection->position, 1.0f ) )
-                    m_IsLightGPUBufferDirty = true;
-
-                if ( selection->lightType == ELightType::Rectangle )
+                if ( selection->m_IsDirectionalLight )
                 {
-                    XMFLOAT3 eulerAnglesDeg;
-                    eulerAnglesDeg.x = XMConvertToDegrees( selection->rotation.x );
-                    eulerAnglesDeg.y = XMConvertToDegrees( selection->rotation.y );
-                    eulerAnglesDeg.z = XMConvertToDegrees( selection->rotation.z );
-                    if ( ImGui::DragFloat3( "Rotation", (float*)&eulerAnglesDeg, 1.0f ) )
+                    if ( ImGuiHelper::DragFloat3RadianInDegree( "Euler Angles", (float*)&selection->m_EulerAngles, 1.f ) )
+                        m_IsLightGPUBufferDirty = true;
+
+                    XMFLOAT3 direction = selection->CalculateDirection();
+                    ImGui::LabelText( "Direction", "%.3f, %.3f, %.3f", direction.x, direction.y, direction.z );
+                }
+                else
+                {
+                    if ( ImGui::DragFloat3( "Position", (float*)&selection->m_Position, 1.0f ) )
+                        m_IsLightGPUBufferDirty = true;
+                }
+
+                if ( ImGui::ColorEdit3( "Color", (float*)&selection->m_Color ) )
+                    m_IsLightGPUBufferDirty = true;
+            }
+        }
+        else if ( m_Scene.m_ObjectSelection.m_IsEnvironmentLightSelected )
+        {
+            ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
+            if ( ImGui::ColorEdit3( "Radiance", (float*)&m_Scene.m_EnvironmentLight->m_Color ) )
+                m_IsLightGPUBufferDirty = true;
+
+            ImGui::InputText( "Image File", const_cast<char*>( m_Scene.m_EnvironmentLight->m_TextureFileName.c_str() ), m_Scene.m_EnvironmentLight->m_TextureFileName.size(), ImGuiInputTextFlags_ReadOnly );
+            if ( ImGui::Button( "Browse##BrowseEnvImage" ) )
+            {
+                OPENFILENAMEA ofn;
+                char filepath[ MAX_PATH ];
+                ZeroMemory( &ofn, sizeof( ofn ) );
+                ofn.lStructSize = sizeof( ofn );
+                ofn.hwndOwner = m_hWnd;
+                ofn.lpstrFile = filepath;
+                ofn.lpstrFile[ 0 ] = '\0';
+                ofn.nMaxFile = sizeof( filepath );
+                ofn.lpstrFilter = "DDS\0*.DDS\0";
+                ofn.nFilterIndex = 1;
+                ofn.lpstrFileTitle = NULL;
+                ofn.nMaxFileTitle = 0;
+                ofn.lpstrInitialDir = NULL;
+                ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+
+                if ( GetOpenFileNameA( &ofn ) == TRUE )
+                {
+                    m_Scene.m_EnvironmentLight->m_TextureFileName = filepath;
+                    bool hasEnvTexturePreviously = m_Scene.m_EnvironmentLight->m_Texture.get() != nullptr;
+                    m_Scene.m_EnvironmentLight->CreateTextureFromFile();
+                    bool hasEnvTextureCurrently = m_Scene.m_EnvironmentLight->m_Texture.get() != nullptr;
+                    if ( hasEnvTexturePreviously != hasEnvTextureCurrently )
                     {
-                        selection->rotation.x = XMConvertToRadians( eulerAnglesDeg.x );
-                        selection->rotation.y = XMConvertToRadians( eulerAnglesDeg.y );
-                        selection->rotation.z = XMConvertToRadians( eulerAnglesDeg.z );
-                        m_IsLightGPUBufferDirty = true;
+                        m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
                     }
+                    m_IsFilmDirty = true;
                 }
-
-                static const char* s_LightTypeNames[] = { "Point", "Rectangle" };
-                if ( ImGui::Combo( "Type", (int*)&selection->lightType, s_LightTypeNames, IM_ARRAYSIZE( s_LightTypeNames ) ) )
+            }
+            if ( m_Scene.m_EnvironmentLight->m_Texture )
+            {
+                ImGui::SameLine();
+                if ( ImGui::Button( "Clear##ClearEnvImage" ) )
                 {
-                    m_IsLightGPUBufferDirty = true;
+                    m_Scene.m_EnvironmentLight->m_TextureFileName = "";
+                    m_Scene.m_EnvironmentLight->m_Texture.reset();
+                    m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
+                    m_IsFilmDirty = true;
                 }
-
-                if ( selection->lightType == ELightType::Rectangle )
-                {
-                    if ( ImGui::DragFloat2( "Size", (float*)&selection->size, 0.1f, 0.0001f, 10000000.0f ) )
-                        m_IsLightGPUBufferDirty = true;
-                }
-
-                if ( ImGui::ColorEdit3( "Color", (float*)&selection->color ) )
-                    m_IsLightGPUBufferDirty = true;
             }
         }
         else if ( m_Scene.m_ObjectSelection.m_MaterialSelectionIndex >= 0 )
         {
             if ( m_Scene.m_ObjectSelection.m_MaterialSelectionIndex < m_Scene.m_Materials.size() )
             {
-                Material* selection = m_Scene.m_Materials.data() + m_Scene.m_ObjectSelection.m_MaterialSelectionIndex;
-                ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float );
-                if ( ImGui::ColorEdit3( "Albedo", (float*)&selection->albedo ) )
-                    m_IsMaterialGPUBufferDirty = true;
-                ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
-                if ( ImGui::ColorEdit3( "Emission", (float*)&selection->emission ) )
-                    m_IsMaterialGPUBufferDirty = true;
-                if ( ImGui::DragFloat( "Roughness", &selection->roughness, 0.01f, 0.0f, 1.0f ) )
-                    m_IsMaterialGPUBufferDirty = true;
-                if ( ImGui::CheckboxFlags( "Is Metal", (int*)&selection->flags, MATERIAL_FLAG_IS_METAL ) )
+                SMaterial* selection = m_Scene.m_Materials.data() + m_Scene.m_ObjectSelection.m_MaterialSelectionIndex;
+
+                static const char* s_MaterialTypeNames[] = { "Diffuse", "Plastic", "Conductor", "Dielectric" };
+                if ( ImGui::Combo( "Type", (int*)&selection->m_MaterialType, s_MaterialTypeNames, IM_ARRAYSIZE( s_MaterialTypeNames ) ) )
                 {
-                    // Reclamp IOR to above 1.0 when material is not metal
-                    if ( ( selection->flags & MATERIAL_FLAG_IS_METAL ) == 0 )
+                    if ( selection->m_MaterialType != EMaterialType::Conductor )
                     {
-                        selection->ior.x = std::max( 1.0f, selection->ior.x );
+                        // Reclamp IOR to above 1.0 when material is not conductor
+                        selection->m_IOR.x = std::max( 1.0f, selection->m_IOR.x );
                     }
                     m_IsMaterialGPUBufferDirty = true;
                 }
-                bool isMetal = selection->flags & MATERIAL_FLAG_IS_METAL;
-                if ( isMetal )
+
+                if ( selection->m_MaterialType == EMaterialType::Diffuse || selection->m_MaterialType == EMaterialType::Plastic )
                 {
-                    if ( ImGui::DragFloat3( "IOR", (float*)&selection->ior, 0.01f, 0.01f, 3.0f ) )
-                        m_IsMaterialGPUBufferDirty = true;
-                    if ( ImGui::DragFloat3( "k", (float*)&selection->k, 0.01f, 0.001f, 5.0f ) )
-                        m_IsMaterialGPUBufferDirty = true;
+                    ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float );
+                    m_IsMaterialGPUBufferDirty |= ImGui::ColorEdit3( "Albedo", (float*)&selection->m_Albedo );
+                    m_IsMaterialGPUBufferDirty |= ImGui::Checkbox( "Albedo Texture", &selection->m_HasAlbedoTexture );
                 }
-                else
+
+                if ( selection->m_MaterialType != EMaterialType::Diffuse )
                 {
-                    if ( ImGui::DragFloat( "IOR", (float*)&selection->ior, 0.01f, 1.0f, 3.0f ) )
-                        m_IsMaterialGPUBufferDirty = true;
+                    ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
+                    m_IsMaterialGPUBufferDirty |= ImGui::DragFloat( "Roughness", &selection->m_Roughness, 0.01f, 0.0f, 1.0f );
+                    m_IsMaterialGPUBufferDirty |= ImGui::Checkbox( "Roughness Texture", &selection->m_HasRoughnessTexture );
+                    m_IsMaterialGPUBufferDirty |= ImGui::Checkbox( "Multiscattering", &selection->m_Multiscattering );
                 }
-                if ( ImGui::DragFloat( "Transmission", &selection->transmission, 0.01f, 0.0f, 1.0f ) )
-                    m_IsMaterialGPUBufferDirty = true;
-                if ( ImGui::DragFloat2( "Texture Tiling", (float*)&selection->texTiling, 0.01f, 0.0f, 100000.0f ) )
-                    m_IsMaterialGPUBufferDirty = true;
-                if ( ImGui::CheckboxFlags( "Albedo Texture", (int*)&selection->flags, MATERIAL_FLAG_ALBEDO_TEXTURE ) )
-                    m_IsMaterialGPUBufferDirty = true;
-                if ( ImGui::CheckboxFlags( "Emission Texture", (int*)&selection->flags, MATERIAL_FLAG_EMISSION_TEXTURE ) )
-                    m_IsMaterialGPUBufferDirty = true;
-                if ( ImGui::CheckboxFlags( "Roughness Texture", (int*)&selection->flags, MATERIAL_FLAG_ROUGHNESS_TEXTURE ) )
-                    m_IsMaterialGPUBufferDirty = true;
+
+                if ( selection->m_MaterialType == EMaterialType::Conductor )
+                {
+                    m_IsMaterialGPUBufferDirty |= ImGui::DragFloat3( "eta", (float*)&selection->m_IOR, 0.01f, 0.0f, MAX_MATERIAL_ETA, "%.3f", ImGuiSliderFlags_AlwaysClamp );              
+                    m_IsMaterialGPUBufferDirty |= ImGui::DragFloat3( "k", (float*)&selection->m_K, 0.01f, 0.0f, MAX_MATERIAL_K, "%.3f", ImGuiSliderFlags_AlwaysClamp );
+                }
+                else if ( selection->m_MaterialType != EMaterialType::Diffuse )
+                {
+                    m_IsMaterialGPUBufferDirty |= ImGui::DragFloat( "IOR", (float*)&selection->m_IOR, 0.01f, 1.0f, MAX_MATERIAL_IOR, "%.3f", ImGuiSliderFlags_AlwaysClamp );
+                }
+
+                if ( selection->m_MaterialType != EMaterialType::Dielectric )
+                {
+                    m_IsMaterialGPUBufferDirty |= ImGui::Checkbox( "Two Sided", &selection->m_IsTwoSided );
+                }
+
+                m_IsMaterialGPUBufferDirty |= ImGui::DragFloat2( "Texture Tiling", (float*)&selection->m_Tiling, 0.01f, 0.0f, 100000.0f );
             }
         }
         else if ( m_Scene.m_ObjectSelection.m_IsCameraSelected )
@@ -941,14 +974,62 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
     {
         ImGui::Begin( "Render Stats." );
 
-        ImGui::Text( "No BVH: %s", m_Scene.m_IsBVHDisabled ? "On" : "Off" );
-        if ( m_Scene.m_HasValidScene )
-        {
-            ImGui::Text( "BVH traversal stack size: %d", m_Scene.m_BVHTraversalStackSize );
-        }
-        ImGui::Text( "Current Resolution: %dx%d", renderContext->m_CurrentResolutionWidth, renderContext->m_CurrentResolutionHeight );
+        ImGui::Text( "Film Resolution: %dx%d", renderContext->m_CurrentResolutionWidth, renderContext->m_CurrentResolutionHeight );
+        ImGui::Text( "Render Viewport: %dx%d", m_RenderViewport.m_Width, m_RenderViewport.m_Height );
         ImGui::Text( "Average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate );
         ImGui::Text( "SPP: %d", m_SPP );
+
+        {
+            POINT pos;
+            ::GetCursorPos( &pos );
+            ::ScreenToClient( m_hWnd, &pos );
+
+            m_CursorPixelPosOnRenderViewport[ 0 ] = (uint32_t)std::clamp<int>( (int)pos.x - (int)m_RenderViewport.m_TopLeftX, 0, (int)m_RenderViewport.m_Width );
+            m_CursorPixelPosOnRenderViewport[ 1 ] = (uint32_t)std::clamp<int>( (int)pos.y - (int)m_RenderViewport.m_TopLeftY, 0, (int)m_RenderViewport.m_Height );
+
+            float filmPixelPerRenderViewportPixelX = (float)m_ResolutionWidth / m_RenderViewport.m_Width;
+            float filmPixelPerRenderViewportPixelY = (float)m_ResolutionHeight / m_RenderViewport.m_Height;
+            m_CursorPixelPosOnFilm[ 0 ] = (uint32_t)std::floorf( filmPixelPerRenderViewportPixelX * m_CursorPixelPosOnRenderViewport[ 0 ] );
+            m_CursorPixelPosOnFilm[ 1 ] = (uint32_t)std::floorf( filmPixelPerRenderViewportPixelY * m_CursorPixelPosOnRenderViewport[ 1 ] );
+
+            ImGui::Text( "Cursor Pos (Render Viewport): %d %d", m_CursorPixelPosOnRenderViewport[ 0 ], m_CursorPixelPosOnRenderViewport[ 1 ] );
+            ImGui::Text( "Cursor Pos (Film): %d %d", m_CursorPixelPosOnFilm[ 0 ], m_CursorPixelPosOnFilm[ 1 ] );
+        }
+
+        ImGui::End();
+    }
+
+    if ( m_ShowRayTracingUI )
+    {
+        ImGui::Begin( "Ray Tracing Tool" );
+
+        ImGui::InputInt2( "Pixel Position", (int*)m_RayTracingPixelPos );
+        ImGui::DragFloat2( "Sub-pixel Position", (float*)m_RayTracingSubPixelPos, .1f, 0.f, .999999f, "%.6f", ImGuiSliderFlags_AlwaysClamp );
+        if ( ImGui::Button( "Trace" ) )
+        {
+            DirectX::XMFLOAT2 screenPos = { (float)m_RayTracingPixelPos[ 0 ] + m_RayTracingSubPixelPos[ 0 ], (float)m_RayTracingPixelPos[ 1 ] + m_RayTracingSubPixelPos[ 1 ] };
+            screenPos.x /= m_ResolutionWidth;
+            screenPos.y /= m_ResolutionHeight;
+
+            XMVECTOR rayOrigin, rayDirection;
+            m_Scene.ScreenToCameraRay( screenPos, &rayOrigin, &rayDirection );
+            m_RayTracingHasHit = m_Scene.TraceRay( rayOrigin, rayDirection, 0.f, &m_RayTracingHit );
+        }
+
+        if ( m_RayTracingHasHit )
+        {
+            SRayHit* hit = &m_RayTracingHit;
+            char stringBuffer[ 512 ];
+            sprintf_s( stringBuffer, ARRAY_LENGTH( stringBuffer ), "Found hit\nDistance: %f\nCoord: %f %f\nInstance: %d\nMesh index: %d\nMesh: %s\nTriangle: %d"
+                , hit->m_T, hit->m_U, hit->m_V, hit->m_InstanceIndex, hit->m_MeshIndex, m_Scene.m_Meshes[ hit->m_MeshIndex ].GetName().c_str(), hit->m_TriangleIndex );
+            ImGui::InputTextMultiline( "Result", stringBuffer, ARRAY_LENGTH( stringBuffer ), ImVec2( 0, 0 ), ImGuiInputTextFlags_ReadOnly );
+        }
+        else
+        {
+            char stringBuffer[] = "No hit";
+            ImGui::InputText( "Result", stringBuffer, ARRAY_LENGTH( stringBuffer ), ImGuiInputTextFlags_ReadOnly );
+        }
+
         ImGui::End();
     }
 

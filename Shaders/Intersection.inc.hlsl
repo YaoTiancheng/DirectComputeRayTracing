@@ -4,18 +4,18 @@
 struct Intersection
 {
     float3  albedo;
-    float3  specular;
-    float3  emission;
     float   alpha;
     float3  position;
     float3  normal;
     float3  tangent;
     float3  geometryNormal;
     float3  ior;
-    float3  k;
-    bool    isMetal;
-    float   transmission;
+    bool    isTwoSided;
     bool    backface;
+    bool    multiscattering;
+    uint    materialType;
+    uint    lightIndex;
+    uint    triangleIndex;
 };
 
 #endif

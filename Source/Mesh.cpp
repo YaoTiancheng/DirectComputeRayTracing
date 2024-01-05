@@ -1,8 +1,7 @@
 #include "stdafx.h"
 #include "Mesh.h"
 #include "Logging.h"
-#define TINYOBJLOADER_IMPLEMENTATION
-#include "OBJLoader/tiny_obj_loader.h"
+#include "Constants.h"
 #include "MikkTSpace/mikktspace.h"
 
 inline void hash_combine( std::size_t& seed ) { }
@@ -150,46 +149,47 @@ static bool GenerateTangentVectorsForMesh( const tinyobj::attrib_t& attrib, cons
     return genTangSpaceDefault( context );
 }
 
-bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool buildBVH, const char* BVHFilename )
+bool Mesh::CreateFromWavefrontOBJData( const tinyobj::attrib_t& attrib, const std::vector<tinyobj::shape_t>& shapes, uint32_t materialIdBase, bool applyTransform, const DirectX::XMFLOAT4X4& transform, bool changeWindingOrder, uint32_t materialIdOverride )
 {
-    tinyobj::attrib_t attrib;
-    std::vector<tinyobj::shape_t> shapes;
-    std::vector<tinyobj::material_t> materials;
-    std::string warn;
-    std::string err;
-    bool loadSuccessful = tinyobj::LoadObj( &attrib, &shapes, &materials, &warn, &err, filename, mtlFileDir );
-    if ( !loadSuccessful )
-    {
-        return false;
-    }
-
     std::unordered_map<SVertexKey, uint32_t> vertexKeyToVertexIndexMap;
 
     size_t normalCount = attrib.normals.size() / 3;
     if ( normalCount == 0 )
         return false;
 
-    std::vector<uint32_t> indices;
-    std::vector<uint32_t> materialIds;
+    bool hasMaterialOverride = materialIdOverride != -1;
     bool needDefaultMaterial = false;
 
     SMikkTSpaceContext mikkTSpaceContext;
     SMikkTSpaceInterface mikkTSpaceInterface;
     mikkTSpaceContext.m_pInterface = &mikkTSpaceInterface;
     ZeroMemory( &mikkTSpaceInterface, sizeof( SMikkTSpaceInterface ) );
-    mikkTSpaceInterface.m_getNumFaces           = MikkTSpaceGetNumFaces;
-    mikkTSpaceInterface.m_getNumVerticesOfFace  = MikkTSpaceGetNumVerticesOfFace;
-    mikkTSpaceInterface.m_getPosition           = MikkTSpaceGetPosition;
-    mikkTSpaceInterface.m_getNormal             = MikkTSpaceGetNormal;
-    mikkTSpaceInterface.m_getTexCoord           = MikkTSpaceGetTexcoord;
-    mikkTSpaceInterface.m_setTSpaceBasic        = MikkTSpaceSetTSpaceBasic;
+    mikkTSpaceInterface.m_getNumFaces = MikkTSpaceGetNumFaces;
+    mikkTSpaceInterface.m_getNumVerticesOfFace = MikkTSpaceGetNumVerticesOfFace;
+    mikkTSpaceInterface.m_getPosition = MikkTSpaceGetPosition;
+    mikkTSpaceInterface.m_getNormal = MikkTSpaceGetNormal;
+    mikkTSpaceInterface.m_getTexCoord = MikkTSpaceGetTexcoord;
+    mikkTSpaceInterface.m_setTSpaceBasic = MikkTSpaceSetTSpaceBasic;
 
     std::vector<XMFLOAT3> tangents;
     std::vector<bool> isTexcoordDegenerated;
 
+    XMMATRIX vTransform, vNormalTransform;
+    if ( applyTransform )
+    {
+        vTransform = XMLoadFloat4x4( &transform );
+        XMVECTOR vDet;
+        vNormalTransform = XMMatrixTranspose( XMMatrixInverse( &vDet, vTransform ) );
+    }
+
+    // For winding order selection
+    const int originalTriangleIndices[ 3 ] = { 0, 1, 2 };
+    const int changedTriangleIndices[ 3 ] = { 0, 2, 1 };
+    const int* triangleIndices = changeWindingOrder ? changedTriangleIndices : originalTriangleIndices;
+
     for ( size_t iShapes = 0; iShapes < shapes.size(); ++iShapes )
     {
-        tinyobj::mesh_t& mesh = shapes[ iShapes ].mesh;
+        const tinyobj::mesh_t& mesh = shapes[ iShapes ].mesh;
 
         assert( mesh.num_face_vertices.size() == mesh.material_ids.size() );
 
@@ -219,26 +219,24 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
         {
             assert( mesh.num_face_vertices[ iFace ] == 3 );
 
-            int materialId = mesh.material_ids[ iFace ];
-            // If the triangle has a material id out of range then assign a default material for it.
-            if ( materialId < 0 || materialId >= materials.size() )
+            if ( !hasMaterialOverride )
             {
-                materialId = (int)materials.size();
-                if ( !needDefaultMaterial )
-                {
-                    needDefaultMaterial = true;
-                }
+                int materialId = mesh.material_ids[ iFace ];
+                m_MaterialIds.push_back( materialId != -1 ? materialIdBase + uint32_t( materialId ) : INVALID_MATERIAL_ID );
             }
-            materialIds.push_back( materialId );
+            else
+            {
+                m_MaterialIds.push_back( materialIdOverride );
+            }
 
             for ( int iVertex = 0; iVertex < 3; ++iVertex )
             {
-                tinyobj::index_t idx = mesh.indices[ iFace * 3 + iVertex ];
+                tinyobj::index_t idx = mesh.indices[ iFace * 3 + triangleIndices[ iVertex ] ];
 
                 if ( idx.vertex_index == -1 || idx.normal_index == -1 )
                     return false;
 
-                XMFLOAT3 tangent = tangents[ iFace * 3 + iVertex ];
+                XMFLOAT3 tangent = tangents[ iFace * 3 + triangleIndices[ iVertex ] ];
 
                 SVertexKey vertexKey = { idx, tangent };
                 uint32_t vertexIndex = 0;
@@ -253,82 +251,119 @@ bool Mesh::LoadFromOBJFile( const char* filename, const char* mtlFileDir, bool b
                         return false;
 
                     vertexIndex = (uint32_t)m_Vertices.size();
-                    Vertex vertex;
+                    GPU::Vertex vertex;
                     vertex.position = XMFLOAT3( attrib.vertices[ idx.vertex_index * 3 ], attrib.vertices[ idx.vertex_index * 3 + 1 ], attrib.vertices[ idx.vertex_index * 3 + 2 ] );
-                    vertex.normal   = XMFLOAT3( attrib.normals[ idx.normal_index * 3 ], attrib.normals[ idx.normal_index * 3 + 1 ], attrib.normals[ idx.normal_index * 3 + 2 ] );
-                    vertex.tangent  = tangent;
+                    vertex.normal = XMFLOAT3( attrib.normals[ idx.normal_index * 3 ], attrib.normals[ idx.normal_index * 3 + 1 ], attrib.normals[ idx.normal_index * 3 + 2 ] );
+                    vertex.tangent = tangent;
                     vertex.texcoord = idx.texcoord_index != -1 ? XMFLOAT2( attrib.texcoords[ idx.texcoord_index * 2 ], attrib.texcoords[ idx.texcoord_index * 2 + 1 ] ) : XMFLOAT2( 0.0f, 0.0f );
-                    
-                    vertex.position.x = -vertex.position.x;
-                    vertex.normal.x   = -vertex.normal.x;
-                    vertex.tangent.x  = -vertex.tangent.x;
+
+                    if ( applyTransform )
+                    {
+                        XMVECTOR vPosition = XMLoadFloat3( &vertex.position );
+                        XMVECTOR vNormal = XMLoadFloat3( &vertex.normal );
+                        XMVECTOR vTangent = XMLoadFloat3( &vertex.tangent );
+                        vPosition = XMVector3Transform( vPosition, vTransform );
+                        vNormal = XMVector3TransformNormal( vNormal, vNormalTransform );
+                        vTangent = XMVector3TransformNormal( vTangent, vNormalTransform );
+                        XMStoreFloat3( &vertex.position, vPosition );
+                        XMStoreFloat3( &vertex.normal, vNormal );
+                        XMStoreFloat3( &vertex.tangent, vTangent );
+                    }
 
                     m_Vertices.emplace_back( vertex );
 
                     vertexKeyToVertexIndexMap.insert( std::make_pair( vertexKey, vertexIndex ) );
                 }
-                indices.push_back( vertexIndex );
+                m_Indices.push_back( vertexIndex );
             }
         }
-    }
-
-    m_Materials.reserve( materials.size() );
-    m_MaterialNames.reserve( materials.size() );
-    for ( auto& iterSrcMat : materials )
-    {
-        Material dstMat;
-        dstMat.albedo    = DirectX::XMFLOAT3( iterSrcMat.diffuse[ 0 ], iterSrcMat.diffuse[ 1 ], iterSrcMat.diffuse[ 2 ] );
-        dstMat.emission  = DirectX::XMFLOAT3( iterSrcMat.emission[ 0 ], iterSrcMat.emission[ 1 ], iterSrcMat.emission[ 2 ] );
-        dstMat.roughness = iterSrcMat.roughness;
-        dstMat.ior       = XMFLOAT3( iterSrcMat.ior, 1.f, 1.f );
-        dstMat.k         = XMFLOAT3( 1.0f, 1.0f, 1.0f );
-        dstMat.transmission = 1.0f - iterSrcMat.dissolve;
-        dstMat.texTiling = XMFLOAT2( 1.0f, 1.0f );
-        dstMat.flags     = 0;
-        m_Materials.emplace_back( dstMat );
-        m_MaterialNames.emplace_back( iterSrcMat.name );
-    }
-
-    if ( needDefaultMaterial )
-    {
-        Material defaultMat;
-        defaultMat.albedo    = DirectX::XMFLOAT3( 1.0f, 0.0f, 1.0f );
-        defaultMat.emission  = DirectX::XMFLOAT3( 0.0f, 0.0f, 0.0f );
-        defaultMat.roughness = 1.0f;
-        defaultMat.ior       = XMFLOAT3( 1.5f, 1.f, 1.f );
-        defaultMat.k         = XMFLOAT3( 1.0f, 1.0f, 1.0f );
-        defaultMat.transmission = 0.0f;
-        defaultMat.texTiling = XMFLOAT2( 1.0f, 1.0f );
-        defaultMat.flags     = 0;
-        m_Materials.emplace_back( defaultMat );
-        m_MaterialNames.emplace_back( "Default Material" );
-    }
-
-    if ( buildBVH )
-    {
-        m_Indices.resize( indices.size() );
-        m_MaterialIds.resize( materialIds.size() );
-        std::vector<UnpackedBVHNode> BVHNodes;
-        BuildBVH( m_Vertices.data(), indices.data(), m_Indices.data(), materialIds.data(), m_MaterialIds.data(), GetTriangleCount(), &BVHNodes, &m_BVHMaxDepth, &m_BVHMaxStackSize );
-
-        if ( BVHFilename && BVHFilename[ 0 ] != '\0' )
-        {
-            FILE* file = fopen( BVHFilename, "w" );
-            if ( file )
-            {
-                SerializeBVHToXML( BVHNodes.data(), file );
-                fclose( file );
-            }
-        }
-
-        m_BVHNodes.resize( BVHNodes.size() );
-        PackBVH( BVHNodes.data(), uint32_t( BVHNodes.size() ), m_BVHNodes.data() );
-    }
-    else
-    {
-        m_Indices = indices;
-        m_MaterialIds = materialIds;
     }
 
     return true;
 }
+
+bool Mesh::GenerateRectangle( uint32_t materialId, bool applyTransform, const DirectX::XMFLOAT4X4& transform )
+{
+    if ( GetVertexCount() + 4 <= UINT_MAX )
+    {
+        GPU::Vertex vertices[ 4 ] =
+        {
+              { { 1.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } }
+            , { { 1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 0.0f } }
+            , { { -1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } }
+            , { { -1.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 1.0f } }
+        };
+        uint32_t indices[ 6 ] = { 0, 1, 3, 1, 2, 3 }; // Front face winding order CCW
+
+        uint32_t indexBase = GetVertexCount();
+
+        m_Vertices.reserve( m_Vertices.size() + 4 );
+        XMMATRIX vTransform = XMLoadFloat4x4( &transform );
+        XMVECTOR vDet;
+        XMMATRIX vNormalTransform = XMMatrixTranspose( XMMatrixInverse( &vDet, vTransform ) );
+        for ( auto& vertex : vertices )
+        {
+            m_Vertices.emplace_back();
+            GPU::Vertex& meshVertex = m_Vertices.back();
+            XMVECTOR vPosition = XMLoadFloat3( &vertex.position );
+            XMVECTOR vNormal = XMLoadFloat3( &vertex.normal );
+            XMVECTOR vTangent = XMLoadFloat3( &vertex.tangent );
+            vPosition = XMVector3Transform( vPosition, vTransform );
+            vNormal = XMVector3TransformNormal( vNormal, vNormalTransform );
+            vTangent = XMVector3TransformNormal( vTangent, vNormalTransform );
+            XMStoreFloat3( &meshVertex.position, vPosition );
+            XMStoreFloat3( &meshVertex.normal, vNormal );
+            XMStoreFloat3( &meshVertex.tangent, vTangent );
+        }
+
+        m_Indices.reserve( indexBase + 6 );
+        for ( auto index : indices )
+        {
+            m_Indices.push_back( indexBase + index );
+        }
+
+        m_MaterialIds.reserve( m_MaterialIds.size() + 2 );
+        m_MaterialIds.push_back( materialId );
+        m_MaterialIds.push_back( materialId );
+        return true;
+    }
+    else
+    {
+        LOG_STRING( "Trying to generate a rectangle shape but maximum vertex count is exceeded.\n" );
+        return false;
+    }
+}
+
+void Mesh::BuildBVH( std::vector<uint32_t>* reorderedTriangleIndices )
+{
+    std::vector<uint32_t> indices = m_Indices;
+    std::vector<uint32_t> triangleIndices;
+    std::vector<uint32_t>* reorderedTriangleIndicesUsed = reorderedTriangleIndices;
+    if ( !reorderedTriangleIndices )
+    {
+        reorderedTriangleIndicesUsed = &triangleIndices;
+    }
+    reorderedTriangleIndicesUsed->resize( GetTriangleCount() );
+    BVHAccel::BuildBLAS( m_Vertices.data(), indices.data(), m_Indices.data(), reorderedTriangleIndicesUsed->data(), GetTriangleCount(), &m_BVHNodes, &m_BVHMaxDepth, &m_BVHMaxStackSize );
+
+    // Reorder material id
+    {
+        std::vector<uint32_t> materialIds = m_MaterialIds;
+        for ( size_t i = 0; i < materialIds.size(); ++i )
+        {
+            m_MaterialIds[ i ] = materialIds[ (*reorderedTriangleIndicesUsed)[ i ] ];
+        }
+    }
+}
+
+void Mesh::Clear()
+{
+    m_Vertices.clear();
+    m_Indices.clear();
+    m_MaterialIds.clear();
+    m_BVHNodes.clear();
+    m_BVHMaxDepth = 0;
+    m_BVHMaxStackSize = 0;
+}
+
+

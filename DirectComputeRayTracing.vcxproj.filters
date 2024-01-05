@@ -57,9 +57,6 @@
     <ClInclude Include="Source\Shader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Source\OBJLoader\tiny_obj_loader.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Source\Mesh.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -123,9 +120,6 @@
     <ClInclude Include="Source\StringConversion.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Source\BxDFTexturesBuilder.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Source\RenderContext.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -151,6 +145,18 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Source\SampleConvolutionRenderer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\MathHelper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Constants.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\ImGuiHelper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\BxDFTexturesBuilding.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -227,9 +233,6 @@
     <ClCompile Include="Source\DirectComputeRayTracing.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Source\BxDFTexturesBuilder.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Source\MegakernelPathTracer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -243,6 +246,27 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\SampleConvolutionRenderer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\SceneXMLLoading.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\SceneWavefrontOBJLoading.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\MathHelper.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\TinyObjLoader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\SceneRayTrace.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\ImGuiHelper.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\BxDFTexturesBuilding.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -267,7 +291,7 @@
     <None Include="Shaders\Samples.inc.hlsl">
       <Filter>Shaders</Filter>
     </None>
-    <None Include="Shaders\RayTracing.hlsl" />
+    <None Include="Shaders\RayTracingCommon.inc.hlsl" />
     <None Include="Shaders\LambertBRDF.inc.hlsl" />
     <None Include="Shaders\Math.inc.hlsl" />
     <None Include="Shaders\BVHAccel.inc.hlsl" />
@@ -279,22 +303,24 @@
     <None Include="Shaders\Vertex.inc.hlsl" />
     <None Include="Shaders\Material.inc.hlsl" />
     <None Include="Shaders\BVHNode.inc.hlsl" />
-    <None Include="Shaders\EnvironmentShader.inc.hlsl" />
     <None Include="Shaders\SumLuminance.hlsl" />
     <None Include="Shaders\SumLuminanceDef.inc.hlsl" />
     <None Include="Shaders\LightingContext.inc.hlsl" />
     <None Include="Shaders\Xoshiro.inc.hlsl" />
     <None Include="Shaders\UInt64.inc.hlsl" />
+    <None Include="Shaders\LightSharedDef.inc.hlsl" />
     <None Include="Shaders\Light.inc.hlsl" />
-    <None Include="Shaders\LightSampling.inc.hlsl" />
     <None Include="Shaders\BxDFTextureDef.inc.hlsl" />
     <None Include="Shaders\Fresnel.inc.hlsl" />
-    <None Include="Shaders\SpecularBRDF.inc.hlsl" />
-    <None Include="Shaders\SpecularBTDF.inc.hlsl" />
+    <None Include="Shaders\SpecularBxDF.inc.hlsl" />
     <None Include="Shaders\CookTorranceBSDF.inc.hlsl" />
     <None Include="Shaders\BxDFTextures.inc.hlsl" />
     <None Include="Shaders\Intrinsics.inc.hlsl" />
     <None Include="Shaders\SampleConvolution.hlsl" />
+    <None Include="Shaders\MegakernelPathtracing.hlsl" />
+    <None Include="Shaders\WavefrontPathTracing.hlsl" />
+    <None Include="Shaders\BxDFTexturesBuilding.hlsl" />
+    <None Include="Shaders\KullaConty.inc.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resources\DirectComputeRayTracing.rc">

@@ -151,6 +151,8 @@ private:
     bool CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, const char* MTLBaseDir, bool applyTransform, const DirectX::XMFLOAT4X4& transform, bool changeWindingOrder, uint32_t materialIdOverride );
 
 public:
+    uint32_t m_ResolutionWidth;
+    uint32_t m_ResolutionHeight;
     DirectX::XMFLOAT2 m_FilmSize;
     float m_FilmDistanceNormalized;
     float m_FocalLength;
@@ -194,6 +196,11 @@ public:
     GPUBufferPtr m_MaterialsBuffer;
     GPUBufferPtr m_InstanceTransformsBuffer;
     GPUBufferPtr m_InstanceLightIndicesBuffer;
+
+    GPUTexturePtr m_FilmTexture;
+    GPUTexturePtr m_SamplePositionTexture;
+    GPUTexturePtr m_SampleValueTexture;
+    GPUTexturePtr m_RenderResultTexture;
 
     SSceneObjectSelection m_ObjectSelection;
 };

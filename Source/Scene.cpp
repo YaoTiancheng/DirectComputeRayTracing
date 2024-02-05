@@ -494,6 +494,46 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
         return false;
     }
 
+    m_FilmTexture.reset( GPUTexture::Create(
+          m_ResolutionWidth
+        , m_ResolutionHeight
+        , DXGI_FORMAT_R32G32B32A32_FLOAT
+        , GPUResourceCreationFlags_HasUAV | GPUResourceCreationFlags_IsRenderTarget ) );
+    if ( !m_FilmTexture )
+    {
+        return false;
+    }
+
+    m_SamplePositionTexture.reset( GPUTexture::Create(
+          m_ResolutionWidth
+        , m_ResolutionHeight
+        , DXGI_FORMAT_R32G32_FLOAT
+        , GPUResourceCreationFlags_HasUAV ) );
+    if ( !m_SamplePositionTexture )
+    { 
+        return false;
+    }
+
+    m_SampleValueTexture.reset( GPUTexture::Create(
+          m_ResolutionWidth
+        , m_ResolutionHeight
+        , DXGI_FORMAT_R32G32B32A32_FLOAT
+        , GPUResourceCreationFlags_HasUAV ) );
+    if ( !m_SampleValueTexture )
+    {
+        return false;
+    }
+
+    m_RenderResultTexture.reset( GPUTexture::Create( 
+          m_ResolutionWidth
+        , m_ResolutionHeight
+        , DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
+        , GPUResourceCreationFlags_IsRenderTarget ) );
+    if ( !m_RenderResultTexture )
+    { 
+        return false;
+    }
+
     m_Camera.SetDirty();
 
     m_HasValidScene = true;
@@ -504,6 +544,8 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
 
 void CScene::Reset()
 {
+    m_ResolutionWidth = CommandLineArgs::Singleton()->ResolutionX();
+    m_ResolutionHeight = CommandLineArgs::Singleton()->ResolutionY();
     m_MaxBounceCount = 2;
     m_FilmSize = XMFLOAT2( 0.05333f, 0.03f );
     m_FocalLength = 0.05f;

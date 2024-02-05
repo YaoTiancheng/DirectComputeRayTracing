@@ -97,6 +97,7 @@
       <FileType>Document</FileType>
     </None>
     <ClInclude Include="Source\BVHAccel.h" />
+    <ClInclude Include="Source\BxDFTextures.h" />
     <ClInclude Include="Source\BxDFTexturesBuilding.h" />
     <ClInclude Include="Source\Camera.h" />
     <ClInclude Include="Source\CommandLineArgs.h" />
@@ -127,7 +128,6 @@
     <ClInclude Include="Source\PostProcessingRenderer.h" />
     <ClInclude Include="Source\Rectangle.h" />
     <ClInclude Include="Source\RenderContext.h" />
-    <ClInclude Include="Source\RenderData.h" />
     <ClInclude Include="Source\RenderJobHelper.h" />
     <ClInclude Include="Source\Scene.h" />
     <ClInclude Include="Source\SceneLuminanceRenderer.h" />

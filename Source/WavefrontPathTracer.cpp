@@ -8,7 +8,7 @@
 #include "D3D11RenderSystem.h"
 #include "ComputeJob.h"
 #include "RenderContext.h"
-#include "RenderData.h"
+#include "BxDFTextures.h"
 #include "ScopedRenderAnnotation.h"
 #include "imgui/imgui.h"
 #include "../Shaders/LightSharedDef.inc.hlsl"
@@ -286,7 +286,7 @@ uint32_t CalculateDispatchGroupCount( uint32_t laneCount )
     return groupCount;
 }
 
-void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SRenderData& renderData )
+void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SBxDFTextures& BxDFTextures )
 {
     ID3D11Device* device = GetDevice();
     ID3D11DeviceContext* deviceContext = GetDeviceContext();
@@ -363,7 +363,7 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SR
 
     for ( uint32_t i = 0; i < m_IterationPerFrame; ++i )
     {
-        RenderOneIteration( renderContext, renderData );
+        RenderOneIteration( renderContext, BxDFTextures );
     }    
 
     // Copy ray counter to the staging buffer
@@ -478,7 +478,7 @@ void CWavefrontPathTracer::GetBlockDimension( uint32_t* width, uint32_t* height 
     *height = blockSizeHeight[ m_BlockDimensionIndex ];
 }
 
-void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderContext, const SRenderData& renderData )
+void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderContext, const SBxDFTextures& BxDFTextures )
 {
     SCOPED_RENDER_ANNOTATION( L"Iteration" );
 
@@ -513,8 +513,8 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
             , m_QueueBuffers[ (int)EShaderKernel::Material ]->GetUAV()
             , m_QueueBuffers[ (int)EShaderKernel::NewPath ]->GetUAV()
             , m_NextBlockIndexBuffer->GetUAV()
-            , renderData.m_SamplePositionTexture->GetUAV()
-            , renderData.m_SampleValueTexture->GetUAV()
+            , m_Scene->m_SamplePositionTexture->GetUAV()
+            , m_Scene->m_SampleValueTexture->GetUAV()
         };
         job.m_DispatchSizeX = CalculateDispatchGroupCount( s_PathPoolLaneCount );
         job.m_DispatchSizeY = 1;
@@ -559,7 +559,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
         job.m_ConstantBuffers =
         {
               m_QueueConstantsBuffers[ 1 ]->GetBuffer()
-            , renderData.m_RayTracingFrameConstantBuffer->GetBuffer()
+            , renderContext.m_RayTracingFrameConstantBuffer->GetBuffer()
             , m_NewPathConstantBuffer->GetBuffer()
         };
         job.m_Shader = m_Shaders[ (int)EShaderKernel::NewPath ].get();
@@ -622,11 +622,11 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
             , m_Scene->m_MaterialIdsBuffer->GetSRV()
             , m_Scene->m_MaterialsBuffer->GetSRV()
             , m_Scene->m_InstanceLightIndicesBuffer->GetSRV()
-            , renderData.m_BRDFTexture->GetSRV()
-            , renderData.m_BRDFAvgTexture->GetSRV()
-            , renderData.m_BRDFDielectricTexture->GetSRV()
-            , renderData.m_BSDFTexture->GetSRV()
-            , renderData.m_BSDFAvgTexture->GetSRV()
+            , BxDFTextures.m_CookTorranceBRDF->GetSRV()
+            , BxDFTextures.m_CookTorranceBRDFAverage->GetSRV()
+            , BxDFTextures.m_CookTorranceBRDFDielectric->GetSRV()
+            , BxDFTextures.m_CookTorranceBSDF->GetSRV()
+            , BxDFTextures.m_CookTorranceBSDFAverage->GetSRV()
             , environmentTextureSRV
         };
         job.m_UAVs =
@@ -641,7 +641,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
             , m_QueueBuffers[ (int)EShaderKernel::ExtensionRayCast ]->GetUAV()
             , m_QueueBuffers[ (int)EShaderKernel::ShadowRayCast ]->GetUAV()
         };
-        job.m_SamplerStates.push_back( renderData.m_UVClampSamplerState.Get() );
+        job.m_SamplerStates.push_back( renderContext.m_UVClampSamplerState.Get() );
         job.DispatchIndirect( m_IndirectArgumentBuffer[ (int)EShaderKernel::Material ]->GetBuffer() );
     }
 

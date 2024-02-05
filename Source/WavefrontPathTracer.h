@@ -22,7 +22,7 @@ public:
 
     virtual void OnSceneLoaded() override;
 
-    virtual void Render( const SRenderContext& renderContext, const SRenderData& renderData ) override;
+    virtual void Render( const SRenderContext& renderContext, const SBxDFTextures& BxDFTextures ) override;
 
     virtual void ResetImage() override;
 
@@ -50,7 +50,7 @@ private:
 
     void GetBlockDimension( uint32_t* width, uint32_t* height );
 
-    void RenderOneIteration( const SRenderContext& renderContext, const SRenderData& renderData );
+    void RenderOneIteration( const SRenderContext& renderContext, const SBxDFTextures& BxDFTextures );
 
     CScene* m_Scene;
 

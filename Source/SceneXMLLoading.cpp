@@ -776,6 +776,26 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                 SValue* filmValue = rootObjectValue.second->FindValue( "film" );
                 if ( filmValue )
                 {
+                    {
+                        int32_t resolutionWidth = 768;
+                        int32_t resolutionHeight = 576;
+
+                        SValue* widthValue = filmValue->FindValue( "width" );
+                        if ( widthValue && widthValue->m_Type == eInteger )
+                        {
+                            resolutionWidth = widthValue->m_Integer;
+                        }
+
+                        SValue* heightValue = filmValue->FindValue( "height" );
+                        if ( heightValue && heightValue->m_Type == eInteger )
+                        {
+                            resolutionHeight = heightValue->m_Integer;
+                        }
+
+                        m_ResolutionWidth = resolutionWidth;
+                        m_ResolutionHeight = resolutionHeight;
+                    }
+
                     SValue* filterValue = filmValue->FindValue( "rfilter" );
                     if ( filterValue )
                     {

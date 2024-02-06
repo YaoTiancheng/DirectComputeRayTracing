@@ -298,6 +298,10 @@ bool SRenderer::LoadScene( const char* filepath, bool reset )
 
     UpdateRenderViewport();
 
+    // Aspect ratio might change due to rounding error, but this is neglectable
+    m_SmallResolutionWidth = std::max( 1u, (uint32_t)std::roundf( m_Scene.m_ResolutionWidth * 0.25f ) );
+    m_SmallResolutionHeight = std::max( 1u, (uint32_t)std::roundf( m_Scene.m_ResolutionHeight * 0.25f ) );
+
     m_IsMaterialGPUBufferDirty = true;
     m_IsLightGPUBufferDirty = true;
 

@@ -889,8 +889,16 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
         {
             m_Scene.m_Camera.OnImGUI();
 
-            if ( ImGui::InputFloat2( "Film Size", (float*)&m_Scene.m_FilmSize ) )
+            if ( ImGui::DragFloat( "Film Width", &m_Scene.m_FilmSize.x, 0.005f, 0.001f, 999.f, "%.3f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
+            {
+                m_Scene.m_FilmSize.y = m_Scene.m_FilmSize.x / m_Scene.m_ResolutionWidth * m_Scene.m_ResolutionHeight;
                 m_IsFilmDirty = true;
+            }
+            if ( ImGui::DragFloat( "Film Height", &m_Scene.m_FilmSize.y, 0.005f, 0.001f, 999.f, "%.3f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
+            {
+                m_Scene.m_FilmSize.x = m_Scene.m_FilmSize.y / m_Scene.m_ResolutionHeight * m_Scene.m_ResolutionWidth;
+                m_IsFilmDirty = true;
+            }
 
             static const char* s_CameraTypeNames[] = { "PinHole", "ThinLens" };
             if ( ImGui::Combo( "Type", (int*)&m_Scene.m_CameraType, s_CameraTypeNames, IM_ARRAYSIZE( s_CameraTypeNames ) ) )

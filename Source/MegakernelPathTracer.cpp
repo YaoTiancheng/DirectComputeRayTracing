@@ -93,7 +93,7 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
         constants->resolutionX = renderContext.m_CurrentResolutionWidth;
         constants->resolutionY = renderContext.m_CurrentResolutionHeight;
         m_Scene->m_Camera.GetTransformMatrix( &constants->cameraTransform );
-        constants->filmDistance = m_Scene->GetFilmDistance();
+        constants->filmDistance = m_Scene->CalculateFilmDistance();
         constants->filmSize = m_Scene->m_FilmSize;
         constants->lightCount = m_Scene->GetLightCount();
         constants->maxBounceCount = m_Scene->m_MaxBounceCount;

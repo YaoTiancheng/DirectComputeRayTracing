@@ -888,53 +888,39 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
             if ( ImGui::InputFloat2( "Film Size", (float*)&m_Scene.m_FilmSize ) )
                 m_IsFilmDirty = true;
 
-            if ( ImGui::DragFloat( "Focal Length", (float*)&m_Scene.m_FocalLength, 0.000001f, 0.000001f, 1000.0f, "%.5f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
-            {
+            static const char* s_CameraTypeNames[] = { "PinHole", "ThinLens" };
+            if ( ImGui::Combo( "Type", (int*)&m_Scene.m_CameraType, s_CameraTypeNames, IM_ARRAYSIZE( s_CameraTypeNames ) ) )
                 m_IsFilmDirty = true;
-                if ( m_Scene.m_IsManualFilmDistanceEnabled )
-                {
-                    m_Scene.m_FocalDistance = m_Scene.CalculateFocalDistance();
-                }
-                else
-                {
-                    m_Scene.m_FilmDistanceNormalized = m_Scene.CalculateFilmDistanceNormalized();
-                }
-            }
-
-            ImGui::Checkbox( "Manual Film Distance", &m_Scene.m_IsManualFilmDistanceEnabled );
-
-            if ( m_Scene.m_IsManualFilmDistanceEnabled )
+            
+            if ( m_Scene.m_CameraType == ECameraType::PinHole )
             {
-                ImGui::LabelText( "Focal Distance", "%.5f", m_Scene.m_FocalDistance );
-
-                if ( ImGui::DragFloat( "Film Distance Normalized", (float*)&m_Scene.m_FilmDistanceNormalized, 0.0001f, 0.000001f, 1.0f, "%.5f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
-                {
+                float fovDeg = DirectX::XMConvertToDegrees( m_Scene.m_FoVX );
+                if ( ImGui::DragFloat( "FoV", (float*)&fovDeg, 1.f, 0.00001f, 179.9f, "%.2f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
+                { 
+                    m_Scene.m_FoVX = DirectX::XMConvertToRadians( fovDeg );
                     m_IsFilmDirty = true;
-                    m_Scene.m_FocalDistance = m_Scene.CalculateFocalDistance();
                 }
             }
             else
-            {
-                if ( ImGui::DragFloat( "Focal Distance", (float*)&m_Scene.m_FocalDistance, 0.005f, 0.000001f, m_Scene.s_MaxFocalDistance, "%.5f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
-                {
+            { 
+                if ( ImGui::DragFloat( "Focal Length", (float*)&m_Scene.m_FocalLength, 0.000001f, 0.000001f, 1000.0f, "%.5f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
                     m_IsFilmDirty = true;
-                    m_Scene.m_FilmDistanceNormalized = m_Scene.CalculateFilmDistanceNormalized();
+            
+                if ( ImGui::DragFloat( "Focal Distance", (float*)&m_Scene.m_FocalDistance, 0.005f, 0.000001f, m_Scene.s_MaxFocalDistance, "%.5f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
+                    m_IsFilmDirty = true;
+
+                if ( ImGui::DragFloat( "Aperture(f-number)", &m_Scene.m_RelativeAperture, 0.1f, 0.01f, 1000.0f, "%.1f", ImGuiSliderFlags_AlwaysClamp ) )
+                    m_IsFilmDirty = true;
+
+                if ( ImGui::DragInt( "Aperture Blade Count", (int*)&m_Scene.m_ApertureBladeCount, 1.0f, 2, 16, "%d", ImGuiSliderFlags_AlwaysClamp ) )
+                    m_IsFilmDirty = true;
+
+                float apertureRotationDeg = DirectX::XMConvertToDegrees( m_Scene.m_ApertureRotation );
+                if ( ImGui::DragFloat( "Aperture Rotation", &apertureRotationDeg, 1.0f, 0.0f, 360.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp ) )
+                {
+                    m_Scene.m_ApertureRotation = DirectX::XMConvertToRadians( apertureRotationDeg );
+                    m_IsFilmDirty = true;
                 }
-
-                ImGui::LabelText( "Film Distance Normalized", "%.5f", m_Scene.m_FilmDistanceNormalized );
-            }
-
-            if ( ImGui::DragFloat( "Aperture(f-number)", &m_Scene.m_RelativeAperture, 0.1f, 0.01f, 1000.0f, "%.1f", ImGuiSliderFlags_AlwaysClamp ) )
-                m_IsFilmDirty = true;
-
-            if ( ImGui::DragInt( "Aperture Blade Count", (int*)&m_Scene.m_ApertureBladeCount, 1.0f, 2, 16, "%d", ImGuiSliderFlags_AlwaysClamp ) )
-                m_IsFilmDirty = true;
-
-            float apertureRotationDeg = DirectX::XMConvertToDegrees( m_Scene.m_ApertureRotation );
-            if ( ImGui::DragFloat( "Aperture Rotation", &apertureRotationDeg, 1.0f, 0.0f, 360.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp ) )
-            {
-                m_Scene.m_ApertureRotation = DirectX::XMConvertToRadians( apertureRotationDeg );
-                m_IsFilmDirty = true;
             }
 
             ImGui::DragFloat( "Shutter Time", &m_Scene.m_ShutterTime, 0.001f, 0.001f, 100000.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp );

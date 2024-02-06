@@ -678,6 +678,30 @@ namespace
     }
 }
 
+static inline bool FindChildBoolean( const SValue* value, const char* name, bool defaultValue = false )
+{
+    SValue* ChildValue = value->FindValue( name );
+    return ChildValue && ChildValue->m_Type == EValueType::eBoolean ? ChildValue->m_Boolean : defaultValue;
+}
+
+static inline int32_t FindChildInteger( const SValue* value, const char* name, int32_t defaultValue = 0 )
+{
+    SValue* ChildValue = value->FindValue( name );
+    return ChildValue && ChildValue->m_Type == EValueType::eInteger ? ChildValue->m_Integer : defaultValue;
+}
+
+static inline float FindChildFloat( const SValue* value, const char* name, float defaultValue = 0.f )
+{
+    SValue* ChildValue = value->FindValue( name );
+    return ChildValue && ChildValue->m_Type == EValueType::eFloat ? ChildValue->m_Float : defaultValue;
+}
+
+static inline std::string_view FindChildString( const SValue* value, const char* name, std::string_view defaultValue = std::string_view() )
+{
+    SValue* ChildValue = value->FindValue( name );
+    return ChildValue && ChildValue->m_Type == EValueType::eString ? ChildValue->m_String : defaultValue;
+}
+
 bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
 {
     std::ifstream ifstream( filepath );
@@ -737,6 +761,20 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
         }
         else if ( strncmp( "sensor", rootObjectValue.first.data(), rootObjectValue.first.length() ) == 0 )
         {
+            const std::string_view sensorTypeString = FindChildString( rootObjectValue.second, "type" );
+            if ( strncmp( "perspective", sensorTypeString.data(), sensorTypeString.length() ) == 0 )
+            {
+                m_CameraType = ECameraType::PinHole;
+            }
+            else if ( strncmp( "thinlens", sensorTypeString.data(), sensorTypeString.length() ) == 0 )
+            {
+                m_CameraType = ECameraType::ThinLens;
+            }
+            else
+            {
+                LOG_STRING_FORMAT( "Unsupported sensor type \'%.*s\'.\n", sensorTypeString.length(), sensorTypeString.data() );
+            }
+
             {
                 SValue* transformValue = rootObjectValue.second->FindValue( "transform" );
                 XMFLOAT3 position = { 0.0f, 0.0f, 0.0f };
@@ -747,29 +785,6 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     eulerAngles = MathHelper::MatrixRotationToRollPitchYall( transformValue->m_Matrix );
                 }
                 m_Camera.SetPositionAndEulerAngles( position, eulerAngles );
-            }
-
-            {
-                SValue* focalLengthValue = rootObjectValue.second->FindValue( "focalLength" );
-                if ( focalLengthValue )
-                {
-                    float focalLengthMilliMeter = (float)atof( focalLengthValue->m_String.data() );
-                    m_FocalLength = focalLengthMilliMeter * 0.001f;
-                }
-                else
-                {
-                    m_FocalLength = 0.05f;
-                }
-            }
-
-            {
-                SValue* apertureRadiusValue = rootObjectValue.second->FindValue( "apertureRadius" );
-                m_RelativeAperture = apertureRadiusValue ? m_FocalLength / ( apertureRadiusValue->m_Float * 2 ) : 8.0f;
-            }
-
-            {
-                SValue* focalDistanceValue = rootObjectValue.second->FindValue( "focusDistance" );
-                m_FocalDistance = focalDistanceValue ? focalDistanceValue->m_Float : 2.0f;
             }
 
             {
@@ -838,6 +853,65 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                         }
                     }
                 }
+            }
+
+            const float aspect = (float)m_ResolutionWidth / m_ResolutionHeight;
+
+            // Update film size
+            m_FilmSize.x = 0.035f;
+            m_FilmSize.y = m_FilmSize.x / std::fmax( aspect, 0.0001f );
+
+            SValue* focalLengthValue = rootObjectValue.second->FindValue( "focalLength" );
+            if ( focalLengthValue )
+            {
+                float focalLengthMilliMeter = (float)atof( focalLengthValue->m_String.data() );
+                m_FocalLength = focalLengthMilliMeter * 0.001f;
+
+                if ( m_CameraType == ECameraType::PinHole )
+                {
+                    LOG_STRING( "Using focalLength for PinHole camera is not supported.\n" );
+                }
+            }
+            else
+            {
+                m_FocalLength = 0.05f;
+            }
+
+            float fovDeg = 50.f;
+            SValue* fovValue = rootObjectValue.second->FindValue( "fov" );
+            if ( fovValue && fovValue->m_Type == eFloat )
+            {
+                fovDeg = std::clamp( fovValue->m_Float, 0.0001f, 179.99f );
+
+                if ( m_CameraType == ECameraType::ThinLens )
+                {
+                    LOG_STRING( "Using fov for ThinLens camera is not supported.\n" );
+                }
+            }
+            m_FoVX = XMConvertToRadians( fovDeg );
+
+            if ( m_CameraType == ECameraType::PinHole )
+            {
+                std::string_view fovAxis = FindChildString( rootObjectValue.second, "fovAxis", "x" );
+                if ( strncmp( "x", fovAxis.data(), fovAxis.length() ) == 0 )
+                {
+                }
+                else if ( strncmp( "y", fovAxis.data(), fovAxis.length() ) == 0 )
+                {
+                    m_FoVX *= aspect;
+                }
+                else
+                {
+                    LOG_STRING_FORMAT( "Unsupported fovAxis \'%.*s\'.\n", fovAxis.length(), fovAxis.data() );
+                }
+            }
+            else if ( m_CameraType == ECameraType::ThinLens )
+            {
+                SValue* apertureRadiusValue = rootObjectValue.second->FindValue( "apertureRadius" );
+                m_RelativeAperture = apertureRadiusValue ? m_FocalLength / ( apertureRadiusValue->m_Float * 2 ) : 8.0f;
+            
+                SValue* focalDistanceValue = rootObjectValue.second->FindValue( "focusDistance" );
+                m_FocalDistance = focalDistanceValue ? focalDistanceValue->m_Float : 2.0f;
             }
         }
         else if ( strncmp( "bsdf", rootObjectValue.first.data(), rootObjectValue.first.length() ) == 0 )

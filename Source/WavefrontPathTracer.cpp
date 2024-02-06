@@ -323,7 +323,7 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SB
         constants->g_FilmSize = m_Scene->m_FilmSize;
         constants->g_ApertureRadius = m_Scene->CalculateApertureDiameter() * 0.5f;
         constants->g_FocalDistance = m_Scene->m_FocalDistance;
-        constants->g_FilmDistance = m_Scene->GetFilmDistance();
+        constants->g_FilmDistance = m_Scene->CalculateFilmDistance();
         constants->g_BladeCount = m_Scene->m_ApertureBladeCount;
         float halfBladeAngle = DirectX::XM_PI / m_Scene->m_ApertureBladeCount;
         constants->g_BladeVertexPos.x = cosf( halfBladeAngle ) * constants->g_ApertureRadius;

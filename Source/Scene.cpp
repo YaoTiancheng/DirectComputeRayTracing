@@ -548,9 +548,10 @@ void CScene::Reset()
     m_ResolutionHeight = CommandLineArgs::Singleton()->ResolutionY();
     m_MaxBounceCount = 2;
     m_FilmSize = XMFLOAT2( 0.05333f, 0.03f );
+    m_CameraType = ECameraType::ThinLens;
+    m_FoVX = 1.221730f;
     m_FocalLength = 0.05f;
     m_FocalDistance = 2.0f;
-    m_FilmDistanceNormalized = CalculateFilmDistanceNormalized();
     m_RelativeAperture = 8.0f; // initialize to f/8
     m_ApertureBladeCount = 7;
     m_ApertureRotation = 0.0f;
@@ -654,30 +655,18 @@ void CScene::UpdateMaterialGPUData()
     }
 }
 
-float CScene::GetFilmDistance() const
-{
-    return m_FilmDistanceNormalized * m_FocalLength;
-}
-
-// Calculate focal distance from focal length and film distance.
-// Based on the Gaussian lens equation.
-float CScene::CalculateFocalDistance() const
-{
-    float filmDistance = GetFilmDistance();
-    float denom = std::fmaxf( 0.0f, m_FocalLength - filmDistance );
-    return std::fminf( s_MaxFocalDistance, ( m_FocalLength * filmDistance ) / denom ); // Clamp this value before it gets too large and make ray generation output invalid numbers.
-}
-
 // Calculate film distance from focal length and focal distance.
 // Based on the Gaussian lens equation.
 float CScene::CalculateFilmDistance() const
 {
-    return ( m_FocalLength * m_FocalDistance ) / ( m_FocalLength + m_FocalDistance );
+    return m_CameraType == ECameraType::PinHole ?
+        0.5f * m_FilmSize.x / std::max( tanf( 0.5f * m_FoVX ), 0.0001f ) :
+        ( m_FocalLength * m_FocalDistance ) / ( m_FocalLength + m_FocalDistance );
 }
 
-float CScene::CalculateFilmDistanceNormalized() const
+float CScene::CalculateApertureDiameter() const
 {
-    return CalculateFilmDistance() / m_FocalLength;
+    return m_CameraType == ECameraType::PinHole ? 0.f : m_FocalLength / m_RelativeAperture;
 }
 
 bool SEnvironmentLight::CreateTextureFromFile()

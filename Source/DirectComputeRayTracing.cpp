@@ -662,7 +662,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                     ofn.lpstrFile = filepath;
                     ofn.lpstrFile[ 0 ] = '\0';
                     ofn.nMaxFile = sizeof( filepath );
-                    ofn.lpstrFilter = "Wavefront OBJ\0*.OBJ\0XML\0*.XML\0";
+                    ofn.lpstrFilter = "All Scene Files (*.obj;*.xml)\0*.OBJ;*.XML\0";
                     ofn.nFilterIndex = 1;
                     ofn.lpstrFileTitle = NULL;
                     ofn.nMaxFileTitle = 0;

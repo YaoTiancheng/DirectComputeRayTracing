@@ -53,6 +53,8 @@ struct SRenderer
 
     void ClearFilmTexture();
 
+    bool HandleFilmResolutionChange();
+
     void UpdateRenderViewport();
 
     void ResizeBackbuffer( uint32_t backbufferWidth, uint32_t backbufferHeight );
@@ -83,6 +85,8 @@ struct SRenderer
     enum class EFrameSeedType { FrameIndex = 0, SampleCount = 1, Fixed = 2, _Count = 3 };
     EFrameSeedType m_FrameSeedType = EFrameSeedType::SampleCount;
 
+    uint32_t m_NewResolutionWidth;
+    uint32_t m_NewResolutionHeight;
     uint32_t m_SmallResolutionWidth = 480;
     uint32_t m_SmallResolutionHeight = 270;
 
@@ -291,16 +295,13 @@ bool SRenderer::LoadScene( const char* filepath, bool reset )
 
     m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
 
-    if ( !m_PostProcessing.SetTextures( m_Scene.m_ResolutionWidth, m_Scene.m_ResolutionHeight, m_Scene.m_FilmTexture, m_Scene.m_RenderResultTexture ) )
+    if ( !HandleFilmResolutionChange() )
     {
         return false;
     }
 
-    UpdateRenderViewport();
-
-    // Aspect ratio might change due to rounding error, but this is neglectable
-    m_SmallResolutionWidth = std::max( 1u, (uint32_t)std::roundf( m_Scene.m_ResolutionWidth * 0.25f ) );
-    m_SmallResolutionHeight = std::max( 1u, (uint32_t)std::roundf( m_Scene.m_ResolutionHeight * 0.25f ) );
+    m_NewResolutionWidth = m_Scene.m_ResolutionWidth;
+    m_NewResolutionHeight = m_Scene.m_ResolutionHeight;
 
     m_IsMaterialGPUBufferDirty = true;
     m_IsLightGPUBufferDirty = true;
@@ -457,6 +458,22 @@ void SRenderer::ClearFilmTexture()
     deviceContext->ClearRenderTargetView( m_Scene.m_FilmTexture->GetRTV(), kClearColor );
 }
 
+bool SRenderer::HandleFilmResolutionChange()
+{
+    if ( !m_PostProcessing.SetTextures( m_Scene.m_ResolutionWidth, m_Scene.m_ResolutionHeight, m_Scene.m_FilmTexture, m_Scene.m_RenderResultTexture ) )
+    {
+        return false;
+    }
+
+    UpdateRenderViewport();
+
+    // Aspect ratio might change due to rounding error, but this is neglectable
+    m_SmallResolutionWidth = std::max( 1u, (uint32_t)std::roundf( m_Scene.m_ResolutionWidth * 0.25f ) );
+    m_SmallResolutionHeight = std::max( 1u, (uint32_t)std::roundf( m_Scene.m_ResolutionHeight * 0.25f ) );
+
+    return true;
+}
+
 void SRenderer::UpdateRenderViewport()
 {
     DXGI_SWAP_CHAIN_DESC swapChainDesc;
@@ -519,6 +536,20 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
             {
                 if ( ImGui::InputInt( "Frame Seed", (int*)&m_FrameSeed, 1 ) )
                 {
+                    m_IsFilmDirty = true;
+                }
+            }
+
+            ImGui::DragInt( "Resolution Width", (int*)&m_NewResolutionWidth, 16, 16, 4096, "%d", ImGuiSliderFlags_AlwaysClamp );
+            ImGui::DragInt( "Resolution Height", (int*)&m_NewResolutionHeight, 16, 16, 4096, "%d", ImGuiSliderFlags_AlwaysClamp );
+            if ( m_Scene.m_ResolutionWidth != m_NewResolutionWidth || m_Scene.m_ResolutionHeight != m_NewResolutionHeight )
+            {
+                if ( ImGui::Button( "Apply##ApplyResolutionChange" ) )
+                {
+                    m_Scene.m_ResolutionWidth = m_NewResolutionWidth;
+                    m_Scene.m_ResolutionHeight = m_NewResolutionHeight;
+                    m_Scene.RecreateFilmTextures();
+                    HandleFilmResolutionChange();
                     m_IsFilmDirty = true;
                 }
             }

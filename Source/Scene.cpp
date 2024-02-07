@@ -494,43 +494,8 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
         return false;
     }
 
-    m_FilmTexture.reset( GPUTexture::Create(
-          m_ResolutionWidth
-        , m_ResolutionHeight
-        , DXGI_FORMAT_R32G32B32A32_FLOAT
-        , GPUResourceCreationFlags_HasUAV | GPUResourceCreationFlags_IsRenderTarget ) );
-    if ( !m_FilmTexture )
+    if ( !RecreateFilmTextures() )
     {
-        return false;
-    }
-
-    m_SamplePositionTexture.reset( GPUTexture::Create(
-          m_ResolutionWidth
-        , m_ResolutionHeight
-        , DXGI_FORMAT_R32G32_FLOAT
-        , GPUResourceCreationFlags_HasUAV ) );
-    if ( !m_SamplePositionTexture )
-    { 
-        return false;
-    }
-
-    m_SampleValueTexture.reset( GPUTexture::Create(
-          m_ResolutionWidth
-        , m_ResolutionHeight
-        , DXGI_FORMAT_R32G32B32A32_FLOAT
-        , GPUResourceCreationFlags_HasUAV ) );
-    if ( !m_SampleValueTexture )
-    {
-        return false;
-    }
-
-    m_RenderResultTexture.reset( GPUTexture::Create( 
-          m_ResolutionWidth
-        , m_ResolutionHeight
-        , DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
-        , GPUResourceCreationFlags_IsRenderTarget ) );
-    if ( !m_RenderResultTexture )
-    { 
         return false;
     }
 
@@ -667,6 +632,51 @@ float CScene::CalculateFilmDistance() const
 float CScene::CalculateApertureDiameter() const
 {
     return m_CameraType == ECameraType::PinHole ? 0.f : m_FocalLength / m_RelativeAperture;
+}
+
+bool CScene::RecreateFilmTextures()
+{
+    m_FilmTexture.reset( GPUTexture::Create(
+          m_ResolutionWidth
+        , m_ResolutionHeight
+        , DXGI_FORMAT_R32G32B32A32_FLOAT
+        , GPUResourceCreationFlags_HasUAV | GPUResourceCreationFlags_IsRenderTarget ) );
+    if ( !m_FilmTexture )
+    {
+        return false;
+    }
+
+    m_SamplePositionTexture.reset( GPUTexture::Create(
+          m_ResolutionWidth
+        , m_ResolutionHeight
+        , DXGI_FORMAT_R32G32_FLOAT
+        , GPUResourceCreationFlags_HasUAV ) );
+    if ( !m_SamplePositionTexture )
+    { 
+        return false;
+    }
+
+    m_SampleValueTexture.reset( GPUTexture::Create(
+          m_ResolutionWidth
+        , m_ResolutionHeight
+        , DXGI_FORMAT_R32G32B32A32_FLOAT
+        , GPUResourceCreationFlags_HasUAV ) );
+    if ( !m_SampleValueTexture )
+    {
+        return false;
+    }
+
+    m_RenderResultTexture.reset( GPUTexture::Create( 
+          m_ResolutionWidth
+        , m_ResolutionHeight
+        , DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
+        , GPUResourceCreationFlags_IsRenderTarget ) );
+    if ( !m_RenderResultTexture )
+    { 
+        return false;
+    }
+
+    return true;
 }
 
 bool SEnvironmentLight::CreateTextureFromFile()

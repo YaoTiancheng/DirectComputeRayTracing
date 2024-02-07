@@ -125,6 +125,8 @@ public:
 
     void Reset();
 
+    bool RecreateFilmTextures();
+
     void UpdateLightGPUData();
 
     void UpdateMaterialGPUData();

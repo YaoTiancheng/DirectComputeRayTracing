@@ -28,6 +28,7 @@ Unidirectional MC path tracer using D3D11 compute shader.
 - mitsuba https://github.com/mitsuba-renderer/mitsuba.git
 - Falcor https://github.com/NVIDIAGameWorks/Falcor.git
 - [Revisiting Physically Based Shading at Imageworks](https://blog.selfshadow.com/publications/s2017-shading-course/imageworks/s2017_pbs_imageworks_slides_v2.pdf)
+- GPU-Raytracer https://github.com/jan-van-bergen/GPU-Raytracer.git
 
 ## Credits
 This renderer is built with these software:

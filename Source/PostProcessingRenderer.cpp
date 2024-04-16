@@ -51,9 +51,9 @@ PostProcessingRenderer::PostProcessingRenderer()
 {
 }
 
-bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, const GPUTexturePtr& filmTexture, const GPUTexturePtr& renderResultTexture )
+bool PostProcessingRenderer::Init()
 {
-    if ( !m_LuminanceRenderer.Init( renderWidth, renderHeight, filmTexture ) )
+    if ( !m_LuminanceRenderer.Init() )
     {
         return false;
     }
@@ -130,7 +130,7 @@ bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, 
 
     m_PostFXJob.m_SamplerStates.push_back( m_PointSamplerState.Get() );
     m_PostFXJob.m_ConstantBuffers.push_back( m_ConstantsBuffer->GetBuffer() );
-    m_PostFXJob.m_SRVs.push_back( filmTexture->GetSRV() );
+    m_PostFXJob.m_SRVs.push_back( nullptr );
     m_PostFXJob.m_SRVs.push_back( nullptr );
     m_PostFXJob.m_VertexBuffer = m_ScreenQuadVerticesBuffer.get();
     m_PostFXJob.m_InputLayout = m_ScreenQuadVertexInputLayout.Get();
@@ -139,12 +139,25 @@ bool PostProcessingRenderer::Init( uint32_t renderWidth, uint32_t renderHeight, 
 
     m_CopyJob.m_SamplerStates.push_back( m_LinearSamplerState.Get() );
     m_CopyJob.m_ConstantBuffers.push_back( m_ConstantsBuffer->GetBuffer() );
-    m_CopyJob.m_SRVs.push_back( renderResultTexture->GetSRV() );
+    m_CopyJob.m_SRVs.push_back( nullptr );
     m_CopyJob.m_VertexBuffer = m_ScreenQuadVerticesBuffer.get();
     m_CopyJob.m_InputLayout = m_ScreenQuadVertexInputLayout.Get();
     m_CopyJob.m_VertexCount = 6;
     m_CopyJob.m_VertexStride = sizeof( XMFLOAT4 );
     m_CopyJob.m_Shader = m_CopyShader.get();
+
+    return true;
+}
+
+bool PostProcessingRenderer::SetTextures( uint32_t renderWidth, uint32_t renderHeight, const GPUTexturePtr& filmTexture, const GPUTexturePtr& renderResultTexture )
+{
+    if ( !m_LuminanceRenderer.SetFilmTexture( renderWidth, renderHeight, filmTexture ) )
+    {
+        return false;
+    }
+
+    m_PostFXJob.m_SRVs[ 0 ] = filmTexture->GetSRV();
+    m_CopyJob.m_SRVs[ 0 ] = renderResultTexture->GetSRV();
 
     return true;
 }
@@ -216,5 +229,5 @@ bool PostProcessingRenderer::OnImGUI()
 void PostProcessingRenderer::UpdateJob( bool enablePostFX )
 {
     m_PostFXJob.m_Shader = !m_IsPostFXEnabled || !enablePostFX ? m_PostFXDisabledShader.get() : ( m_IsAutoExposureEnabled ? m_PostFXAutoExposureShader.get() : m_PostFXShader.get() );
-    m_PostFXJob.m_SRVs[ 1 ] = m_LuminanceRenderer.GetLuminanceResultBuffer()->GetSRV();
+    m_PostFXJob.m_SRVs[ 1 ] = m_LuminanceRenderer.GetLuminanceResultBuffer() ? m_LuminanceRenderer.GetLuminanceResultBuffer()->GetSRV() : nullptr;
 }

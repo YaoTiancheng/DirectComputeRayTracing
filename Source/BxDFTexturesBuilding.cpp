@@ -85,9 +85,9 @@ static ComputeShaderPtr CompileAndCreateKernel( const char* kernelName, const SK
     return shader;
 }
 
-BxDFTexturesBuilding::STextures BxDFTexturesBuilding::Build()
+SBxDFTextures BxDFTexturesBuilding::Build()
 {
-    BxDFTexturesBuilding::STextures outputTextures;
+    SBxDFTextures outputTextures;
 
     {
         const uint32_t sampleCountPerBatch = 4096;

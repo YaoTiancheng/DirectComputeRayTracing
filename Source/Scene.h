@@ -5,6 +5,12 @@
 #include "Mesh.h"
 #include "../Shaders/Material.inc.hlsl"
 
+enum class ECameraType
+{
+    PinHole = 0,
+    ThinLens = 1,
+};
+
 enum class EFilter
 {
     Box = 0,
@@ -119,6 +125,8 @@ public:
 
     void Reset();
 
+    bool RecreateFilmTextures();
+
     void UpdateLightGPUData();
 
     void UpdateMaterialGPUData();
@@ -127,13 +135,9 @@ public:
 
     uint32_t GetLightCount() const { return (uint32_t)m_MeshLights.size() + (uint32_t)m_PunctualLights.size() + ( m_EnvironmentLight ? 1 : 0 ); }
 
-    float CalculateFocalDistance() const;
-
     float CalculateFilmDistance() const;
 
-    float CalculateFilmDistanceNormalized() const;
-
-    float CalculateApertureDiameter() const { return m_FocalLength / m_RelativeAperture; }
+    float CalculateApertureDiameter() const;
 
     bool XM_CALLCONV TraceRay( DirectX::FXMVECTOR origin, DirectX::FXMVECTOR direction, float tMin, SRayHit* outRayHit ) const;
 
@@ -151,8 +155,11 @@ private:
     bool CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, const char* MTLBaseDir, bool applyTransform, const DirectX::XMFLOAT4X4& transform, bool changeWindingOrder, uint32_t materialIdOverride );
 
 public:
+    uint32_t m_ResolutionWidth;
+    uint32_t m_ResolutionHeight;
     DirectX::XMFLOAT2 m_FilmSize;
-    float m_FilmDistanceNormalized;
+    ECameraType m_CameraType;
+    float m_FoVX;
     float m_FocalLength;
     float m_FocalDistance;
     float m_RelativeAperture;
@@ -160,7 +167,6 @@ public:
     float m_ApertureRotation;
     float m_ShutterTime;
     float m_ISO;
-    bool m_IsManualFilmDistanceEnabled = false;
     uint32_t m_MaxBounceCount;
     float m_FilterRadius = 1.0f;
     EFilter m_Filter = EFilter::Box;
@@ -194,6 +200,11 @@ public:
     GPUBufferPtr m_MaterialsBuffer;
     GPUBufferPtr m_InstanceTransformsBuffer;
     GPUBufferPtr m_InstanceLightIndicesBuffer;
+
+    GPUTexturePtr m_FilmTexture;
+    GPUTexturePtr m_SamplePositionTexture;
+    GPUTexturePtr m_SampleValueTexture;
+    GPUTexturePtr m_RenderResultTexture;
 
     SSceneObjectSelection m_ObjectSelection;
 };

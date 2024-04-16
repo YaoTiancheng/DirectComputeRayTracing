@@ -6,7 +6,9 @@
 class SceneLuminanceRenderer
 {
 public:
-    bool Init( uint32_t resolutionWidth, uint32_t resolutionHeight, const GPUTexturePtr& filmTexture );
+    bool Init();
+
+    bool SetFilmTexture( uint32_t resolutionWidth, uint32_t resolutionHeight, const GPUTexturePtr& filmTexture );
 
     void Dispatch( uint32_t resolutionWidth, uint32_t resolutionHeight );
 

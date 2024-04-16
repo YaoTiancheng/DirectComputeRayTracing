@@ -6,7 +6,7 @@
 #include "Scene.h"
 #include "ComputeJob.h"
 #include "RenderContext.h"
-#include "RenderData.h"
+#include "BxDFTextures.h"
 #include "MessageBox.h"
 #include "ScopedRenderAnnotation.h"
 #include "imgui/imgui.h"
@@ -80,7 +80,7 @@ void CMegakernelPathTracer::OnSceneLoaded()
     m_FilmClearTrigger = true;
 }
 
-void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const SRenderData& renderData )
+void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const SBxDFTextures& BxDFTextures )
 {
     SCOPED_RENDER_ANNOTATION( L"Dispatch rays" );
 
@@ -93,7 +93,7 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
         constants->resolutionX = renderContext.m_CurrentResolutionWidth;
         constants->resolutionY = renderContext.m_CurrentResolutionHeight;
         m_Scene->m_Camera.GetTransformMatrix( &constants->cameraTransform );
-        constants->filmDistance = m_Scene->GetFilmDistance();
+        constants->filmDistance = m_Scene->CalculateFilmDistance();
         constants->filmSize = m_Scene->m_FilmSize;
         constants->lightCount = m_Scene->GetLightCount();
         constants->maxBounceCount = m_Scene->m_MaxBounceCount;
@@ -124,8 +124,8 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
     }
 
     ComputeJob computeJob;
-    computeJob.m_SamplerStates = { renderData.m_UVClampSamplerState.Get() };
-    computeJob.m_UAVs = { renderData.m_SamplePositionTexture->GetUAV(), renderData.m_SampleValueTexture->GetUAV() };
+    computeJob.m_SamplerStates = { renderContext.m_UVClampSamplerState.Get() };
+    computeJob.m_UAVs = { m_Scene->m_SamplePositionTexture->GetUAV(), m_Scene->m_SampleValueTexture->GetUAV() };
 
     ID3D11ShaderResourceView* environmentTextureSRV = nullptr;
     if ( m_Scene->m_EnvironmentLight && m_Scene->m_EnvironmentLight->m_Texture )
@@ -137,11 +137,11 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
           m_Scene->m_VerticesBuffer->GetSRV()
         , m_Scene->m_TrianglesBuffer->GetSRV()
         , m_Scene->m_LightsBuffer->GetSRV()
-        , renderData.m_BRDFTexture->GetSRV()
-        , renderData.m_BRDFAvgTexture->GetSRV()
-        , renderData.m_BRDFDielectricTexture->GetSRV()
-        , renderData.m_BSDFTexture->GetSRV()
-        , renderData.m_BSDFAvgTexture->GetSRV()
+        , BxDFTextures.m_CookTorranceBRDF->GetSRV()
+        , BxDFTextures.m_CookTorranceBRDFAverage->GetSRV()
+        , BxDFTextures.m_CookTorranceBRDFDielectric->GetSRV()
+        , BxDFTextures.m_CookTorranceBSDF->GetSRV()
+        , BxDFTextures.m_CookTorranceBSDFAverage->GetSRV()
         , m_Scene->m_BVHNodesBuffer ? m_Scene->m_BVHNodesBuffer->GetSRV() : nullptr
         , m_Scene->m_InstanceTransformsBuffer->GetSRV( 0, (uint32_t)m_Scene->m_InstanceTransforms.size() )
         , m_Scene->m_InstanceTransformsBuffer->GetSRV( (uint32_t)m_Scene->m_InstanceTransforms.size(), (uint32_t)m_Scene->m_InstanceTransforms.size() )
@@ -151,7 +151,7 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
         , environmentTextureSRV
     };
 
-    computeJob.m_ConstantBuffers = { m_RayTracingConstantsBuffer->GetBuffer(), renderData.m_RayTracingFrameConstantBuffer->GetBuffer(), m_DebugConstantsBuffer->GetBuffer() };
+    computeJob.m_ConstantBuffers = { m_RayTracingConstantsBuffer->GetBuffer(), renderContext.m_RayTracingFrameConstantBuffer->GetBuffer(), m_DebugConstantsBuffer->GetBuffer() };
     computeJob.m_Shader = m_RayTracingShader.get();
 
     uint32_t dispatchThreadWidth = renderContext.m_IsSmallResolutionEnabled ? renderContext.m_CurrentResolutionWidth : m_TileSize;

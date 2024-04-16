@@ -4,7 +4,6 @@
 #include "Shader.h"
 #include "GPUBuffer.h"
 #include "RenderContext.h"
-#include "RenderData.h"
 #include "ComputeJob.h"
 #include "GPUTexture.h"
 #include "ScopedRenderAnnotation.h"
@@ -41,7 +40,7 @@ bool CSampleConvolutionRenderer::Init()
     return true;
 }
 
-void CSampleConvolutionRenderer::Execute( const SRenderContext& renderContext, const CScene& scene, const SRenderData& renderData )
+void CSampleConvolutionRenderer::Execute( const SRenderContext& renderContext, const CScene& scene )
 {
     SCOPED_RENDER_ANNOTATION( L"Convolute samples" );
 
@@ -84,8 +83,8 @@ void CSampleConvolutionRenderer::Execute( const SRenderContext& renderContext, c
 
     ComputeJob computeJob;
     computeJob.m_ConstantBuffers = { m_ConstantBuffer->GetBuffer() };
-    computeJob.m_SRVs = { renderData.m_SamplePositionTexture->GetSRV(), renderData.m_SampleValueTexture->GetSRV() };
-    computeJob.m_UAVs = { renderData.m_FilmTexture->GetUAV() };
+    computeJob.m_SRVs = { scene.m_SamplePositionTexture->GetSRV(), scene.m_SampleValueTexture->GetSRV() };
+    computeJob.m_UAVs = { scene.m_FilmTexture->GetUAV() };
     computeJob.m_Shader = m_Shader.get();
     computeJob.m_DispatchSizeX = renderContext.m_CurrentResolutionWidth / 8;
     computeJob.m_DispatchSizeX += renderContext.m_CurrentResolutionWidth % 8 ? 1 : 0;

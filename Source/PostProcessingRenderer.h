@@ -11,7 +11,9 @@ class PostProcessingRenderer
 public:
     PostProcessingRenderer();
 
-    bool Init( uint32_t renderWidth, uint32_t renderHeight, const GPUTexturePtr& filmTexture, const GPUTexturePtr& renderResultTexture );
+    bool Init();
+
+    bool SetTextures( uint32_t renderWidth, uint32_t renderHeight, const GPUTexturePtr& filmTexture, const GPUTexturePtr& renderResultTexture );
 
     void ExecuteLuminanceCompute( const SRenderContext& renderContext );
 

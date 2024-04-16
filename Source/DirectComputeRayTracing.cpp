@@ -12,7 +12,6 @@
 #include "Rectangle.h"
 #include "BxDFTexturesBuilding.h"
 #include "RenderContext.h"
-#include "RenderData.h"
 #include "MegakernelPathTracer.h"
 #include "WavefrontPathTracer.h"
 #include "Scene.h"
@@ -27,6 +26,9 @@
 #include "../Shaders/SumLuminanceDef.inc.hlsl"
 
 using namespace DirectX;
+
+template <typename T>
+using ComPtr = Microsoft::WRL::ComPtr<T>;
 
 struct SRenderer
 {
@@ -51,7 +53,9 @@ struct SRenderer
 
     void ClearFilmTexture();
 
-    void UpdateRenderViewport( uint32_t backbufferWidth, uint32_t backbufferHeight );
+    bool HandleFilmResolutionChange();
+
+    void UpdateRenderViewport();
 
     void ResizeBackbuffer( uint32_t backbufferWidth, uint32_t backbufferHeight );
 
@@ -66,7 +70,12 @@ struct SRenderer
     bool m_IsFilmDirty = true;
     bool m_IsLastFrameFilmDirty = true;
 
-    SRenderData m_RenderData;
+    SBxDFTextures m_BxDFTextures;
+    GPUTexturePtr m_sRGBBackbuffer;
+    GPUTexturePtr m_LinearBackbuffer;
+    GPUBufferPtr m_RayTracingFrameConstantBuffer;
+    ComPtr<ID3D11SamplerState> m_UVClampSamplerState;
+
     CScene m_Scene;
     CPathTracer* m_PathTracer[ 2 ] = { nullptr, nullptr };
     uint32_t m_ActivePathTracerIndex = 0;
@@ -76,8 +85,8 @@ struct SRenderer
     enum class EFrameSeedType { FrameIndex = 0, SampleCount = 1, Fixed = 2, _Count = 3 };
     EFrameSeedType m_FrameSeedType = EFrameSeedType::SampleCount;
 
-    uint32_t m_ResolutionWidth;
-    uint32_t m_ResolutionHeight;
+    uint32_t m_NewResolutionWidth;
+    uint32_t m_NewResolutionHeight;
     uint32_t m_SmallResolutionWidth = 480;
     uint32_t m_SmallResolutionHeight = 270;
 
@@ -189,7 +198,7 @@ bool CDirectComputeRayTracing::OnWndMessage( UINT message, WPARAM wParam, LPARAM
         UINT width = LOWORD( lParam );
         UINT height = HIWORD( lParam );
         s_Renderer->ResizeBackbuffer( width, height );
-        s_Renderer->UpdateRenderViewport( width, height );
+        s_Renderer->UpdateRenderViewport();
     }
 
     return s_Renderer->OnWndMessage( message, wParam, lParam );
@@ -219,77 +228,30 @@ bool SRenderer::Init()
         return false;
     }
 
-    m_ResolutionWidth = CommandLineArgs::Singleton()->ResolutionX();
-    m_ResolutionHeight = CommandLineArgs::Singleton()->ResolutionY();
+    m_BxDFTextures = BxDFTexturesBuilding::Build();
+    if ( !m_BxDFTextures.AllTexturesSet() )
+    {
+        return false;
+    }
 
     ID3D11Device* device = GetDevice();
 
-    BxDFTexturesBuilding::STextures BxdfTextures = BxDFTexturesBuilding::Build();
-
-    m_RenderData.m_FilmTexture.reset( GPUTexture::Create(
-          m_ResolutionWidth
-        , m_ResolutionHeight
-        , DXGI_FORMAT_R32G32B32A32_FLOAT
-        , GPUResourceCreationFlags_HasUAV | GPUResourceCreationFlags_IsRenderTarget ) );
-    if ( !m_RenderData.m_FilmTexture )
-        return false;
-
-    m_RenderData.m_SamplePositionTexture.reset( GPUTexture::Create(
-          m_ResolutionWidth
-        , m_ResolutionHeight
-        , DXGI_FORMAT_R32G32_FLOAT
-        , GPUResourceCreationFlags_HasUAV ) );
-    if ( !m_RenderData.m_SamplePositionTexture )
-        return false;
-
-    m_RenderData.m_SampleValueTexture.reset( GPUTexture::Create(
-          m_ResolutionWidth
-        , m_ResolutionHeight
-        , DXGI_FORMAT_R32G32B32A32_FLOAT
-        , GPUResourceCreationFlags_HasUAV ) );
-    if ( !m_RenderData.m_SampleValueTexture )
-        return false;
-
-    m_RenderData.m_BRDFTexture = BxdfTextures.m_CookTorranceBRDF;
-    if ( !m_RenderData.m_BRDFTexture )
-        return false;
-
-    m_RenderData.m_BRDFAvgTexture = BxdfTextures.m_CookTorranceBRDFAverage;
-    if ( !m_RenderData.m_BRDFAvgTexture )
-        return false;
-
-    m_RenderData.m_BRDFDielectricTexture = BxdfTextures.m_CookTorranceBRDFDielectric;
-    if ( !m_RenderData.m_BRDFDielectricTexture )
-        return false;
-
-    m_RenderData.m_BSDFTexture = BxdfTextures.m_CookTorranceBSDF;
-    if ( !m_RenderData.m_BSDFTexture )
-        return false;
-
-    m_RenderData.m_BSDFAvgTexture = BxdfTextures.m_CookTorranceBSDFAverage;
-    if ( !m_RenderData.m_BSDFAvgTexture )
-        return false;
-
-    m_RenderData.m_RayTracingFrameConstantBuffer.reset( GPUBuffer::Create(
+    m_RayTracingFrameConstantBuffer.reset( GPUBuffer::Create(
           sizeof( RayTracingFrameConstants )
         , 0
         , DXGI_FORMAT_UNKNOWN
         , D3D11_USAGE_DYNAMIC
         , D3D11_BIND_CONSTANT_BUFFER
         , GPUResourceCreationFlags_CPUWriteable ) );
-    if ( !m_RenderData.m_RayTracingFrameConstantBuffer )
+    if ( !m_RayTracingFrameConstantBuffer )
         return false;
 
-    m_RenderData.m_RenderResultTexture.reset( GPUTexture::Create( m_ResolutionWidth, m_ResolutionHeight, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, GPUResourceCreationFlags_IsRenderTarget ) );
-    if ( !m_RenderData.m_RenderResultTexture )
+    m_sRGBBackbuffer.reset( GPUTexture::CreateFromSwapChain( DXGI_FORMAT_R8G8B8A8_UNORM_SRGB ) );
+    if ( !m_sRGBBackbuffer )
         return false;
 
-    m_RenderData.m_sRGBBackbuffer.reset( GPUTexture::CreateFromSwapChain( DXGI_FORMAT_R8G8B8A8_UNORM_SRGB ) );
-    if ( !m_RenderData.m_sRGBBackbuffer )
-        return false;
-
-    m_RenderData.m_LinearBackbuffer.reset( GPUTexture::CreateFromSwapChain() );
-    if ( !m_RenderData.m_LinearBackbuffer )
+    m_LinearBackbuffer.reset( GPUTexture::CreateFromSwapChain() );
+    if ( !m_LinearBackbuffer )
         return false;
 
     D3D11_SAMPLER_DESC samplerDesc;
@@ -301,17 +263,15 @@ bool SRenderer::Init()
     samplerDesc.MaxAnisotropy = 1;
     samplerDesc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
     samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
-    HRESULT hr = device->CreateSamplerState( &samplerDesc, &m_RenderData.m_UVClampSamplerState );
+    HRESULT hr = device->CreateSamplerState( &samplerDesc, &m_UVClampSamplerState );
     if ( FAILED( hr ) )
         return false;
 
     if ( !m_SampleConvolutionRenderer.Init() )
         return false;
 
-    if ( !m_PostProcessing.Init( m_ResolutionWidth, m_ResolutionHeight, m_RenderData.m_FilmTexture, m_RenderData.m_RenderResultTexture ) )
+    if ( !m_PostProcessing.Init() )
         return false;
-
-    UpdateRenderViewport( m_ResolutionWidth, m_ResolutionHeight );
 
     LoadScene( CommandLineArgs::Singleton()->GetFilename().c_str(), true );
 
@@ -335,6 +295,14 @@ bool SRenderer::LoadScene( const char* filepath, bool reset )
 
     m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
 
+    if ( !HandleFilmResolutionChange() )
+    {
+        return false;
+    }
+
+    m_NewResolutionWidth = m_Scene.m_ResolutionWidth;
+    m_NewResolutionHeight = m_Scene.m_ResolutionHeight;
+
     m_IsMaterialGPUBufferDirty = true;
     m_IsLightGPUBufferDirty = true;
 
@@ -352,9 +320,9 @@ void SRenderer::DispatchRayTracing( SRenderContext* renderContext )
 
     m_IsLastFrameFilmDirty = m_IsFilmDirty;
 
-    renderContext->m_CurrentResolutionWidth = renderContext->m_IsSmallResolutionEnabled ? m_SmallResolutionWidth : m_ResolutionWidth;
-    renderContext->m_CurrentResolutionRatio = (float)renderContext->m_CurrentResolutionWidth / m_ResolutionWidth;
-    renderContext->m_CurrentResolutionHeight = renderContext->m_IsSmallResolutionEnabled ? m_SmallResolutionHeight : m_ResolutionHeight;
+    renderContext->m_CurrentResolutionWidth = renderContext->m_IsSmallResolutionEnabled ? m_SmallResolutionWidth : m_Scene.m_ResolutionWidth;
+    renderContext->m_CurrentResolutionRatio = (float)renderContext->m_CurrentResolutionWidth / m_Scene.m_ResolutionWidth;
+    renderContext->m_CurrentResolutionHeight = renderContext->m_IsSmallResolutionEnabled ? m_SmallResolutionHeight : m_Scene.m_ResolutionHeight;
 
     if ( m_IsFilmDirty || renderContext->m_IsResolutionChanged )
     {
@@ -370,33 +338,31 @@ void SRenderer::DispatchRayTracing( SRenderContext* renderContext )
         m_PathTracer[ m_ActivePathTracerIndex ]->ResetImage();
     }
 
-    if ( m_Scene.m_HasValidScene )
+    
+    if ( m_IsLightGPUBufferDirty )
     {
-        if ( m_IsLightGPUBufferDirty )
-        {
-            m_Scene.UpdateLightGPUData();
-        }
-
-        if ( m_IsMaterialGPUBufferDirty )
-        {
-            m_Scene.UpdateMaterialGPUData();
-        }
-
-        UpdateGPUData();
-
-        m_PathTracer[ m_ActivePathTracerIndex ]->Render( *renderContext, m_RenderData );
-
-        if ( m_PathTracer[ m_ActivePathTracerIndex ]->IsImageComplete() )
-        {
-            if ( m_FrameSeedType != EFrameSeedType::Fixed )
-            {
-                m_FrameSeed++;
-            }
-
-            ++m_SPP;
-        }
+        m_Scene.UpdateLightGPUData();
     }
 
+    if ( m_IsMaterialGPUBufferDirty )
+    {
+        m_Scene.UpdateMaterialGPUData();
+    }
+
+    UpdateGPUData();
+
+    m_PathTracer[ m_ActivePathTracerIndex ]->Render( *renderContext, m_BxDFTextures );
+
+    if ( m_PathTracer[ m_ActivePathTracerIndex ]->IsImageComplete() )
+    {
+        if ( m_FrameSeedType != EFrameSeedType::Fixed )
+        {
+            m_FrameSeed++;
+        }
+
+        ++m_SPP;
+    }
+    
     m_Scene.m_Camera.ClearDirty();
     m_IsLightGPUBufferDirty = false;
     m_IsMaterialGPUBufferDirty = false;
@@ -405,35 +371,40 @@ void SRenderer::DispatchRayTracing( SRenderContext* renderContext )
 
 void SRenderer::RenderOneFrame()
 {
-    SRenderContext renderContext;
-    renderContext.m_EnablePostFX = true;
-
     m_FrameTimer.BeginFrame();
 
-    m_Scene.m_Camera.Update( m_FrameTimer.GetCurrentFrameDeltaTime() );
+    SRenderContext renderContext;
+    renderContext.m_EnablePostFX = true;
+    renderContext.m_RayTracingFrameConstantBuffer = m_RayTracingFrameConstantBuffer;
+    renderContext.m_UVClampSamplerState = m_UVClampSamplerState;
 
-    DispatchRayTracing( &renderContext );
-
-    ID3D11RenderTargetView* RTV = nullptr;
     D3D11_VIEWPORT viewport;
     ID3D11DeviceContext* deviceContext = GetDeviceContext();
+    ID3D11RenderTargetView* RTV = nullptr;
 
-    if ( m_PathTracer[ m_ActivePathTracerIndex ]->IsImageComplete() || renderContext.m_IsSmallResolutionEnabled )
-    {
-        m_SampleConvolutionRenderer.Execute( renderContext, m_Scene, m_RenderData );
+    if ( m_Scene.m_HasValidScene )
+    { 
+        m_Scene.m_Camera.Update( m_FrameTimer.GetCurrentFrameDeltaTime() );
 
-        m_PostProcessing.ExecuteLuminanceCompute( renderContext );
+        DispatchRayTracing( &renderContext );
 
-        RTV = m_RenderData.m_RenderResultTexture->GetRTV();
-        deviceContext->OMSetRenderTargets( 1, &RTV, nullptr );
+        if ( m_PathTracer[ m_ActivePathTracerIndex ]->IsImageComplete() || renderContext.m_IsSmallResolutionEnabled )
+        {
+            m_SampleConvolutionRenderer.Execute( renderContext, m_Scene );
 
-        viewport = { 0.0f, 0.0f, (float)m_ResolutionWidth, (float)m_ResolutionHeight, 0.0f, 1.0f };
-        deviceContext->RSSetViewports( 1, &viewport );
+            m_PostProcessing.ExecuteLuminanceCompute( renderContext );
 
-        m_PostProcessing.ExecutePostFX( renderContext, m_Scene );
+            RTV = m_Scene.m_RenderResultTexture->GetRTV();
+            deviceContext->OMSetRenderTargets( 1, &RTV, nullptr );
+
+            viewport = { 0.0f, 0.0f, (float)m_Scene.m_ResolutionWidth, (float)m_Scene.m_ResolutionHeight, 0.0f, 1.0f };
+            deviceContext->RSSetViewports( 1, &viewport );
+
+            m_PostProcessing.ExecutePostFX( renderContext, m_Scene );
+        }
     }
 
-    RTV = m_RenderData.m_sRGBBackbuffer->GetRTV();
+    RTV = m_sRGBBackbuffer->GetRTV();
     deviceContext->OMSetRenderTargets( 1, &RTV, nullptr );
 
     DXGI_SWAP_CHAIN_DESC swapChainDesc;
@@ -444,16 +415,19 @@ void SRenderer::RenderOneFrame()
     XMFLOAT4 clearColor = { 0.0f, 0.0f, 0.0f, 0.0f };
     deviceContext->ClearRenderTargetView( RTV, (float*)&clearColor );
 
-    viewport = { (float)m_RenderViewport.m_TopLeftX, (float)m_RenderViewport.m_TopLeftY, (float)m_RenderViewport.m_Width, (float)m_RenderViewport.m_Height, 0.0f, 1.0f };
-    deviceContext->RSSetViewports( 1, &viewport );
+    if ( m_Scene.m_HasValidScene )
+    {
+        viewport = { (float)m_RenderViewport.m_TopLeftX, (float)m_RenderViewport.m_TopLeftY, (float)m_RenderViewport.m_Width, (float)m_RenderViewport.m_Height, 0.0f, 1.0f };
+        deviceContext->RSSetViewports( 1, &viewport );
 
-    m_PostProcessing.ExecuteCopy();
+        m_PostProcessing.ExecuteCopy();
+    }
 
     ImGUINewFrame();
     OnImGUI( &renderContext );
     ImGui::Render();
 
-    RTV = m_RenderData.m_LinearBackbuffer->GetRTV();
+    RTV = m_LinearBackbuffer->GetRTV();
     GetDeviceContext()->OMSetRenderTargets( 1, &RTV, nullptr );
 
     {
@@ -469,11 +443,11 @@ void SRenderer::RenderOneFrame()
 
 void SRenderer::UpdateGPUData()
 {
-    if ( void* address = m_RenderData.m_RayTracingFrameConstantBuffer->Map() )
+    if ( void* address = m_RayTracingFrameConstantBuffer->Map() )
     {
         RayTracingFrameConstants* constants = (RayTracingFrameConstants*)address;
         constants->frameSeed = m_FrameSeed;
-        m_RenderData.m_RayTracingFrameConstantBuffer->Unmap();
+        m_RayTracingFrameConstantBuffer->Unmap();
     }
 }
 
@@ -481,35 +455,54 @@ void SRenderer::ClearFilmTexture()
 {
     ID3D11DeviceContext* deviceContext = GetDeviceContext();
     const static float kClearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-    deviceContext->ClearRenderTargetView( m_RenderData.m_FilmTexture->GetRTV(), kClearColor );
+    deviceContext->ClearRenderTargetView( m_Scene.m_FilmTexture->GetRTV(), kClearColor );
 }
 
-void SRenderer::UpdateRenderViewport( uint32_t backbufferWidth, uint32_t backbufferHeight )
+bool SRenderer::HandleFilmResolutionChange()
 {
-    uint32_t renderWidth = m_ResolutionWidth;
-    uint32_t renderHeight = m_ResolutionHeight;
-    float scale = (float)backbufferWidth / renderWidth;
-    float desiredViewportHeight = renderHeight * scale;
-    if ( desiredViewportHeight > backbufferHeight )
+    if ( !m_PostProcessing.SetTextures( m_Scene.m_ResolutionWidth, m_Scene.m_ResolutionHeight, m_Scene.m_FilmTexture, m_Scene.m_RenderResultTexture ) )
     {
-        scale = (float)backbufferHeight / renderHeight;
+        return false;
+    }
+
+    UpdateRenderViewport();
+
+    // Aspect ratio might change due to rounding error, but this is neglectable
+    m_SmallResolutionWidth = std::max( 1u, (uint32_t)std::roundf( m_Scene.m_ResolutionWidth * 0.25f ) );
+    m_SmallResolutionHeight = std::max( 1u, (uint32_t)std::roundf( m_Scene.m_ResolutionHeight * 0.25f ) );
+
+    return true;
+}
+
+void SRenderer::UpdateRenderViewport()
+{
+    DXGI_SWAP_CHAIN_DESC swapChainDesc;
+    GetSwapChain()->GetDesc( &swapChainDesc );
+
+    uint32_t renderWidth = m_Scene.m_ResolutionWidth;
+    uint32_t renderHeight = m_Scene.m_ResolutionHeight;
+    float scale = (float)swapChainDesc.BufferDesc.Width / renderWidth;
+    float desiredViewportHeight = renderHeight * scale;
+    if ( desiredViewportHeight > swapChainDesc.BufferDesc.Height )
+    {
+        scale = (float)swapChainDesc.BufferDesc.Height / renderHeight;
     }
 
     m_RenderViewport.m_Width = uint32_t( renderWidth * scale );
     m_RenderViewport.m_Height = uint32_t( renderHeight * scale );
-    m_RenderViewport.m_TopLeftX = uint32_t( ( backbufferWidth - m_RenderViewport.m_Width ) * 0.5f );
-    m_RenderViewport.m_TopLeftY = uint32_t( ( backbufferHeight - m_RenderViewport.m_Height ) * 0.5f );
+    m_RenderViewport.m_TopLeftX = uint32_t( (swapChainDesc.BufferDesc.Width - m_RenderViewport.m_Width ) * 0.5f );
+    m_RenderViewport.m_TopLeftY = uint32_t( (swapChainDesc.BufferDesc.Height - m_RenderViewport.m_Height ) * 0.5f );
 }
 
 void SRenderer::ResizeBackbuffer( uint32_t backbufferWidth, uint32_t backbufferHeight )
 {
-    m_RenderData.m_sRGBBackbuffer.reset();
-    m_RenderData.m_LinearBackbuffer.reset();
+    m_sRGBBackbuffer.reset();
+    m_LinearBackbuffer.reset();
 
     ResizeSwapChainBuffers( backbufferWidth, backbufferHeight );
 
-    m_RenderData.m_sRGBBackbuffer.reset( GPUTexture::CreateFromSwapChain( DXGI_FORMAT_R8G8B8A8_UNORM_SRGB ) );
-    m_RenderData.m_LinearBackbuffer.reset( GPUTexture::CreateFromSwapChain() );
+    m_sRGBBackbuffer.reset( GPUTexture::CreateFromSwapChain( DXGI_FORMAT_R8G8B8A8_UNORM_SRGB ) );
+    m_LinearBackbuffer.reset( GPUTexture::CreateFromSwapChain() );
 }
 
 void SRenderer::OnImGUI( SRenderContext* renderContext )
@@ -526,6 +519,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
     if ( !m_ShowUI )
         return;
 
+    if ( m_Scene.m_HasValidScene )
     {
         ImGui::Begin( "Settings" );
         ImGui::PushItemWidth( ImGui::GetFontSize() * -15 );
@@ -546,8 +540,22 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 }
             }
 
-            ImGui::DragInt( "Small Resolution Width", (int*)&m_SmallResolutionWidth, 16, 16, m_ResolutionWidth, "%d", ImGuiSliderFlags_AlwaysClamp );
-            ImGui::DragInt( "Small Resolution Height", (int*)&m_SmallResolutionHeight, 16, 16, m_ResolutionHeight, "%d", ImGuiSliderFlags_AlwaysClamp );
+            ImGui::DragInt( "Resolution Width", (int*)&m_NewResolutionWidth, 16, 16, 4096, "%d", ImGuiSliderFlags_AlwaysClamp );
+            ImGui::DragInt( "Resolution Height", (int*)&m_NewResolutionHeight, 16, 16, 4096, "%d", ImGuiSliderFlags_AlwaysClamp );
+            if ( m_Scene.m_ResolutionWidth != m_NewResolutionWidth || m_Scene.m_ResolutionHeight != m_NewResolutionHeight )
+            {
+                if ( ImGui::Button( "Apply##ApplyResolutionChange" ) )
+                {
+                    m_Scene.m_ResolutionWidth = m_NewResolutionWidth;
+                    m_Scene.m_ResolutionHeight = m_NewResolutionHeight;
+                    m_Scene.RecreateFilmTextures();
+                    HandleFilmResolutionChange();
+                    m_IsFilmDirty = true;
+                }
+            }
+
+            ImGui::DragInt( "Small Resolution Width", (int*)&m_SmallResolutionWidth, 16, 16, m_Scene.m_ResolutionWidth, "%d", ImGuiSliderFlags_AlwaysClamp );
+            ImGui::DragInt( "Small Resolution Height", (int*)&m_SmallResolutionHeight, 16, 16, m_Scene.m_ResolutionHeight, "%d", ImGuiSliderFlags_AlwaysClamp );
 
             uint32_t lastActivePathTracerIndex = m_ActivePathTracerIndex;
             static const char* s_PathTracerNames[] = { "Megakernel Path Tracer", "Wavefront Path Tracer" };
@@ -654,7 +662,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                     ofn.lpstrFile = filepath;
                     ofn.lpstrFile[ 0 ] = '\0';
                     ofn.nMaxFile = sizeof( filepath );
-                    ofn.lpstrFilter = "Wavefront OBJ\0*.OBJ\0XML\0*.XML\0";
+                    ofn.lpstrFilter = "All Scene Files (*.obj;*.xml)\0*.OBJ;*.XML\0";
                     ofn.nFilterIndex = 1;
                     ofn.lpstrFileTitle = NULL;
                     ofn.nMaxFileTitle = 0;
@@ -912,56 +920,50 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
         {
             m_Scene.m_Camera.OnImGUI();
 
-            if ( ImGui::InputFloat2( "Film Size", (float*)&m_Scene.m_FilmSize ) )
-                m_IsFilmDirty = true;
-
-            if ( ImGui::DragFloat( "Focal Length", (float*)&m_Scene.m_FocalLength, 0.000001f, 0.000001f, 1000.0f, "%.5f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
+            if ( ImGui::DragFloat( "Film Width", &m_Scene.m_FilmSize.x, 0.005f, 0.001f, 999.f, "%.3f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
             {
+                m_Scene.m_FilmSize.y = m_Scene.m_FilmSize.x / m_Scene.m_ResolutionWidth * m_Scene.m_ResolutionHeight;
                 m_IsFilmDirty = true;
-                if ( m_Scene.m_IsManualFilmDistanceEnabled )
-                {
-                    m_Scene.m_FocalDistance = m_Scene.CalculateFocalDistance();
-                }
-                else
-                {
-                    m_Scene.m_FilmDistanceNormalized = m_Scene.CalculateFilmDistanceNormalized();
-                }
+            }
+            if ( ImGui::DragFloat( "Film Height", &m_Scene.m_FilmSize.y, 0.005f, 0.001f, 999.f, "%.3f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
+            {
+                m_Scene.m_FilmSize.x = m_Scene.m_FilmSize.y / m_Scene.m_ResolutionHeight * m_Scene.m_ResolutionWidth;
+                m_IsFilmDirty = true;
             }
 
-            ImGui::Checkbox( "Manual Film Distance", &m_Scene.m_IsManualFilmDistanceEnabled );
-
-            if ( m_Scene.m_IsManualFilmDistanceEnabled )
+            static const char* s_CameraTypeNames[] = { "PinHole", "ThinLens" };
+            if ( ImGui::Combo( "Type", (int*)&m_Scene.m_CameraType, s_CameraTypeNames, IM_ARRAYSIZE( s_CameraTypeNames ) ) )
+                m_IsFilmDirty = true;
+            
+            if ( m_Scene.m_CameraType == ECameraType::PinHole )
             {
-                ImGui::LabelText( "Focal Distance", "%.5f", m_Scene.m_FocalDistance );
-
-                if ( ImGui::DragFloat( "Film Distance Normalized", (float*)&m_Scene.m_FilmDistanceNormalized, 0.0001f, 0.000001f, 1.0f, "%.5f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
-                {
+                float fovDeg = DirectX::XMConvertToDegrees( m_Scene.m_FoVX );
+                if ( ImGui::DragFloat( "FoV", (float*)&fovDeg, 1.f, 0.00001f, 179.9f, "%.2f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
+                { 
+                    m_Scene.m_FoVX = DirectX::XMConvertToRadians( fovDeg );
                     m_IsFilmDirty = true;
-                    m_Scene.m_FocalDistance = m_Scene.CalculateFocalDistance();
                 }
             }
             else
-            {
-                if ( ImGui::DragFloat( "Focal Distance", (float*)&m_Scene.m_FocalDistance, 0.005f, 0.000001f, m_Scene.s_MaxFocalDistance, "%.5f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
-                {
+            { 
+                if ( ImGui::DragFloat( "Focal Length", (float*)&m_Scene.m_FocalLength, 0.000001f, 0.000001f, 1000.0f, "%.5f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
                     m_IsFilmDirty = true;
-                    m_Scene.m_FilmDistanceNormalized = m_Scene.CalculateFilmDistanceNormalized();
+            
+                if ( ImGui::DragFloat( "Focal Distance", (float*)&m_Scene.m_FocalDistance, 0.005f, 0.000001f, m_Scene.s_MaxFocalDistance, "%.5f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
+                    m_IsFilmDirty = true;
+
+                if ( ImGui::DragFloat( "Aperture(f-number)", &m_Scene.m_RelativeAperture, 0.1f, 0.01f, 1000.0f, "%.1f", ImGuiSliderFlags_AlwaysClamp ) )
+                    m_IsFilmDirty = true;
+
+                if ( ImGui::DragInt( "Aperture Blade Count", (int*)&m_Scene.m_ApertureBladeCount, 1.0f, 2, 16, "%d", ImGuiSliderFlags_AlwaysClamp ) )
+                    m_IsFilmDirty = true;
+
+                float apertureRotationDeg = DirectX::XMConvertToDegrees( m_Scene.m_ApertureRotation );
+                if ( ImGui::DragFloat( "Aperture Rotation", &apertureRotationDeg, 1.0f, 0.0f, 360.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp ) )
+                {
+                    m_Scene.m_ApertureRotation = DirectX::XMConvertToRadians( apertureRotationDeg );
+                    m_IsFilmDirty = true;
                 }
-
-                ImGui::LabelText( "Film Distance Normalized", "%.5f", m_Scene.m_FilmDistanceNormalized );
-            }
-
-            if ( ImGui::DragFloat( "Aperture(f-number)", &m_Scene.m_RelativeAperture, 0.1f, 0.01f, 1000.0f, "%.1f", ImGuiSliderFlags_AlwaysClamp ) )
-                m_IsFilmDirty = true;
-
-            if ( ImGui::DragInt( "Aperture Blade Count", (int*)&m_Scene.m_ApertureBladeCount, 1.0f, 2, 16, "%d", ImGuiSliderFlags_AlwaysClamp ) )
-                m_IsFilmDirty = true;
-
-            float apertureRotationDeg = DirectX::XMConvertToDegrees( m_Scene.m_ApertureRotation );
-            if ( ImGui::DragFloat( "Aperture Rotation", &apertureRotationDeg, 1.0f, 0.0f, 360.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp ) )
-            {
-                m_Scene.m_ApertureRotation = DirectX::XMConvertToRadians( apertureRotationDeg );
-                m_IsFilmDirty = true;
             }
 
             ImGui::DragFloat( "Shutter Time", &m_Scene.m_ShutterTime, 0.001f, 0.001f, 100000.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp );
@@ -971,6 +973,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
         ImGui::End();
     }
 
+    if ( m_Scene.m_HasValidScene )
     {
         ImGui::Begin( "Render Stats." );
 
@@ -987,8 +990,8 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
             m_CursorPixelPosOnRenderViewport[ 0 ] = (uint32_t)std::clamp<int>( (int)pos.x - (int)m_RenderViewport.m_TopLeftX, 0, (int)m_RenderViewport.m_Width );
             m_CursorPixelPosOnRenderViewport[ 1 ] = (uint32_t)std::clamp<int>( (int)pos.y - (int)m_RenderViewport.m_TopLeftY, 0, (int)m_RenderViewport.m_Height );
 
-            float filmPixelPerRenderViewportPixelX = (float)m_ResolutionWidth / m_RenderViewport.m_Width;
-            float filmPixelPerRenderViewportPixelY = (float)m_ResolutionHeight / m_RenderViewport.m_Height;
+            float filmPixelPerRenderViewportPixelX = (float)m_Scene.m_ResolutionWidth / m_RenderViewport.m_Width;
+            float filmPixelPerRenderViewportPixelY = (float)m_Scene.m_ResolutionHeight / m_RenderViewport.m_Height;
             m_CursorPixelPosOnFilm[ 0 ] = (uint32_t)std::floorf( filmPixelPerRenderViewportPixelX * m_CursorPixelPosOnRenderViewport[ 0 ] );
             m_CursorPixelPosOnFilm[ 1 ] = (uint32_t)std::floorf( filmPixelPerRenderViewportPixelY * m_CursorPixelPosOnRenderViewport[ 1 ] );
 
@@ -999,7 +1002,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
         ImGui::End();
     }
 
-    if ( m_ShowRayTracingUI )
+    if ( m_ShowRayTracingUI && m_Scene.m_HasValidScene )
     {
         ImGui::Begin( "Ray Tracing Tool" );
 
@@ -1008,8 +1011,8 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
         if ( ImGui::Button( "Trace" ) )
         {
             DirectX::XMFLOAT2 screenPos = { (float)m_RayTracingPixelPos[ 0 ] + m_RayTracingSubPixelPos[ 0 ], (float)m_RayTracingPixelPos[ 1 ] + m_RayTracingSubPixelPos[ 1 ] };
-            screenPos.x /= m_ResolutionWidth;
-            screenPos.y /= m_ResolutionHeight;
+            screenPos.x /= m_Scene.m_ResolutionWidth;
+            screenPos.y /= m_Scene.m_ResolutionHeight;
 
             XMVECTOR rayOrigin, rayDirection;
             m_Scene.ScreenToCameraRay( screenPos, &rayOrigin, &rayDirection );

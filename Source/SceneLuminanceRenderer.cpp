@@ -7,7 +7,7 @@
 #include "imgui/imgui.h"
 #include "../Shaders/SumLuminanceDef.inc.hlsl"
 
-bool SceneLuminanceRenderer::Init( uint32_t resolutionWidth, uint32_t resolutionHeight, const GPUTexturePtr& filmTexture )
+bool SceneLuminanceRenderer::Init()
 {
     {
         std::vector<D3D_SHADER_MACRO> sumLuminanceShaderDefines;
@@ -19,27 +19,6 @@ bool SceneLuminanceRenderer::Init( uint32_t resolutionWidth, uint32_t resolution
         sumLuminanceShaderDefines.insert( sumLuminanceShaderDefines.begin(), { "REDUCE_TO_1D", "0" } );
         m_SumLuminanceTo1DShader.reset( ComputeShader::CreateFromFile( L"Shaders\\SumLuminance.hlsl", sumLuminanceShaderDefines ) );
         if ( !m_SumLuminanceTo1DShader )
-            return false;
-    }
-
-    {
-        uint32_t sumLuminanceBlockCountX = uint32_t( std::ceilf( resolutionWidth / float( SL_BLOCKSIZE ) ) );
-        sumLuminanceBlockCountX = uint32_t( std::ceilf( sumLuminanceBlockCountX / 2.0f ) );
-        uint32_t sumLuminanceBlockCountY = uint32_t( std::ceilf( resolutionHeight / float( SL_BLOCKSIZEY ) ) );
-        sumLuminanceBlockCountY = uint32_t( std::ceilf( sumLuminanceBlockCountY / 2.0f ) );
-        m_SumLuminanceBuffer0.reset( GPUBuffer::CreateStructured(
-              sizeof( float ) * sumLuminanceBlockCountX * sumLuminanceBlockCountY
-            , sizeof( float )
-            , D3D11_USAGE_DEFAULT
-            , D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_SHADER_RESOURCE ) );
-        if ( !m_SumLuminanceBuffer0 )
-            return false;
-        m_SumLuminanceBuffer1.reset( GPUBuffer::CreateStructured(
-              sizeof( float ) * sumLuminanceBlockCountX * sumLuminanceBlockCountY
-            , sizeof( float )
-            , D3D11_USAGE_DEFAULT
-            , D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_SHADER_RESOURCE ) );
-        if ( !m_SumLuminanceBuffer1 )
             return false;
     }
 
@@ -66,8 +45,8 @@ bool SceneLuminanceRenderer::Init( uint32_t resolutionWidth, uint32_t resolution
     }
 
     {
-        m_SumLuminanceTo1DJob.m_UAVs.push_back( m_SumLuminanceBuffer1->GetUAV() );
-        m_SumLuminanceTo1DJob.m_SRVs.push_back( filmTexture->GetSRV() );
+        m_SumLuminanceTo1DJob.m_UAVs.push_back( nullptr );
+        m_SumLuminanceTo1DJob.m_SRVs.push_back( nullptr );
         m_SumLuminanceTo1DJob.m_ConstantBuffers.push_back( m_SumLuminanceConstantsBuffer0->GetBuffer() );
         m_SumLuminanceTo1DJob.m_Shader = m_SumLuminanceTo1DShader.get();
         m_SumLuminanceTo1DJob.m_DispatchSizeZ = 1;
@@ -79,6 +58,39 @@ bool SceneLuminanceRenderer::Init( uint32_t resolutionWidth, uint32_t resolution
         m_SumLuminanceToSingleJob.m_DispatchSizeY = 1;
         m_SumLuminanceToSingleJob.m_DispatchSizeZ = 1;
     }
+
+    return true;
+}
+
+bool SceneLuminanceRenderer::SetFilmTexture( uint32_t resolutionWidth, uint32_t resolutionHeight, const GPUTexturePtr& filmTexture )
+{
+    {
+        uint32_t sumLuminanceBlockCountX = uint32_t( std::ceilf( resolutionWidth / float( SL_BLOCKSIZE ) ) );
+        sumLuminanceBlockCountX = uint32_t( std::ceilf( sumLuminanceBlockCountX / 2.0f ) );
+        uint32_t sumLuminanceBlockCountY = uint32_t( std::ceilf( resolutionHeight / float( SL_BLOCKSIZEY ) ) );
+        sumLuminanceBlockCountY = uint32_t( std::ceilf( sumLuminanceBlockCountY / 2.0f ) );
+        m_SumLuminanceBuffer0.reset( GPUBuffer::CreateStructured(
+              sizeof( float ) * sumLuminanceBlockCountX * sumLuminanceBlockCountY
+            , sizeof( float )
+            , D3D11_USAGE_DEFAULT
+            , D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_SHADER_RESOURCE ) );
+        if ( !m_SumLuminanceBuffer0 )
+            return false;
+        m_SumLuminanceBuffer1.reset( GPUBuffer::CreateStructured(
+              sizeof( float ) * sumLuminanceBlockCountX * sumLuminanceBlockCountY
+            , sizeof( float )
+            , D3D11_USAGE_DEFAULT
+            , D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_SHADER_RESOURCE ) );
+        if ( !m_SumLuminanceBuffer1 )
+            return false;
+    }
+
+    {
+        m_SumLuminanceTo1DJob.m_UAVs[ 0 ] = m_SumLuminanceBuffer1->GetUAV();
+        m_SumLuminanceTo1DJob.m_SRVs[ 0 ] = filmTexture->GetSRV();
+    }
+
+    m_LuminanceResultBuffer = nullptr;
 
     return true;
 }

@@ -2,14 +2,13 @@
 
 class CScene;
 struct SRenderContext;
-struct SRenderData;
 
 class CSampleConvolutionRenderer
 {
 public:
     bool Init();
 
-    void Execute( const SRenderContext& renderContext, const CScene& scene, const SRenderData& renderData );
+    void Execute( const SRenderContext& renderContext, const CScene& scene );
 
 private:
     void CompileShader( int32_t filterIndex );

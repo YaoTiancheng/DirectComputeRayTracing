@@ -21,7 +21,11 @@ static void TransformedBoundingBox( const DirectX::BoundingBox& originalBBox, co
 
 float BoundingBoxSurfaceArea( const DirectX::BoundingBox& m_BoundingBox )
 {
-    return 4.f * ( m_BoundingBox.Extents.x * m_BoundingBox.Extents.y + m_BoundingBox.Extents.x * m_BoundingBox.Extents.z + m_BoundingBox.Extents.y * m_BoundingBox.Extents.z );
+    // The BoundingBox::Extents are "Distance from the center to each side", 
+    // so the sum should be multiplied by 4 to get half of the surface area,
+    // and then multiplied by 2 to get full surface area,
+    // hence the multiplying by 8.
+    return 8.f * ( m_BoundingBox.Extents.x * m_BoundingBox.Extents.y + m_BoundingBox.Extents.x * m_BoundingBox.Extents.z + m_BoundingBox.Extents.y * m_BoundingBox.Extents.z );
 }
 
 struct SPrimitiveInfo

@@ -25,7 +25,7 @@ public:
 
     virtual void OnSceneLoaded() override;
 
-    virtual void Render( const SRenderContext& renderContext, const SRenderData& renderData ) override;
+    virtual void Render( const SRenderContext& renderContext, const SBxDFTextures& BxDFTextures ) override;
 
     virtual void ResetImage() override;
 

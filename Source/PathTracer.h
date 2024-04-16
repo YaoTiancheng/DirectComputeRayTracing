@@ -1,7 +1,7 @@
 #pragma once
 
 struct SRenderContext;
-struct SRenderData;
+struct SBxDFTextures;
 
 class CPathTracer
 {
@@ -14,7 +14,7 @@ public:
 
     virtual void OnSceneLoaded() {}
 
-    virtual void Render( const SRenderContext& renderContext, const SRenderData& renderData ) {}
+    virtual void Render( const SRenderContext& renderContext, const SBxDFTextures& BxDFTextures ) {}
 
     virtual void ResetImage() {}
 

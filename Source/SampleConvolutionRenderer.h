@@ -14,6 +14,6 @@ private:
     void CompileShader( int32_t filterIndex );
 
     int32_t m_FilterIndex = -1;
-    ComputeShaderPtr m_Shader;
-    GPUBufferPtr m_ConstantBuffer;
+    ComPtr<ID3D12RootSignature> m_RootSignature;
+    std::shared_ptr<ID3D12PipelineState> m_PSO;
 };

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GPUResourceCreationFlag.h"
+#include "D3D12DescriptorHandle.h"
 
 class GPUTexture
 {
@@ -15,19 +16,19 @@ public:
 
     ~GPUTexture();
 
-    ID3D11ShaderResourceView*   GetSRV() const { return m_SRV; }
+    CD3D12DescritorHandle GetSRV() const { return m_SRV; }
 
-    ID3D11UnorderedAccessView*  GetUAV() const { return m_UAV; }
+    CD3D12DescritorHandle GetUAV() const { return m_UAV; }
 
-    ID3D11RenderTargetView*     GetRTV() const { return m_RTV; }
+    CD3D12DescritorHandle GetRTV() const { return m_RTV; }
 
 private:
     GPUTexture();
 
     static GPUTexture* CreateFromSwapChainInternal( const D3D11_RENDER_TARGET_VIEW_DESC *desc );
 
-    ID3D11Resource*             m_Texture;
-    ID3D11ShaderResourceView*   m_SRV;
-    ID3D11UnorderedAccessView*  m_UAV;
-    ID3D11RenderTargetView*     m_RTV;
+    ID3D12Resource* m_Texture;
+    CD3D12DescritorHandle m_SRV;
+    CD3D12DescritorHandle m_UAV;
+    CD3D12DescritorHandle m_RTV;
 };

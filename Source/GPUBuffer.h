@@ -1,38 +1,73 @@
 #pragma once
 
-#include "GPUResourceCreationFlag.h"
+#include "D3D12Resource.h"
+#include "D3D12DescriptorHandle.h"
 
-class GPUBuffer
+enum class EGPUBufferUsage
+{
+    Default = 0,
+    Dynamic = 1,
+    Staging = 2,
+};
+
+enum EGPUBufferBindFlag : uint32_t
+{
+    EGPUBufferBindFlag_ConstantBuffer = 0x1,
+    EGPUBufferBindFlag_ShaderResource = 0x2,
+    EGPUBufferBindFlag_UnorderedAccess = 0x4,
+};
+
+class GPUBuffer : public CD3D12Resource
 {
 public:
-    static GPUBuffer*           Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORMAT format, D3D11_USAGE usage, uint32_t bindFlags, bool isStructured, uint32_t flags = (uint32_t)GPUResourceCreationFlags::GPUResourceCreationFlags_None, const void* initialData = nullptr );
+    static GPUBuffer* Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORMAT format, EGPUBufferUsage usage, uint32_t bindFlags, bool isStructured,
+        const void* initialData = nullptr, D3D12_RESOURCE_STATES resourceStates = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
 
-    static GPUBuffer*           Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORMAT format, D3D11_USAGE usage, uint32_t bindFlags, uint32_t flags = (uint32_t)GPUResourceCreationFlags::GPUResourceCreationFlags_None, const void* initialData = nullptr );
+    static GPUBuffer* Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORMAT format, EGPUBufferUsage usage, uint32_t bindFlags,
+        const void* initialData = nullptr, D3D12_RESOURCE_STATES resourceStates = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
 
-    static GPUBuffer*           CreateStructured( uint32_t byteWidth, uint32_t byteStride, D3D11_USAGE usage, uint32_t bindFlags, uint32_t flags = (uint32_t)GPUResourceCreationFlags::GPUResourceCreationFlags_None, const void* initialData = nullptr );
+    static GPUBuffer* CreateStructured( uint32_t byteWidth, uint32_t byteStride, EGPUBufferUsage usage, uint32_t bindFlags,
+        const void* initialData = nullptr, D3D12_RESOURCE_STATES resourceStates = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
 
-    ~GPUBuffer();
+    virtual ~GPUBuffer();
 
-    ID3D11Buffer*               GetBuffer() const { return m_Buffer; }
+    ID3D12Resource* GetBuffer() const { return m_Buffer.Get(); }
 
-    ID3D11ShaderResourceView*   GetSRV() const { assert( m_SRV != nullptr ); return m_SRV; }
+    D3D12_GPU_VIRTUAL_ADDRESS GetGPUVirtualAddress() const { return m_Buffer->GetGPUVirtualAddress(); }
 
-    ID3D11UnorderedAccessView*  GetUAV() const { assert( m_UAV != nullptr ); return m_UAV; }
+    const CD3D12DescritorHandle& GetSRV() const { return m_SRV; }
 
-    ID3D11ShaderResourceView*   GetSRV( uint32_t elementOffset, uint32_t numElement );
+    const CD3D12DescritorHandle& GetUAV() const { return m_UAV; }
 
-    void*                       Map();
+    const CD3D12DescritorHandle& GetCBV() const { return m_CBV; }
 
-    void*                       Map( D3D11_MAP mapType, uint32_t flags );
+    const CD3D12DescritorHandle& GetSRV( DXGI_FORMAT format, uint32_t byteStride, uint32_t elementOffset, uint32_t numElement );
 
-    void                        Unmap();
+    void* Map();
+
+    void Unmap();
+
+    struct SUploadContext
+    {
+        uint8_t* Map();
+
+        void Unmap();
+
+        void Upload();
+
+        ID3D12Resource* m_SrcBuffer;
+        ID3D12Resource* m_DestBuffer;
+        uint64_t m_SrcOffset;
+        uint64_t m_ByteWidth;
+    };
+
+    bool AllocateUploadContext( SUploadContext* context ) const;
 
 private:
-    GPUBuffer();
-
-    ID3D11Buffer* m_Buffer;
-    ID3D11ShaderResourceView*   m_SRV;
-    ID3D11UnorderedAccessView * m_UAV;
+    ComPtr<ID3D12Resource> m_Buffer;
+    CD3D12DescritorHandle m_SRV;
+    CD3D12DescritorHandle m_UAV;
+    CD3D12DescritorHandle m_CBV;
 
     struct SSRVDesc
     {
@@ -52,5 +87,5 @@ private:
             return std::hash<uint32_t>()( desc.m_ElementOffset ) ^ std::hash<uint32_t>()( desc.m_NumElement );
         }
     };
-    std::unordered_map<SSRVDesc, ID3D11ShaderResourceView*, SRVDescHash> m_SRVs;
+    std::unordered_map<SSRVDesc, CD3D12DescritorHandle, SRVDescHash> m_SRVs;
 };

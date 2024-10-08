@@ -1,12 +1,12 @@
 #include "stdafx.h"
 #include "PostProcessingRenderer.h"
-#include "D3D11RenderSystem.h"
-#include "GPUTexture.h"
+#include "D3D12Adapter.h"
 #include "GPUBuffer.h"
 #include "Shader.h"
 #include "RenderContext.h"
 #include "ScopedRenderAnnotation.h"
 #include "Scene.h"
+#include "Logging.h"
 #include "imgui/imgui.h"
 
 using namespace DirectX;
@@ -19,11 +19,6 @@ XMFLOAT4 s_ScreenQuadVertices[ 6 ] =
     { -1.0f, -1.0f,  0.0f,  1.0f },
     {  1.0f,  1.0f,  0.0f,  1.0f },
     {  1.0f, -1.0f,  0.0f,  1.0f },
-};
-
-D3D11_INPUT_ELEMENT_DESC s_ScreenQuadInputElementDesc[ 1 ]
-{
-    { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 };
 
 struct SConvolutionConstant
@@ -58,115 +53,148 @@ bool PostProcessingRenderer::Init()
         return false;
     }
 
+    // Compile shaders
     std::vector<D3D_SHADER_MACRO> shaderDefines;
     shaderDefines.push_back( { NULL, NULL } );
-    m_PostFXShader.reset( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
-    if ( !m_PostFXShader )
+    GfxShaderPtr postFXShader( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
+    if ( !postFXShader )
         return false;
 
     shaderDefines.clear();
     shaderDefines.push_back( { "DISABLE_POST_FX", "0" } );
     shaderDefines.push_back( { NULL, NULL } );
-    m_PostFXDisabledShader.reset( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
-    if ( !m_PostFXDisabledShader )
+    GfxShaderPtr postFXDisabledShader( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
+    if ( !postFXDisabledShader )
         return false;
 
     shaderDefines.clear();
     shaderDefines.push_back( { "AUTO_EXPOSURE", "0" } );
     shaderDefines.push_back( { NULL, NULL } );
-    m_PostFXAutoExposureShader.reset( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
-    if ( !m_PostFXAutoExposureShader )
+    GfxShaderPtr postFXAutoExposureShader( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
+    if ( !postFXAutoExposureShader )
         return false;
 
     shaderDefines.clear();
     shaderDefines.push_back( { "COPY", "0" } );
     shaderDefines.push_back( { NULL, NULL } );
-    m_CopyShader.reset( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
-    if ( !m_CopyShader )
+    GfxShaderPtr copyShader( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
+    if ( !copyShader )
         return false;
 
-    m_ConstantsBuffer.reset( GPUBuffer::Create(
-          sizeof( SConvolutionConstant )
-        , 0
-        , DXGI_FORMAT_UNKNOWN
-        , D3D11_USAGE_DYNAMIC
-        , D3D11_BIND_CONSTANT_BUFFER
-        , GPUResourceCreationFlags_CPUWriteable ) );
-    if ( !m_ConstantsBuffer )
+    // Static samplers
+    D3D12_STATIC_SAMPLER_DESC samplers[ 2 ] = { {}, {} };
+    for ( auto& sampler : samplers )
+    {
+        sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        sampler.MaxAnisotropy = 1;
+        sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+        sampler.MaxLOD = D3D12_FLOAT32_MAX;
+        sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    }
+    samplers[ 0 ].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    samplers[ 1 ].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+
+    // Create root signature
+    {
+        CD3DX12_ROOT_PARAMETER1 rootParameters[ 3 ];
+        rootParameters[ 0 ].InitAsConstantBufferView( 0 );
+        rootParameters[ 1 ].InitAsShaderResourceView( 0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL );
+        rootParameters[ 2 ].InitAsShaderResourceView( 1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL );
+        CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 3, rootParameters, 2, samplers );
+
+        ComPtr<ID3DBlob> serializedRootSignature;
+        ComPtr<ID3DBlob> error;
+        HRESULT hr = D3D12SerializeVersionedRootSignature( &rootSignatureDesc, serializedRootSignature.GetAddressOf(), error.GetAddressOf() ); 
+        LOG_STRING_FORMAT( "Create post processing root signature with error: %s\n", (const char*)error->GetBufferPointer() );
+        if ( FAILED( hr ) )
+        {
+            return false;
+        }
+
+        if ( FAILED( D3D12Adapter::GetDevice()->CreateRootSignature( 0, serializedRootSignature->GetBufferPointer(), serializedRootSignature->GetBufferSize(), IID_PPV_ARGS( m_RootSignature.GetAddressOf() ) ) ) )
+        {
+            return false;
+        }
+    }
+
+    D3D12_INPUT_ELEMENT_DESC screenQuadInputElementDesc[ 1 ]
+    {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+    };
+
+    // Create PSO
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+    psoDesc.InputLayout = { screenQuadInputElementDesc, 1 };
+    psoDesc.pRootSignature = m_RootSignature.Get();
+    psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC( D3D12_DEFAULT );
+    psoDesc.BlendState = CD3DX12_BLEND_DESC( D3D12_DEFAULT );
+    psoDesc.DepthStencilState.DepthEnable = false;
+    psoDesc.DepthStencilState.StencilEnable = false;
+    psoDesc.SampleMask = UINT_MAX;
+    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    psoDesc.NumRenderTargets = 1;
+    psoDesc.RTVFormats[ 0 ] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    psoDesc.SampleDesc.Count = 1;
+    psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
+
+    // PostFX PSO
+    psoDesc.VS = postFXShader->GetVertexShaderBytecode();
+    psoDesc.PS = postFXShader->GetPixelShaderBytecode();
+    if ( FAILED( D3D12Adapter::GetDevice()->CreateGraphicsPipelineState( &psoDesc, IID_PPV_ARGS( m_PostFXPSO.GetAddressOf() ) ) ) )
+    {
         return false;
+    }
+
+    // PostFXAutoExposure PSO
+    psoDesc.VS = postFXAutoExposureShader->GetVertexShaderBytecode();
+    psoDesc.PS = postFXAutoExposureShader->GetPixelShaderBytecode();
+    if ( FAILED( D3D12Adapter::GetDevice()->CreateGraphicsPipelineState( &psoDesc, IID_PPV_ARGS( m_PostFXAutoExposurePSO.GetAddressOf() ) ) ) )
+    {
+        return false;
+    }
+
+    // PostFXDisabled PSO
+    psoDesc.VS = postFXDisabledShader->GetVertexShaderBytecode();
+    psoDesc.PS = postFXDisabledShader->GetPixelShaderBytecode();
+    if ( FAILED( D3D12Adapter::GetDevice()->CreateGraphicsPipelineState( &psoDesc, IID_PPV_ARGS( m_PostFXDisabledPSO.GetAddressOf() ) ) ) )
+    {
+        return false;
+    }
+
+    // Copy PSO
+    psoDesc.VS = copyShader->GetVertexShaderBytecode();
+    psoDesc.PS = copyShader->GetPixelShaderBytecode();
+    if ( FAILED( D3D12Adapter::GetDevice()->CreateGraphicsPipelineState( &psoDesc, IID_PPV_ARGS( m_CopyPSO.GetAddressOf() ) ) ) )
+    {
+        return false;
+    }
 
     m_ScreenQuadVerticesBuffer.reset( GPUBuffer::Create(
           sizeof( s_ScreenQuadVertices )
         , sizeof( XMFLOAT4 )
         , DXGI_FORMAT_UNKNOWN
-        , D3D11_USAGE_IMMUTABLE
-        , D3D11_BIND_VERTEX_BUFFER
+        , EGPUBufferUsage::Default
         , 0
-        , &s_ScreenQuadVertices ) );
+        , &s_ScreenQuadVertices[ 0 ]
+        , D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER ), SD3D12ResourceDeferredDeleter() );
     if ( !m_ScreenQuadVerticesBuffer )
         return false;
-
-    m_ScreenQuadVertexInputLayout.Attach( m_PostFXShader->CreateInputLayout( s_ScreenQuadInputElementDesc, 1 ) );
-    if ( !m_ScreenQuadVertexInputLayout )
-        return false;
-
-    D3D11_SAMPLER_DESC samplerDesc;
-    ZeroMemory( &samplerDesc, sizeof( D3D11_SAMPLER_DESC ) );
-    samplerDesc.Filter   = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
-    samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
-    samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-    samplerDesc.MaxAnisotropy = 1;
-    samplerDesc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
-    samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
-    HRESULT hr = GetDevice()->CreateSamplerState( &samplerDesc, &m_LinearSamplerState );
-    if ( FAILED( hr ) )
-        return false;
-
-    samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
-    hr = GetDevice()->CreateSamplerState( &samplerDesc, &m_PointSamplerState );
-    if ( FAILED( hr ) )
-        return false;
-
-    m_PostFXJob.m_SamplerStates.push_back( m_PointSamplerState.Get() );
-    m_PostFXJob.m_ConstantBuffers.push_back( m_ConstantsBuffer->GetBuffer() );
-    m_PostFXJob.m_SRVs.push_back( nullptr );
-    m_PostFXJob.m_SRVs.push_back( nullptr );
-    m_PostFXJob.m_VertexBuffer = m_ScreenQuadVerticesBuffer.get();
-    m_PostFXJob.m_InputLayout = m_ScreenQuadVertexInputLayout.Get();
-    m_PostFXJob.m_VertexCount = 6;
-    m_PostFXJob.m_VertexStride = sizeof( XMFLOAT4 );
-
-    m_CopyJob.m_SamplerStates.push_back( m_LinearSamplerState.Get() );
-    m_CopyJob.m_ConstantBuffers.push_back( m_ConstantsBuffer->GetBuffer() );
-    m_CopyJob.m_SRVs.push_back( nullptr );
-    m_CopyJob.m_VertexBuffer = m_ScreenQuadVerticesBuffer.get();
-    m_CopyJob.m_InputLayout = m_ScreenQuadVertexInputLayout.Get();
-    m_CopyJob.m_VertexCount = 6;
-    m_CopyJob.m_VertexStride = sizeof( XMFLOAT4 );
-    m_CopyJob.m_Shader = m_CopyShader.get();
 
     return true;
 }
 
 bool PostProcessingRenderer::SetTextures( uint32_t renderWidth, uint32_t renderHeight, const GPUTexturePtr& filmTexture, const GPUTexturePtr& renderResultTexture )
 {
-    if ( !m_LuminanceRenderer.SetFilmTexture( renderWidth, renderHeight, filmTexture ) )
-    {
-        return false;
-    }
-
-    m_PostFXJob.m_SRVs[ 0 ] = filmTexture->GetSRV();
-    m_CopyJob.m_SRVs[ 0 ] = renderResultTexture->GetSRV();
-
-    return true;
+    return m_LuminanceRenderer.SetFilmTexture( renderWidth, renderHeight, filmTexture );
 }
 
-void PostProcessingRenderer::ExecuteLuminanceCompute( const SRenderContext& renderContext )
+void PostProcessingRenderer::ExecuteLuminanceCompute( const CScene& scene, const SRenderContext& renderContext )
 {
     if ( m_IsAutoExposureEnabled && m_IsPostFXEnabled && renderContext.m_EnablePostFX )
     {
-        m_LuminanceRenderer.Dispatch( renderContext.m_CurrentResolutionWidth, renderContext.m_CurrentResolutionHeight );
+        m_LuminanceRenderer.Dispatch( scene, renderContext.m_CurrentResolutionWidth, renderContext.m_CurrentResolutionHeight );
     }
 }
 
@@ -174,33 +202,64 @@ void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext,
 {
     SCOPED_RENDER_ANNOTATION( L"PostFX" );
 
-    if ( void* address = m_ConstantsBuffer->Map() )
-    {
-        SConvolutionConstant* constants = (SConvolutionConstant*)address;
-        constants->m_ReciprocalPixelCount = 1.0f / ( renderContext.m_CurrentResolutionWidth * renderContext.m_CurrentResolutionHeight );
-        constants->m_MaxWhiteSqr = m_LuminanceWhite * m_LuminanceWhite;
-        constants->m_TexcoordScale = renderContext.m_CurrentResolutionRatio;
-        constants->m_EV100 = m_CalculateEV100FromCamera ? CalculateEV100( scene.m_RelativeAperture, scene.m_ShutterTime, scene.m_ISO ) : m_ManualEV100;
-        m_ConstantsBuffer->Unmap();
-    }
+    SConvolutionConstant constants;
+    constants.m_ReciprocalPixelCount = 1.0f / ( renderContext.m_CurrentResolutionWidth * renderContext.m_CurrentResolutionHeight );
+    constants.m_MaxWhiteSqr = m_LuminanceWhite * m_LuminanceWhite;
+    constants.m_TexcoordScale = renderContext.m_CurrentResolutionRatio;
+    constants.m_EV100 = m_CalculateEV100FromCamera ? CalculateEV100( scene.m_RelativeAperture, scene.m_ShutterTime, scene.m_ISO ) : m_ManualEV100;
 
-    UpdateJob( renderContext.m_EnablePostFX );
+    GPUBufferPtr constantBuffer( GPUBuffer::Create(
+          sizeof( SConvolutionConstant )
+        , 0
+        , DXGI_FORMAT_UNKNOWN
+        , EGPUBufferUsage::Dynamic
+        , EGPUBufferBindFlag_ConstantBuffer
+        , &constants ), SD3D12ResourceDeferredDeleter() );
+
+    D3D12_VERTEX_BUFFER_VIEW vertexBufferView = {};
+    vertexBufferView.BufferLocation = m_ScreenQuadVerticesBuffer->GetGPUVirtualAddress();
+    vertexBufferView.SizeInBytes = sizeof( s_ScreenQuadVertices );
+    vertexBufferView.StrideInBytes = sizeof( XMFLOAT4 );
         
-    m_PostFXJob.Dispatch();
+    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
+    commandList->SetGraphicsRootSignature( m_RootSignature.Get() );
+    commandList->SetGraphicsRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );
+    commandList->SetGraphicsRootShaderResourceView( 1, scene.m_FilmTexture->GetSRV().GPU.ptr );
+    commandList->SetGraphicsRootShaderResourceView( 2, m_LuminanceRenderer.GetLuminanceResultBuffer() ? m_LuminanceRenderer.GetLuminanceResultBuffer()->GetSRV().GPU.ptr : 0 );
+    commandList->SetPipelineState( !m_IsPostFXEnabled || !renderContext.m_EnablePostFX ? m_PostFXDisabledPSO.Get() : ( m_IsAutoExposureEnabled ? m_PostFXAutoExposurePSO.Get() : m_PostFXPSO.Get() ) );
+    commandList->IASetPrimitiveTopology( D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
+    commandList->IASetVertexBuffers( 0, 1, &vertexBufferView );
+    commandList->DrawInstanced( 6, 1, 0, 0 );
 }
 
-void PostProcessingRenderer::ExecuteCopy()
+void PostProcessingRenderer::ExecuteCopy( const CScene& scene )
 {
     SCOPED_RENDER_ANNOTATION( L"Copy" );
+    
+    SConvolutionConstant constants;
+    constants.m_TexcoordScale = 1.0f;
 
-    if ( void* address = m_ConstantsBuffer->Map() )
-    {
-        SConvolutionConstant* constants = (SConvolutionConstant*)address;
-        constants->m_TexcoordScale = 1.0f;
-        m_ConstantsBuffer->Unmap();
-    }
+    GPUBufferPtr constantBuffer( GPUBuffer::Create(
+          sizeof( SConvolutionConstant )
+        , 0
+        , DXGI_FORMAT_UNKNOWN
+        , EGPUBufferUsage::Dynamic
+        , EGPUBufferBindFlag_ConstantBuffer
+        , &constants ), SD3D12ResourceDeferredDeleter() );
 
-    m_CopyJob.Dispatch();
+    D3D12_VERTEX_BUFFER_VIEW vertexBufferView = {};
+    vertexBufferView.BufferLocation = m_ScreenQuadVerticesBuffer->GetGPUVirtualAddress();
+    vertexBufferView.SizeInBytes = sizeof( s_ScreenQuadVertices );
+    vertexBufferView.StrideInBytes = sizeof( XMFLOAT4 );
+
+    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
+    commandList->SetGraphicsRootSignature( m_RootSignature.Get() );
+    commandList->SetGraphicsRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );
+    commandList->SetGraphicsRootShaderResourceView( 1, scene.m_RenderResultTexture->GetSRV().GPU.ptr );
+    commandList->SetPipelineState( m_CopyPSO.Get() );
+    commandList->IASetPrimitiveTopology( D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
+    commandList->IASetVertexBuffers( 0, 1, &vertexBufferView );
+    commandList->DrawInstanced( 6, 1, 0, 0 );
 }
 
 bool PostProcessingRenderer::OnImGUI()
@@ -224,10 +283,4 @@ bool PostProcessingRenderer::OnImGUI()
     }
 
     return false;
-}
-
-void PostProcessingRenderer::UpdateJob( bool enablePostFX )
-{
-    m_PostFXJob.m_Shader = !m_IsPostFXEnabled || !enablePostFX ? m_PostFXDisabledShader.get() : ( m_IsAutoExposureEnabled ? m_PostFXAutoExposureShader.get() : m_PostFXShader.get() );
-    m_PostFXJob.m_SRVs[ 1 ] = m_LuminanceRenderer.GetLuminanceResultBuffer() ? m_LuminanceRenderer.GetLuminanceResultBuffer()->GetSRV() : nullptr;
 }

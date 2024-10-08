@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "DirectComputeRayTracing.h"
-#include "D3D11RenderSystem.h"
+#include "D3D12Adapter.h"
+#include "D3D12Resource.h"
 #include "CommandLineArgs.h"
 #include "GPUTexture.h"
 #include "GPUBuffer.h"
@@ -166,12 +167,12 @@ CDirectComputeRayTracing::~CDirectComputeRayTracing()
 {
     delete s_Renderer;
     ShutDownImGui();
-    FiniRenderSystem();
+    D3D12Adapter::Destroy();
 }
 
 bool CDirectComputeRayTracing::Init()
 {
-    if ( !InitRenderSystem( s_Renderer->m_hWnd ) )
+    if ( !D3D12Adapter::Init( s_Renderer->m_hWnd ) )
         return false;
 
     if ( !InitImGui( s_Renderer->m_hWnd ) )
@@ -392,7 +393,7 @@ void SRenderer::RenderOneFrame()
         {
             m_SampleConvolutionRenderer.Execute( renderContext, m_Scene );
 
-            m_PostProcessing.ExecuteLuminanceCompute( renderContext );
+            m_PostProcessing.ExecuteLuminanceCompute( m_Scene, renderContext );
 
             RTV = m_Scene.m_RenderResultTexture->GetRTV();
             deviceContext->OMSetRenderTargets( 1, &RTV, nullptr );
@@ -420,7 +421,7 @@ void SRenderer::RenderOneFrame()
         viewport = { (float)m_RenderViewport.m_TopLeftX, (float)m_RenderViewport.m_TopLeftY, (float)m_RenderViewport.m_Width, (float)m_RenderViewport.m_Height, 0.0f, 1.0f };
         deviceContext->RSSetViewports( 1, &viewport );
 
-        m_PostProcessing.ExecuteCopy();
+        m_PostProcessing.ExecuteCopy( m_Scene );
     }
 
     ImGUINewFrame();

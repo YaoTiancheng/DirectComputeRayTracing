@@ -24,7 +24,7 @@
     <ClInclude Include="Source\Camera.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Source\D3D11RenderSystem.h">
+    <ClInclude Include="Source\D3D12Adapter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Source\DDSTextureLoader.h">
@@ -159,6 +159,18 @@
     <ClInclude Include="Source\BxDFTextures.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Source\D3D12Resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\D3D12MemoryArena.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\D3D12DescriptorHandle.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\D3D12DescriptorPoolHeap.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\Application.cpp">
@@ -167,7 +179,7 @@
     <ClCompile Include="Source\Camera.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Source\D3D11RenderSystem.cpp">
+    <ClCompile Include="Source\D3D12Adapter.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\DDSTextureLoader.cpp">
@@ -269,6 +281,15 @@
     <ClCompile Include="Source\BxDFTexturesBuilding.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Source\D3D12Resource.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\D3D12MemoryArena.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\D3D12DescriptorPoolHeap.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Image Include="Resources\small.ico">
@@ -321,6 +342,7 @@
     <None Include="Shaders\WavefrontPathTracing.hlsl" />
     <None Include="Shaders\BxDFTexturesBuilding.hlsl" />
     <None Include="Shaders\KullaConty.inc.hlsl" />
+    <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resources\DirectComputeRayTracing.rc">

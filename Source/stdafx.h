@@ -18,9 +18,10 @@
 #include <vector>
 #include <stack>
 
-#include <d3d11_1.h>
-#include <D3Dcommon.h>
+#include "d3d12.h"
+#include "d3dx12.h"
 #include <dxgi1_5.h>
+#include <dxgidebug.h>
 #include <d3dcompiler.h>
 #include <DirectXMath.h>
 #include <DirectXCollision.h>
@@ -47,3 +48,5 @@
 
 #define DCRT_STRINGIFY_MACRO_VALUE( s ) DCRT_STRINGIFY_MACRO( s )
 #define DCRT_STRINGIFY_MACRO( s ) #s
+
+using Microsoft::WRL::ComPtr;

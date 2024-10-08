@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "Shader.h"
-#include "D3D11RenderSystem.h"
+#include "D3D12Adapter.h"
 #include "CommandLineArgs.h"
 
 static ID3DBlob* CompileFromFile( LPCWSTR filename, LPCSTR entryPoint, LPCSTR target, const std::vector<D3D_SHADER_MACRO>& defines )
@@ -29,40 +29,23 @@ GfxShader* GfxShader::CreateFromFile( const wchar_t* filename, const std::vector
     if ( !vertexShaderBlob )
         return nullptr;
 
-    ID3D11VertexShader* vertexShader = nullptr;
-    HRESULT hr = GetDevice()->CreateVertexShader( vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize(), nullptr, &vertexShader );
-    if ( FAILED( hr ) )
-    {
-        vertexShaderBlob->Release();
-        return nullptr;
-    }
-
     ID3DBlob* pixelShaderBlob = CompileFromFile( filename, "MainPS", "ps_5_0", defines );
     if ( !pixelShaderBlob )
     {
         vertexShaderBlob->Release();
-        vertexShader->Release();
         return nullptr;
     }
-
-    ID3D11PixelShader* pixelShader = nullptr;
-    hr = GetDevice()->CreatePixelShader( pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize(), nullptr, &pixelShader );
-    if ( FAILED( hr ) )
-    {
-        vertexShaderBlob->Release();
-        vertexShader->Release();
-        pixelShaderBlob->Release();
-        return nullptr;
-    }
-
-    pixelShaderBlob->Release();
 
     GfxShader* gfxShader = new GfxShader();
-    gfxShader->m_VertexShader       = vertexShader;
-    gfxShader->m_PixelShader        = pixelShader;
-    gfxShader->m_VertexShaderBlob   = vertexShaderBlob;
-
+    gfxShader->m_VertexShader = vertexShaderBlob;
+    gfxShader->m_PixelShader = pixelShaderBlob;
     return gfxShader;
+}
+
+GfxShader::GfxShader()
+    : m_VertexShader( nullptr )
+    , m_PixelShader( nullptr )
+{
 }
 
 GfxShader::~GfxShader()
@@ -71,22 +54,6 @@ GfxShader::~GfxShader()
         m_VertexShader->Release();
     if ( m_PixelShader )
         m_PixelShader->Release();
-    if ( m_VertexShaderBlob )
-        m_VertexShaderBlob->Release();
-}
-
-ID3D11InputLayout* GfxShader::CreateInputLayout( const D3D11_INPUT_ELEMENT_DESC* elements, uint32_t count )
-{
-    ID3D11InputLayout* inputLayout = nullptr;
-    HRESULT hr = GetDevice()->CreateInputLayout( elements, count, m_VertexShaderBlob->GetBufferPointer(), m_VertexShaderBlob->GetBufferSize(), &inputLayout );
-    return inputLayout;
-}
-
-GfxShader::GfxShader()
-    : m_VertexShader( nullptr )
-    , m_PixelShader( nullptr )
-    , m_VertexShaderBlob( nullptr )
-{
 }
 
 ComputeShader* ComputeShader::CreateFromFile( const wchar_t* filename, const std::vector<D3D_SHADER_MACRO>& defines )
@@ -95,19 +62,8 @@ ComputeShader* ComputeShader::CreateFromFile( const wchar_t* filename, const std
     if ( !shaderBlob )
         return nullptr;
 
-    ID3D11ComputeShader* shader = nullptr;
-    HRESULT hr = GetDevice()->CreateComputeShader( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), nullptr, &shader );
-    if ( FAILED( hr ) )
-    {
-        shaderBlob->Release();
-        return nullptr;
-    }
-
-    shaderBlob->Release();
-
     ComputeShader* computeShader = new ComputeShader();
-    computeShader->m_ComputeShader = shader;
-
+    computeShader->m_ComputeShader = shaderBlob;
     return computeShader;
 }
 

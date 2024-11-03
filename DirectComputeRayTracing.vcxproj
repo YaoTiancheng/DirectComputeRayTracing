@@ -105,6 +105,7 @@
     <ClInclude Include="Source\CommandLineArgs.h" />
     <ClInclude Include="Source\ComputeJob.h" />
     <ClInclude Include="Source\Constants.h" />
+    <ClInclude Include="Source\D3D12GPUDescriptorHeap.h" />
     <ClInclude Include="Source\D3D12Resource.h" />
     <ClInclude Include="Source\D3D12MemoryArena.h" />
     <ClInclude Include="Source\D3D12DescriptorHandle.h" />
@@ -157,7 +158,7 @@
     <ClCompile Include="Source\ComputeJob.cpp" />
     <ClCompile Include="Source\D3D12Resource.cpp" />
     <ClCompile Include="Source\D3D12MemoryArena.cpp" />
-    <ClCompile Include="Source\D3D12DescriptorPoolHeap.cpp" />
+    <ClCompile Include="Source\D3D12DescriptorHeap.cpp" />
     <ClCompile Include="Source\ImGuiHelper.cpp" />
     <ClCompile Include="Source\MathHelper.cpp" />
     <ClCompile Include="Source\SceneRayTrace.cpp" />

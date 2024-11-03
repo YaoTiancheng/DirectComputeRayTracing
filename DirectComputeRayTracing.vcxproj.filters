@@ -171,6 +171,9 @@
     <ClInclude Include="Source\D3D12DescriptorPoolHeap.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Source\D3D12GPUDescriptorHeap.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\Application.cpp">
@@ -287,7 +290,7 @@
     <ClCompile Include="Source\D3D12MemoryArena.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Source\D3D12DescriptorPoolHeap.cpp">
+    <ClCompile Include="Source\D3D12DescriptorHeap.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

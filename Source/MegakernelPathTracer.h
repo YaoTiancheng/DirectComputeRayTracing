@@ -45,7 +45,9 @@ private:
 private:
     CScene* m_Scene;
 
-    ComputeShaderPtr m_RayTracingShader;
+    ComPtr<ID3D12RootSignature> m_RootSignature;
+    std::shared_ptr<ID3D12PipelineState> m_PSO;
+
     GPUBufferPtr m_RayTracingConstantsBuffer;
     GPUBufferPtr m_DebugConstantsBuffer;
 

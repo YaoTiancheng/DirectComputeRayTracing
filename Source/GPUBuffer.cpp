@@ -20,9 +20,10 @@ const CD3D12DescritorHandle& GPUBuffer::GetSRV( DXGI_FORMAT format, uint32_t byt
         desc.Buffer.NumElements = numElement;
         desc.Buffer.StructureByteStride = byteStride;
         desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
-        SRV = descriptorHeap->Allocate( m_Buffer.Get(), &desc );
+        SRV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
         if ( SRV.IsValid() )
         {
+            D3D12Adapter::GetDevice()->CreateShaderResourceView( m_Buffer.Get(), &desc, SRV.CPU );
             m_SRVs.insert( { { elementOffset, numElement }, SRV } );
         }
     }
@@ -107,15 +108,15 @@ GPUBuffer::~GPUBuffer()
     CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
     for ( auto& it : m_SRVs )
     {
-        descriptorHeap->FreeCBVSRVUAV( it.second );
+        descriptorHeap->Free( it.second, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
     }
     if ( m_UAV.IsValid() )
     {
-        descriptorHeap->FreeCBVSRVUAV( m_UAV );
+        descriptorHeap->Free( m_UAV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
     }
     if ( m_CBV.IsValid() )
     {
-        descriptorHeap->FreeCBVSRVUAV( m_CBV );
+        descriptorHeap->Free( m_CBV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
     }
 }
 
@@ -202,7 +203,7 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
                 barrier.Transition.pResource = buffer.Get();
                 barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
                 barrier.Transition.StateAfter = resourceStates;
-                commandList->ResourceBarrier( 1, barrier );
+                commandList->ResourceBarrier( 1, &barrier );
             }
         }
     }
@@ -220,11 +221,12 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
         desc.Buffer.NumElements = byteWidth / byteStride;
         desc.Buffer.StructureByteStride = isStructured ? byteStride : 0;
         desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
-        SRV = descriptorHeap->Allocate( buffer.Get(), &desc );
+        SRV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
         if ( !SRV.IsValid() )
         {
             return nullptr;
         }
+        D3D12Adapter::GetDevice()->CreateShaderResourceView( buffer.Get(), &desc, SRV.CPU );
     }
 
     CD3D12DescritorHandle UAV;
@@ -238,12 +240,13 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
         desc.Buffer.StructureByteStride = isStructured ? byteStride : 0;
         desc.Buffer.CounterOffsetInBytes = 0;
         desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
-        UAV = descriptorHeap->Allocate( buffer.Get(), &desc );
+        UAV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
         if ( !UAV.IsValid() )
         {
-            descriptorHeap->FreeCBVSRVUAV( SRV );
+            descriptorHeap->Free( SRV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
             return nullptr;
         }
+        D3D12Adapter::GetDevice()->CreateUnorderedAccessView( buffer.Get(), nullptr, &desc, UAV.CPU );
     }
 
     CD3D12DescritorHandle CBV;
@@ -252,13 +255,14 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
         D3D12_CONSTANT_BUFFER_VIEW_DESC desc;
         desc.BufferLocation = buffer->GetGPUVirtualAddress();
         desc.SizeInBytes = byteWidth;
-        CBV = descriptorHeap->Allocate( &desc );
+        CBV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
         if ( !CBV.IsValid() )
         {
-            descriptorHeap->FreeCBVSRVUAV( SRV );
-            descriptorHeap->FreeCBVSRVUAV( UAV );
+            descriptorHeap->Free( SRV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+            descriptorHeap->Free( UAV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
             return nullptr;
         }
+        D3D12Adapter::GetDevice()->CreateConstantBufferView( &desc, CBV.CPU );
     }
 
     GPUBuffer* gpuBuffer = new GPUBuffer();

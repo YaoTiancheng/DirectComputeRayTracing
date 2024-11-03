@@ -1,6 +1,7 @@
 #pragma once
 
 class CD3D12DescriptorPoolHeap;
+class CD3D12GPUDescriptorHeap;
 class CD3D12BufferedGrowingHeapArena;
 class CD3D12BufferedGrowingBufferArena;
 
@@ -16,11 +17,7 @@ namespace D3D12Adapter
 
     uint32_t GetBackbufferIndex();
 
-    uint32_t GetRTVDescriptorSize();
-
-    uint32_t GetCBVSRVUAVDescriptorSize();
-
-    uint32_t GetSamplerDescriptorSize();
+    uint32_t GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE type );
 
     bool Init( HWND hWnd );
 
@@ -35,6 +32,8 @@ namespace D3D12Adapter
     void Present( UINT syncInterval );
 
     CD3D12DescriptorPoolHeap* GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE heapType );
+
+    CD3D12GPUDescriptorHeap* GetGPUDescriptorHeap( D3D12_DESCRIPTOR_HEAP_TYPE heapType );
 
     CD3D12BufferedGrowingHeapArena* GetUploadHeapArena();
 

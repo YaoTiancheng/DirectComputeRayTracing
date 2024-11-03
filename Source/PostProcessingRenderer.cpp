@@ -2,6 +2,7 @@
 #include "PostProcessingRenderer.h"
 #include "D3D12Adapter.h"
 #include "GPUBuffer.h"
+#include "GPUTexture.h"
 #include "Shader.h"
 #include "RenderContext.h"
 #include "ScopedRenderAnnotation.h"

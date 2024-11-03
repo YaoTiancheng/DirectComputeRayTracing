@@ -1,10 +1,12 @@
 #include "stdafx.h"
 #include "SceneLuminanceRenderer.h"
+#include "D3D12Adapter.h"
 #include "Shader.h"
 #include "GPUBuffer.h"
 #include "GPUTexture.h"
 #include "Scene.h"
 #include "ScopedRenderAnnotation.h"
+#include "Logging.h"
 #include "imgui/imgui.h"
 #include "../Shaders/SumLuminanceDef.inc.hlsl"
 
@@ -129,9 +131,9 @@ void SceneLuminanceRenderer::Dispatch( const CScene& scene, uint32_t resolutionW
         barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
         barrier.Transition.pResource = m_SumLuminanceBuffer1->GetBuffer();
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
         barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-        commandList->ResourceBarrier( 1, barrier );
+        commandList->ResourceBarrier( 1, &barrier );
     }
 
     commandList->SetComputeRootUnorderedAccessView( 2, m_SumLuminanceBuffer1->GetUAV().GPU.ptr );
@@ -194,7 +196,7 @@ void SceneLuminanceRenderer::Dispatch( const CScene& scene, uint32_t resolutionW
         barrier.Transition.pResource = sumLuminanceBuffer1->GetBuffer();
         barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
         barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
-        commandList->ResourceBarrier( 1, barrier );
+        commandList->ResourceBarrier( 1, &barrier );
     }
 
     m_LuminanceResultBuffer = sumLuminanceBuffer1;

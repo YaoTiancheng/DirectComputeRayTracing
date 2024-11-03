@@ -55,6 +55,8 @@ public:
 
         void Upload();
 
+        bool IsValid() const { return m_SrcBuffer && m_DestBuffer; }
+
         ID3D12Resource* m_SrcBuffer;
         ID3D12Resource* m_DestBuffer;
         uint64_t m_SrcOffset;

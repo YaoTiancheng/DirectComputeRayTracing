@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "SampleConvolutionRenderer.h"
 #include "D3D12Adapter.h"
+#include "Logging.h"
 #include "Shader.h"
 #include "GPUBuffer.h"
 #include "GPUTexture.h"
@@ -94,7 +95,7 @@ void CSampleConvolutionRenderer::Execute( const SRenderContext& renderContext, c
             constant.g_LanczosSincTau = scene.m_LanczosSincTau;
         }
 
-        GPUBufferPtr m_ConstantBuffer( GPUBuffer::Create( sizeof( SConvolutionConstant ), 0, DXGI_FORMAT_UNKNOWN, EGPUBufferUsage::Dynamic,
+        GPUBufferPtr constantBuffer( GPUBuffer::Create( sizeof( SConvolutionConstant ), 0, DXGI_FORMAT_UNKNOWN, EGPUBufferUsage::Dynamic,
             EGPUBufferBindFlag_ConstantBuffer, &constant ) );
         
         commandList->SetComputeRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );

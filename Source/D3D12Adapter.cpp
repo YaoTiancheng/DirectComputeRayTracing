@@ -18,9 +18,7 @@ uint64_t g_FenceValues[ BACKBUFFER_COUNT ] = {};
 bool g_SupportTearing = false;
 uint32_t g_BackbufferIndex = 0;
 
-uint32_t g_RTVDescriptorSize = 0;
-uint32_t g_CBVSRVUAVDescriptorSize = 0;
-uint32_t g_SamplerDescriptorSize = 0;
+uint32_t g_DescriptorSizes[ D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES ];
 CD3D12DescriptorPoolHeap g_DescriptorPoolHeaps[ D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES ];
 
 ID3D12Device* D3D12Adapter::GetDevice()
@@ -48,19 +46,9 @@ uint32_t GetBackbufferIndex()
     return g_BackbufferIndex;
 }
 
-uint32_t D3D12Adapter::GetRTVDescriptorSize()
+uint32_t D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE type )
 {
-    return g_RTVDescriptorSize;
-}
-
-uint32_t D3D12Adapter::GetCBVSRVUAVDescriptorSize()
-{
-    return g_CBVSRVUAVDescriptorSize;
-}
-
-uint32_t D3D12Adapter::GetSamplerDescriptorSize()
-{
-    return g_SamplerDescriptorSize;
+    return g_DescriptorSizes[ (uint32_t)type ];
 }
 
 CD3D12DescriptorPoolHeap* D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE heapType )
@@ -162,9 +150,10 @@ bool D3D12Adapter::Init( HWND hWnd )
         return false;
     }
 
-    g_RTVDescriptorSize = g_Device->GetDescriptorHandleIncrementSize( D3D12_DESCRIPTOR_HEAP_TYPE_RTV );
-    g_CBVSRVUAVDescriptorSize = g_Device->GetDescriptorHandleIncrementSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
-    g_SamplerDescriptorSize = g_Device->GetDescriptorHandleIncrementSize( D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER );
+    for ( uint32_t type = 0; type < (uint32_t)D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++type )
+    {
+        g_DescriptorSizes[ type ] = g_Device->GetDescriptorHandleIncrementSize( (D3D12_DESCRIPTOR_HEAP_TYPE)type );
+    }
 
     return true;
 }

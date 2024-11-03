@@ -9,21 +9,9 @@ public:
 
     void Destroy();
 
-    CD3D12DescritorHandle Allocate( ID3D12Resource* resource, const D3D12_SHADER_RESOURCE_VIEW_DESC* desc );
+    CD3D12DescritorHandle Allocate( D3D12_DESCRIPTOR_HEAP_TYPE type );
 
-    CD3D12DescritorHandle Allocate( ID3D12Resource* resource, const D3D12_UNORDERED_ACCESS_VIEW_DESC* desc );
-
-    CD3D12DescritorHandle Allocate( const D3D12_CONSTANT_BUFFER_VIEW_DESC* desc );
-
-    CD3D12DescritorHandle Allocate( ID3D12Resource* resource, const D3D12_RENDER_TARGET_VIEW_DESC* desc );
-
-    CD3D12DescritorHandle Allocate( const D3D12_SAMPLER_DESC* desc );
-
-    void FreeCBVSRVUAV( const CD3D12DescritorHandle& handle );
-
-    void FreeRTV( const CD3D12DescritorHandle& handle );
-
-    void FreeSampler( const CD3D12DescritorHandle& handle );
+    void Free( const CD3D12DescritorHandle& handle, D3D12_DESCRIPTOR_HEAP_TYPE type );
 
 private:
     ComPtr<ID3D12DescriptorHeap> m_Heap;

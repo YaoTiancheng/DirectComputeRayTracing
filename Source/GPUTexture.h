@@ -16,6 +16,8 @@ public:
 
     ~GPUTexture();
 
+    ID3D12Resource* GetTexture() const { return m_Texture; }
+
     CD3D12DescritorHandle GetSRV() const { return m_SRV; }
 
     CD3D12DescritorHandle GetUAV() const { return m_UAV; }

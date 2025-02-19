@@ -22,6 +22,13 @@ struct CD3D12DescritorHandle
         GPU.Offset( offsetInDescriptors, descriptorIncrementSize );
     }
 
+    void Offsetted( uint32_t offsetInDescriptors, uint32_t descriptorIncrementSize ) const
+    {
+        CD3D12DescritorHandle result = *this;
+        result.Offset( offsetInDescriptors, descriptorIncrementSize );
+        return result;
+    }
+
     CD3DX12_CPU_DESCRIPTOR_HANDLE CPU;
     CD3DX12_GPU_DESCRIPTOR_HANDLE GPU;
 };

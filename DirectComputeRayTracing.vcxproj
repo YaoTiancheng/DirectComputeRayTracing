@@ -110,6 +110,7 @@
     <ClInclude Include="Source\D3D12MemoryArena.h" />
     <ClInclude Include="Source\D3D12DescriptorHandle.h" />
     <ClInclude Include="Source\D3D12DescriptorPoolHeap.h" />
+    <ClInclude Include="Source\D3D12DescriptorUtil.h" />
     <ClInclude Include="Source\ImGuiHelper.h" />
     <ClInclude Include="Source\MathHelper.h" />
     <ClInclude Include="Source\SampleConvolutionRenderer.h" />

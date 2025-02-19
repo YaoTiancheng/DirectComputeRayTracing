@@ -38,4 +38,6 @@ namespace D3D12Adapter
     CD3D12BufferedGrowingHeapArena* GetUploadHeapArena();
 
     CD3D12BufferedGrowingBufferArena* GetUploadBufferArena();
+
+    ID3D12CommandSignature* GetDispatchIndirectCommandSignature();
 }

@@ -50,11 +50,12 @@ private:
 
     void GetBlockDimension( uint32_t* width, uint32_t* height );
 
-    void RenderOneIteration( const SRenderContext& renderContext, const SBxDFTextures& BxDFTextures );
+    void RenderOneIteration( const SRenderContext& renderContext, const SBxDFTextures& BxDFTextures, bool isInitialIteration );
 
     CScene* m_Scene;
 
-    ComputeShaderPtr m_Shaders[ (int)EShaderKernel::_Count ];
+    ComPtr<ID3D12RootSignature> m_RootSignature;
+    std::shared_ptr<ID3D12PipelineState> m_PSOs[ (int)EShaderKernel::_Count ];
 
     GPUBufferPtr m_RayBuffer;
     GPUBufferPtr m_RayHitBuffer;

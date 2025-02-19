@@ -170,21 +170,6 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
         }
     }
 
-    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
-
-    // Transition the cbuffers to copy dest
-    D3D12_RESOURCE_BARRIER barriers[ 2 ] = {};
-    for ( auto& barrier : barriers )
-    {
-        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
-        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
-    }
-    barriers[ 0 ].Transition.pResource = m_RayTracingConstantsBuffer->GetBuffer();
-    barriers[ 1 ].Transition.pResource = m_DebugConstantsBuffer->GetBuffer();
-    commandList->ResourceBarrier( 2, barriers );
-
     if ( rayTracingConstantBufferUpload.IsValid() )
     {
         rayTracingConstantBufferUpload.Upload();
@@ -194,13 +179,21 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
         debugConstantBufferUpload.Upload();
     }
 
-    // Transition the cbuffers to constant buffer read
-    for ( auto& barrier : barriers )
+    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
+
+    // Barriers
     {
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+        std::vector<D3D12_RESOURCE_BARRIER> barriers;
+        barriers.reserve( 2 );
+
+        barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_RayTracingConstantsBuffer->GetBuffer(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER ) );
+        if ( m_OutputType > 0 )
+        { 
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_DebugConstantsBuffer->GetBuffer(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER ) );
+        }
+
+        commandList->ResourceBarrier( barriers.size(), barriers.data() );
     }
-    commandList->ResourceBarrier( 2, barriers );
 
     commandList->SetComputeRootSignature( m_RootSignature.Get() );
 
@@ -210,7 +203,6 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
 
     CD3D12GPUDescriptorHeap* GPUDescriptorHeap = D3D12Adapter::GetGPUDescriptorHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
     CD3D12DescritorHandle baseDestDesciptor = GPUDescriptorHeap->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 17 );
-    assert( GPUDescriptorHeapHandle.IsValid() );
     commandList->SetComputeRootDescriptorTable( 3, baseDestDesciptor.GPU );
 
     CD3D12DescritorHandle environmentTextureSRV;

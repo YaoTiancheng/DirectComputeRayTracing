@@ -21,13 +21,13 @@ class GPUBuffer : public CD3D12Resource
 {
 public:
     static GPUBuffer* Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORMAT format, EGPUBufferUsage usage, uint32_t bindFlags, bool isStructured,
-        const void* initialData = nullptr, D3D12_RESOURCE_STATES resourceStates = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
+        const void* initialData = nullptr, D3D12_RESOURCE_STATES resourceStates = D3D12_RESOURCE_STATE_COMMON );
 
     static GPUBuffer* Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORMAT format, EGPUBufferUsage usage, uint32_t bindFlags,
-        const void* initialData = nullptr, D3D12_RESOURCE_STATES resourceStates = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
+        const void* initialData = nullptr, D3D12_RESOURCE_STATES resourceStates = D3D12_RESOURCE_STATE_COMMON );
 
     static GPUBuffer* CreateStructured( uint32_t byteWidth, uint32_t byteStride, EGPUBufferUsage usage, uint32_t bindFlags,
-        const void* initialData = nullptr, D3D12_RESOURCE_STATES resourceStates = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
+        const void* initialData = nullptr, D3D12_RESOURCE_STATES resourceStates = D3D12_RESOURCE_STATE_COMMON );
 
     virtual ~GPUBuffer();
 

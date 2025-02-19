@@ -125,17 +125,6 @@ void SceneLuminanceRenderer::Dispatch( const CScene& scene, uint32_t resolutionW
         commandList->SetComputeRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );
     }
 
-    // Resource barrier
-    {
-        D3D12_RESOURCE_BARRIER barrier = {};
-        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-        barrier.Transition.pResource = m_SumLuminanceBuffer1->GetBuffer();
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
-        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-        commandList->ResourceBarrier( 1, &barrier );
-    }
-
     commandList->SetComputeRootUnorderedAccessView( 2, m_SumLuminanceBuffer1->GetUAV().GPU.ptr );
     commandList->SetComputeRootShaderResourceView( 1, scene.m_FilmTexture->GetSRV().GPU.ptr );
     commandList->SetPipelineState( m_SumLuminanceTo1DPSO.Get() );
@@ -147,22 +136,17 @@ void SceneLuminanceRenderer::Dispatch( const CScene& scene, uint32_t resolutionW
     GPUBuffer* sumLuminanceBuffer0 = m_SumLuminanceBuffer0.get();
     GPUBuffer* sumLuminanceBuffer1 = m_SumLuminanceBuffer1.get();
     uint32_t blockCount = sumLuminanceBlockCountX * sumLuminanceBlockCountY;
+    uint32_t iteration = 0;
     while ( blockCount != 1 )
     {
         // Transition the ping-pong buffers
         {
-            D3D12_RESOURCE_BARRIER barriers[ 2 ] = {};
-            barriers[ 0 ].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-            barriers[ 0 ].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-            barriers[ 0 ].Transition.pResource = sumLuminanceBuffer0->GetBuffer();
-            barriers[ 0 ].Transition.StateBefore = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
-            barriers[ 0 ].Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-            barriers[ 1 ].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-            barriers[ 1 ].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-            barriers[ 1 ].Transition.pResource = sumLuminanceBuffer1->GetBuffer();
-            barriers[ 1 ].Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-            barriers[ 1 ].Transition.StateAfter = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
-            commandList->ResourceBarrier( 2, barriers );
+            D3D12_RESOURCE_BARRIER barriers[ 2 ] = 
+            {
+                CD3DX12_RESOURCE_BARRIER::Transition( sumLuminanceBuffer1->GetBuffer(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
+                CD3DX12_RESOURCE_BARRIER::Transition( sumLuminanceBuffer0->GetBuffer(), D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS );
+            };
+            commandList->ResourceBarrier( iteration == 0 ? 1 : 2, barriers ); // The 1st iteration relies on state implicit promotion
         }
 
         commandList->SetComputeRootUnorderedAccessView( 2, sumLuminanceBuffer0->GetUAV().GPU.ptr );
@@ -186,17 +170,8 @@ void SceneLuminanceRenderer::Dispatch( const CScene& scene, uint32_t resolutionW
         blockCount = threadGroupCount;
 
         std::swap( sumLuminanceBuffer0, sumLuminanceBuffer1 );
-    }
 
-    // Transition the result buffer for shader read. But this should be delayed to where it is actually used.
-    {
-        D3D12_RESOURCE_BARRIER barrier = {};
-        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-        barrier.Transition.pResource = sumLuminanceBuffer1->GetBuffer();
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
-        commandList->ResourceBarrier( 1, &barrier );
+        ++iteration;
     }
 
     m_LuminanceResultBuffer = sumLuminanceBuffer1;

@@ -50,7 +50,7 @@ struct SRenderer
 
     void RenderOneFrame();
 
-    void UpdateGPUData();
+    void UploadFrameConstantBuffer();
 
     void ClearFilmTexture();
 
@@ -237,13 +237,12 @@ bool SRenderer::Init()
 
     ID3D11Device* device = GetDevice();
 
-    m_RayTracingFrameConstantBuffer.reset( GPUBuffer::Create(
+    m_RayTracingFrameConstantBuffer.reset( GPUBuffer::Create( 
           sizeof( RayTracingFrameConstants )
         , 0
         , DXGI_FORMAT_UNKNOWN
-        , D3D11_USAGE_DYNAMIC
-        , D3D11_BIND_CONSTANT_BUFFER
-        , GPUResourceCreationFlags_CPUWriteable ) );
+        , EGPUBufferUsage::Default
+        , EGPUBufferBindFlag_ConstantBuffer ) );
     if ( !m_RayTracingFrameConstantBuffer )
         return false;
 
@@ -353,7 +352,7 @@ void SRenderer::DispatchRayTracing( SRenderContext* renderContext )
         m_Scene.UpdateMaterialGPUData();
     }
 
-    UpdateGPUData();
+    UploadFrameConstantBuffer();
 
     m_PathTracer[ m_ActivePathTracerIndex ]->Render( *renderContext, m_BxDFTextures );
 
@@ -445,13 +444,18 @@ void SRenderer::RenderOneFrame()
     Present( 0 );
 }
 
-void SRenderer::UpdateGPUData()
+void SRenderer::UploadFrameConstantBuffer()
 {
-    if ( void* address = m_RayTracingFrameConstantBuffer->Map() )
+    GPUBuffer::SUploadContext context = {};
+    if ( m_RayTracingFrameConstantBuffer->AllocateUploadContext( &context ) )
     {
-        RayTracingFrameConstants* constants = (RayTracingFrameConstants*)address;
-        constants->frameSeed = m_FrameSeed;
-        m_RayTracingFrameConstantBuffer->Unmap();
+        RayTracingFrameConstants* constants = (RayTracingFrameConstants*)context.Map();
+        if ( constants )
+        {
+            constants->frameSeed = m_FrameSeed;
+            context.Unmap();
+            context.Upload(); // No barrier needed because of implicit state promotion
+        }
     }
 }
 

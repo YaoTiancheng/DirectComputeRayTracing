@@ -10,6 +10,8 @@ struct CD3D12DescritorHandle
 
     bool IsValid() const { return CPU.ptr != 0 && GPU.ptr != 0; }
 
+    operator bool() const { return IsValid(); }
+
     void InitOffseted( ID3D12DescriptorHeap* heap, uint32_t offsetInDescriptors, uint32_t descriptorIncrementSize )
     {
         CPU.InitOffsetted( heap->GetCPUDescriptorHandleForHeapStart(), offsetInDescriptors, descriptorIncrementSize );

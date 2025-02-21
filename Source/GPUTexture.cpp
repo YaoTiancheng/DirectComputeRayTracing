@@ -1,67 +1,74 @@
 #include "stdafx.h"
 #include "GPUTexture.h"
-#include "D3D11RenderSystem.h"
+#include "D3D12Adapter.h"
+#include "D3D12DescriptorPoolHeap.h"
 #include "DDSTextureLoader.h"
 
-GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT format, uint32_t flags, uint32_t arraySize, const D3D11_SUBRESOURCE_DATA* initialData, const char* debugName )
+GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT format, uint32_t bindFlags, uint32_t arraySize, D3D12_RESOURCE_STATES resourceStates, const char* debugName )
 {
-    bool hasUAV         = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_HasUAV ) != 0;
-    bool isRenderTarget = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_IsRenderTarget ) != 0;
+    const bool hasUAV = ( bindFlags & EGPUTextureBindFlag_UnorderedAccess ) != 0;
+    const bool isRenderTarget = ( bindFlags & EGPUTextureBindFlag_RenderTarget ) != 0;
 
-    D3D11_TEXTURE2D_DESC desc;
-    ZeroMemory( &desc, sizeof( desc ) );
-    desc.Width              = width;
-    desc.Height             = height;
-    desc.MipLevels          = 1;
-    desc.ArraySize          = arraySize;
-    desc.Format             = format;
-    desc.SampleDesc.Count   = 1;
-    desc.Usage              = D3D11_USAGE_DEFAULT;
-    uint32_t bindFlags = D3D11_BIND_SHADER_RESOURCE;
+    ComPtr<ID3D12Resource> texture;
+    D3D12_RESOURCE_DESC desc = {};
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Width = width;
+    desc.Height = height;
+    desc.DepthOrArraySize = arraySize;
+    desc.MipLevels = 1;
+    desc.Format = format;
+    desc.SampleDesc.Count = 1;
+    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    desc.Flags = D3D12_RESOURCE_FLAG_NONE;
     if ( hasUAV )
-        bindFlags |= D3D11_BIND_UNORDERED_ACCESS;
-    if ( isRenderTarget )
-        bindFlags |= D3D11_BIND_RENDER_TARGET;
-    desc.BindFlags          = bindFlags;
-
-    ID3D11Texture2D* texture = nullptr;
-    HRESULT hr = GetDevice()->CreateTexture2D( &desc, initialData, &texture );
-    if ( FAILED( hr ) )
-        return nullptr;
-
-    ID3D11ShaderResourceView* SRV = nullptr;
-    hr = GetDevice()->CreateShaderResourceView( texture, nullptr, &SRV );
-    if ( FAILED( hr ) )
     {
-        texture->Release();
+        desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    }
+    if ( isRenderTarget )
+    {
+        desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    }
+
+    if ( FAILED( D3D12Adapter::GetDevice()->CreateCommittedResource( CD3DX12_HEAP_PROPERTIES( D3D12_HEAP_TYPE_DEFAULT ), D3D12_HEAP_FLAG_NONE, &desc,
+        resourceStates, nullptr, IID_PPV_ARGS( texture.GetAddressOf() ) ) ) )
+    {
         return nullptr;
     }
 
-    ID3D11UnorderedAccessView* UAV = nullptr;
+    CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+
+    CD3D12DescritorHandle SRV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    if ( !SRV )
+    {
+        return nullptr;
+    }
+    D3D12Adapter::GetDevice()->CreateShaderResourceView( texture.get(), nullptr, SRV.CPU );
+
+    CD3D12DescritorHandle UAV;
     if ( hasUAV )
     {
-        hr = GetDevice()->CreateUnorderedAccessView( texture, nullptr, &UAV );
-        if ( FAILED( hr ) )
+        UAV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+        if ( !UAV )
         {
-            SRV->Release();
-            texture->Release();
+            descriptorHeap->Free( SRV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
             return nullptr;
         }
+        D3D12Adapter::GetDevice()->CreateUnorderedAccessView( texture.get(), nullptr, nullptr, UAV.CPU );
     }
 
-    ID3D11RenderTargetView* RTV = nullptr;
+    CD3D12DescritorHandle RTV;
     if ( isRenderTarget )
     {
-        hr = GetDevice()->CreateRenderTargetView( texture, nullptr, &RTV );
-        if ( FAILED( hr ) )
+        RTV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+        if ( !RTV )
         {
+            descriptorHeap->Free( SRV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
             if ( UAV )
-                UAV->Release();
-            RTV->Release();
-            SRV->Release();
-            texture->Release();
-            return nullptr;
+            {
+                descriptorHeap->Free( UAV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+            }
         }
+        D3D12Adapter::GetDevice()->CreateRenderTargetView( texture.get(), nullptr, RTV.CPU );
     }
 
     if ( debugName )
@@ -85,31 +92,32 @@ GPUTexture* GPUTexture::CreateFromSwapChain()
 
 GPUTexture* GPUTexture::CreateFromSwapChain( DXGI_FORMAT format )
 {
-    D3D11_RENDER_TARGET_VIEW_DESC desc;
-    ZeroMemory( &desc, sizeof( desc ) );
+    D3D12_RENDER_TARGET_VIEW_DESC desc = {};
     desc.Format = format;
-    desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+    desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
     return CreateFromSwapChainInternal( &desc );
 }
 
-GPUTexture * GPUTexture::CreateFromSwapChainInternal( const D3D11_RENDER_TARGET_VIEW_DESC* desc )
+GPUTexture* GPUTexture::CreateFromSwapChainInternal( const D3D12_RENDER_TARGET_VIEW_DESC* desc )
 {
-    ID3D11Texture2D* backBuffer = nullptr;
-    HRESULT hr = GetSwapChain()->GetBuffer( 0, __uuidof( ID3D11Texture2D ), (void**)( &backBuffer ) );
+    ComPtr<ID3D12Resource> backBuffer;
+    HRESULT hr = GetSwapChain()->GetBuffer( 0, IID_PPV_ARGS( backBuffer.GetAddressOf() ) );
     if ( FAILED( hr ) )
-        return nullptr;
-
-    ID3D11RenderTargetView* RTV = nullptr;
-    hr = GetDevice()->CreateRenderTargetView( backBuffer, desc, &RTV );
-    if ( FAILED( hr ) )
-    {
-        backBuffer->Release();
+    { 
         return nullptr;
     }
 
-    backBuffer->Release();
+    CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    CD3D12DescritorHandle RTV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    if ( !RTV.IsValid() )
+    {
+        return nullptr;
+    }
+
+    D3D12Adapter::GetDevice()->CreateRenderTargetView( backBuffer.Get(), desc, RTV.CPU );
 
     GPUTexture* gpuTexture = new GPUTexture();
+    gpuTexture->m_Texture = backBuffer;
     gpuTexture->m_RTV = RTV;
     
     return gpuTexture;
@@ -130,22 +138,19 @@ GPUTexture* GPUTexture::CreateFromFile( const wchar_t* filename )
     return gpuTexture;
 }
 
-GPUTexture::GPUTexture()
-    : m_Texture( nullptr )
-    , m_SRV( nullptr )
-    , m_UAV( nullptr )
-    , m_RTV( nullptr )
-{
-}
-
 GPUTexture::~GPUTexture()
 {
+    CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
     if ( m_SRV )
-        m_SRV->Release();
+    { 
+        descriptorHeap->Free( m_SRV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    }
     if ( m_UAV )
-        m_UAV->Release();
+    { 
+        descriptorHeap->Free( m_UAV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    }
     if ( m_RTV )
-        m_RTV->Release();
-    if ( m_Texture )
-        m_Texture->Release();
+    { 
+        descriptorHeap->Free( m_RTV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    }
 }

@@ -276,6 +276,9 @@ bool SRenderer::Init()
 
     LoadScene( CommandLineArgs::Singleton()->GetFilename().c_str(), true );
 
+    D3D12Adapter::GetCommandQueue()->ExecuteCommandLists( 1, &D3D12Adapter::GetCommandList() );
+    D3D12Adapter::WaitForGPU();
+
     return true;
 }
 

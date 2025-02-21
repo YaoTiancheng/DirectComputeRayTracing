@@ -191,19 +191,22 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
             { 
                 memcpy_s( mappedData, byteWidth, initialData, byteWidth );
                 uploadContext.Unmap();
-                uploadContext.Upload();
-            }
 
-            if ( resourceStates != D3D12_RESOURCE_STATE_COPY_DEST )
-            {
-                ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
-                D3D12_RESOURCE_BARRIER barrier = {};
-                barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-                barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-                barrier.Transition.pResource = buffer.Get();
-                barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-                barrier.Transition.StateAfter = resourceStates;
-                commandList->ResourceBarrier( 1, &barrier );
+                if ( resourceStates != D3D12_RESOURCE_STATE_COPY_DEST && resourceStates != D3D12_RESOURCE_STATE_COMMON )
+                {
+                    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
+                    D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( buffer.Get(), resourceStates, D3D12_RESOURCE_STATE_COPY_DEST );
+                    commandList->ResourceBarrier( 1, &barrier );
+                }
+
+                uploadContext.Upload();
+
+                if ( resourceStates != D3D12_RESOURCE_STATE_COPY_DEST )
+                {
+                    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
+                    D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( buffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, resourceStates );
+                    commandList->ResourceBarrier( 1, &barrier );
+                }
             }
         }
     }
@@ -243,7 +246,10 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
         UAV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
         if ( !UAV.IsValid() )
         {
-            descriptorHeap->Free( SRV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+            if ( hasSRV )
+            {
+                descriptorHeap->Free( SRV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+            }
             return nullptr;
         }
         D3D12Adapter::GetDevice()->CreateUnorderedAccessView( buffer.Get(), nullptr, &desc, UAV.CPU );
@@ -258,8 +264,14 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
         CBV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
         if ( !CBV.IsValid() )
         {
-            descriptorHeap->Free( SRV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
-            descriptorHeap->Free( UAV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+            if ( hasSRV )
+            { 
+                descriptorHeap->Free( SRV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+            }
+            if ( hasUAV )
+            { 
+                descriptorHeap->Free( UAV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+            }
             return nullptr;
         }
         D3D12Adapter::GetDevice()->CreateConstantBufferView( &desc, CBV.CPU );

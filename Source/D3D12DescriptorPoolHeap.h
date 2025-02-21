@@ -9,6 +9,8 @@ public:
 
     void Destroy();
 
+    bool CanAllocate() const { return !m_FreeEntries.empty(); }
+
     CD3D12DescritorHandle Allocate( D3D12_DESCRIPTOR_HEAP_TYPE type );
 
     void Free( const CD3D12DescritorHandle& handle, D3D12_DESCRIPTOR_HEAP_TYPE type );

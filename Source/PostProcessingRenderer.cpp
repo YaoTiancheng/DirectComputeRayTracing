@@ -209,13 +209,13 @@ void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext,
     constants.m_TexcoordScale = renderContext.m_CurrentResolutionRatio;
     constants.m_EV100 = m_CalculateEV100FromCamera ? CalculateEV100( scene.m_RelativeAperture, scene.m_ShutterTime, scene.m_ISO ) : m_ManualEV100;
 
-    GPUBufferPtr constantBuffer( GPUBuffer::Create(
+    CD3D12ResourcePtr<GPUBuffer> constantBuffer( GPUBuffer::Create(
           sizeof( SConvolutionConstant )
         , 0
         , DXGI_FORMAT_UNKNOWN
         , EGPUBufferUsage::Dynamic
         , EGPUBufferBindFlag_ConstantBuffer
-        , &constants ), SD3D12ResourceDeferredDeleter() );
+        , &constants ) );
 
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView = {};
     vertexBufferView.BufferLocation = m_ScreenQuadVerticesBuffer->GetGPUVirtualAddress();
@@ -240,13 +240,13 @@ void PostProcessingRenderer::ExecuteCopy( const CScene& scene )
     SConvolutionConstant constants;
     constants.m_TexcoordScale = 1.0f;
 
-    GPUBufferPtr constantBuffer( GPUBuffer::Create(
+    CD3D12ResourcePtr<GPUBuffer> constantBuffer( GPUBuffer::Create(
           sizeof( SConvolutionConstant )
         , 0
         , DXGI_FORMAT_UNKNOWN
         , EGPUBufferUsage::Dynamic
         , EGPUBufferBindFlag_ConstantBuffer
-        , &constants ), SD3D12ResourceDeferredDeleter() );
+        , &constants ) );
 
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView = {};
     vertexBufferView.BufferLocation = m_ScreenQuadVerticesBuffer->GetGPUVirtualAddress();

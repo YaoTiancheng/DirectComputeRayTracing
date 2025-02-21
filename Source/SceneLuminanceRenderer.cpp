@@ -119,8 +119,8 @@ void SceneLuminanceRenderer::Dispatch( const CScene& scene, uint32_t resolutionW
         params[ 1 ] = sumLuminanceBlockCountY;
         params[ 2 ] = resolutionWidth;
         params[ 3 ] = resolutionHeight;
-        GPUBufferPtr constantBuffer( GPUBuffer::Create( sizeof( uint32_t ) * 4, 0, DXGI_FORMAT_UNKNOWN, EGPUBufferUsage::Dynamic, EGPUBufferBindFlag_ConstantBuffer, params ),
-            SD3D12ResourceDeferredDeleter() );
+        CD3D12ResourcePtr<GPUBuffer> constantBuffer( GPUBuffer::Create( sizeof( uint32_t ) * 4, 0, DXGI_FORMAT_UNKNOWN, 
+            EGPUBufferUsage::Dynamic, EGPUBufferBindFlag_ConstantBuffer, params ) );
 
         commandList->SetComputeRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );
     }
@@ -159,8 +159,8 @@ void SceneLuminanceRenderer::Dispatch( const CScene& scene, uint32_t resolutionW
             uint32_t params[ 4 ];
             params[ 0 ] = blockCount;
             params[ 1 ] = threadGroupCount;
-            GPUBufferPtr constantBuffer( GPUBuffer::Create( sizeof( uint32_t ) * 4, 0, DXGI_FORMAT_UNKNOWN, EGPUBufferUsage::Dynamic, EGPUBufferBindFlag_ConstantBuffer, params ),
-                SD3D12ResourceDeferredDeleter() );
+            CD3D12ResourcePtr<GPUBuffer> constantBuffer( GPUBuffer::Create( sizeof( uint32_t ) * 4, 0, DXGI_FORMAT_UNKNOWN, 
+                EGPUBufferUsage::Dynamic, EGPUBufferBindFlag_ConstantBuffer, params ) );
 
             commandList->SetComputeRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );
         }

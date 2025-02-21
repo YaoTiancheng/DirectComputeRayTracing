@@ -95,7 +95,7 @@ void CSampleConvolutionRenderer::Execute( const SRenderContext& renderContext, c
             constant.g_LanczosSincTau = scene.m_LanczosSincTau;
         }
 
-        GPUBufferPtr constantBuffer( GPUBuffer::Create( sizeof( SConvolutionConstant ), 0, DXGI_FORMAT_UNKNOWN, EGPUBufferUsage::Dynamic,
+        CD3D12ResourcePtr<GPUBuffer> constantBuffer( GPUBuffer::Create( sizeof( SConvolutionConstant ), 0, DXGI_FORMAT_UNKNOWN, EGPUBufferUsage::Dynamic,
             EGPUBufferBindFlag_ConstantBuffer, &constant ) );
         
         commandList->SetComputeRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );

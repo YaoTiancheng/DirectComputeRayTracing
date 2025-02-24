@@ -10,7 +10,4 @@ struct SRenderContext
     bool      m_EnablePostFX;
 
     GPUBufferPtr m_RayTracingFrameConstantBuffer;
-    template <typename T>
-    using ComPtr = Microsoft::WRL::ComPtr<T>;
-    ComPtr<ID3D11SamplerState> m_UVClampSamplerState;
 };

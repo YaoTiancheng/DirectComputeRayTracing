@@ -75,7 +75,6 @@ struct SRenderer
     GPUTexturePtr m_sRGBBackbuffer;
     GPUTexturePtr m_LinearBackbuffer;
     GPUBufferPtr m_RayTracingFrameConstantBuffer;
-    ComPtr<ID3D11SamplerState> m_UVClampSamplerState;
 
     CScene m_Scene;
     CPathTracer* m_PathTracer[ 2 ] = { nullptr, nullptr };
@@ -254,19 +253,6 @@ bool SRenderer::Init()
     if ( !m_LinearBackbuffer )
         return false;
 
-    D3D11_SAMPLER_DESC samplerDesc;
-    ZeroMemory( &samplerDesc, sizeof( D3D11_SAMPLER_DESC ) );
-    samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
-    samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
-    samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-    samplerDesc.MaxAnisotropy = 1;
-    samplerDesc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
-    samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
-    HRESULT hr = device->CreateSamplerState( &samplerDesc, &m_UVClampSamplerState );
-    if ( FAILED( hr ) )
-        return false;
-
     if ( !m_SampleConvolutionRenderer.Init() )
         return false;
 
@@ -399,7 +385,6 @@ void SRenderer::RenderOneFrame()
     SRenderContext renderContext;
     renderContext.m_EnablePostFX = true;
     renderContext.m_RayTracingFrameConstantBuffer = m_RayTracingFrameConstantBuffer;
-    renderContext.m_UVClampSamplerState = m_UVClampSamplerState;
 
     D3D11_VIEWPORT viewport;
     ID3D11DeviceContext* deviceContext = GetDeviceContext();

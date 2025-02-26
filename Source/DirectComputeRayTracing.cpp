@@ -164,6 +164,8 @@ CDirectComputeRayTracing::CDirectComputeRayTracing( HWND hWnd )
 
 CDirectComputeRayTracing::~CDirectComputeRayTracing()
 {
+    D3D12Adapter::WaitForGPU();
+
     delete s_Renderer;
     ShutDownImGui();
     D3D12Adapter::Destroy();

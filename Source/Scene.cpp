@@ -645,45 +645,57 @@ float CScene::CalculateApertureDiameter() const
 
 bool CScene::RecreateFilmTextures()
 {
-    m_FilmTexture.reset( GPUTexture::Create(
+    m_FilmTexture.Reset( GPUTexture::Create(
           m_ResolutionWidth
         , m_ResolutionHeight
         , DXGI_FORMAT_R32G32B32A32_FLOAT
-        , GPUResourceCreationFlags_HasUAV | GPUResourceCreationFlags_IsRenderTarget ) );
+        , EGPUTextureBindFlag_UnorderedAccess | EGPUTextureBindFlag_RenderTarget
+        , 1
+        , D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
     if ( !m_FilmTexture )
     {
         return false;
     }
 
-    m_SamplePositionTexture.reset( GPUTexture::Create(
+    m_SamplePositionTexture.Reset( GPUTexture::Create(
           m_ResolutionWidth
         , m_ResolutionHeight
         , DXGI_FORMAT_R32G32_FLOAT
-        , GPUResourceCreationFlags_HasUAV ) );
+        , EGPUTextureBindFlag_UnorderedAccess
+        , 1
+        , D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
     if ( !m_SamplePositionTexture )
     { 
         return false;
     }
 
-    m_SampleValueTexture.reset( GPUTexture::Create(
+    m_SampleValueTexture.Reset( GPUTexture::Create(
           m_ResolutionWidth
         , m_ResolutionHeight
         , DXGI_FORMAT_R32G32B32A32_FLOAT
-        , GPUResourceCreationFlags_HasUAV ) );
+        , EGPUTextureBindFlag_UnorderedAccess
+        , 1
+        , D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
     if ( !m_SampleValueTexture )
     {
         return false;
     }
 
-    m_RenderResultTexture.reset( GPUTexture::Create( 
+    m_RenderResultTexture.Reset( GPUTexture::Create(
           m_ResolutionWidth
         , m_ResolutionHeight
         , DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
-        , GPUResourceCreationFlags_IsRenderTarget ) );
+        , EGPUTextureBindFlag_RenderTarget
+        , 1
+        , D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
     if ( !m_RenderResultTexture )
     { 
         return false;
     }
+
+    m_IsFilmTextureCleared = false;
+    m_IsSampleTexturesRead = true;
+    m_IsRenderResultTextureRead = true;
 
     return true;
 }

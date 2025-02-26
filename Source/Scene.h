@@ -1,5 +1,6 @@
 #pragma once
 
+#include "D3D12Resource.h"
 #include "BVHAccel.h"
 #include "Camera.h"
 #include "Mesh.h"
@@ -201,10 +202,15 @@ public:
     GPUBufferPtr m_InstanceTransformsBuffer;
     GPUBufferPtr m_InstanceLightIndicesBuffer;
 
-    GPUTexturePtr m_FilmTexture;
-    GPUTexturePtr m_SamplePositionTexture;
-    GPUTexturePtr m_SampleValueTexture;
-    GPUTexturePtr m_RenderResultTexture;
+    CD3D12ResourcePtr<GPUTexture> m_FilmTexture;
+    CD3D12ResourcePtr<GPUTexture> m_SamplePositionTexture;
+    CD3D12ResourcePtr<GPUTexture> m_SampleValueTexture;
+    CD3D12ResourcePtr<GPUTexture> m_RenderResultTexture;
+
+    // Resource states
+    bool m_IsFilmTextureCleared = false;
+    bool m_IsSampleTexturesRead = false;
+    bool m_IsRenderResultTextureRead = true;
 
     SSceneObjectSelection m_ObjectSelection;
 };

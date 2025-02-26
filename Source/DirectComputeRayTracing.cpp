@@ -72,8 +72,8 @@ struct SRenderer
     bool m_IsLastFrameFilmDirty = true;
 
     SBxDFTextures m_BxDFTextures;
-    GPUTexturePtr m_sRGBBackbuffer;
-    GPUTexturePtr m_LinearBackbuffer;
+    std::vector<GPUTexturePtr> m_sRGBBackbuffers;
+    std::vector<GPUTexturePtr> m_LinearBackbuffers;
     GPUBufferPtr m_RayTracingFrameConstantBuffer;
 
     CScene m_Scene;
@@ -245,13 +245,22 @@ bool SRenderer::Init()
     if ( !m_RayTracingFrameConstantBuffer )
         return false;
 
-    m_sRGBBackbuffer.reset( GPUTexture::CreateFromSwapChain( DXGI_FORMAT_R8G8B8A8_UNORM_SRGB ) );
-    if ( !m_sRGBBackbuffer )
-        return false;
+    m_sRGBBackbuffers.resize( D3D12Adapter::GetBackbufferCount() );
+    m_LinearBackbuffers.resize( D3D12Adapter::GetBackbufferCount() );
+    for ( uint32_t index = 0; index < D3D12Adapter::GetBackbufferCount(); ++index )
+    { 
+        m_sRGBBackbuffers[ index ].reset( GPUTexture::CreateFromSwapChain( DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, index ) );
+        if ( !m_sRGBBackbuffers[ index ] )
+        { 
+            return false;
+        }
 
-    m_LinearBackbuffer.reset( GPUTexture::CreateFromSwapChain() );
-    if ( !m_LinearBackbuffer )
-        return false;
+        m_LinearBackbuffers[ index ].reset( GPUTexture::CreateFromSwapChain( index ) );
+        if ( !m_LinearBackbuffers[ index ] )
+        { 
+            return false;
+        }
+    }
 
     if ( !m_SampleConvolutionRenderer.Init() )
         return false;
@@ -315,6 +324,15 @@ void SRenderer::DispatchRayTracing( SRenderContext* renderContext )
 
     if ( m_IsFilmDirty || renderContext->m_IsResolutionChanged )
     {
+        // Transition the film texture to RTV
+        {
+            D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( m_Scene.m_FilmTexture->GetTexture(),
+                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET );
+            D3D12Adapter::GetCommandList()->ResourceBarrier( 1, &barrier );
+
+            m_Scene.m_IsFilmTextureCleared = true;
+        }
+
         ClearFilmTexture();
 
         if ( m_FrameSeedType == EFrameSeedType::SampleCount )
@@ -327,7 +345,6 @@ void SRenderer::DispatchRayTracing( SRenderContext* renderContext )
         m_PathTracer[ m_ActivePathTracerIndex ]->ResetImage();
     }
 
-    
     if ( m_IsLightGPUBufferDirty )
     {
         m_Scene.UpdateLightGPUData();
@@ -340,13 +357,13 @@ void SRenderer::DispatchRayTracing( SRenderContext* renderContext )
 
     UploadFrameConstantBuffer();
 
-    // Barriers for light buffer and material buffer
-    // These barrier could be delayed to where the buffers are actually used inside the path tracer, they are here instead because,
-    // for now the path tracer does not know whether the buffer is written or not hence it does not know the before state.
+    // Barriers for potential path tracer read/write resources
+    // These barrier could be delayed to where the buffers are actually used inside the path tracer if their before states could be determined.
     if ( m_IsLightGPUBufferDirty || m_IsMaterialGPUBufferDirty )
     {
         D3D12_RESOURCE_BARRIER barriers[ 2 ];
         uint32_t barrierCount = 0;
+        
         if ( m_IsLightGPUBufferDirty )
         {
             barriers[ barrierCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( m_Scene.m_LightsBuffer->GetBuffer(),
@@ -357,6 +374,7 @@ void SRenderer::DispatchRayTracing( SRenderContext* renderContext )
             barriers[ barrierCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( m_Scene.m_MaterialsBuffer->GetBuffer(),
                 D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
         }
+        
         D3D12Adapter::GetCommandList()->ResourceBarrier( barrierCount, barriers );
     }
 
@@ -386,9 +404,11 @@ void SRenderer::RenderOneFrame()
     renderContext.m_EnablePostFX = true;
     renderContext.m_RayTracingFrameConstantBuffer = m_RayTracingFrameConstantBuffer;
 
-    D3D11_VIEWPORT viewport;
-    ID3D11DeviceContext* deviceContext = GetDeviceContext();
-    ID3D11RenderTargetView* RTV = nullptr;
+    D3D12Adapter::BeginCurrentFrame();
+
+    D3D12_VIEWPORT viewport;
+    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
+    CD3D12DescritorHandle RTV;
 
     if ( m_Scene.m_HasValidScene )
     { 
@@ -400,53 +420,82 @@ void SRenderer::RenderOneFrame()
         {
             m_SampleConvolutionRenderer.Execute( renderContext, m_Scene );
 
+            m_Scene.m_IsFilmTextureCleared = false;
+            m_Scene.m_IsSampleTexturesRead = true;
+
             m_PostProcessing.ExecuteLuminanceCompute( m_Scene, renderContext );
 
             RTV = m_Scene.m_RenderResultTexture->GetRTV();
-            deviceContext->OMSetRenderTargets( 1, &RTV, nullptr );
+            commandList->OMSetRenderTargets( 1, &RTV.CPU, true, nullptr );
 
             viewport = { 0.0f, 0.0f, (float)m_Scene.m_ResolutionWidth, (float)m_Scene.m_ResolutionHeight, 0.0f, 1.0f };
-            deviceContext->RSSetViewports( 1, &viewport );
+            commandList->RSSetViewports( 1, &viewport );
 
             m_PostProcessing.ExecutePostFX( renderContext, m_Scene );
+
+            m_Scene.m_IsRenderResultTextureRead = false;
         }
     }
 
-    RTV = m_sRGBBackbuffer->GetRTV();
-    deviceContext->OMSetRenderTargets( 1, &RTV, nullptr );
+    const uint32_t backbufferIndex = D3D12Adapter::GetBackbufferIndex();
+
+    // Transition the current backbuffer
+    {
+        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( m_sRGBBackbuffers[ backbufferIndex ]->GetTexture(),
+            D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET );
+        commandList->ResourceBarrier( 1, &barrier );
+    }
+
+    RTV = m_sRGBBackbuffers[ backbufferIndex ]->GetRTV();
+    commandList->OMSetRenderTargets( 1, &RTV.CPU, true, nullptr );
 
     DXGI_SWAP_CHAIN_DESC swapChainDesc;
     GetSwapChain()->GetDesc( &swapChainDesc );
     viewport = { 0.0f, 0.0f, (float)swapChainDesc.BufferDesc.Width, (float)swapChainDesc.BufferDesc.Height, 0.0f, 1.0f };
-    deviceContext->RSSetViewports( 1, &viewport );
+    commandList->RSSetViewports( 1, &viewport );
 
     XMFLOAT4 clearColor = { 0.0f, 0.0f, 0.0f, 0.0f };
-    deviceContext->ClearRenderTargetView( RTV, (float*)&clearColor );
+    commandList->ClearRenderTargetView( RTV.CPU, (float*)&clearColor, 0, nullptr );
 
     if ( m_Scene.m_HasValidScene )
     {
         viewport = { (float)m_RenderViewport.m_TopLeftX, (float)m_RenderViewport.m_TopLeftY, (float)m_RenderViewport.m_Width, (float)m_RenderViewport.m_Height, 0.0f, 1.0f };
-        deviceContext->RSSetViewports( 1, &viewport );
+        commandList->RSSetViewports( 1, &viewport );
 
         m_PostProcessing.ExecuteCopy( m_Scene );
+        m_Scene.m_IsRenderResultTextureRead = true;
     }
 
     ImGUINewFrame();
     OnImGUI( &renderContext );
     ImGui::Render();
 
-    RTV = m_LinearBackbuffer->GetRTV();
-    GetDeviceContext()->OMSetRenderTargets( 1, &RTV, nullptr );
+    RTV = m_LinearBackbuffers[ backbufferIndex ]->GetRTV();
+    commandList->OMSetRenderTargets( 1, &RTV.CPU, true, nullptr );
 
     {
         SCOPED_RENDER_ANNOTATION( L"ImGUI" );
         ImGui_ImplDX11_RenderDrawData( ImGui::GetDrawData() );
     }
 
-    RTV = nullptr;
-    GetDeviceContext()->OMSetRenderTargets( 1, &RTV, nullptr );
+    commandList->OMSetRenderTargets( 0, nullptr, true, nullptr );
 
+    // Transition the current backbuffer
+    {
+        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( m_sRGBBackbuffers[ backbufferIndex ]->GetTexture(),
+            D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT );
+        commandList->ResourceBarrier( 1, &barrier );
+    }
+
+    HRESULT hr = commandList->Close();
+    if ( FAILED( hr ) )
+    {
+        LOG_STRING_FORMAT( "CommandList close failure: %x\n", hr );
+    }
+
+    D3D12Adapter::GetCommandQueue()->ExecuteCommandLists( 1, &commandList );
     Present( 0 );
+    D3D12Adapter::MoveToNextFrame();
 }
 
 void SRenderer::UploadFrameConstantBuffer()
@@ -466,9 +515,9 @@ void SRenderer::UploadFrameConstantBuffer()
 
 void SRenderer::ClearFilmTexture()
 {
-    ID3D11DeviceContext* deviceContext = GetDeviceContext();
-    const static float kClearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-    deviceContext->ClearRenderTargetView( m_Scene.m_FilmTexture->GetRTV(), kClearColor );
+    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
+    const float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    commandList->ClearRenderTargetView( m_Scene.m_FilmTexture->GetRTV().CPU, clearColor, 0, nullptr );
 }
 
 bool SRenderer::HandleFilmResolutionChange()
@@ -509,13 +558,26 @@ void SRenderer::UpdateRenderViewport()
 
 void SRenderer::ResizeBackbuffer( uint32_t backbufferWidth, uint32_t backbufferHeight )
 {
-    m_sRGBBackbuffer.reset();
-    m_LinearBackbuffer.reset();
+    D3D12Adapter::WaitForGPU();
+
+    for ( GPUTexturePtr& backbuffer : m_sRGBBackbuffers )
+    {
+        backbuffer.reset();
+    }
+    for ( GPUTexturePtr& backbuffer : m_LinearBackbuffers )
+    {
+        backbuffer.reset();
+    }
 
     ResizeSwapChainBuffers( backbufferWidth, backbufferHeight );
 
-    m_sRGBBackbuffer.reset( GPUTexture::CreateFromSwapChain( DXGI_FORMAT_R8G8B8A8_UNORM_SRGB ) );
-    m_LinearBackbuffer.reset( GPUTexture::CreateFromSwapChain() );
+    m_sRGBBackbuffers.resize( D3D12Adapter::GetBackbufferCount() );
+    m_LinearBackbuffers.resize( D3D12Adapter::GetBackbufferCount() );
+    for ( uint32_t index = 0; index < D3D12Adapter::GetBackbufferCount(); ++index )
+    {
+        m_sRGBBackbuffers[ index ].reset( GPUTexture::CreateFromSwapChain( DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, index ) );
+        m_LinearBackbuffers[ index ].reset( GPUTexture::CreateFromSwapChain( index ) );
+    }
 }
 
 void SRenderer::OnImGUI( SRenderContext* renderContext )

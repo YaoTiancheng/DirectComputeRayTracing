@@ -27,6 +27,8 @@ namespace D3D12Adapter
 
     bool WaitForGPU();
 
+    void BeginCurrentFrame();
+
     bool MoveToNextFrame();
 
     void ResizeSwapChainBuffers( uint32_t width, uint32_t height );

@@ -206,6 +206,19 @@ bool D3D12Adapter::WaitForGPU()
     return true;
 }
 
+void D3D12Adapter::BeginCurrentFrame()
+{
+    // Command list allocators can only be reset when the associated 
+    // command lists have finished execution on the GPU; apps should use 
+    // fences to determine GPU execution progress.
+    g_CommandAllocators[ g_BackbufferIndex ]->Reset();
+
+    // However, when ExecuteCommandList() is called on a particular command 
+    // list, that command list can then be reset at any time and must be before 
+    // re-recording.
+    g_CommandList->Reset( g_CommandAllocators[ g_BackbufferIndex ].Get(), nullptr );
+}
+
 bool D3D12Adapter::MoveToNextFrame()
 {
     // Schedule a Signal command in the queue.

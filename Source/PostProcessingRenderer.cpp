@@ -221,8 +221,16 @@ void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext,
     vertexBufferView.BufferLocation = m_ScreenQuadVerticesBuffer->GetGPUVirtualAddress();
     vertexBufferView.SizeInBytes = sizeof( s_ScreenQuadVertices );
     vertexBufferView.StrideInBytes = sizeof( XMFLOAT4 );
-        
+
     ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
+
+    if ( scene.m_IsRenderResultTextureRead )
+    {
+        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( scene.m_RenderResultTexture->GetTexture(),
+            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET );
+        commandList->ResourceBarrier( 1, &barrier );
+    }
+        
     commandList->SetGraphicsRootSignature( m_RootSignature.Get() );
     commandList->SetGraphicsRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );
     commandList->SetGraphicsRootShaderResourceView( 1, scene.m_FilmTexture->GetSRV().GPU.ptr );
@@ -254,6 +262,14 @@ void PostProcessingRenderer::ExecuteCopy( const CScene& scene )
     vertexBufferView.StrideInBytes = sizeof( XMFLOAT4 );
 
     ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
+
+    if ( !scene.m_IsRenderResultTextureRead )
+    {
+        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( scene.m_RenderResultTexture->GetTexture(),
+            D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
+        commandList->ResourceBarrier( 1, &barrier );
+    }
+
     commandList->SetGraphicsRootSignature( m_RootSignature.Get() );
     commandList->SetGraphicsRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );
     commandList->SetGraphicsRootShaderResourceView( 1, scene.m_RenderResultTexture->GetSRV().GPU.ptr );

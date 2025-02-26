@@ -16,9 +16,9 @@ public:
     static GPUTexture* Create( uint32_t width, uint32_t height, DXGI_FORMAT format, uint32_t bindFlags, uint32_t arraySize = 1,
         D3D12_RESOURCE_STATES resourceStates = D3D12_RESOURCE_STATE_COMMON, const char* debugName = nullptr );
 
-    static GPUTexture* CreateFromSwapChain();
+    static GPUTexture* CreateFromSwapChain( uint32_t index );
 
-    static GPUTexture* CreateFromSwapChain( DXGI_FORMAT format );
+    static GPUTexture* CreateFromSwapChain( DXGI_FORMAT format, uint32_t index );
 
     static GPUTexture* CreateFromFile( const wchar_t* filename );
 
@@ -35,7 +35,7 @@ public:
     CD3D12DescritorHandle GetRTV() const { return m_RTV; }
 
 private:
-    static GPUTexture* CreateFromSwapChainInternal( const D3D12_RENDER_TARGET_VIEW_DESC *desc );
+    static GPUTexture* CreateFromSwapChainInternal( const D3D12_RENDER_TARGET_VIEW_DESC *desc, uint32_t index );
 
     ComPtr<ID3D12Resource> m_Texture;
     CD3D12DescritorHandle m_SRV;

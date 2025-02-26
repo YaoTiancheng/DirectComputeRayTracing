@@ -598,8 +598,12 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
         std::vector<D3D12_RESOURCE_BARRIER> barriers;
         barriers.reserve( 11 );
 
-        barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_Scene->m_SamplePositionTexture->GetTexture(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS ) );
-        barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_Scene->m_SampleValueTexture->GetTexture(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS ) );
+        if ( m_Scene->m_IsSampleTexturesRead )
+        { 
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_Scene->m_SamplePositionTexture->GetTexture(), D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS ) );
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_Scene->m_SampleValueTexture->GetTexture(), D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS ) );
+            m_Scene->m_IsSampleTexturesRead = false;
+        }
         barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::UAV( m_QueueCounterBuffers[ 1 ]->GetBuffer() ) );
 
         // Following barriers are conditional because of implicit state transitions

@@ -85,25 +85,25 @@ GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT for
     return gpuTexture;
 }
 
-GPUTexture* GPUTexture::CreateFromSwapChain()
+GPUTexture* GPUTexture::CreateFromSwapChain( uint32_t index )
 {
-    return CreateFromSwapChainInternal( nullptr );
+    return CreateFromSwapChainInternal( nullptr, index );
 }
 
-GPUTexture* GPUTexture::CreateFromSwapChain( DXGI_FORMAT format )
+GPUTexture* GPUTexture::CreateFromSwapChain( DXGI_FORMAT format, uint32_t index )
 {
     D3D12_RENDER_TARGET_VIEW_DESC desc = {};
     desc.Format = format;
     desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-    return CreateFromSwapChainInternal( &desc );
+    return CreateFromSwapChainInternal( &desc, index );
 }
 
-GPUTexture* GPUTexture::CreateFromSwapChainInternal( const D3D12_RENDER_TARGET_VIEW_DESC* desc )
+GPUTexture* GPUTexture::CreateFromSwapChainInternal( const D3D12_RENDER_TARGET_VIEW_DESC* desc, uint32_t index )
 {
     ComPtr<ID3D12Resource> backBuffer;
-    HRESULT hr = GetSwapChain()->GetBuffer( 0, IID_PPV_ARGS( backBuffer.GetAddressOf() ) );
+    HRESULT hr = GetSwapChain()->GetBuffer( index, IID_PPV_ARGS( backBuffer.GetAddressOf() ) );
     if ( FAILED( hr ) )
-    { 
+    {
         return nullptr;
     }
 

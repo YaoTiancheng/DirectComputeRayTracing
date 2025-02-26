@@ -106,6 +106,26 @@ void CSampleConvolutionRenderer::Execute( const SRenderContext& renderContext, c
     commandList->SetComputeRootUnorderedAccessView( 3, scene.m_FilmTexture->GetUAV().GPU.ptr );
     commandList->SetPipelineState( m_PSO.get() );
 
+    // Barriers
+    {
+        D3D12_RESOURCE_BARRIER barriers[ 3 ];
+        uint32_t barriersCount = 0;
+
+        barriers[ barriersCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( scene.m_FilmTexture->GetTexture(),
+            scene.m_IsFilmTextureCleared ? D3D12_RESOURCE_STATE_RENDER_TARGET : D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS );
+
+        if ( !scene.m_IsSampleTexturesRead )
+        {
+            barriers[ barriersCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( scene.m_SamplePositionTexture->GetTexture(),
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
+            barriers[ barriersCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( scene.m_SampleValueTexture->GetTexture(),
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
+        }
+
+        commandList->ResourceBarrier( barriersCount, &barrier );
+    }
+
     uint32_t dispatchSizeX = renderContext.m_CurrentResolutionWidth / 8;
     dispatchSizeX += renderContext.m_CurrentResolutionWidth % 8 ? 1 : 0;
     uint32_t dispatchSizeY = renderContext.m_CurrentResolutionHeight / 8;

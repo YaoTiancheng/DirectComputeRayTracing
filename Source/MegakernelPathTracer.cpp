@@ -184,12 +184,20 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
     // Barriers
     {
         std::vector<D3D12_RESOURCE_BARRIER> barriers;
-        barriers.reserve( 3 );
+        barriers.reserve( 5 );
 
         barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( renderContext.m_RayTracingFrameConstantBuffer->GetBuffer(),
             D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER ) );
         barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_RayTracingConstantsBuffer->GetBuffer(),
             D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER ) );
+        if ( m_Scene->m_IsSampleTexturesRead )
+        {
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_Scene->m_SamplePositionTexture->GetTexture(),
+                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS ) );
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_Scene->m_SampleValueTexture->GetTexture(),
+                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS ) );
+            m_Scene->m_IsSampleTexturesRead = false;
+        }
         if ( m_OutputType > 0 )
         { 
             barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_DebugConstantsBuffer->GetBuffer(),

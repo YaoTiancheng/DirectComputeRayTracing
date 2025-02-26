@@ -240,7 +240,7 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
             dest += mesh.GetVertexCount();
         }
 
-        m_VerticesBuffer.reset( GPUBuffer::CreateStructured(
+        m_VerticesBuffer.Reset( GPUBuffer::CreateStructured(
               sizeof( GPU::Vertex ) * totalVertexCount
             , sizeof( GPU::Vertex )
             , EGPUBufferUsage::Default
@@ -275,7 +275,7 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
             vertexOffset += mesh.GetVertexCount();
         }
 
-        m_TrianglesBuffer.reset( GPUBuffer::CreateStructured(
+        m_TrianglesBuffer.Reset( GPUBuffer::CreateStructured(
               sizeof( uint32_t ) * totalIndexCount
             , sizeof( uint32_t )
             , EGPUBufferUsage::Default
@@ -330,7 +330,7 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
         dest = BVHNodes.data();
         BVHAccel::PackBVH( TLAS.data(), (uint32_t)TLAS.size(), false, dest );
 
-        m_BVHNodesBuffer.reset( GPUBuffer::CreateStructured(
+        m_BVHNodesBuffer.Reset( GPUBuffer::CreateStructured(
               sizeof( GPU::BVHNode ) * totalBVHNodeCount
             , sizeof( GPU::BVHNode )
             , EGPUBufferUsage::Default
@@ -360,7 +360,7 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
             dest += mesh.GetMaterialIds().size();
         }
 
-        m_MaterialIdsBuffer.reset( GPUBuffer::CreateStructured(
+        m_MaterialIdsBuffer.Reset( GPUBuffer::CreateStructured(
               sizeof( uint32_t ) * (uint32_t)materialIds.size()
             , sizeof( uint32_t )
             , EGPUBufferUsage::Default
@@ -403,7 +403,7 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
             ++dest;
         }
 
-        m_InstanceTransformsBuffer.reset( GPUBuffer::CreateStructured(
+        m_InstanceTransformsBuffer.Reset( GPUBuffer::CreateStructured(
               sizeof( DirectX::XMFLOAT4X3 ) * (uint32_t)instanceTransforms.size()
             , sizeof( DirectX::XMFLOAT4X3 )
             , EGPUBufferUsage::Default
@@ -439,7 +439,7 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
         }
 
         // Create instance light indices buffer
-        m_InstanceLightIndicesBuffer.reset( GPUBuffer::Create( 
+        m_InstanceLightIndicesBuffer.Reset( GPUBuffer::Create(
               sizeof( uint32_t ) * (uint32_t)m_InstanceTransforms.size()
             , sizeof( uint32_t )
             , DXGI_FORMAT_R32_UINT
@@ -459,7 +459,7 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
         }
     }
     
-    m_MaterialsBuffer.reset( GPUBuffer::CreateStructured(
+    m_MaterialsBuffer.Reset( GPUBuffer::CreateStructured(
           uint32_t( sizeof( GPU::Material ) * m_Materials.size() )
         , sizeof( GPU::Material )
         , EGPUBufferUsage::Default
@@ -475,7 +475,7 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
         return false;
     }
 
-    m_LightsBuffer.reset( GPUBuffer::CreateStructured(
+    m_LightsBuffer.Reset( GPUBuffer::CreateStructured(
           sizeof( GPU::SLight ) * s_MaxLightsCount
         , sizeof( GPU::SLight )
         , EGPUBufferUsage::Default

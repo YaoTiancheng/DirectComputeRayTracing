@@ -165,6 +165,7 @@ CDirectComputeRayTracing::CDirectComputeRayTracing( HWND hWnd )
 CDirectComputeRayTracing::~CDirectComputeRayTracing()
 {
     D3D12Adapter::WaitForGPU();
+    CD3D12Resource::FlushDeleteAll();
 
     delete s_Renderer;
     ShutDownImGui();
@@ -222,6 +223,8 @@ bool SRenderer::OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam )
 
 bool SRenderer::Init()
 {
+    CD3D12Resource::CreateDeferredDeleteQueue();
+
     m_PathTracer[ 0 ] = new CMegakernelPathTracer( &m_Scene );
     m_PathTracer[ 1 ] = new CWavefrontPathTracer( &m_Scene );
 
@@ -235,8 +238,6 @@ bool SRenderer::Init()
     {
         return false;
     }
-
-    ID3D11Device* device = GetDevice();
 
     m_RayTracingFrameConstantBuffer.reset( GPUBuffer::Create( 
           sizeof( RayTracingFrameConstants )
@@ -272,7 +273,12 @@ bool SRenderer::Init()
 
     LoadScene( CommandLineArgs::Singleton()->GetFilename().c_str(), true );
 
-    D3D12Adapter::GetCommandQueue()->ExecuteCommandLists( 1, &D3D12Adapter::GetCommandList() );
+    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
+    if ( FAILED( commandList->Close() ) )
+    {
+        return false;
+    }
+    D3D12Adapter::GetCommandQueue()->ExecuteCommandLists( 1, &commandList );
     D3D12Adapter::WaitForGPU();
 
     return true;
@@ -498,6 +504,8 @@ void SRenderer::RenderOneFrame()
     D3D12Adapter::GetCommandQueue()->ExecuteCommandLists( 1, &commandList );
     Present( 0 );
     D3D12Adapter::MoveToNextFrame();
+
+    CD3D12Resource::FlushDelete();
 }
 
 void SRenderer::UploadFrameConstantBuffer()

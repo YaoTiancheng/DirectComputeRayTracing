@@ -224,11 +224,23 @@ void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext,
 
     ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
 
-    if ( scene.m_IsRenderResultTextureRead )
     {
-        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( scene.m_RenderResultTexture->GetTexture(),
-            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET );
-        commandList->ResourceBarrier( 1, &barrier );
+        D3D12_RESOURCE_BARRIER barriers[ 2 ];
+        uint32_t barrierCount = 0;
+        if ( m_LuminanceRenderer.GetLuminanceResultBuffer() && m_IsAutoExposureEnabled )
+        {
+            barriers[ barrierCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( m_LuminanceRenderer.GetLuminanceResultBuffer()->GetBuffer(),
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
+        }
+        if ( scene.m_IsRenderResultTextureRead )
+        {
+            barriers[ barrierCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( scene.m_RenderResultTexture->GetTexture(),
+                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET );
+        }
+        if ( barrierCount )
+        { 
+            commandList->ResourceBarrier( barrierCount, &barriers );
+        }
     }
         
     commandList->SetGraphicsRootSignature( m_RootSignature.Get() );

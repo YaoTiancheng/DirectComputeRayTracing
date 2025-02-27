@@ -1,5 +1,7 @@
 #pragma once
 
+#include "D3D12DescriptorHandle.h"
+
 class CD3D12DescriptorPoolHeap;
 class CD3D12GPUDescriptorHeap;
 class CD3D12BufferedGrowingHeapArena;
@@ -44,4 +46,8 @@ namespace D3D12Adapter
     CD3D12BufferedGrowingBufferArena* GetUploadBufferArena();
 
     ID3D12CommandSignature* GetDispatchIndirectCommandSignature();
+
+    CD3D12DescritorHandle GetNullSRV();
+
+    CD3D12DescritorHandle GetNullUAV();
 }

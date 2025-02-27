@@ -1,5 +1,7 @@
 #pragma once
 
+#include "D3D12Resource.h"
+
 class CScene;
 
 class SceneLuminanceRenderer
@@ -20,7 +22,7 @@ private:
     ComPtr<ID3D12PipelineState> m_SumLuminanceTo1DPSO;
     ComPtr<ID3D12PipelineState> m_SumLuminanceToSinglePSO;
 
-    GPUBufferPtr m_SumLuminanceBuffer0;
-    GPUBufferPtr m_SumLuminanceBuffer1;
+    CD3D12ResourcePtr<GPUBuffer> m_SumLuminanceBuffer0;
+    CD3D12ResourcePtr<GPUBuffer> m_SumLuminanceBuffer1;
     GPUBuffer* m_LuminanceResultBuffer = nullptr;
 };

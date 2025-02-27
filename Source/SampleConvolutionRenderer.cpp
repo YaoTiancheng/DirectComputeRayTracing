@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "SampleConvolutionRenderer.h"
 #include "D3D12Adapter.h"
+#include "D3D12GPUDescriptorHeap.h"
 #include "Logging.h"
 #include "Shader.h"
 #include "GPUBuffer.h"
@@ -28,12 +29,13 @@ struct SConvolutionConstant
 
 bool CSampleConvolutionRenderer::Init()
 {
-    CD3DX12_ROOT_PARAMETER1 rootParameters[ 4 ];
+    CD3DX12_ROOT_PARAMETER1 rootParameters[ 2 ];
     rootParameters[ 0 ].InitAsConstantBufferView( 0 );
-    rootParameters[ 1 ].InitAsShaderResourceView( 0 );
-    rootParameters[ 2 ].InitAsShaderResourceView( 1 );
-    rootParameters[ 3 ].InitAsUnorderedAccessView( 0 );
-    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 3, rootParameters );
+    CD3DX12_DESCRIPTOR_RANGE1 descriptorRanges[ 2 ];
+    descriptorRanges[ 0 ].Init( D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0 );
+    descriptorRanges[ 1 ].Init( D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0 );
+    rootParameters[ 1 ].InitAsDescriptorTable( 2, descriptorRanges );
+    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 2, rootParameters );
 
     ComPtr<ID3DBlob> serializedRootSignature;
     ComPtr<ID3DBlob> error;
@@ -101,9 +103,14 @@ void CSampleConvolutionRenderer::Execute( const SRenderContext& renderContext, c
         commandList->SetComputeRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );
     }
 
-    commandList->SetComputeRootShaderResourceView( 1, scene.m_SamplePositionTexture->GetSRV().GPU.ptr );
-    commandList->SetComputeRootShaderResourceView( 2, scene.m_SampleValueTexture->GetSRV().GPU.ptr );
-    commandList->SetComputeRootUnorderedAccessView( 3, scene.m_FilmTexture->GetUAV().GPU.ptr );
+    CD3D12DescritorHandle descriptorTable = D3D12Adapter::GetGPUDescriptorHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV )->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 3 );
+    commandList->SetComputeRootDescriptorTable( 1, descriptorTable.GPU );
+    D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, descriptorTable.CPU, scene.m_SamplePositionTexture->GetSRV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    descriptorTable.Offset( 1, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
+    D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, descriptorTable.CPU, scene.m_SampleValueTexture->GetSRV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    descriptorTable.Offset( 1, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
+    D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, descriptorTable.CPU, scene.m_FilmTexture->GetUAV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+
     commandList->SetPipelineState( m_PSO.get() );
 
     // Barriers

@@ -129,8 +129,8 @@ void SceneLuminanceRenderer::Dispatch( const CScene& scene, uint32_t resolutionW
         commandList->SetComputeRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );
     }
 
-    CD3D12DescritorHandle descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &scene.m_FilmTexture->GetSRV(), 1, &m_SumLuminanceBuffer1->GetUAV(), 1 );
-    commandList->SetComputeRootDescriptorTable( 1, descriptorTable.GPU );
+    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &scene.m_FilmTexture->GetSRV(), 1, &m_SumLuminanceBuffer1->GetUAV(), 1 );
+    commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
 
     commandList->SetPipelineState( m_SumLuminanceTo1DPSO.Get() );
 
@@ -163,7 +163,7 @@ void SceneLuminanceRenderer::Dispatch( const CScene& scene, uint32_t resolutionW
         }
 
         descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &sumLuminanceBuffer1->GetSRV(), 1, &sumLuminanceBuffer0->GetUAV(), 1 );
-        commandList->SetComputeRootDescriptorTable( 1, descriptorTable.GPU );
+        commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
 
         uint32_t threadGroupCount = uint32_t( std::ceilf( blockCount / float( SL_REDUCE_TO_SINGLE_GROUPTHREADS ) ) );
 

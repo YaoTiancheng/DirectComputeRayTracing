@@ -28,17 +28,17 @@ public:
 
     D3D12_GPU_VIRTUAL_ADDRESS GetGPUVirtualAddress() const { return m_Texture->GetGPUVirtualAddress(); }
 
-    CD3D12DescritorHandle GetSRV() const { return m_SRV; }
+    SD3D12DescriptorHandle GetSRV() const { return m_SRV; }
 
-    CD3D12DescritorHandle GetUAV() const { return m_UAV; }
+    SD3D12DescriptorHandle GetUAV() const { return m_UAV; }
 
-    CD3D12DescritorHandle GetRTV() const { return m_RTV; }
+    SD3D12DescriptorHandle GetRTV() const { return m_RTV; }
 
 private:
     static GPUTexture* CreateFromSwapChainInternal( const D3D12_RENDER_TARGET_VIEW_DESC *desc, uint32_t index );
 
     ComPtr<ID3D12Resource> m_Texture;
-    CD3D12DescritorHandle m_SRV;
-    CD3D12DescritorHandle m_UAV;
-    CD3D12DescritorHandle m_RTV;
+    SD3D12DescriptorHandle m_SRV;
+    SD3D12DescriptorHandle m_UAV;
+    SD3D12DescriptorHandle m_RTV;
 };

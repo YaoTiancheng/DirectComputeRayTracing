@@ -156,7 +156,7 @@
     <ClInclude Include="Source\D3D12MemoryArena.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Source\D3D12DescriptorHandle.h">
+    <ClInclude Include="Source\D3D12Descriptor.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Source\D3D12DescriptorPoolHeap.h">

@@ -37,14 +37,14 @@ GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT for
 
     CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
 
-    CD3D12DescritorHandle SRV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    SD3D12DescriptorHandle SRV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
     if ( !SRV )
     {
         return nullptr;
     }
     D3D12Adapter::GetDevice()->CreateShaderResourceView( texture.get(), nullptr, SRV.CPU );
 
-    CD3D12DescritorHandle UAV;
+    SD3D12DescriptorHandle UAV;
     if ( hasUAV )
     {
         UAV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
@@ -56,7 +56,7 @@ GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT for
         D3D12Adapter::GetDevice()->CreateUnorderedAccessView( texture.get(), nullptr, nullptr, UAV.CPU );
     }
 
-    CD3D12DescritorHandle RTV;
+    SD3D12DescriptorHandle RTV;
     if ( isRenderTarget )
     {
         RTV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_RTV );
@@ -108,7 +108,7 @@ GPUTexture* GPUTexture::CreateFromSwapChainInternal( const D3D12_RENDER_TARGET_V
     }
 
     CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
-    CD3D12DescritorHandle RTV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_RTV );
+    SD3D12DescriptorHandle RTV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_RTV );
     if ( !RTV.IsValid() )
     {
         return nullptr;

@@ -105,9 +105,9 @@ void CSampleConvolutionRenderer::Execute( const SRenderContext& renderContext, c
     }
 
 
-    CD3D12DescritorHandle SRVs[] = { scene.m_SamplePositionTexture->GetSRV(), scene.m_SampleValueTexture->GetSRV() };
-    CD3D12DescritorHandle descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( SRVs, ARRAY_LENGTH( SRVs ), &scene.m_FilmTexture->GetUAV(), 1 );
-    commandList->SetComputeRootDescriptorTable( 1, descriptorTable.GPU );
+    SD3D12DescriptorHandle SRVs[] = { scene.m_SamplePositionTexture->GetSRV(), scene.m_SampleValueTexture->GetSRV() };
+    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( SRVs, ARRAY_LENGTH( SRVs ), &scene.m_FilmTexture->GetUAV(), 1 );
+    commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
 
     commandList->SetPipelineState( m_PSO.get() );
 

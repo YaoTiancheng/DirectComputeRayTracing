@@ -25,7 +25,7 @@ uint32_t g_BackbufferIndex = 0;
 uint32_t g_DescriptorSizes[ D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES ];
 CD3D12DescriptorPoolHeap g_DescriptorPoolHeaps[ D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES ];
 CD3D12GPUDescriptorHeap g_GPUDescriptorHeap;
-CD3D12DescritorHandle g_NullBufferSRV;
+SD3D12DescriptorHandle g_NullBufferSRV;
 
 ID3D12Device* D3D12Adapter::GetDevice()
 {
@@ -67,7 +67,7 @@ CD3D12GPUDescriptorHeap* D3D12Adapter::GetGPUDescriptorHeap()
     return &g_GPUDescriptorHeap;
 }
 
-CD3D12DescritorHandle D3D12Adapter::GetNullBufferSRV()
+SD3D12DescriptorHandle D3D12Adapter::GetNullBufferSRV()
 {
     return g_NullBufferSRV;
 }

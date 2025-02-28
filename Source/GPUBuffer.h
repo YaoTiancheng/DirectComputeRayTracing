@@ -35,13 +35,13 @@ public:
 
     D3D12_GPU_VIRTUAL_ADDRESS GetGPUVirtualAddress() const { return m_Buffer->GetGPUVirtualAddress(); }
 
-    const CD3D12DescritorHandle& GetSRV() const { return m_SRV; }
+    const SD3D12DescriptorHandle& GetSRV() const { return m_SRV; }
 
-    const CD3D12DescritorHandle& GetUAV() const { return m_UAV; }
+    const SD3D12DescriptorHandle& GetUAV() const { return m_UAV; }
 
-    const CD3D12DescritorHandle& GetCBV() const { return m_CBV; }
+    const SD3D12DescriptorHandle& GetCBV() const { return m_CBV; }
 
-    const CD3D12DescritorHandle& GetSRV( DXGI_FORMAT format, uint32_t byteStride, uint32_t elementOffset, uint32_t numElement );
+    const SD3D12DescriptorHandle& GetSRV( DXGI_FORMAT format, uint32_t byteStride, uint32_t elementOffset, uint32_t numElement );
 
     void* Map();
 
@@ -67,9 +67,9 @@ public:
 
 private:
     ComPtr<ID3D12Resource> m_Buffer;
-    CD3D12DescritorHandle m_SRV;
-    CD3D12DescritorHandle m_UAV;
-    CD3D12DescritorHandle m_CBV;
+    SD3D12DescriptorHandle m_SRV;
+    SD3D12DescriptorHandle m_UAV;
+    SD3D12DescriptorHandle m_CBV;
 
     struct SSRVDesc
     {
@@ -89,5 +89,5 @@ private:
             return std::hash<uint32_t>()( desc.m_ElementOffset ) ^ std::hash<uint32_t>()( desc.m_NumElement );
         }
     };
-    std::unordered_map<SSRVDesc, CD3D12DescritorHandle, SRVDescHash> m_SRVs;
+    std::unordered_map<SSRVDesc, SD3D12DescriptorHandle, SRVDescHash> m_SRVs;
 };

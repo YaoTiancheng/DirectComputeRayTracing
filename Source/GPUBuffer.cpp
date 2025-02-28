@@ -4,9 +4,9 @@
 #include "D3D12DescriptorPoolHeap.h"
 #include "D3D12MemoryArena.h"
 
-const CD3D12DescritorHandle& GPUBuffer::GetSRV( DXGI_FORMAT format, uint32_t byteStride, uint32_t elementOffset, uint32_t numElement )
+const SD3D12DescriptorHandle& GPUBuffer::GetSRV( DXGI_FORMAT format, uint32_t byteStride, uint32_t elementOffset, uint32_t numElement )
 {
-    CD3D12DescritorHandle SRV;
+    SD3D12DescriptorHandle SRV;
     auto it = m_SRVs.find( { elementOffset, numElement } );
     if ( it == m_SRVs.end() )
     {
@@ -213,7 +213,7 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
 
     CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
 
-    CD3D12DescritorHandle SRV;
+    SD3D12DescriptorHandle SRV;
     if ( hasSRV )
     {
         D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
@@ -232,7 +232,7 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
         D3D12Adapter::GetDevice()->CreateShaderResourceView( buffer.Get(), &desc, SRV.CPU );
     }
 
-    CD3D12DescritorHandle UAV;
+    SD3D12DescriptorHandle UAV;
     if ( hasUAV )
     {
         D3D12_UNORDERED_ACCESS_VIEW_DESC desc;
@@ -255,7 +255,7 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
         D3D12Adapter::GetDevice()->CreateUnorderedAccessView( buffer.Get(), nullptr, &desc, UAV.CPU );
     }
 
-    CD3D12DescritorHandle CBV;
+    SD3D12DescriptorHandle CBV;
     if ( hasCBV )
     {
         D3D12_CONSTANT_BUFFER_VIEW_DESC desc;

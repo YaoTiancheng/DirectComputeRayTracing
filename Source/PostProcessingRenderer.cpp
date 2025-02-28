@@ -249,10 +249,10 @@ void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext,
     commandList->SetGraphicsRootSignature( m_RootSignature.Get() );
     commandList->SetGraphicsRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );
 
-    CD3D12DescritorHandle SRVs[] = { scene.m_FilmTexture->GetSRV(),
+    SD3D12DescriptorHandle SRVs[] = { scene.m_FilmTexture->GetSRV(),
         m_LuminanceRenderer.GetLuminanceResultBuffer() ? m_LuminanceRenderer.GetLuminanceResultBuffer()->GetSRV() : D3D12Adapter::GetNullBufferSRV() };
-    CD3D12DescritorHandle descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( SRVs, ARRAY_LENGTH( SRVs ), nullptr, 0 );
-    commandList->SetGraphicsRootDescriptorTable( 1, descriptorTable.GPU );
+    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( SRVs, ARRAY_LENGTH( SRVs ), nullptr, 0 );
+    commandList->SetGraphicsRootDescriptorTable( 1, descriptorTable );
 
     commandList->SetPipelineState( !m_IsPostFXEnabled || !renderContext.m_EnablePostFX ? m_PostFXDisabledPSO.Get() : ( m_IsAutoExposureEnabled ? m_PostFXAutoExposurePSO.Get() : m_PostFXPSO.Get() ) );
     commandList->IASetPrimitiveTopology( D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
@@ -292,8 +292,8 @@ void PostProcessingRenderer::ExecuteCopy( const CScene& scene )
     commandList->SetGraphicsRootSignature( m_RootSignature.Get() );
     commandList->SetGraphicsRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );
 
-    CD3D12DescritorHandle descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &scene.m_RenderResultTexture->GetSRV(), 1, nullptr, 0 );
-    commandList->SetGraphicsRootDescriptorTable( 1, descriptorTable.GPU );
+    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &scene.m_RenderResultTexture->GetSRV(), 1, nullptr, 0 );
+    commandList->SetGraphicsRootDescriptorTable( 1, descriptorTable );
 
     commandList->SetPipelineState( m_CopyPSO.Get() );
     commandList->IASetPrimitiveTopology( D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST );

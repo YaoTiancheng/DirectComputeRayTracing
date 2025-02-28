@@ -416,7 +416,7 @@ void SRenderer::RenderOneFrame()
 
     D3D12_VIEWPORT viewport;
     ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
-    CD3D12DescritorHandle RTV;
+    SD3D12DescriptorHandle RTV;
 
     if ( m_Scene.m_HasValidScene )
     { 

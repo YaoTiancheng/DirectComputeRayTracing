@@ -213,12 +213,12 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
     commandList->SetComputeRootConstantBufferView( 1, renderContext.m_RayTracingFrameConstantBuffer->GetGPUVirtualAddress() );
     commandList->SetComputeRootConstantBufferView( 2, m_DebugConstantsBuffer->GetGPUVirtualAddress() );
 
-    CD3D12DescritorHandle environmentTextureSRV;
+    SD3D12DescriptorHandle environmentTextureSRV;
     if ( m_Scene->m_EnvironmentLight && m_Scene->m_EnvironmentLight->m_Texture )
     {
         environmentTextureSRV = m_Scene->m_EnvironmentLight->m_Texture->GetSRV();
     }
-    CD3D12DescritorHandle srcDescriptors[ 17 ] =
+    SD3D12DescriptorHandle srcDescriptors[ 17 ] =
     {
           m_Scene->m_VerticesBuffer->GetSRV()
         , m_Scene->m_TrianglesBuffer->GetSRV()
@@ -228,7 +228,7 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
         , BxDFTextures.m_CookTorranceBRDFDielectric->GetSRV()
         , BxDFTextures.m_CookTorranceBSDF->GetSRV()
         , BxDFTextures.m_CookTorranceBSDFAverage->GetSRV()
-        , m_Scene->m_BVHNodesBuffer ? m_Scene->m_BVHNodesBuffer->GetSRV() : CD3D12DescritorHandle()
+        , m_Scene->m_BVHNodesBuffer ? m_Scene->m_BVHNodesBuffer->GetSRV() : D3D12Adapter::GetNullBufferSRV()
         , m_Scene->m_InstanceTransformsBuffer->GetSRV( DXGI_FORMAT_UNKNOWN, sizeof( XMFLOAT4X3 ), 0, (uint32_t)m_Scene->m_InstanceTransforms.size() )
         , m_Scene->m_InstanceTransformsBuffer->GetSRV( DXGI_FORMAT_UNKNOWN, sizeof( XMFLOAT4X3 ), (uint32_t)m_Scene->m_InstanceTransforms.size(), (uint32_t)m_Scene->m_InstanceTransforms.size() )
         , m_Scene->m_MaterialIdsBuffer->GetSRV()
@@ -239,8 +239,8 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
         , m_Scene->m_SampleValueTexture->GetUAV()
     };
 
-    CD3D12DescritorHandle descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( srcDescriptors, ARRAY_LENGTH( srcDescriptors ) );
-    commandList->SetComputeRootDescriptorTable( 3, descriptorTable.GPU );
+    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( srcDescriptors, ARRAY_LENGTH( srcDescriptors ) );
+    commandList->SetComputeRootDescriptorTable( 3, descriptorTable );
 
     commandList->SetPipelineState( m_PSO.get() );
     

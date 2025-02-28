@@ -107,7 +107,7 @@
     <ClInclude Include="Source\D3D12GPUDescriptorHeap.h" />
     <ClInclude Include="Source\D3D12Resource.h" />
     <ClInclude Include="Source\D3D12MemoryArena.h" />
-    <ClInclude Include="Source\D3D12Descriptor.h" />
+    <ClInclude Include="Source\D3D12DescriptorHandle.h" />
     <ClInclude Include="Source\D3D12DescriptorPoolHeap.h" />
     <ClInclude Include="Source\D3D12DescriptorUtil.h" />
     <ClInclude Include="Source\ImGuiHelper.h" />

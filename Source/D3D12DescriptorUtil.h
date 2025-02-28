@@ -27,4 +27,39 @@ namespace D3D12Util
             CopyDescriptors( dstDescriptor, srcDescriptors, rangeSize, descriptorSize );
         }
     }
+
+    struct SD3D12DescriptorTableLayout
+    {
+        SD3D12DescriptorTableLayout() = default;
+
+        SD3D12DescriptorTableLayout( uint32_t SRVCount, uint32_t UAVCount )
+            : m_SRVCount( SRVCount )
+            , m_UAVCount( UAVCount )
+        {
+        }
+
+        void InitRootParameter( CD3DX12_ROOT_PARAMETER1* rootParameter ) const
+        {
+            CD3DX12_DESCRIPTOR_RANGE1 ranges[ s_MaxRangesCount ];
+            uint32_t rangesCount = 0;
+            if ( m_SRVCount )
+            { 
+                ranges[ rangesCount++ ].Init( D3D12_DESCRIPTOR_RANGE_TYPE_SRV, m_SRVCount, 0 );
+            }
+            if ( m_UAVCount )
+            { 
+                ranges[ rangesCount++ ].Init( D3D12_DESCRIPTOR_RANGE_TYPE_UAV, m_UAVCount, 0 );
+            }
+            rootParameter->InitAsDescriptorTable( rangesCount, ranges );
+        }
+
+        CD3D12DescritorHandle AllocateAndCopyToGPUDescriptorHeap( CD3D12DescritorHandle* SRVs, uint32_t SRVCount, CD3D12DescritorHandle* UAVs, uint32_t UAVCount );
+
+        CD3D12DescritorHandle AllocateAndCopyToGPUDescriptorHeap( CD3D12DescritorHandle* descriptors, uint32_t count );
+
+
+        static const uint32_t s_MaxRangesCount = 2;
+        uint32_t m_SRVCount = 0;
+        uint32_t m_UAVCount = 0;
+    }
 }

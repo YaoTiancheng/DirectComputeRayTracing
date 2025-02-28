@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "SceneLuminanceRenderer.h"
 #include "D3D12Adapter.h"
-#include "D3D12GPUDescriptorHeap.h"
+#include "D3D12DescriptorUtil.h"
 #include "Shader.h"
 #include "GPUBuffer.h"
 #include "GPUTexture.h"
@@ -10,6 +10,10 @@
 #include "Logging.h"
 #include "imgui/imgui.h"
 #include "../Shaders/SumLuminanceDef.inc.hlsl"
+
+using namespace D3D12Util;
+
+static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 1, 1 );
 
 bool SceneLuminanceRenderer::Init()
 {
@@ -31,10 +35,7 @@ bool SceneLuminanceRenderer::Init()
     {
         CD3DX12_ROOT_PARAMETER1 rootParameters[ 2 ];
         rootParameters[ 0 ].InitAsConstantBufferView( 0 );
-        CD3DX12_DESCRIPTOR_RANGE1 descriptorRanges[ 2 ];
-        descriptorRanges[ 0 ].Init( D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0 );
-        descriptorRanges[ 1 ].Init( D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0 );
-        rootParameters[ 1 ].InitAsDescriptorTable( 2, descriptorRanges );
+        s_DescriptorTableLayout.InitRootParameter( &rootParameters[ 1 ] );
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 2, rootParameters );
 
         ComPtr<ID3DBlob> serializedRootSignature;
@@ -107,7 +108,6 @@ void SceneLuminanceRenderer::Dispatch( const CScene& scene, uint32_t resolutionW
     SCOPED_RENDER_ANNOTATION( L"Calculate scene luminance" );
 
     ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
-    CD3D12GPUDescriptorHeap* descriptorHeap = D3D12Adapter::GetGPUDescriptorHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
 
     uint32_t sumLuminanceBlockCountX = uint32_t( std::ceilf( resolutionWidth / float( SL_BLOCKSIZE ) ) );
     sumLuminanceBlockCountX = uint32_t( std::ceilf( sumLuminanceBlockCountX / 2.0f ) );
@@ -129,12 +129,8 @@ void SceneLuminanceRenderer::Dispatch( const CScene& scene, uint32_t resolutionW
         commandList->SetComputeRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );
     }
 
-    CD3D12DescritorHandle descriptorTable = descriptorHeap->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2 );
+    CD3D12DescritorHandle descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &scene.m_FilmTexture->GetSRV(), 1, &m_SumLuminanceBuffer1->GetUAV(), 1 );
     commandList->SetComputeRootDescriptorTable( 1, descriptorTable.GPU );
-    CD3D12DescritorHandle SRV = descriptorTable;
-    CD3D12DescritorHandle UAV = descriptorTable.Offsetted( 1, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
-    D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, SRV.CPU, scene.m_FilmTexture->GetSRV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
-    D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, UAV.CPU, m_SumLuminanceBuffer1->GetUAV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
 
     commandList->SetPipelineState( m_SumLuminanceTo1DPSO.Get() );
 
@@ -166,12 +162,8 @@ void SceneLuminanceRenderer::Dispatch( const CScene& scene, uint32_t resolutionW
             commandList->ResourceBarrier( iteration == 0 ? 1 : 2, barriers ); // The 1st iteration relies on state implicit promotion
         }
 
-        descriptorTable = descriptorHeap->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2 );
+        descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &sumLuminanceBuffer1->GetSRV(), 1, &sumLuminanceBuffer0->GetUAV(), 1 );
         commandList->SetComputeRootDescriptorTable( 1, descriptorTable.GPU );
-        SRV = descriptorTable;
-        UAV = descriptorTable.Offsetted( 1, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
-        D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, SRV.CPU, sumLuminanceBuffer1->GetSRV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
-        D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, UAV.CPU, sumLuminanceBuffer0->GetUAV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
 
         uint32_t threadGroupCount = uint32_t( std::ceilf( blockCount / float( SL_REDUCE_TO_SINGLE_GROUPTHREADS ) ) );
 

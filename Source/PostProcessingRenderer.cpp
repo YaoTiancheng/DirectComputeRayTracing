@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "PostProcessingRenderer.h"
 #include "D3D12Adapter.h"
-#include "D3D12GPUDescriptorHeap.h"
+#include "D3D12DescriptorUtil.h"
 #include "GPUBuffer.h"
 #include "GPUTexture.h"
 #include "Shader.h"
@@ -12,6 +12,7 @@
 #include "imgui/imgui.h"
 
 using namespace DirectX;
+using namespace D3D12Util;
 
 XMFLOAT4 s_ScreenQuadVertices[ 6 ] =
 {
@@ -30,6 +31,8 @@ struct SConvolutionConstant
     float m_TexcoordScale;
     float m_EV100;
 };
+
+static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 2, 0 );
 
 namespace
 {
@@ -102,9 +105,7 @@ bool PostProcessingRenderer::Init()
     {
         CD3DX12_ROOT_PARAMETER1 rootParameters[ 2 ];
         rootParameters[ 0 ].InitAsConstantBufferView( 0 );
-        CD3DX12_DESCRIPTOR_RANGE1 descriptorRange;
-        descriptorRange.Init( D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0 );
-        rootParameters[ 1 ].InitAsDescriptorTable( 1, &descriptorRange );
+        s_DescriptorTableLayout.InitRootParameter( &rootParameters[ 1 ] );
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 2, rootParameters, 2, samplers );
 
         ComPtr<ID3DBlob> serializedRootSignature;
@@ -248,13 +249,10 @@ void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext,
     commandList->SetGraphicsRootSignature( m_RootSignature.Get() );
     commandList->SetGraphicsRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );
 
-    CD3D12DescritorHandle descriptorTable = D3D12Adapter::GetGPUDescriptorHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV )->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2 );
+    CD3D12DescritorHandle SRVs[] = { scene.m_FilmTexture->GetSRV(),
+        m_LuminanceRenderer.GetLuminanceResultBuffer() ? m_LuminanceRenderer.GetLuminanceResultBuffer()->GetSRV() : D3D12Adapter::GetNullSRV() };
+    CD3D12DescritorHandle descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( SRVs, ARRAY_LENGTH( SRVs ), nullptr, 0 );
     commandList->SetGraphicsRootDescriptorTable( 1, descriptorTable.GPU );
-    D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, descriptorTable.CPU, scene.m_FilmTexture->GetSRV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
-    descriptorTable.Offset( 1, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
-    D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, descriptorTable.CPU,
-        m_LuminanceRenderer.GetLuminanceResultBuffer() ? m_LuminanceRenderer.GetLuminanceResultBuffer()->GetSRV().CPU : D3D12Adapter::GetNullSRV().CPU,
-        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
 
     commandList->SetPipelineState( !m_IsPostFXEnabled || !renderContext.m_EnablePostFX ? m_PostFXDisabledPSO.Get() : ( m_IsAutoExposureEnabled ? m_PostFXAutoExposurePSO.Get() : m_PostFXPSO.Get() ) );
     commandList->IASetPrimitiveTopology( D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
@@ -294,9 +292,8 @@ void PostProcessingRenderer::ExecuteCopy( const CScene& scene )
     commandList->SetGraphicsRootSignature( m_RootSignature.Get() );
     commandList->SetGraphicsRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );
 
-    CD3D12DescritorHandle descriptorTable = D3D12Adapter::GetGPUDescriptorHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV )->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2 );
+    CD3D12DescritorHandle descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &scene.m_RenderResultTexture->GetSRV(), 1, nullptr, 0 );
     commandList->SetGraphicsRootDescriptorTable( 1, descriptorTable.GPU );
-    D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, descriptorTable.CPU, scene.m_RenderResultTexture->GetSRV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
 
     commandList->SetPipelineState( m_CopyPSO.Get() );
     commandList->IASetPrimitiveTopology( D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST );

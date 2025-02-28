@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "D3D12DescriptorPoolHeap.h"
 #include "D3D12GPUDescriptorHeap.h"
+#include "D3D12DescriptorUtil.h"
 #include "D3D12Adapter.h"
 
 bool CD3D12DescriptorPoolHeap::Create( D3D12_DESCRIPTOR_HEAP_TYPE heapType, uint32_t size )
@@ -114,3 +115,26 @@ CD3D12DescritorHandle CD3D12GPUDescriptorHeap::AllocateRange( D3D12_DESCRIPTOR_H
     }
     return handle;
 }
+
+using namespace D3D12Util;
+
+CD3D12DescritorHandle SD3D12DescriptorTableLayout::AllocateAndCopyToGPUDescriptorHeap( CD3D12DescritorHandle* SRVs, uint32_t SRVCount, CD3D12DescritorHandle* UAVs, uint32_t UAVCount )
+{
+    CD3D12DescritorHandle descriptorTable = D3D12Adapter::GetGPUDescriptorHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV )->AllocateRange( m_SRVCount + m_UAVCount );
+    CD3D12DescritorHandle* src[] = { SRVs, UAVs };
+    uint32_t offsets[] = { 0, m_SRVCount };
+    uint32_t sizes[] = { SRVCount, UAVCount };
+    assert( SRVCount <= m_SRVCount );
+    assert( UAVCount <= m_UAVCount );
+    CopyToDescriptorTable( descriptorTable, src, offsets, sizes, 2, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    return descriptorTable;
+}
+
+CD3D12DescritorHandle SD3D12DescriptorTableLayout::AllocateAndCopyToGPUDescriptorHeap( CD3D12DescritorHandle* descriptors, uint32_t count )
+{
+    assert( count <= m_SRVCount + m_UAVCount );
+    CD3D12DescritorHandle descriptorTable = D3D12Adapter::GetGPUDescriptorHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV )->AllocateRange( m_SRVCount + m_UAVCount );
+    CopyDescriptors( descriptorTable, descriptors, count, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
+    return descriptorTable;
+}
+

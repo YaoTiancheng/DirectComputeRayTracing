@@ -11,6 +11,8 @@
 #include "MathHelper.h"
 #include "../Shaders/BxDFTextureDef.inc.hlsl"
 
+using namespace D3D12Util;
+
 struct SKernelCompilationParams
 {
     float m_LutIntervalX;
@@ -25,6 +27,8 @@ struct SKernelCompilationParams
     uint32_t m_BxDFType;
     bool m_HasFresnel;
 };
+
+static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 1, 1 );
 
 static CD3D12ComPtr<ID3D12PipelineState> CompileAndCreateKernel( const char* kernelName, const SKernelCompilationParams& params, ID3D12RootSignature* rootSignature )
 {
@@ -110,10 +114,7 @@ SBxDFTextures BxDFTexturesBuilding::Build()
     {
         CD3DX12_ROOT_PARAMETER1 rootParameters[ 2 ];
         rootParameters[ 0 ].InitAsConstantBufferView( 0 );
-        CD3DX12_DESCRIPTOR_RANGE1 descriptorRanges[ 2 ];
-        descriptorRanges[ 0 ].Init( D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0 );
-        descriptorRanges[ 1 ].Init( D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0 );
-        rootParameters[ 1 ].InitAsDescriptorTable( 2, descriptorRanges );
+        s_DescriptorTableLayout.InitRootParameter( &rootParameters[ 1 ] );
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 2, rootParameters );
 
         ComPtr<ID3DBlob> serializedRootSignature;
@@ -136,7 +137,6 @@ SBxDFTextures BxDFTexturesBuilding::Build()
     }
 
     ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
-    CD3D12GPUDescriptorHeap* descriptorHeap = D3D12Adapter::GetGPUDescriptorHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
 
     {
         const uint32_t sampleCountPerBatch = 4096;
@@ -186,11 +186,8 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             {
                 commandList->SetPipelineState( integralShader.Get() );
 
-                CD3D12DescritorHandle descriptorTable = descriptorHeap->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2 );
+                CD3D12DescritorHandle descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( nullptr, 0, &accumulationTexture->GetUAV(), 1 );
                 commandList->SetComputeRootDescriptorTable( 1, descriptorTable.GPU );
-
-                CD3D12DescritorHandle UAV = descriptorTable.Offsetted( 1, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
-                D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, UAV.CPU, accumulationTexture->GetUAV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
 
                 for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
                 {
@@ -210,13 +207,9 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             {
                 commandList->SetPipelineState( copyShader.Get() );
 
-                CD3D12DescritorHandle descriptorTable = descriptorHeap->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2 );
+                CD3D12DescritorHandle descriptorTable = 
+                    s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBRDF->GetUAV(), 1 );
                 commandList->SetComputeRootDescriptorTable( 1, descriptorTable.GPU );
-
-                CD3D12DescritorHandle SRV = descriptorTable;
-                D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, SRV.CPU, accumulationTexture->GetSRV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
-                CD3D12DescritorHandle UAV = descriptorTable.Offsetted( 1, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
-                D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, UAV.CPU, outputTextures.m_CookTorranceBRDF->GetUAV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
 
                 D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( accumulationTexture->GetTexture(), 
                     D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE )
@@ -228,13 +221,9 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             {
                 commandList->SetPipelineState( averageShader.Get() );
 
-                CD3D12DescritorHandle descriptorTable = descriptorHeap->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2 );
+                CD3D12DescritorHandle descriptorTable = 
+                    s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBRDFAverage->GetUAV(), 1 );
                 commandList->SetComputeRootDescriptorTable( 1, descriptorTable.GPU );
-
-                CD3D12DescritorHandle SRV = descriptorTable;
-                D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, SRV.CPU, accumulationTexture->GetSRV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
-                CD3D12DescritorHandle UAV = descriptorTable.Offsetted( 1, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
-                D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, UAV.CPU, outputTextures.m_CookTorranceBRDFAverage->GetUAV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
 
                 commandList->Dispatch( 1, 1, 1 );
             }
@@ -299,11 +288,8 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             {
                 commandList->SetPipelineState( integralShader.Get() );
 
-                CD3D12DescritorHandle descriptorTable = descriptorHeap->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2 );
+                CD3D12DescritorHandle descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( nullptr, 0, &accumulationTexture->GetUAV(), 1 );
                 commandList->SetComputeRootDescriptorTable( 1, descriptorTable.GPU );
-
-                CD3D12DescritorHandle UAV = descriptorTable.Offsetted( 1, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
-                D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, UAV.CPU, accumulationTexture->GetUAV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
 
                 for ( uint32_t jobIndex = 0; jobIndex < batchCount * 2; ++jobIndex )
                 {
@@ -323,13 +309,9 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             {
                 commandList->SetPipelineState( copyShader.Get() );
 
-                CD3D12DescritorHandle descriptorTable = descriptorHeap->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2 );
+                CD3D12DescritorHandle descriptorTable = 
+                    s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBRDFDielectric->GetUAV(), 1 );
                 commandList->SetComputeRootDescriptorTable( 1, descriptorTable.GPU );
-
-                CD3D12DescritorHandle SRV = descriptorTable;
-                D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, SRV.CPU, accumulationTexture->GetSRV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
-                CD3D12DescritorHandle UAV = descriptorTable.Offsetted( 1, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
-                D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, UAV.CPU, outputTextures.m_CookTorranceBRDFDielectric->GetUAV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
 
                 D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( accumulationTexture->GetTexture(), 
                     D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE )
@@ -403,11 +385,8 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             {
                 commandList->SetPipelineState( integralShader.Get() );
 
-                CD3D12DescritorHandle descriptorTable = descriptorHeap->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2 );
+                CD3D12DescritorHandle descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( nullptr, 0, &accumulationTexture->GetUAV(), 1 );
                 commandList->SetComputeRootDescriptorTable( 1, descriptorTable.GPU );
-
-                CD3D12DescritorHandle UAV = descriptorTable.Offsetted( 1, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
-                D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, UAV.CPU, accumulationTexture->GetUAV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
 
                 for ( uint32_t jobIndex = 0; jobIndex < batchCount * 2; ++jobIndex )
                 {
@@ -427,13 +406,9 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             {
                 commandList->SetPipelineState( copyShader.Get() );
 
-                CD3D12DescritorHandle descriptorTable = descriptorHeap->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2 );
+                CD3D12DescritorHandle descriptorTable = 
+                    s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBSDF->GetUAV(), 1 );
                 commandList->SetComputeRootDescriptorTable( 1, descriptorTable.GPU );
-
-                CD3D12DescritorHandle SRV = descriptorTable;
-                D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, SRV.CPU, accumulationTexture->GetSRV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
-                CD3D12DescritorHandle UAV = descriptorTable.Offsetted( 1, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
-                D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, UAV.CPU, outputTextures.m_CookTorranceBSDF->GetUAV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
 
                 D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( accumulationTexture->GetTexture(), 
                     D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE )
@@ -445,13 +420,9 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             {
                 commandList->SetPipelineState( averageShader.Get() );
 
-                CD3D12DescritorHandle descriptorTable = descriptorHeap->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2 );
+                CD3D12DescritorHandle descriptorTable = 
+                    s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBSDFAverage->GetUAV(), 1 );
                 commandList->SetComputeRootDescriptorTable( 1, descriptorTable.GPU );
-
-                CD3D12DescritorHandle SRV = descriptorTable;
-                D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, SRV.CPU, accumulationTexture->GetSRV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
-                CD3D12DescritorHandle UAV = descriptorTable.Offsetted( 1, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
-                D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, UAV.CPU, outputTextures.m_CookTorranceBSDFAverage->GetUAV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
 
                 commandList->Dispatch( 1, 
                     MathHelper::DivideAndRoundUp( (uint32_t)BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, compilationParams.m_GroupSizeY ),

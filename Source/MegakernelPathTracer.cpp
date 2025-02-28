@@ -2,7 +2,7 @@
 #include "MegakernelPathTracer.h"
 #include "D3D12Adapter.h"
 #include "D3D12Resource.h"
-#include "D3D12GPUDescriptorHeap.h"
+#include "D3D12DescriptorUtil.h"
 #include "Logging.h"
 #include "Shader.h"
 #include "GPUBuffer.h"
@@ -16,6 +16,7 @@
 #include "../Shaders/LightSharedDef.inc.hlsl"
 
 using namespace DirectX;
+using namespace D3D12Util;
 
 #define CS_GROUP_SIZE_X 16
 #define CS_GROUP_SIZE_Y 8
@@ -45,6 +46,8 @@ struct SDebugConstants
     uint32_t m_Padding[ 3 ];
 };
 
+static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 15, 2 );
+
 bool CMegakernelPathTracer::Create()
 {
     // Static sampler
@@ -62,10 +65,7 @@ bool CMegakernelPathTracer::Create()
     rootParameters[ 0 ].InitAsConstantBufferView( 0 );
     rootParameters[ 1 ].InitAsConstantBufferView( 1 );
     rootParameters[ 2 ].InitAsConstantBufferView( 2 );
-    CD3DX12_DESCRIPTOR_RANGE1 descriptorRanges[ 2 ];
-    descriptorRanges[ 0 ].Init( D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 15, 0 );
-    descriptorRanges[ 1 ].Init( D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2, 0 );
-    rootParameters[ 3 ].InitAsDescriptorTable( 2, descriptorRanges );
+    s_DescriptorTableLayout.InitRootParameter( &rootParameters[ 3 ] );
 
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 4, rootParameters, 1, &sampler );
 
@@ -213,10 +213,6 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
     commandList->SetComputeRootConstantBufferView( 1, renderContext.m_RayTracingFrameConstantBuffer->GetGPUVirtualAddress() );
     commandList->SetComputeRootConstantBufferView( 2, m_DebugConstantsBuffer->GetGPUVirtualAddress() );
 
-    CD3D12GPUDescriptorHeap* GPUDescriptorHeap = D3D12Adapter::GetGPUDescriptorHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
-    CD3D12DescritorHandle baseDestDesciptor = GPUDescriptorHeap->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 17 );
-    commandList->SetComputeRootDescriptorTable( 3, baseDestDesciptor.GPU );
-
     CD3D12DescritorHandle environmentTextureSRV;
     if ( m_Scene->m_EnvironmentLight && m_Scene->m_EnvironmentLight->m_Texture )
     {
@@ -243,12 +239,8 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
         , m_Scene->m_SampleValueTexture->GetUAV()
     };
 
-    CD3D12DescritorHandle destDesciptor = baseDestDesciptor;
-    for ( auto& srcDescriptor : srcDescriptors )
-    {
-        D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, destDesciptor.CPU, srcDescriptor.CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
-        destDesciptor.Offset( 1, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
-    }
+    CD3D12DescritorHandle descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( srcDescriptors, ARRAY_LENGTH( srcDescriptors ) );
+    commandList->SetComputeRootDescriptorTable( 3, descriptorTable.GPU );
 
     commandList->SetPipelineState( m_PSO.get() );
     

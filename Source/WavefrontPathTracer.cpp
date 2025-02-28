@@ -9,8 +9,6 @@
 #include "GPUBuffer.h"
 #include "GPUTexture.h"
 #include "MessageBox.h"
-#include "D3D11RenderSystem.h"
-#include "ComputeJob.h"
 #include "RenderContext.h"
 #include "BxDFTextures.h"
 #include "ScopedRenderAnnotation.h"

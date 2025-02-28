@@ -59,7 +59,7 @@ GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT for
     CD3D12DescritorHandle RTV;
     if ( isRenderTarget )
     {
-        RTV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+        RTV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_RTV );
         if ( !RTV )
         {
             descriptorHeap->Free( SRV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
@@ -108,7 +108,7 @@ GPUTexture* GPUTexture::CreateFromSwapChainInternal( const D3D12_RENDER_TARGET_V
     }
 
     CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
-    CD3D12DescritorHandle RTV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    CD3D12DescritorHandle RTV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_RTV );
     if ( !RTV.IsValid() )
     {
         return nullptr;
@@ -151,6 +151,6 @@ GPUTexture::~GPUTexture()
     }
     if ( m_RTV )
     { 
-        descriptorHeap->Free( m_RTV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+        descriptorHeap->Free( m_RTV, D3D12_DESCRIPTOR_HEAP_TYPE_RTV );
     }
 }

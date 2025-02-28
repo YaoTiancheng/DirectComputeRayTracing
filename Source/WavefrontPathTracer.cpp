@@ -396,7 +396,7 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SB
 
     commandList->SetComputeRootSignature( m_RootSignature.Get() );
 
-    CD3D12GPUDescriptorHeap* GPUDescriptorHeap = D3D12Adapter::GetGPUDescriptorHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    CD3D12GPUDescriptorHeap* GPUDescriptorHeap = D3D12Adapter::GetGPUDescriptorHeap();
 
     if ( m_NewImage )
     {
@@ -563,7 +563,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
     ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
 
-    CD3D12GPUDescriptorHeap* GPUDescriptorHeap = D3D12Adapter::GetGPUDescriptorHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    CD3D12GPUDescriptorHeap* GPUDescriptorHeap = D3D12Adapter::GetGPUDescriptorHeap();
 
     // Barriers
     if ( !isInitialIteration )

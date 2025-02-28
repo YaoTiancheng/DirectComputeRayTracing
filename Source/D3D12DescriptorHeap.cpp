@@ -70,19 +70,15 @@ void CD3D12DescriptorPoolHeap::Free( const CD3D12DescritorHandle& handle, D3D12_
 bool CD3D12GPUDescriptorHeap::Create( D3D12_DESCRIPTOR_HEAP_TYPE heapType, uint32_t size )
 {
     uint32_t backbufferCount = D3D12Adapter::GetBackbufferCount();
-    m_Heaps.resize( backbufferCount );
 
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
     heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    heapDesc.NumDescriptors = size;
+    heapDesc.NumDescriptors = size * backbufferCount;
     heapDesc.Type = heapType;
-
-    for ( uint32_t i = 0; i < backbufferCount; ++i )
+    
+    if ( FAILED( D3D12Adapter::GetDevice()->CreateDescriptorHeap( &heapDesc, IID_PPV_ARGS( m_Heap.GetAddressOf() ) ) ) )
     {
-        if ( FAILED( D3D12Adapter::GetDevice()->CreateDescriptorHeap( &heapDesc, IID_PPV_ARGS( m_Heaps[ i ].ReleaseAndGetAddressOf() ) ) ) )
-        {
-            return false;
-        }
+        return false;
     }
 
     m_Size = size;
@@ -91,10 +87,7 @@ bool CD3D12GPUDescriptorHeap::Create( D3D12_DESCRIPTOR_HEAP_TYPE heapType, uint3
 
 void CD3D12GPUDescriptorHeap::Destroy()
 {
-    for ( auto& heap : m_Heaps )
-    {
-        heap.Reset();
-    }
+    m_Heap.Reset();
 
     m_Size = 0;
     m_Top = 0;
@@ -110,7 +103,8 @@ CD3D12DescritorHandle CD3D12GPUDescriptorHeap::AllocateRange( D3D12_DESCRIPTOR_H
     CD3D12DescritorHandle handle;
     if ( m_Top + number <= m_Size )
     {
-        handle.InitOffseted( m_Heaps[ D3D12Adapter::GetBackbufferIndex() ].Get(), m_Top, D3D12Adapter::GetDescriptorSize( type ) );
+        uint32_t offset = D3D12Adapter::GetBackbufferIndex() * m_Size + m_Top;
+        handle.InitOffseted( m_Heap.Get(), offset, D3D12Adapter::GetDescriptorSize( type ) );
         m_Top += number;
     }
     return handle;
@@ -120,7 +114,7 @@ using namespace D3D12Util;
 
 CD3D12DescritorHandle SD3D12DescriptorTableLayout::AllocateAndCopyToGPUDescriptorHeap( CD3D12DescritorHandle* SRVs, uint32_t SRVCount, CD3D12DescritorHandle* UAVs, uint32_t UAVCount )
 {
-    CD3D12DescritorHandle descriptorTable = D3D12Adapter::GetGPUDescriptorHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV )->AllocateRange( m_SRVCount + m_UAVCount );
+    CD3D12DescritorHandle descriptorTable = D3D12Adapter::GetGPUDescriptorHeap()->AllocateRange( m_SRVCount + m_UAVCount );
     CD3D12DescritorHandle* src[] = { SRVs, UAVs };
     uint32_t offsets[] = { 0, m_SRVCount };
     uint32_t sizes[] = { SRVCount, UAVCount };
@@ -133,7 +127,7 @@ CD3D12DescritorHandle SD3D12DescriptorTableLayout::AllocateAndCopyToGPUDescripto
 CD3D12DescritorHandle SD3D12DescriptorTableLayout::AllocateAndCopyToGPUDescriptorHeap( CD3D12DescritorHandle* descriptors, uint32_t count )
 {
     assert( count <= m_SRVCount + m_UAVCount );
-    CD3D12DescritorHandle descriptorTable = D3D12Adapter::GetGPUDescriptorHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV )->AllocateRange( m_SRVCount + m_UAVCount );
+    CD3D12DescritorHandle descriptorTable = D3D12Adapter::GetGPUDescriptorHeap()->AllocateRange( m_SRVCount + m_UAVCount );
     CopyDescriptors( descriptorTable, descriptors, count, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
     return descriptorTable;
 }

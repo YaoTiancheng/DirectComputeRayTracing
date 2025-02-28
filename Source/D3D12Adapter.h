@@ -39,7 +39,7 @@ namespace D3D12Adapter
 
     CD3D12DescriptorPoolHeap* GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE heapType );
 
-    CD3D12GPUDescriptorHeap* GetGPUDescriptorHeap( D3D12_DESCRIPTOR_HEAP_TYPE heapType );
+    CD3D12GPUDescriptorHeap* GetGPUDescriptorHeap();
 
     CD3D12BufferedGrowingHeapArena* GetUploadHeapArena();
 

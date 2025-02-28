@@ -1,11 +1,13 @@
 #include "stdafx.h"
 #include "D3D12Adapter.h"
 #include "D3D12DescriptorPoolHeap.h"
+#include "D3D12GPUDescriptorHeap.h"
 #include "CommandLineArgs.h"
 
 using namespace Microsoft::WRL;
 
 #define BACKBUFFER_COUNT 2
+#define GPU_DESCRIPTOR_HEAP_SIZE 1024
 
 ComPtr<ID3D12Device> g_Device;
 ComPtr<ID3D12CommandQueue> g_CommandQueue;
@@ -20,6 +22,7 @@ uint32_t g_BackbufferIndex = 0;
 
 uint32_t g_DescriptorSizes[ D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES ];
 CD3D12DescriptorPoolHeap g_DescriptorPoolHeaps[ D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES ];
+CD3D12GPUDescriptorHeap g_GPUDescriptorHeap;
 
 ID3D12Device* D3D12Adapter::GetDevice()
 {
@@ -155,11 +158,18 @@ bool D3D12Adapter::Init( HWND hWnd )
         g_DescriptorSizes[ type ] = g_Device->GetDescriptorHandleIncrementSize( (D3D12_DESCRIPTOR_HEAP_TYPE)type );
     }
 
+    if ( !g_GPUDescriptorHeap.Create( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, GPU_DESCRIPTOR_HEAP_SIZE ) )
+    {
+        return false;
+    }
+
     return true;
 }
 
 void D3D12Adapter::Destroy()
 {
+    g_GPUDescriptorHeap.Destroy();
+
     CloseHandle( g_FenceEvent );
     g_Fence.Reset();
     g_CommandList.Reset();
@@ -217,6 +227,9 @@ void D3D12Adapter::BeginCurrentFrame()
     // list, that command list can then be reset at any time and must be before 
     // re-recording.
     g_CommandList->Reset( g_CommandAllocators[ g_BackbufferIndex ].Get(), nullptr );
+
+    // Bind descriptor heaps
+    g_CommandList->SetDescriptorHeaps( 1, &g_GPUDescriptorHeap.GetD3DHeap() );
 }
 
 bool D3D12Adapter::MoveToNextFrame()
@@ -243,6 +256,9 @@ bool D3D12Adapter::MoveToNextFrame()
 
     // Set the fence value for the next frame.
     g_FenceValues[ g_BackbufferIndex ] = currentFenceValue + 1;
+
+    // Reset the GPU descriptor heap
+    g_GPUDescriptorHeap.Reset();
 
     return true;
 }

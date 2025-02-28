@@ -103,7 +103,6 @@
     <ClInclude Include="Source\BxDFTexturesBuilding.h" />
     <ClInclude Include="Source\Camera.h" />
     <ClInclude Include="Source\CommandLineArgs.h" />
-    <ClInclude Include="Source\ComputeJob.h" />
     <ClInclude Include="Source\Constants.h" />
     <ClInclude Include="Source\D3D12GPUDescriptorHeap.h" />
     <ClInclude Include="Source\D3D12Resource.h" />
@@ -119,7 +118,6 @@
     <ClInclude Include="Source\DDSTextureLoader.h" />
     <ClInclude Include="Resources\Resource.h" />
     <ClInclude Include="Source\ScopedRenderAnnotation.h" />
-    <ClInclude Include="Source\GraphicsJob.h" />
     <ClInclude Include="Source\imgui\imconfig.h" />
     <ClInclude Include="Source\imgui\imgui.h" />
     <ClInclude Include="Source\imgui\imgui_impl_dx11.h" />
@@ -143,7 +141,6 @@
     <ClInclude Include="Source\Timers.h" />
     <ClInclude Include="Source\Shader.h" />
     <ClInclude Include="Source\GPUBuffer.h" />
-    <ClInclude Include="Source\GPUResourceCreationFlag.h" />
     <ClInclude Include="Source\GPUTexture.h" />
     <ClInclude Include="Source\DirectComputeRayTracing.h" />
     <ClInclude Include="Source\stdafx.h" />
@@ -156,7 +153,6 @@
     <ClCompile Include="Source\BxDFTexturesBuilding.cpp" />
     <ClCompile Include="Source\Camera.cpp" />
     <ClCompile Include="Source\CommandLineArgs.cpp" />
-    <ClCompile Include="Source\ComputeJob.cpp" />
     <ClCompile Include="Source\D3D12Resource.cpp" />
     <ClCompile Include="Source\D3D12MemoryArena.cpp" />
     <ClCompile Include="Source\D3D12DescriptorHeap.cpp" />
@@ -169,7 +165,6 @@
     <ClCompile Include="Source\Application.cpp" />
     <ClCompile Include="Source\DDSTextureLoader.cpp" />
     <ClCompile Include="Source\Logging.cpp" />
-    <ClCompile Include="Source\GraphicsJob.cpp" />
     <ClCompile Include="Source\imgui\imgui.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>

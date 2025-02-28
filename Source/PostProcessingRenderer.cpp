@@ -250,7 +250,7 @@ void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext,
     commandList->SetGraphicsRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );
 
     CD3D12DescritorHandle SRVs[] = { scene.m_FilmTexture->GetSRV(),
-        m_LuminanceRenderer.GetLuminanceResultBuffer() ? m_LuminanceRenderer.GetLuminanceResultBuffer()->GetSRV() : D3D12Adapter::GetNullSRV() };
+        m_LuminanceRenderer.GetLuminanceResultBuffer() ? m_LuminanceRenderer.GetLuminanceResultBuffer()->GetSRV() : D3D12Adapter::GetNullBufferSRV() };
     CD3D12DescritorHandle descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( SRVs, ARRAY_LENGTH( SRVs ), nullptr, 0 );
     commandList->SetGraphicsRootDescriptorTable( 1, descriptorTable.GPU );
 

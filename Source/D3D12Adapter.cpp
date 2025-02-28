@@ -8,6 +8,8 @@ using namespace Microsoft::WRL;
 
 #define BACKBUFFER_COUNT 2
 #define GPU_DESCRIPTOR_HEAP_SIZE 1024
+#define DESCRIPTOR_POOL_HEAP_SIZE_CBV_SRV_UAV 512
+#define DESCRIPTOR_POOL_HEAP_SIZE_RTV 8
 
 ComPtr<ID3D12Device> g_Device;
 ComPtr<ID3D12CommandQueue> g_CommandQueue;
@@ -23,6 +25,7 @@ uint32_t g_BackbufferIndex = 0;
 uint32_t g_DescriptorSizes[ D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES ];
 CD3D12DescriptorPoolHeap g_DescriptorPoolHeaps[ D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES ];
 CD3D12GPUDescriptorHeap g_GPUDescriptorHeap;
+CD3D12DescritorHandle g_NullBufferSRV;
 
 ID3D12Device* D3D12Adapter::GetDevice()
 {
@@ -57,6 +60,16 @@ uint32_t D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE type )
 CD3D12DescriptorPoolHeap* D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE heapType )
 {
     return &g_DescriptorPoolHeaps[ (uint32_t)heapType ];
+}
+
+CD3D12GPUDescriptorHeap* D3D12Adapter::GetGPUDescriptorHeap()
+{
+    return &g_GPUDescriptorHeap;
+}
+
+CD3D12DescritorHandle D3D12Adapter::GetNullBufferSRV()
+{
+    return g_NullBufferSRV;
 }
 
 bool D3D12Adapter::Init( HWND hWnd )
@@ -158,6 +171,30 @@ bool D3D12Adapter::Init( HWND hWnd )
         g_DescriptorSizes[ type ] = g_Device->GetDescriptorHandleIncrementSize( (D3D12_DESCRIPTOR_HEAP_TYPE)type );
     }
 
+    // Only create two heaps, leave others unused.
+    if ( !g_DescriptorPoolHeaps[ (uint32_t)D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ].Create( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, DESCRIPTOR_POOL_HEAP_SIZE_CBV_SRV_UAV ) )
+    {
+        return false;
+    }
+    if ( !g_DescriptorPoolHeaps[ (uint32_t)D3D12_DESCRIPTOR_HEAP_TYPE_RTV ].Create( D3D12_DESCRIPTOR_HEAP_TYPE_RTV, DESCRIPTOR_POOL_HEAP_SIZE_RTV ) )
+    {
+        return false;
+    }
+
+    // Create null SRV
+    {
+        g_NullBufferSRV = g_DescriptorPoolHeaps[ (uint32_t)D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ].Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
+        desc.Format = DXGI_FORMAT_R8_UINT;
+        desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        desc.Buffer.FirstElement = 0;
+        desc.Buffer.NumElements = 0;
+        desc.Buffer.StructureByteStride = 0;
+        g_Device->CreateShaderResourceView( nullptr, &desc, g_NullBufferSRV.CPU );
+    }
+
     if ( !g_GPUDescriptorHeap.Create( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, GPU_DESCRIPTOR_HEAP_SIZE ) )
     {
         return false;
@@ -169,6 +206,11 @@ bool D3D12Adapter::Init( HWND hWnd )
 void D3D12Adapter::Destroy()
 {
     g_GPUDescriptorHeap.Destroy();
+
+    for ( CD3D12DescriptorPoolHeap& heap : g_DescriptorPoolHeaps )
+    {
+        heap.Destroy();
+    }
 
     CloseHandle( g_FenceEvent );
     g_Fence.Reset();

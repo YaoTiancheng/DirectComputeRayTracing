@@ -17,5 +17,5 @@ public:
 
 private:
     ComPtr<ID3D12DescriptorHeap> m_Heap;
-    std::list<uint32_t> m_FreeEntries;
+    std::list<uint32_t> m_FreeEntries; // TODO: merge continuous entries
 };

@@ -4,8 +4,8 @@
 
 class CD3D12DescriptorPoolHeap;
 class CD3D12GPUDescriptorHeap;
-class CD3D12BufferedGrowingHeapArena;
-class CD3D12BufferedGrowingBufferArena;
+class CD3D12MultiHeapArena;
+class CD3D12MultiBufferArena;
 
 namespace D3D12Adapter
 {
@@ -41,9 +41,9 @@ namespace D3D12Adapter
 
     CD3D12GPUDescriptorHeap* GetGPUDescriptorHeap();
 
-    CD3D12BufferedGrowingHeapArena* GetUploadHeapArena();
+    CD3D12MultiHeapArena* GetUploadHeapArena();
 
-    CD3D12BufferedGrowingBufferArena* GetUploadBufferArena();
+    CD3D12MultiBufferArena* GetUploadBufferArena();
 
     ID3D12CommandSignature* GetDispatchIndirectCommandSignature();
 

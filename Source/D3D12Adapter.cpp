@@ -2,6 +2,7 @@
 #include "D3D12Adapter.h"
 #include "D3D12DescriptorPoolHeap.h"
 #include "D3D12GPUDescriptorHeap.h"
+#include "D3D12MemoryArena.h"
 #include "CommandLineArgs.h"
 
 using namespace Microsoft::WRL;
@@ -10,6 +11,8 @@ using namespace Microsoft::WRL;
 #define GPU_DESCRIPTOR_HEAP_SIZE 1024
 #define DESCRIPTOR_POOL_HEAP_SIZE_CBV_SRV_UAV 512
 #define DESCRIPTOR_POOL_HEAP_SIZE_RTV 8
+#define UPLOAD_BUFFER_ARENA_BYTESIZE 1 * 1024 * 1024
+#define UPLOAD_HEAP_ARENA_BYTESIZE 1 * 1024 * 1024
 
 ComPtr<ID3D12Device> g_Device;
 ComPtr<ID3D12CommandQueue> g_CommandQueue;
@@ -26,6 +29,14 @@ uint32_t g_DescriptorSizes[ D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES ];
 CD3D12DescriptorPoolHeap g_DescriptorPoolHeaps[ D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES ];
 CD3D12GPUDescriptorHeap g_GPUDescriptorHeap;
 SD3D12DescriptorHandle g_NullBufferSRV;
+
+struct SUploadMemoryArena
+{
+    CD3D12MultiBufferArena m_UploadBufferArena;
+    CD3D12MultiHeapArena m_UploadHeapArena;
+};
+
+SUploadMemoryArena g_UploadMemoryArenas[ BACKBUFFER_COUNT ];
 
 ID3D12Device* D3D12Adapter::GetDevice()
 {
@@ -65,6 +76,16 @@ CD3D12DescriptorPoolHeap* D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_
 CD3D12GPUDescriptorHeap* D3D12Adapter::GetGPUDescriptorHeap()
 {
     return &g_GPUDescriptorHeap;
+}
+
+CD3D12MultiHeapArena* D3D12Adapter::GetUploadHeapArena()
+{
+    return &g_UploadMemoryArenas[ g_BackbufferIndex ].m_UploadHeapArena;
+}
+
+CD3D12MultiBufferArena* D3D12Adapter::GetUploadBufferArena()
+{
+    return &g_UploadMemoryArenas[ g_BackbufferIndex ].m_UploadBufferArena;
 }
 
 SD3D12DescriptorHandle D3D12Adapter::GetNullBufferSRV()
@@ -200,11 +221,44 @@ bool D3D12Adapter::Init( HWND hWnd )
         return false;
     }
 
+    for ( SUploadMemoryArena& arena : g_UploadMemoryArenas )
+    {
+        // Create buffer arena
+        {
+            CD3D12BufferArena::SInitializer initializer = {};
+            initializer.m_HeapProperties = CD3DX12_HEAP_PROPERTIES( D3D12_HEAP_TYPE_UPLOAD );
+            initializer.m_State = D3D12_RESOURCE_STATE_GENERIC_READ;
+            initializer.SizeInBytes = UPLOAD_BUFFER_ARENA_BYTESIZE;
+            if ( !arena.m_UploadBufferArena.Create( initializer, 1 ) )
+            {
+                return false;
+            }
+        }
+
+        // Create heap arena
+        {
+            D3D12_HEAP_DESC initializer = {};
+            initializer.SizeInBytes = UPLOAD_HEAP_ARENA_BYTESIZE;
+            initializer.Properties = CD3DX12_HEAP_PROPERTIES( D3D12_HEAP_TYPE_UPLOAD );
+            initializer.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+            if ( !arena.m_UploadHeapArena.Create( initializer, 1 ) )
+            {
+                return false;
+            }
+        }
+    }
+
     return true;
 }
 
 void D3D12Adapter::Destroy()
 {
+    for ( SUploadMemoryArena& arena : g_UploadMemoryArenas )
+    {
+        arena.m_UploadBufferArena.Destroy();
+        arena.m_UploadHeapArena.Destroy();
+    }
+
     g_GPUDescriptorHeap.Destroy();
 
     for ( CD3D12DescriptorPoolHeap& heap : g_DescriptorPoolHeaps )
@@ -301,6 +355,11 @@ bool D3D12Adapter::MoveToNextFrame()
 
     // Reset the GPU descriptor heap
     g_GPUDescriptorHeap.Reset();
+
+    // Reset the upload memory arenas
+    SUploadMemoryArena& memoryArena = g_UploadMemoryArenas[ g_BackbufferIndex ];
+    memoryArena.m_UploadBufferArena.Reset( 1 );
+    memoryArena.m_UploadHeapArena.Reset( 1 );
 
     return true;
 }

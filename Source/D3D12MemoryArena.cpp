@@ -3,7 +3,7 @@
 #include "D3D12MemoryArena.h"
 
 template <typename TArena>
-TD3D12ArenaMemoryLocation<TArena> TD3D12GrowingMemoryArena<TArena>::Allocate( const typename TArena::InitializerType& initializer, uint64_t byteSize, uint64_t alignment )
+TD3D12ArenaMemoryLocation<TArena> TD3D12MultiMemoryArena<TArena>::Allocate( const typename TArena::InitializerType& initializer, uint64_t byteSize, uint64_t alignment )
 {
     if ( byteSize > initializer.SizeInBytes )
     {
@@ -37,49 +37,8 @@ TD3D12ArenaMemoryLocation<TArena> TD3D12GrowingMemoryArena<TArena>::Allocate( co
     return allocation;
 }
 
-template TD3D12ArenaMemoryLocation<CD3D12HeapArena> TD3D12GrowingMemoryArena<CD3D12HeapArena>::Allocate( const CD3D12HeapArena::InitializerType& initializer, uint64_t byteSize, uint64_t alignment );
-template TD3D12ArenaMemoryLocation<CD3D12BufferArena> TD3D12GrowingMemoryArena<CD3D12BufferArena>::Allocate( const CD3D12BufferArena::InitializerType& initializer, uint64_t byteSize, uint64_t alignment );
-
-template <typename TArena>
-bool TD3D12BufferedGrowingMemoryArena<TArena>::Create( const typename TArena::InitializerType& initializer, uint32_t capacity /*= 0 */ )
-{
-    assert( m_Arenas.empty() );
-    m_Arenas.resize( D3D12Adapter::GetBackbufferCount() );
-    for ( auto& arena : m_Arenas )
-    {
-        arena = std::make_shared<TD3D12GrowingMemoryArena<TArena>>();
-        if ( !arena->Create( initializer, capacity ) )
-        {
-            m_Arenas.clear();
-            return false;
-        }
-    }
-    m_Initializer = initializer;
-    return true;
-}
-
-template bool TD3D12BufferedGrowingMemoryArena<CD3D12HeapArena>::Create( const CD3D12HeapArena::InitializerType& initializer, uint32_t capacity );
-template bool TD3D12BufferedGrowingMemoryArena<CD3D12BufferArena>::Create( const CD3D12BufferArena::InitializerType& initializer, uint32_t capacity );
-
-template <typename TArena>
-void TD3D12BufferedGrowingMemoryArena<TArena>::Reset( uint32_t capacity /*= 0 */ )
-{
-    const uint32_t backbufferIndex = D3D12Adapter::GetBackbufferIndex();
-    m_Arenas[ backbufferIndex ]->Reset( capacity );
-}
-
-template void TD3D12BufferedGrowingMemoryArena<CD3D12HeapArena>::Reset( uint32_t capacity );
-template void TD3D12BufferedGrowingMemoryArena<CD3D12BufferArena>::Reset( uint32_t capacity );
-
-template <typename TArena>
-TD3D12ArenaMemoryLocation<TArena> TD3D12BufferedGrowingMemoryArena<TArena>::Allocate( uint64_t byteSize, uint64_t alignment )
-{
-    const uint32_t backbufferIndex = D3D12Adapter::GetBackbufferIndex();
-    return m_Arenas[ backbufferIndex ]->Allocate( m_Initializer, byteSize, alignment );
-}
-
-template TD3D12ArenaMemoryLocation<CD3D12HeapArena> TD3D12BufferedGrowingMemoryArena<CD3D12HeapArena>::Allocate( uint64_t byteSize, uint64_t alignment );
-template TD3D12ArenaMemoryLocation<CD3D12BufferArena> TD3D12BufferedGrowingMemoryArena<CD3D12BufferArena>::Allocate( uint64_t byteSize, uint64_t alignment );
+template TD3D12ArenaMemoryLocation<CD3D12HeapArena> TD3D12MultiMemoryArena<CD3D12HeapArena>::Allocate( const CD3D12HeapArena::InitializerType& initializer, uint64_t byteSize, uint64_t alignment );
+template TD3D12ArenaMemoryLocation<CD3D12BufferArena> TD3D12MultiMemoryArena<CD3D12BufferArena>::Allocate( const CD3D12BufferArena::InitializerType& initializer, uint64_t byteSize, uint64_t alignment );
 
 bool CD3D12HeapArena::Create( const CD3D12HeapArena::InitializerType& desc )
 {

@@ -82,7 +82,7 @@ namespace
 
         const D3D12_RESOURCE_DESC desc = destBuffer->GetDesc();
 
-        CD3D12BufferedGrowingBufferArena* uploadBufferArena = D3D12Adapter::GetUploadBufferArena();
+        CD3D12MultiBufferArena* uploadBufferArena = D3D12Adapter::GetUploadBufferArena();
         SD3D12ArenaBufferLocation location = uploadBufferArena->Allocate( desc.Width, 1 );
         if ( !location.IsValid() )
         {
@@ -151,7 +151,7 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
     {
         // todo: Placed resource for constant buffers seems to be an overkill. Use buffer sub-allocation instead.
 
-        CD3D12BufferedGrowingHeapArena* uploadHeapArena = D3D12Adapter::GetUploadHeapArena();
+        CD3D12MultiHeapArena* uploadHeapArena = D3D12Adapter::GetUploadHeapArena();
         SD3D12ArenaHeapLocation location = uploadHeapArena->Allocate( byteWidth, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT );
         if ( !location.IsValid() )
         {

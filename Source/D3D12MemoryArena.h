@@ -89,17 +89,17 @@ struct TD3D12ArenaMemoryLocation
 
 
 template <typename TArena>
-class TD3D12GrowingMemoryArena
+class TD3D12MultiMemoryArena
 {
 public:
-    TD3D12GrowingMemoryArena() = default;
-    ~TD3D12GrowingMemoryArena()
+    TD3D12MultiMemoryArena() = default;
+    ~TD3D12MultiMemoryArena()
     {
         Destroy();
     }
 
-    TD3D12GrowingMemoryArena( const TD3D12GrowingMemoryArena& ) = delete;
-    TD3D12GrowingMemoryArena& operator=( const TD3D12GrowingMemoryArena& ) = delete;
+    TD3D12MultiMemoryArena( const TD3D12MultiMemoryArena& ) = delete;
+    TD3D12MultiMemoryArena& operator=( const TD3D12MultiMemoryArena& ) = delete;
 
     bool Create( const typename TArena::InitializerType& initializer, uint32_t capacity = 0 ) 
     {
@@ -146,41 +146,6 @@ private:
 };
 
 
-template <typename TArena>
-class TD3D12BufferedGrowingMemoryArena
-{
-public:
-    TD3D12BufferedGrowingMemoryArena()
-        : m_Initializer{}
-    {
-    }
-
-    ~TD3D12BufferedGrowingMemoryArena()
-    {
-        Destroy();
-    }
-
-    TD3D12BufferedGrowingMemoryArena( const TD3D12BufferedGrowingMemoryArena& ) = delete;
-    TD3D12BufferedGrowingMemoryArena& operator=( const TD3D12BufferedGrowingMemoryArena& ) = delete;
-
-    bool Create( const typename TArena::InitializerType& initializer, uint32_t capacity = 0 );
-
-    void Destroy()
-    {
-        m_Arenas.clear();
-        m_Initializer = {};
-    }
-
-    void Reset( uint32_t capacity = 0 );
-
-    TD3D12ArenaMemoryLocation<TArena> Allocate( uint64_t byteSize, uint64_t alignment );
-
-private:
-    typename TArena::InitializerType m_Initializer;
-    std::vector<std::shared_ptr<TD3D12GrowingMemoryArena<TArena>>> m_Arenas;
-};
-
-
 class CD3D12HeapArena : public TD3D12MemoryArena<ID3D12Heap>
 {
 public:
@@ -208,5 +173,5 @@ public:
 using SD3D12ArenaHeapLocation = TD3D12ArenaMemoryLocation<CD3D12HeapArena>;
 using SD3D12ArenaBufferLocation = TD3D12ArenaMemoryLocation<CD3D12BufferArena>;
 
-class CD3D12BufferedGrowingHeapArena : public TD3D12BufferedGrowingMemoryArena<CD3D12HeapArena> {};
-class CD3D12BufferedGrowingBufferArena : public TD3D12BufferedGrowingMemoryArena<CD3D12BufferArena> {};
+class CD3D12MultiHeapArena : public TD3D12MultiMemoryArena<CD3D12HeapArena> {};
+class CD3D12MultiBufferArena : public TD3D12MultiMemoryArena<CD3D12BufferArena> {};

@@ -38,6 +38,8 @@ struct SUploadMemoryArena
 
 SUploadMemoryArena g_UploadMemoryArenas[ BACKBUFFER_COUNT ];
 
+ComPtr<ID3D12CommandSignature> g_DispatchIndirectCommandSignature;
+
 ID3D12Device* D3D12Adapter::GetDevice()
 {
     return g_Device.Get();
@@ -86,6 +88,11 @@ CD3D12MultiHeapArena* D3D12Adapter::GetUploadHeapArena()
 CD3D12MultiBufferArena* D3D12Adapter::GetUploadBufferArena()
 {
     return &g_UploadMemoryArenas[ g_BackbufferIndex ].m_UploadBufferArena;
+}
+
+ID3D12CommandSignature* D3D12Adapter::GetDispatchIndirectCommandSignature()
+{
+    return g_DispatchIndirectCommandSignature.Get();
 }
 
 SD3D12DescriptorHandle D3D12Adapter::GetNullBufferSRV()
@@ -248,11 +255,27 @@ bool D3D12Adapter::Init( HWND hWnd )
         }
     }
 
+    {
+        D3D12_INDIRECT_ARGUMENT_DESC arg = {};
+        arg.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
+        D3D12_COMMAND_SIGNATURE_DESC desc = {};
+        desc.ByteStride = 12;
+        desc.NumArgumentDescs = 1;
+        desc.pArgumentDescs = &arg;
+        hr = g_Device->CreateCommandSignature( &desc, nullptr, IID_PPV_ARGS( g_DispatchIndirectCommandSignature.GetAddressOf() ) );
+        if ( FAILED( hr ) )
+        {
+            return false;
+        }
+    }
+
     return true;
 }
 
 void D3D12Adapter::Destroy()
 {
+    g_DispatchIndirectCommandSignature.Reset();
+
     for ( SUploadMemoryArena& arena : g_UploadMemoryArenas )
     {
         arena.m_UploadBufferArena.Destroy();

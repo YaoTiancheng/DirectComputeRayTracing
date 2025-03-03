@@ -184,7 +184,7 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
     // Barriers
     {
         std::vector<D3D12_RESOURCE_BARRIER> barriers;
-        barriers.reserve( 5 );
+        barriers.reserve( 7 );
 
         barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( renderContext.m_RayTracingFrameConstantBuffer->GetBuffer(),
             D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER ) );
@@ -197,6 +197,18 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
             barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_Scene->m_SampleValueTexture->GetTexture(),
                 D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS ) );
             m_Scene->m_IsSampleTexturesRead = false;
+        }
+        if ( !m_Scene->m_IsLightBufferRead )
+        {
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_Scene->m_LightsBuffer->GetBuffer(),
+                D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
+            m_Scene->m_IsLightBufferRead = true;
+        }
+        if ( !m_Scene->m_IsMaterialBufferRead )
+        {
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_Scene->m_MaterialsBuffer->GetBuffer(),
+                D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
+            m_Scene->m_IsMaterialBufferRead = true;
         }
         if ( m_OutputType > 0 )
         { 

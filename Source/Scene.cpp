@@ -498,6 +498,9 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
 
     m_Camera.SetDirty();
 
+    m_IsLightBufferRead = true;
+    m_IsMaterialBufferRead = true;
+
     m_HasValidScene = true;
     m_ObjectSelection.DeselectAll();
 
@@ -592,6 +595,8 @@ void CScene::UpdateLightGPUData()
 
             context.Unmap();
             context.Upload();
+
+            m_IsLightBufferRead = false;
         }
     }
 }
@@ -625,6 +630,8 @@ void CScene::UpdateMaterialGPUData()
             }
             context.Unmap();
             context.Upload();
+
+            m_IsMaterialBufferRead = false;
         }
     }
 }

@@ -365,27 +365,6 @@ void SRenderer::DispatchRayTracing( SRenderContext* renderContext )
 
     UploadFrameConstantBuffer();
 
-    // Barriers for potential path tracer read/write resources
-    // These barrier could be delayed to where the buffers are actually used inside the path tracer if their before states could be determined.
-    if ( m_IsLightGPUBufferDirty || m_IsMaterialGPUBufferDirty )
-    {
-        D3D12_RESOURCE_BARRIER barriers[ 2 ];
-        uint32_t barrierCount = 0;
-        
-        if ( m_IsLightGPUBufferDirty )
-        {
-            barriers[ barrierCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( m_Scene.m_LightsBuffer->GetBuffer(),
-                D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
-        }
-        if ( m_IsMaterialGPUBufferDirty )
-        {
-            barriers[ barrierCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( m_Scene.m_MaterialsBuffer->GetBuffer(),
-                D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
-        }
-        
-        D3D12Adapter::GetCommandList()->ResourceBarrier( barrierCount, barriers );
-    }
-
     m_PathTracer[ m_ActivePathTracerIndex ]->Render( *renderContext, m_BxDFTextures );
 
     if ( m_PathTracer[ m_ActivePathTracerIndex ]->IsImageComplete() )

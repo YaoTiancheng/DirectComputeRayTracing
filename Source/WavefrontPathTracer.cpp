@@ -798,7 +798,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
     // Barriers
     {
         std::vector<D3D12_RESOURCE_BARRIER> barriers;
-        barriers.reserve( 8 );
+        barriers.reserve( 10 );
 
         // Read wait for control write
         barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_QueueBuffers[ (int)EShaderKernel::Material ]->GetBuffer(),
@@ -810,6 +810,20 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
         barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::UAV( m_QueueCounterBuffers[ 0 ]->GetBuffer() ) );
         barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_IndirectArgumentBuffer[ (int)EShaderKernel::Material ]->GetBuffer(),
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT ) );
+
+        if ( !m_Scene->m_IsLightBufferRead )
+        {
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_Scene->m_LightsBuffer->GetBuffer(),
+                D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
+            m_Scene->m_IsLightBufferRead = true;
+        }
+        if ( !m_Scene->m_IsMaterialBufferRead )
+        {
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_Scene->m_MaterialsBuffer->GetBuffer(),
+                D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
+            m_Scene->m_IsMaterialBufferRead = true;
+        }
+
 #if 0
         // New path and material write to different indices of following buffers, their UAV barriers are not necessary
         barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::UAV( m_RayBuffer->GetBuffer() ) );

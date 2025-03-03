@@ -485,6 +485,10 @@ void SRenderer::RenderOneFrame()
     D3D12Adapter::MoveToNextFrame();
 
     CD3D12Resource::FlushDelete();
+
+    // State decay to common state
+    m_Scene->m_IsLightBufferRead = true;
+    m_Scene->m_IsMaterialBufferRead = true;
 }
 
 void SRenderer::UploadFrameConstantBuffer()

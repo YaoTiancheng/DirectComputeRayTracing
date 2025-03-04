@@ -10,6 +10,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectComputeRayTracing", "
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MikkTSpace", "MikkTSpace\MikkTSpace.vcxproj", "{DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DDSTextureLoader12", "DDSTextureLoader12\DDSTextureLoader12.vcxproj", "{1CF4EE1D-37BB-48D0-9F73-574901F8659F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -24,6 +26,10 @@ Global
 		{DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6}.Debug|x64.Build.0 = Debug|x64
 		{DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6}.Release|x64.ActiveCfg = Release|x64
 		{DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6}.Release|x64.Build.0 = Release|x64
+		{1CF4EE1D-37BB-48D0-9F73-574901F8659F}.Debug|x64.ActiveCfg = Debug|x64
+		{1CF4EE1D-37BB-48D0-9F73-574901F8659F}.Debug|x64.Build.0 = Debug|x64
+		{1CF4EE1D-37BB-48D0-9F73-574901F8659F}.Release|x64.ActiveCfg = Release|x64
+		{1CF4EE1D-37BB-48D0-9F73-574901F8659F}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

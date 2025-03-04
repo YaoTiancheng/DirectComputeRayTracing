@@ -68,7 +68,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;Shlwapi.lib;MikkTSpace.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;Shlwapi.lib;MikkTSpace.lib;DDSTextureLoader12.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -89,7 +89,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;Shlwapi.lib;MikkTSpace.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;Shlwapi.lib;MikkTSpace.lib;DDSTextureLoader12.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -115,12 +115,10 @@
     <ClInclude Include="Source\SampleConvolutionRenderer.h" />
     <ClInclude Include="Source\D3D12Adapter.h" />
     <ClInclude Include="Source\Application.h" />
-    <ClInclude Include="Source\DDSTextureLoader.h" />
     <ClInclude Include="Resources\Resource.h" />
     <ClInclude Include="Source\ScopedRenderAnnotation.h" />
     <ClInclude Include="Source\imgui\imconfig.h" />
     <ClInclude Include="Source\imgui\imgui.h" />
-    <ClInclude Include="Source\imgui\imgui_impl_dx11.h" />
     <ClInclude Include="Source\imgui\imgui_impl_win32.h" />
     <ClInclude Include="Source\imgui\imgui_internal.h" />
     <ClInclude Include="Source\imgui\imstb_rectpack.h" />
@@ -163,7 +161,6 @@
     <ClCompile Include="Source\SampleConvolutionRenderer.cpp" />
     <ClCompile Include="Source\D3D12Adapter.cpp" />
     <ClCompile Include="Source\Application.cpp" />
-    <ClCompile Include="Source\DDSTextureLoader.cpp" />
     <ClCompile Include="Source\Logging.cpp" />
     <ClCompile Include="Source\imgui\imgui.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
@@ -174,10 +171,6 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Source\imgui\imgui_draw.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="Source\imgui\imgui_impl_dx11.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>

@@ -27,9 +27,6 @@
     <ClInclude Include="Source\D3D12Adapter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Source\DDSTextureLoader.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Source\stdafx.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -79,9 +76,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Source\imgui\imgui_internal.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\imgui\imgui_impl_dx11.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Source\imgui\imgui_impl_win32.h">
@@ -179,9 +173,6 @@
     <ClCompile Include="Source\D3D12Adapter.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Source\DDSTextureLoader.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Source\stdafx.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -222,9 +213,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\imgui\imgui_widgets.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\imgui\imgui_impl_dx11.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\imgui\imgui_impl_win32.cpp">

@@ -2,7 +2,7 @@
 #include "GPUTexture.h"
 #include "D3D12Adapter.h"
 #include "D3D12DescriptorPoolHeap.h"
-#include "DDSTextureLoader.h"
+#include "DDSTextureLoader12/DDSTextureLoader12.h"
 
 GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT format, uint32_t bindFlags, uint32_t arraySize, D3D12_RESOURCE_STATES resourceStates, const char* debugName )
 {
@@ -125,16 +125,49 @@ GPUTexture* GPUTexture::CreateFromSwapChainInternal( const D3D12_RENDER_TARGET_V
 
 GPUTexture* GPUTexture::CreateFromFile( const wchar_t* filename )
 {
-    ID3D11Resource* texture = nullptr;
-    ID3D11ShaderResourceView* SRV = nullptr;
-    HRESULT hr = DirectX::CreateDDSTextureFromFile( GetDevice(), filename, &texture, &SRV );
+    std::unique_ptr<uint8_t[]> ddsData;
+    std::vector<D3D12_SUBRESOURCE_DATA> subresources;
+    bool isCubemap = false;
+    ID3D12Resource* D3DTexture = nullptr;
+    HRESULT hr = DirectX::LoadDDSTextureFromFile( D3D12Adapter::GetDevice(), filename, &D3DTexture, ddsData, subresources, 0, nullptr, &isCubemap );
     if ( FAILED( hr ) )
+    {
         return nullptr;
+    }
+
+    CD3D12ComPtr<ID3D12Resource> texture( D3DTexture );
+
+    const UINT64 textureByteSize = GetRequiredIntermediateSize( texture.Get(), 0, (UINT)subresources.size() );
+    const CD3DX12_HEAP_PROPERTIES heapProperties( D3D12_HEAP_TYPE_UPLOAD );
+    const CD3DX12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer( textureByteSize );
+    hr = D3D12Adapter::GetDevice()->CreateCommittedResource( &heapProperties, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr, IID_PPV_ARGS( &D3DTexture ) );
+    if ( FAILED( hr ) )
+    {
+        return nullptr;
+    }
+
+    CD3D12ComPtr<ID3D12Resource> intermediate( D3DTexture );
+
+    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
+
+    UpdateSubresources( commandList, texture.Get(), intermediate.Get(), 0, 0, (UINT)subresources.size(), subresources.data() );
+
+    D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( texture.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
+    commandList->ResourceBarrier( 1, &barrier );
+
+    // Create SRV
+    CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    SD3D12DescriptorHandle SRV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    if ( !SRV )
+    {
+        return nullptr;
+    }
+    D3D12Adapter::GetDevice()->CreateShaderResourceView( texture.Get(), nullptr, SRV.CPU );
 
     GPUTexture* gpuTexture = new GPUTexture();
-    gpuTexture->m_Texture = texture;
+    gpuTexture->m_Texture.Reset( texture.Get() );
     gpuTexture->m_SRV = SRV;
-
     return gpuTexture;
 }
 

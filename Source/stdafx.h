@@ -51,4 +51,4 @@
 
 using Microsoft::WRL::ComPtr;
 
-#include "pix3"
+#include "pix3.h"

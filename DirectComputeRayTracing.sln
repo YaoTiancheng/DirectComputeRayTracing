@@ -5,6 +5,7 @@ VisualStudioVersion = 15.0.28010.2026
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectComputeRayTracing", "DirectComputeRayTracing.vcxproj", "{5376CBD2-3B00-46A2-AB27-CB4D9855CD3B}"
 	ProjectSection(ProjectDependencies) = postProject
+		{1CF4EE1D-37BB-48D0-9F73-574901F8659F} = {1CF4EE1D-37BB-48D0-9F73-574901F8659F}
 		{DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6} = {DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6}
 	EndProjectSection
 EndProject

@@ -54,18 +54,18 @@ public:
 	{
 	}
 
-	CD3D12BasePtr(CD3D12BasePtr&& other )
+	CD3D12BasePtr( CD3D12BasePtr&& other )
 		: m_SharedPtr( std::move( other.m_SharedPtr ) )
 	{
 	}
 
-	CD3D12BasePtr& operator=( const CD3D12ComPtr& other )
+	CD3D12BasePtr& operator=( const CD3D12BasePtr& other )
 	{
 		m_SharedPtr = other.m_SharedPtr;
 		return *this;
 	}
 
-	CD3D12BasePtr& operator=(CD3D12BasePtr&& other )
+	CD3D12BasePtr& operator=( CD3D12BasePtr&& other )
 	{
 		m_SharedPtr = std::move( other.m_SharedPtr );
 		return *this;
@@ -87,7 +87,7 @@ public:
 		m_SharedPtr.reset( ptr, TDeleter() );
 	}
 
-	void Swap( CD3D12ComPtr& other )
+	void Swap( CD3D12BasePtr& other )
 	{
 		m_SharedPtr.swap( other.m_SharedPtr );
 	}

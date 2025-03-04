@@ -126,7 +126,6 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
     const bool hasSRV = ( bindFlags & EGPUBufferBindFlag_ShaderResource ) != 0;
     const bool hasCBV = ( bindFlags & EGPUBufferBindFlag_ConstantBuffer ) != 0;
 
-    ComPtr<ID3D12Resource> buffer;
     D3D12_RESOURCE_DESC bufferDesc = {};
     bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
     bufferDesc.Width = byteWidth;
@@ -137,12 +136,13 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
     bufferDesc.SampleDesc.Count = 1;
     bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
     bufferDesc.Flags = hasUAV ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE;
+    ID3D12Resource* D3DBuffer = nullptr;
     if ( usage != EGPUBufferUsage::Dynamic )
     {
         const D3D12_HEAP_TYPE heapType = usage == EGPUBufferUsage::Default ? D3D12_HEAP_TYPE_DEFAULT : D3D12_HEAP_TYPE_READBACK;
         const D3D12_RESOURCE_STATES resourceStates = usage == EGPUBufferUsage::Default && !initialData ? resourceStates : D3D12_RESOURCE_STATE_COPY_DEST;
         if ( FAILED( D3D12Adapter::GetDevice()->CreateCommittedResource( &CD3DX12_HEAP_PROPERTIES( heapType ), D3D12_HEAP_FLAG_NONE, &bufferDesc,
-            resourceStates, nullptr, IID_PPV_ARGS( buffer.GetAddressOf() ) ) ) )
+            resourceStates, nullptr, IID_PPV_ARGS( &D3DBuffer ) ) ) )
         {
             return nullptr;
         }
@@ -159,11 +159,13 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
         }
 
         if ( FAILED( D3D12Adapter::GetDevice()->CreatePlacedResource( location.m_Memory, location.m_Offset, &bufferDesc,
-            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS( buffer.GetAddressOf() ) ) ) )
+            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS( &D3DBuffer ) ) ) )
         {
             return nullptr;
         }
     }
+
+    CD3D12ComPtr<ID3D12Resource> buffer( D3DBuffer );
 
     if ( initialData )
     {
@@ -278,7 +280,7 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
     }
 
     GPUBuffer* gpuBuffer = new GPUBuffer();
-    gpuBuffer->m_Buffer = buffer;
+    gpuBuffer->m_Buffer.Reset( buffer.Get() );
     gpuBuffer->m_SRV = SRV;
     gpuBuffer->m_UAV = UAV;
     gpuBuffer->m_CBV = CBV;

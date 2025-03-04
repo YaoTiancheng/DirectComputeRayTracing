@@ -128,7 +128,7 @@ void CSampleConvolutionRenderer::Execute( const SRenderContext& renderContext, c
                 D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
         }
 
-        commandList->ResourceBarrier( barriersCount, &barrier );
+        commandList->ResourceBarrier( barriersCount, barriers );
     }
 
     uint32_t dispatchSizeX = renderContext.m_CurrentResolutionWidth / 8;

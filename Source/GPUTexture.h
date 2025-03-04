@@ -24,7 +24,7 @@ public:
 
     ~GPUTexture();
 
-    ID3D12Resource* GetTexture() const { return m_Texture; }
+    ID3D12Resource* GetTexture() const { return m_Texture.Get(); }
 
     D3D12_GPU_VIRTUAL_ADDRESS GetGPUVirtualAddress() const { return m_Texture->GetGPUVirtualAddress(); }
 

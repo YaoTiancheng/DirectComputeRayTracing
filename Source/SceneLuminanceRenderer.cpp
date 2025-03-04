@@ -156,8 +156,8 @@ void SceneLuminanceRenderer::Dispatch( const CScene& scene, uint32_t resolutionW
         {
             D3D12_RESOURCE_BARRIER barriers[ 2 ] = 
             {
-                CD3DX12_RESOURCE_BARRIER::Transition( sumLuminanceBuffer1->GetBuffer(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
-                CD3DX12_RESOURCE_BARRIER::Transition( sumLuminanceBuffer0->GetBuffer(), D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS );
+                CD3DX12_RESOURCE_BARRIER::Transition( sumLuminanceBuffer1->GetBuffer(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ),
+                CD3DX12_RESOURCE_BARRIER::Transition( sumLuminanceBuffer0->GetBuffer(), D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS ),
             };
             commandList->ResourceBarrier( iteration == 0 ? 1 : 2, barriers ); // The 1st iteration relies on state implicit promotion
         }

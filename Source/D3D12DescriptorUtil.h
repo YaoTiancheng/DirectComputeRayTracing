@@ -5,7 +5,7 @@
 
 namespace D3D12Util
 {
-    inline void CopyDescriptors( SD3D12DescriptorHandle dstDescriptor, const SD3D12DescriptorHandle* srcDescriptors, uint32_t count, uint32_t descriptorSize )
+    inline void CopyDescriptors( SD3D12DescriptorHandle dstDescriptor, const SD3D12DescriptorHandle* srcDescriptors, uint32_t count, uint32_t descriptorSize, D3D12_DESCRIPTOR_HEAP_TYPE type )
     {
         for ( uint32_t i = 0 ; i < count; ++i )
         {
@@ -24,7 +24,7 @@ namespace D3D12Util
             uint32_t rangeSize = rangeSizes[ i ];
             SD3D12DescriptorHandle dstDescriptor = descriptorTable.Offsetted( rangeOffset, descriptorSize );
             const SD3D12DescriptorHandle* srcDescriptors = rangeSrcDescriptors[ i ];
-            CopyDescriptors( dstDescriptor, srcDescriptors, rangeSize, descriptorSize );
+            CopyDescriptors( dstDescriptor, srcDescriptors, rangeSize, descriptorSize, type );
         }
     }
 
@@ -53,9 +53,9 @@ namespace D3D12Util
             rootParameter->InitAsDescriptorTable( rangesCount, ranges );
         }
 
-        D3D12_GPU_DESCRIPTOR_HANDLE AllocateAndCopyToGPUDescriptorHeap( SD3D12DescriptorHandle* SRVs, uint32_t SRVCount, SD3D12DescriptorHandle* UAVs, uint32_t UAVCount );
+        D3D12_GPU_DESCRIPTOR_HANDLE AllocateAndCopyToGPUDescriptorHeap( const SD3D12DescriptorHandle* SRVs, uint32_t SRVCount, const SD3D12DescriptorHandle* UAVs, uint32_t UAVCount );
 
-        D3D12_GPU_DESCRIPTOR_HANDLE AllocateAndCopyToGPUDescriptorHeap( SD3D12DescriptorHandle* descriptors, uint32_t count );
+        D3D12_GPU_DESCRIPTOR_HANDLE AllocateAndCopyToGPUDescriptorHeap( const SD3D12DescriptorHandle* descriptors, uint32_t count );
 
         static const uint32_t s_MaxRangesCount = 2;
         uint32_t m_SRVCount = 0;

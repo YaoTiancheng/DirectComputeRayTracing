@@ -9,6 +9,7 @@
 #include "D3D12Resource.h"
 #include "ScopedRenderAnnotation.h"
 #include "MathHelper.h"
+#include "Logging.h"
 #include "../Shaders/BxDFTextureDef.inc.hlsl"
 
 using namespace D3D12Util;
@@ -87,8 +88,6 @@ static CD3D12ComPtr<ID3D12PipelineState> CompileAndCreateKernel( const char* ker
 
     shaderDefines.push_back( { NULL, NULL } );
 
-    CD3D12ComPtr<ID3D12PipelineState> PSO;
-
     ComputeShaderPtr shader( ComputeShader::CreateFromFile( L"Shaders\\BxDFTexturesBuilding.hlsl", shaderDefines ) );
     if ( !shader )
     {
@@ -126,7 +125,7 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             return outputTextures;
         }
 
-        ID3D12RootSignature D3D12RootSignature = nullptr;
+        ID3D12RootSignature* D3D12RootSignature = nullptr;
         if ( FAILED( D3D12Adapter::GetDevice()->CreateRootSignature( 0, serializedRootSignature->GetBufferPointer(), serializedRootSignature->GetBufferSize(),
             IID_PPV_ARGS( &D3D12RootSignature ) ) ) )
         {
@@ -155,13 +154,13 @@ SBxDFTextures BxDFTexturesBuilding::Build()
         compilationParams.m_BxDFType = 0;
         compilationParams.m_HasFresnel = false;
 
-        CD3D12ComPtr<ID3D12PipelineState> integralShader = CompileAndCreateKernel( "INTEGRATE_COOKTORRANCE_BXDF", compilationParams, rootSignature.get() );
-        CD3D12ComPtr<ID3D12PipelineState> copyShader = CompileAndCreateKernel( "COPY", compilationParams, rootSignature.get() );
+        CD3D12ComPtr<ID3D12PipelineState> integralShader = CompileAndCreateKernel( "INTEGRATE_COOKTORRANCE_BXDF", compilationParams, rootSignature.Get() );
+        CD3D12ComPtr<ID3D12PipelineState> copyShader = CompileAndCreateKernel( "COPY", compilationParams, rootSignature.Get() );
 
         compilationParams.m_SampleCount = BXDFTEX_BRDF_SIZE_X;
-        CD3D12ComPtr<ID3D12PipelineState> averageShader = CompileAndCreateKernel( "INTEGRATE_AVERAGE", compilationParams, rootSignature.get() );
+        CD3D12ComPtr<ID3D12PipelineState> averageShader = CompileAndCreateKernel( "INTEGRATE_AVERAGE", compilationParams, rootSignature.Get() );
 
-        commandList->SetComputeRootSignature( rootSignature.get() );
+        commandList->SetComputeRootSignature( rootSignature.Get() );
 
         if ( integralShader && copyShader && averageShader )
         {
@@ -195,8 +194,8 @@ SBxDFTextures BxDFTexturesBuilding::Build()
                     D3D12_RESOURCE_BARRIER barriers[ 2 ] = 
                     {
                         CD3DX12_RESOURCE_BARRIER::Transition( batchConstantBuffers[ batchIndex ]->GetBuffer(),
-                            D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER );
-                        CD3DX12_RESOURCE_BARRIER::UAV( accumulationTexture->GetTexture() );
+                            D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER ),
+                        CD3DX12_RESOURCE_BARRIER::UAV( accumulationTexture->GetTexture() ),
                     };
                     commandList->ResourceBarrier( batchIndex == 0 ? 1 : 2, barriers ); // No UAV barrier for the first batch
                     commandList->Dispatch( 1, 1, 1 );
@@ -212,7 +211,7 @@ SBxDFTextures BxDFTexturesBuilding::Build()
                 commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
 
                 D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( accumulationTexture->GetTexture(), 
-                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE )
+                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE );
                 commandList->ResourceBarrier( 1, &barrier );
                 commandList->Dispatch( 1, 1, 1 );
             }
@@ -297,8 +296,8 @@ SBxDFTextures BxDFTexturesBuilding::Build()
                     D3D12_RESOURCE_BARRIER barriers[ 2 ] = 
                     {
                         CD3DX12_RESOURCE_BARRIER::Transition( batchConstantBuffers[ jobIndex ]->GetBuffer(),
-                            D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER );
-                        CD3DX12_RESOURCE_BARRIER::UAV( accumulationTexture->GetTexture() );
+                            D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER ),
+                        CD3DX12_RESOURCE_BARRIER::UAV( accumulationTexture->GetTexture() ),
                     };
                     commandList->ResourceBarrier( jobIndex == 0 ? 1 : 2, barriers ); // No UAV barrier for the first batch
                     commandList->Dispatch( BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z / groupSizeZ );
@@ -314,7 +313,7 @@ SBxDFTextures BxDFTexturesBuilding::Build()
                 commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
 
                 D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( accumulationTexture->GetTexture(), 
-                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE )
+                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE );
                 commandList->ResourceBarrier( 1, &barrier );
                 commandList->Dispatch( BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2 / groupSizeZ );
             }
@@ -394,8 +393,8 @@ SBxDFTextures BxDFTexturesBuilding::Build()
                     D3D12_RESOURCE_BARRIER barriers[ 2 ] = 
                     {
                         CD3DX12_RESOURCE_BARRIER::Transition( batchConstantBuffers[ jobIndex ]->GetBuffer(),
-                            D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER );
-                        CD3DX12_RESOURCE_BARRIER::UAV( accumulationTexture->GetTexture() );
+                            D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER ),
+                        CD3DX12_RESOURCE_BARRIER::UAV( accumulationTexture->GetTexture() ),
                     };
                     commandList->ResourceBarrier( jobIndex == 0 ? 1 : 2, barriers ); // No UAV barrier for the first batch
                     commandList->Dispatch( BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z / groupSizeZ );
@@ -411,7 +410,7 @@ SBxDFTextures BxDFTexturesBuilding::Build()
                 commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
 
                 D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( accumulationTexture->GetTexture(), 
-                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE )
+                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE );
                 commandList->ResourceBarrier( 1, &barrier );
                 commandList->Dispatch( BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2 / groupSizeZ );
             }
@@ -435,12 +434,12 @@ SBxDFTextures BxDFTexturesBuilding::Build()
     {
         D3D12_RESOURCE_BARRIER barriers[ 5 ] = 
         {
-            CD3DX12_RESOURCE_BARRIER::Transition( outputTextures.m_CookTorranceBRDF->GetBuffer(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
-            CD3DX12_RESOURCE_BARRIER::Transition( outputTextures.m_CookTorranceBRDFAverage->GetBuffer(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
-            CD3DX12_RESOURCE_BARRIER::Transition( outputTextures.m_CookTorranceBRDFDielectric->GetBuffer(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
-            CD3DX12_RESOURCE_BARRIER::Transition( outputTextures.m_CookTorranceBSDF->GetBuffer(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
-            CD3DX12_RESOURCE_BARRIER::Transition( outputTextures.m_CookTorranceBSDFAverage->GetBuffer(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
-        }
+            CD3DX12_RESOURCE_BARRIER::Transition( outputTextures.m_CookTorranceBRDF->GetTexture(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ),
+            CD3DX12_RESOURCE_BARRIER::Transition( outputTextures.m_CookTorranceBRDFAverage->GetTexture(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ),
+            CD3DX12_RESOURCE_BARRIER::Transition( outputTextures.m_CookTorranceBRDFDielectric->GetTexture(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ),
+            CD3DX12_RESOURCE_BARRIER::Transition( outputTextures.m_CookTorranceBSDF->GetTexture(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ),
+            CD3DX12_RESOURCE_BARRIER::Transition( outputTextures.m_CookTorranceBSDFAverage->GetTexture(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ),
+        };
         commandList->ResourceBarrier( 5, barriers );
     }
 

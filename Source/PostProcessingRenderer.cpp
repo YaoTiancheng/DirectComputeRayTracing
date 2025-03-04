@@ -242,7 +242,7 @@ void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext,
         }
         if ( barrierCount )
         { 
-            commandList->ResourceBarrier( barrierCount, &barriers );
+            commandList->ResourceBarrier( barrierCount, barriers );
         }
     }
         

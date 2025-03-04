@@ -132,7 +132,6 @@
     <ClInclude Include="Source\PostProcessingRenderer.h" />
     <ClInclude Include="Source\Rectangle.h" />
     <ClInclude Include="Source\RenderContext.h" />
-    <ClInclude Include="Source\RenderJobHelper.h" />
     <ClInclude Include="Source\Scene.h" />
     <ClInclude Include="Source\SceneLuminanceRenderer.h" />
     <ClInclude Include="Source\StringConversion.h" />
@@ -185,7 +184,6 @@
     <ClCompile Include="Source\MessageBox.cpp" />
     <ClCompile Include="Source\MegakernelPathTracer.cpp" />
     <ClCompile Include="Source\PostProcessingRenderer.cpp" />
-    <ClCompile Include="Source\RenderJobHelper.cpp" />
     <ClCompile Include="Source\Scene.cpp" />
     <ClCompile Include="Source\SceneLuminanceRenderer.cpp" />
     <ClCompile Include="Source\Shader.cpp" />

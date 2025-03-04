@@ -193,14 +193,14 @@ public:
     std::vector<DirectX::XMFLOAT4X3> m_InstanceTransforms;
     uint32_t m_BVHTraversalStackSize;
 
-    CD3D12ResourcePtr<GPUTexture> m_VerticesBuffer;
-    CD3D12ResourcePtr<GPUTexture> m_TrianglesBuffer;
-    CD3D12ResourcePtr<GPUTexture> m_BVHNodesBuffer;
-    CD3D12ResourcePtr<GPUTexture> m_LightsBuffer;
-    CD3D12ResourcePtr<GPUTexture> m_MaterialIdsBuffer;
-    CD3D12ResourcePtr<GPUTexture> m_MaterialsBuffer;
-    CD3D12ResourcePtr<GPUTexture> m_InstanceTransformsBuffer;
-    CD3D12ResourcePtr<GPUTexture> m_InstanceLightIndicesBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_VerticesBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_TrianglesBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_BVHNodesBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_LightsBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_MaterialIdsBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_MaterialsBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_InstanceTransformsBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_InstanceLightIndicesBuffer;
 
     CD3D12ResourcePtr<GPUTexture> m_FilmTexture;
     CD3D12ResourcePtr<GPUTexture> m_SamplePositionTexture;

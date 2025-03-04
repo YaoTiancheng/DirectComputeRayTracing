@@ -216,7 +216,7 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
                 D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER ) );
         }
 
-        commandList->ResourceBarrier( barriers.size(), barriers.data() );
+        commandList->ResourceBarrier( (uint32_t)barriers.size(), barriers.data() );
     }
 
     commandList->SetComputeRootSignature( m_RootSignature.Get() );
@@ -251,7 +251,7 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
         , m_Scene->m_SampleValueTexture->GetUAV()
     };
 
-    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( srcDescriptors, ARRAY_LENGTH( srcDescriptors ) );
+    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( srcDescriptors, (uint32_t)ARRAY_LENGTH( srcDescriptors ) );
     commandList->SetComputeRootDescriptorTable( 3, descriptorTable );
 
     commandList->SetPipelineState( m_PSO.get() );

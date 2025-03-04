@@ -134,7 +134,7 @@ bool D3D12Adapter::Init( HWND hWnd )
     D3D12_COMMAND_QUEUE_DESC queueDesc = {};
     queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
     queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-    HRESULT hr = g_Device->CreateCommandQueue( &queueDesc, IID_PPV_ARGS( &g_CommandQueue ) );
+    hr = g_Device->CreateCommandQueue( &queueDesc, IID_PPV_ARGS( &g_CommandQueue ) );
     if ( FAILED( hr ) )
     {
         return false;
@@ -142,7 +142,7 @@ bool D3D12Adapter::Init( HWND hWnd )
 
     UINT dxgiFactoryFlags = CommandLineArgs::Singleton()->UseDebugDevice() ? DXGI_CREATE_FACTORY_DEBUG : 0;
     ComPtr<IDXGIFactory4> factory;
-    HRESULT hr = CreateDXGIFactory2( dxgiFactoryFlags, IID_PPV_ARGS( &factory ) );
+    hr = CreateDXGIFactory2( dxgiFactoryFlags, IID_PPV_ARGS( &factory ) );
     if ( FAILED( hr ) )
     {
         return false;
@@ -157,7 +157,7 @@ bool D3D12Adapter::Init( HWND hWnd )
     swapChainDesc.Flags = g_SupportTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
 
     ComPtr<IDXGISwapChain1> swapChain;
-    HRESULT hr = factory->CreateSwapChainForHwnd( g_Device.Get(), hWnd, &swapChainDesc, nullptr, nullptr, swapChain.GetAddressOf() );
+    hr = factory->CreateSwapChainForHwnd( g_Device.Get(), hWnd, &swapChainDesc, nullptr, nullptr, swapChain.GetAddressOf() );
     if ( FAILED( hr ) )
     {
         return false;
@@ -348,7 +348,8 @@ void D3D12Adapter::BeginCurrentFrame()
     g_CommandList->Reset( g_CommandAllocators[ g_BackbufferIndex ].Get(), nullptr );
 
     // Bind descriptor heaps
-    g_CommandList->SetDescriptorHeaps( 1, &g_GPUDescriptorHeap.GetD3DHeap() );
+    ID3D12DescriptorHeap* heap = g_GPUDescriptorHeap.GetD3DHeap();
+    g_CommandList->SetDescriptorHeaps( 1, &heap );
 }
 
 bool D3D12Adapter::MoveToNextFrame()

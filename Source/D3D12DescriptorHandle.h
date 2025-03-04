@@ -7,6 +7,11 @@ struct SD3D12DescriptorHandle
     {
     }
 
+    SD3D12DescriptorHandle( CD3DX12_CPU_DESCRIPTOR_HANDLE handle )
+        : CPU( handle )
+    {
+    }
+
     SD3D12DescriptorHandle( D3D12_CPU_DESCRIPTOR_HANDLE handle )
         : CPU( handle )
     {
@@ -15,6 +20,8 @@ struct SD3D12DescriptorHandle
     bool IsValid() const { return CPU.ptr != 0; }
 
     operator bool() const { return IsValid(); }
+
+    operator CD3DX12_CPU_DESCRIPTOR_HANDLE() { return CPU; }
 
     operator D3D12_CPU_DESCRIPTOR_HANDLE() { return CPU; }
 
@@ -28,12 +35,12 @@ struct SD3D12DescriptorHandle
         CPU.Offset( offsetInDescriptors, descriptorIncrementSize );
     }
 
-    void Offsetted( uint32_t offsetInDescriptors, uint32_t descriptorIncrementSize ) const
+    SD3D12DescriptorHandle Offsetted( uint32_t offsetInDescriptors, uint32_t descriptorIncrementSize ) const
     {
         SD3D12DescriptorHandle result = *this;
         result.Offset( offsetInDescriptors, descriptorIncrementSize );
         return result;
     }
 
-    D3D12_CPU_DESCRIPTOR_HANDLE CPU;
+    CD3DX12_CPU_DESCRIPTOR_HANDLE CPU;
 };

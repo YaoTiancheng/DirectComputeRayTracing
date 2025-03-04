@@ -14,7 +14,7 @@ class GPUTexture : public CD3D12Resource
 {
 public:
     static GPUTexture* Create( uint32_t width, uint32_t height, DXGI_FORMAT format, uint32_t bindFlags, uint32_t arraySize = 1,
-        D3D12_RESOURCE_STATES resourceStates = D3D12_RESOURCE_STATE_COMMON, const char* debugName = nullptr );
+        D3D12_RESOURCE_STATES resourceStates = D3D12_RESOURCE_STATE_COMMON, const wchar_t* debugName = nullptr );
 
     static GPUTexture* CreateFromSwapChain( uint32_t index );
 

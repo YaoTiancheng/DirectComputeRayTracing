@@ -168,11 +168,11 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             SCOPED_RENDER_ANNOTATION( L"Integrate CookTorrance BRDF" );
 
             CD3D12ResourcePtr<GPUTexture> accumulationTexture( GPUTexture::Create( BXDFTEX_BRDF_SIZE_X, BXDFTEX_BRDF_SIZE_Y, DXGI_FORMAT_R32_FLOAT, EGPUTextureBindFlag_UnorderedAccess,
-                1, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, "CookTorranceBRDF Accumulation" ) );
+                1, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBRDF Accumulation" ) );
             outputTextures.m_CookTorranceBRDF.reset( GPUTexture::Create( BXDFTEX_BRDF_SIZE_X, BXDFTEX_BRDF_SIZE_Y, DXGI_FORMAT_R16_UNORM, EGPUTextureBindFlag_UnorderedAccess,
-                1, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, "CookTorranceBRDF" ) );
+                1, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBRDF" ) );
             outputTextures.m_CookTorranceBRDFAverage.reset( GPUTexture::Create( BXDFTEX_BRDF_SIZE_Y, 1, DXGI_FORMAT_R16_UNORM, EGPUTextureBindFlag_UnorderedAccess,
-                1, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, "CookTorranceBRDFAverage" ) );
+                1, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBRDFAverage" ) );
 
             CD3D12ResourcePtr<GPUBuffer> batchConstantBuffers[ batchCount ];
             for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
@@ -260,9 +260,9 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             SCOPED_RENDER_ANNOTATION( L"Integrate CookTorrance BRDF Dielectric" );
 
             CD3D12ResourcePtr<GPUTexture> accumulationTexture( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_X, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R32_FLOAT,
-                EGPUTextureBindFlag_UnorderedAccess, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, "CookTorranceBRDFDielectric Accumulation" ) );
+                EGPUTextureBindFlag_UnorderedAccess, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBRDFDielectric Accumulation" ) );
             outputTextures.m_CookTorranceBRDFDielectric.reset( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_X, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R16_UNORM,
-                EGPUTextureBindFlag_UnorderedAccess, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, "CookTorranceBRDFDielectric" ) );
+                EGPUTextureBindFlag_UnorderedAccess, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBRDFDielectric" ) );
             
             CD3D12ResourcePtr<GPUBuffer> batchConstantBuffers[ batchCount * 2 ];
             // Leaving
@@ -355,11 +355,11 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             SCOPED_RENDER_ANNOTATION( L"Integrate CookTorrance BSDF" );
 
             CD3D12ResourcePtr<GPUTexture> accumulationTexture( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_X, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R32_FLOAT,
-                EGPUTextureBindFlag_UnorderedAccess, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, "CookTorranceBSDF Accumulation" ) );
+                EGPUTextureBindFlag_UnorderedAccess, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBSDF Accumulation" ) );
             outputTextures.m_CookTorranceBSDF.reset( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_X, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R16_UNORM,
-                EGPUTextureBindFlag_UnorderedAccess, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, "CookTorranceBSDF" ) );
+                EGPUTextureBindFlag_UnorderedAccess, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBSDF" ) );
             outputTextures.m_CookTorranceBSDFAverage.reset( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z, DXGI_FORMAT_R16_UNORM,
-                EGPUTextureBindFlag_UnorderedAccess, 2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, "CookTorranceBSDFAverage" ) );
+                EGPUTextureBindFlag_UnorderedAccess, 2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBSDFAverage" ) );
 
             CD3D12ResourcePtr<GPUBuffer> batchConstantBuffers[ batchCount * 2 ];
             // Leaving

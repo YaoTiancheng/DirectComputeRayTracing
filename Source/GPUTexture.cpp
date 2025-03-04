@@ -4,7 +4,7 @@
 #include "D3D12DescriptorPoolHeap.h"
 #include "DDSTextureLoader12/DDSTextureLoader12.h"
 
-GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT format, uint32_t bindFlags, uint32_t arraySize, D3D12_RESOURCE_STATES resourceStates, const char* debugName )
+GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT format, uint32_t bindFlags, uint32_t arraySize, D3D12_RESOURCE_STATES resourceStates, const wchar_t* debugName )
 {
     const bool hasUAV = ( bindFlags & EGPUTextureBindFlag_UnorderedAccess ) != 0;
     const bool isRenderTarget = ( bindFlags & EGPUTextureBindFlag_RenderTarget ) != 0;
@@ -73,7 +73,7 @@ GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT for
 
     if ( debugName )
     {
-        texture->SetPrivateData( WKPDID_D3DDebugObjectName, (UINT)strlen( debugName ), debugName );
+        texture->SetName( debugName );
     }
 
     GPUTexture* gpuTexture = new GPUTexture();

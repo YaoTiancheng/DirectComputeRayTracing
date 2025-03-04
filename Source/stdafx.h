@@ -50,3 +50,5 @@
 #define DCRT_STRINGIFY_MACRO( s ) #s
 
 using Microsoft::WRL::ComPtr;
+
+#include "pix3"

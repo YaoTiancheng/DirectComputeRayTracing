@@ -484,7 +484,7 @@ void SRenderer::RenderOneFrame()
     commandList->OMSetRenderTargets( 1, &RTV.CPU, true, nullptr );
 
     {
-        SCOPED_RENDER_ANNOTATION( L"ImGUI" );
+        SCOPED_RENDER_ANNOTATION( commandList, L"ImGUI" );
         ImGui_ImplDX12_RenderDrawData( ImGui::GetDrawData(), commandList );
     }
 

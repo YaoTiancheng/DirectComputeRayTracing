@@ -398,7 +398,7 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SB
 
     if ( m_NewImage )
     {
-        SCOPED_RENDER_ANNOTATION( L"Reset" );
+        SCOPED_RENDER_ANNOTATION( commandList, L"Reset" );
 
         {
             SD3D12GPUDescriptorHeapHandle nextBlockIndexDesciptor = GPUDescriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
@@ -432,7 +432,7 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SB
 
     // Copy ray counter to the staging buffer
     {
-        SCOPED_RENDER_ANNOTATION( L"Copy counters to staging buffer" );
+        SCOPED_RENDER_ANNOTATION( commandList, L"Copy counters to staging buffer" );
 
         if ( m_NewImage )
         {
@@ -557,9 +557,9 @@ void CWavefrontPathTracer::GetBlockDimension( uint32_t* width, uint32_t* height 
 
 void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderContext, const SBxDFTextures& BxDFTextures, bool isInitialIteration )
 {
-    SCOPED_RENDER_ANNOTATION( L"Iteration" );
-
     ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
+
+    SCOPED_RENDER_ANNOTATION( commandList, L"Iteration" );
 
     CD3D12GPUDescriptorHeap* GPUDescriptorHeap = D3D12Adapter::GetGPUDescriptorHeap();
 
@@ -574,7 +574,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
     // Clear the new path & material queue counters
     {
-        SCOPED_RENDER_ANNOTATION( L"Clear new path & material queues" );
+        SCOPED_RENDER_ANNOTATION( commandList, L"Clear new path & material queues" );
 
         GPUBufferPtr queueCounterBuffer = m_QueueCounterBuffers[ 1 ];
         SD3D12GPUDescriptorHeapHandle queueCounterDescriptor = GPUDescriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
@@ -624,7 +624,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
     // Control
     {
-        SCOPED_RENDER_ANNOTATION( L"Control" );
+        SCOPED_RENDER_ANNOTATION( commandList, L"Control" );
 
         SD3D12DescriptorHandle SRVs[] =
         {
@@ -661,7 +661,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
     // Clear ray counters
     {
-        SCOPED_RENDER_ANNOTATION( L"Clear extension & shadow raycast queues" );
+        SCOPED_RENDER_ANNOTATION( commandList, L"Clear extension & shadow raycast queues" );
 
         GPUBufferPtr queueCounterBuffer = m_QueueCounterBuffers[ 0 ];
         SD3D12GPUDescriptorHeapHandle queueCounterDescriptor = GPUDescriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
@@ -689,7 +689,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
     // Copy the new path & material queue counters to constant buffers
     {
-        SCOPED_RENDER_ANNOTATION( L"Copy new path & material queue counter" );
+        SCOPED_RENDER_ANNOTATION( commandList, L"Copy new path & material queue counter" );
 
         commandList->CopyResource( m_QueueConstantsBuffers[ 1 ]->GetBuffer(), m_QueueCounterBuffers[ 1 ]->GetBuffer() );
     }
@@ -704,7 +704,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
     // Fill indirect args for new path
     {
-        SCOPED_RENDER_ANNOTATION( L"Fill new path indirect arg" );
+        SCOPED_RENDER_ANNOTATION( commandList, L"Fill new path indirect arg" );
 
         SD3D12DescriptorHandle SRV = m_QueueCounterBuffers[ 1 ]->GetSRV( DXGI_FORMAT_R32_UINT, 4, 1, 1 );
         SD3D12DescriptorHandle UAV = m_IndirectArgumentBuffer[ (int)EShaderKernel::NewPath ]->GetUAV();
@@ -726,7 +726,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
     // Fill indirect args for material
     {
-        SCOPED_RENDER_ANNOTATION( L"Fill material indirect arg" );
+        SCOPED_RENDER_ANNOTATION( commandList, L"Fill material indirect arg" );
 
         SD3D12DescriptorHandle SRV = m_QueueCounterBuffers[ 1 ]->GetSRV( DXGI_FORMAT_R32_UINT, 4, 0, 1 );
         SD3D12DescriptorHandle UAV = m_IndirectArgumentBuffer[ (int)EShaderKernel::Material ]->GetUAV();
@@ -769,7 +769,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
     // New Path
     {
-        SCOPED_RENDER_ANNOTATION( L"New path" );
+        SCOPED_RENDER_ANNOTATION( commandList, L"New path" );
 
         SD3D12DescriptorHandle SRVs[] =
         {
@@ -852,7 +852,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
     // Material
     {
-        SCOPED_RENDER_ANNOTATION( L"Material" );
+        SCOPED_RENDER_ANNOTATION( commandList, L"Material" );
 
         SD3D12DescriptorHandle environmentTextureSRV;
         if ( m_Scene->m_EnvironmentLight && m_Scene->m_EnvironmentLight->m_Texture )
@@ -918,7 +918,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
     // Copy the extension ray & shadow ray queue counters to constant buffers
     {
-        SCOPED_RENDER_ANNOTATION( L"Copy extension & shadow raycast queue counters" );
+        SCOPED_RENDER_ANNOTATION( commandList, L"Copy extension & shadow raycast queue counters" );
 
         commandList->CopyResource( m_QueueConstantsBuffers[ 0 ]->GetBuffer(), m_QueueCounterBuffers[ 0 ]->GetBuffer() );
     }
@@ -933,7 +933,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
     // Fill indirect args for extension raycast
     {
-        SCOPED_RENDER_ANNOTATION( L"Fill extension raycast indirect arg" );
+        SCOPED_RENDER_ANNOTATION( commandList, L"Fill extension raycast indirect arg" );
 
         SD3D12DescriptorHandle SRV = m_QueueCounterBuffers[ 0 ]->GetSRV( DXGI_FORMAT_R32_UINT, 4, 0, 1 );
         SD3D12DescriptorHandle UAV = m_IndirectArgumentBuffer[ (int)EShaderKernel::ExtensionRayCast ]->GetUAV();
@@ -954,7 +954,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
     // Fill indirect args for shadow raycast
     {
-        SCOPED_RENDER_ANNOTATION( L"Fill shadow raycast indirect arg" );
+        SCOPED_RENDER_ANNOTATION( commandList, L"Fill shadow raycast indirect arg" );
 
         SD3D12DescriptorHandle SRV = m_QueueCounterBuffers[ 0 ]->GetSRV( DXGI_FORMAT_R32_UINT, 4, 1, 1 );
         SD3D12DescriptorHandle UAV = m_IndirectArgumentBuffer[ (int)EShaderKernel::ShadowRayCast ]->GetUAV();
@@ -983,7 +983,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
     // Extension raycast
     {
-        SCOPED_RENDER_ANNOTATION( L"Extension raycast" );
+        SCOPED_RENDER_ANNOTATION( commandList, L"Extension raycast" );
 
         SD3D12DescriptorHandle SRVs[] = 
         {
@@ -1019,7 +1019,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
     // Shadow raycast
     {
-        SCOPED_RENDER_ANNOTATION( L"Shadow raycast" );
+        SCOPED_RENDER_ANNOTATION( commandList, L"Shadow raycast" );
 
         SD3D12DescriptorHandle SRVs[] = 
         {

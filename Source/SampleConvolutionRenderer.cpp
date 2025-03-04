@@ -57,7 +57,9 @@ bool CSampleConvolutionRenderer::Init()
 
 void CSampleConvolutionRenderer::Execute( const SRenderContext& renderContext, const CScene& scene )
 {
-    SCOPED_RENDER_ANNOTATION( L"Convolute samples" );
+    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
+
+    SCOPED_RENDER_ANNOTATION( commandList, L"Convolute samples" );
 
     int32_t filterIndex = (int32_t)scene.m_Filter;
     if ( filterIndex != m_FilterIndex )
@@ -65,8 +67,6 @@ void CSampleConvolutionRenderer::Execute( const SRenderContext& renderContext, c
         CompileShader( filterIndex );
         m_FilterIndex = filterIndex;
     }
-
-    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
 
     commandList->SetComputeRootSignature( m_RootSignature.Get() );
 

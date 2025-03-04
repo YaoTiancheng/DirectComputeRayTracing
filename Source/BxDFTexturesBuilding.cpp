@@ -165,7 +165,7 @@ SBxDFTextures BxDFTexturesBuilding::Build()
 
         if ( integralShader && copyShader && averageShader )
         {
-            SCOPED_RENDER_ANNOTATION( L"Integrate CookTorrance BRDF" );
+            SCOPED_RENDER_ANNOTATION( commandList, L"Integrate CookTorrance BRDF" );
 
             CD3D12ResourcePtr<GPUTexture> accumulationTexture( GPUTexture::Create( BXDFTEX_BRDF_SIZE_X, BXDFTEX_BRDF_SIZE_Y, DXGI_FORMAT_R32_FLOAT, EGPUTextureBindFlag_UnorderedAccess,
                 1, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBRDF Accumulation" ) );
@@ -257,7 +257,7 @@ SBxDFTextures BxDFTexturesBuilding::Build()
         CD3D12ComPtr<ID3D12PipelineState> copyShader = CompileAndCreateKernel( "COPY", compilationParams, rootSignature.Get() );
         if ( integralShader && copyShader )
         {
-            SCOPED_RENDER_ANNOTATION( L"Integrate CookTorrance BRDF Dielectric" );
+            SCOPED_RENDER_ANNOTATION( commandList, L"Integrate CookTorrance BRDF Dielectric" );
 
             CD3D12ResourcePtr<GPUTexture> accumulationTexture( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_X, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R32_FLOAT,
                 EGPUTextureBindFlag_UnorderedAccess, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBRDFDielectric Accumulation" ) );
@@ -352,7 +352,7 @@ SBxDFTextures BxDFTexturesBuilding::Build()
 
         if ( integralShader && copyShader && averageShader )
         {
-            SCOPED_RENDER_ANNOTATION( L"Integrate CookTorrance BSDF" );
+            SCOPED_RENDER_ANNOTATION( commandList, L"Integrate CookTorrance BSDF" );
 
             CD3D12ResourcePtr<GPUTexture> accumulationTexture( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_X, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R32_FLOAT,
                 EGPUTextureBindFlag_UnorderedAccess, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBSDF Accumulation" ) );

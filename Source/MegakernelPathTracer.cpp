@@ -120,7 +120,9 @@ void CMegakernelPathTracer::OnSceneLoaded()
 
 void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const SBxDFTextures& BxDFTextures )
 {
-    SCOPED_RENDER_ANNOTATION( L"Dispatch rays" );
+    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
+
+    SCOPED_RENDER_ANNOTATION( commandList, L"Dispatch rays" );
 
     uint32_t tileCountX = (uint32_t)std::ceilf( float( renderContext.m_CurrentResolutionWidth ) / float( m_TileSize ) );
     uint32_t tileCountY = (uint32_t)std::ceilf( float( renderContext.m_CurrentResolutionHeight ) / float( m_TileSize ) );
@@ -178,8 +180,6 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
     {
         debugConstantBufferUpload.Upload();
     }
-
-    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
 
     // Barriers
     {

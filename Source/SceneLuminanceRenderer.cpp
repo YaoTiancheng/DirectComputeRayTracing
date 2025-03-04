@@ -105,9 +105,9 @@ bool SceneLuminanceRenderer::SetFilmTexture( uint32_t resolutionWidth, uint32_t 
 
 void SceneLuminanceRenderer::Dispatch( const CScene& scene, uint32_t resolutionWidth, uint32_t resolutionHeight )
 {
-    SCOPED_RENDER_ANNOTATION( L"Calculate scene luminance" );
-
     ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
+
+    SCOPED_RENDER_ANNOTATION( commandList, L"Calculate scene luminance" );
 
     uint32_t sumLuminanceBlockCountX = uint32_t( std::ceilf( resolutionWidth / float( SL_BLOCKSIZE ) ) );
     sumLuminanceBlockCountX = uint32_t( std::ceilf( sumLuminanceBlockCountX / 2.0f ) );

@@ -204,7 +204,9 @@ void PostProcessingRenderer::ExecuteLuminanceCompute( const CScene& scene, const
 
 void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext, const CScene& scene )
 {
-    SCOPED_RENDER_ANNOTATION( L"PostFX" );
+    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
+
+    SCOPED_RENDER_ANNOTATION( commandList, L"PostFX" );
 
     SConvolutionConstant constants;
     constants.m_ReciprocalPixelCount = 1.0f / ( renderContext.m_CurrentResolutionWidth * renderContext.m_CurrentResolutionHeight );
@@ -224,8 +226,6 @@ void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext,
     vertexBufferView.BufferLocation = m_ScreenQuadVerticesBuffer->GetGPUVirtualAddress();
     vertexBufferView.SizeInBytes = sizeof( s_ScreenQuadVertices );
     vertexBufferView.StrideInBytes = sizeof( XMFLOAT4 );
-
-    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
 
     {
         D3D12_RESOURCE_BARRIER barriers[ 2 ];
@@ -262,7 +262,9 @@ void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext,
 
 void PostProcessingRenderer::ExecuteCopy( const CScene& scene )
 {
-    SCOPED_RENDER_ANNOTATION( L"Copy" );
+    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
+
+    SCOPED_RENDER_ANNOTATION( commandList, L"Copy" );
     
     SConvolutionConstant constants;
     constants.m_TexcoordScale = 1.0f;
@@ -279,8 +281,6 @@ void PostProcessingRenderer::ExecuteCopy( const CScene& scene )
     vertexBufferView.BufferLocation = m_ScreenQuadVerticesBuffer->GetGPUVirtualAddress();
     vertexBufferView.SizeInBytes = sizeof( s_ScreenQuadVertices );
     vertexBufferView.StrideInBytes = sizeof( XMFLOAT4 );
-
-    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
 
     if ( !scene.m_IsRenderResultTextureRead )
     {

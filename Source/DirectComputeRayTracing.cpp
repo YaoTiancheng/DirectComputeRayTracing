@@ -21,7 +21,7 @@
 #include "SampleConvolutionRenderer.h"
 #include "Constants.h"
 #include "imgui/imgui.h"
-#include "imgui/imgui_impl_dx11.h"
+#include "imgui/imgui_impl_dx12.h"
 #include "imgui/imgui_impl_win32.h"
 #include "ImGuiHelper.h"
 #include "../Shaders/SumLuminanceDef.inc.hlsl"
@@ -114,6 +114,21 @@ struct RayTracingFrameConstants
     uint32_t padding[ 3 ];
 };
 
+static void AllocImGuiDescriptor( ImGui_ImplDX12_InitInfo* info, D3D12_CPU_DESCRIPTOR_HANDLE* out_cpu_desc_handle, D3D12_GPU_DESCRIPTOR_HANDLE* out_gpu_desc_handle )
+{
+    CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    SD3D12DescriptorHandle CPUDescriptor = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    D3D12_GPU_DESCRIPTOR_HANDLE GPUDescriptor = descriptorHeap->CalculateGPUDescriptorHandle( CPUDescriptor );
+    *out_cpu_desc_handle = CPUDescriptor.CPU;
+    *out_gpu_desc_handle = GPUDescriptor;
+}
+
+static void FreeImGuiDescriptor( ImGui_ImplDX12_InitInfo* info, D3D12_CPU_DESCRIPTOR_HANDLE cpu_desc_handle, D3D12_GPU_DESCRIPTOR_HANDLE gpu_desc_handle )
+{
+    CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    descriptorHeap->Free( cpu_desc_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+}
+
 static bool InitImGui( HWND hWnd )
 {
     IMGUI_CHECKVERSION();
@@ -133,7 +148,15 @@ static bool InitImGui( HWND hWnd )
         return false;
     }
 
-    if ( !ImGui_ImplDX11_Init( GetDevice(), GetDeviceContext() ) )
+    ImGui_ImplDX12_InitInfo initInfo = {};
+    initInfo.Device = D3D12Adapter::GetDevice();
+    initInfo.CommandQueue = D3D12Adapter::GetCommandQueue();
+    initInfo.NumFramesInFlight = D3D12Adapter::GetBackbufferCount();
+    initInfo.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+    initInfo.SrvDescriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV )->GetD3DHeap();
+    initInfo.SrvDescriptorAllocFn = AllocImGuiDescriptor;
+    initInfo.SrvDescriptorFreeFn = FreeImGuiDescriptor;
+    if ( !ImGui_ImplDX12_Init( &initInfo ) )
     {
         ImGui_ImplWin32_Shutdown();
         ImGui::DestroyContext();
@@ -145,14 +168,14 @@ static bool InitImGui( HWND hWnd )
 
 static void ShutDownImGui()
 {
-    ImGui_ImplDX11_Shutdown();
+    ImGui_ImplDX12_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
 }
 
 static void ImGUINewFrame()
 {
-    ImGui_ImplDX11_NewFrame();
+    ImGui_ImplDX12_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 }
@@ -462,7 +485,7 @@ void SRenderer::RenderOneFrame()
 
     {
         SCOPED_RENDER_ANNOTATION( L"ImGUI" );
-        ImGui_ImplDX11_RenderDrawData( ImGui::GetDrawData() );
+        ImGui_ImplDX12_RenderDrawData( ImGui::GetDrawData(), commandList );
     }
 
     commandList->OMSetRenderTargets( 0, nullptr, true, nullptr );

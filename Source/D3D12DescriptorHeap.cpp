@@ -66,6 +66,14 @@ void CD3D12DescriptorPoolHeap::Free( const SD3D12DescriptorHandle& handle, D3D12
     FreeDescriptorHandle( m_Heap.Get(), &m_FreeEntries, handle, D3D12Adapter::GetDescriptorSize( type ) );
 }
 
+D3D12_GPU_DESCRIPTOR_HANDLE CD3D12DescriptorPoolHeap::CalculateGPUDescriptorHandle( SD3D12DescriptorHandle handle ) const
+{
+    SIZE_T delta = handle.CPU.ptr - m_Heap->GetCPUDescriptorHandleForHeapStart().ptr;
+    D3D12_GPU_DESCRIPTOR_HANDLE GPUDescriptor;
+    GPUDescriptor.ptr = m_Heap->GetGPUDescriptorHandleForHeapStart().ptr + (UINT64)delta;
+    return GPUDescriptor;
+}
+
 bool CD3D12GPUDescriptorHeap::Create( D3D12_DESCRIPTOR_HEAP_TYPE heapType, uint32_t size )
 {
     uint32_t backbufferCount = D3D12Adapter::GetBackbufferCount();

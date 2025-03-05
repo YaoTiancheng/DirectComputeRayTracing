@@ -15,7 +15,7 @@ namespace D3D12Util
         }
     }
 
-    inline void CopyToDescriptorTable( SD3D12DescriptorHandle descriptorTable, const const SD3D12DescriptorHandle** rangeSrcDescriptors, const uint32_t* rangeOffsets, const uint32_t* rangeSizes, uint32_t rangeCount, D3D12_DESCRIPTOR_HEAP_TYPE type )
+    inline void CopyToDescriptorTable( SD3D12DescriptorHandle descriptorTable, const SD3D12DescriptorHandle** rangeSrcDescriptors, const uint32_t* rangeOffsets, const uint32_t* rangeSizes, uint32_t rangeCount, D3D12_DESCRIPTOR_HEAP_TYPE type )
     {
         const uint32_t descriptorSize = D3D12Adapter::GetDescriptorSize( type );
         for ( uint32_t i = 0; i < rangeCount; ++i )
@@ -60,5 +60,5 @@ namespace D3D12Util
         static const uint32_t s_MaxRangesCount = 2;
         uint32_t m_SRVCount = 0;
         uint32_t m_UAVCount = 0;
-    }
+    };
 }

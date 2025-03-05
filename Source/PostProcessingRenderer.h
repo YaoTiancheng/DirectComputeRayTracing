@@ -12,7 +12,7 @@ public:
 
     bool Init();
 
-    bool SetTextures( uint32_t renderWidth, uint32_t renderHeight, const GPUTexturePtr& filmTexture, const GPUTexturePtr& renderResultTexture );
+    bool OnFilmResolutionChange( uint32_t renderWidth, uint32_t renderHeight );
 
     void ExecuteLuminanceCompute( const CScene& scene, const SRenderContext& renderContext );
 

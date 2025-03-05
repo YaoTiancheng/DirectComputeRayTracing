@@ -189,9 +189,9 @@ bool PostProcessingRenderer::Init()
     return true;
 }
 
-bool PostProcessingRenderer::SetTextures( uint32_t renderWidth, uint32_t renderHeight, const GPUTexturePtr& filmTexture, const GPUTexturePtr& renderResultTexture )
+bool PostProcessingRenderer::OnFilmResolutionChange( uint32_t renderWidth, uint32_t renderHeight )
 {
-    return m_LuminanceRenderer.SetFilmTexture( renderWidth, renderHeight, filmTexture );
+    return m_LuminanceRenderer.ResizeInputResolution( renderWidth, renderHeight );
 }
 
 void PostProcessingRenderer::ExecuteLuminanceCompute( const CScene& scene, const SRenderContext& renderContext )
@@ -251,7 +251,7 @@ void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext,
 
     SD3D12DescriptorHandle SRVs[] = { scene.m_FilmTexture->GetSRV(),
         m_LuminanceRenderer.GetLuminanceResultBuffer() ? m_LuminanceRenderer.GetLuminanceResultBuffer()->GetSRV() : D3D12Adapter::GetNullBufferSRV() };
-    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( SRVs, ARRAY_LENGTH( SRVs ), nullptr, 0 );
+    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( SRVs, (uint32_t)ARRAY_LENGTH( SRVs ), nullptr, 0 );
     commandList->SetGraphicsRootDescriptorTable( 1, descriptorTable );
 
     commandList->SetPipelineState( !m_IsPostFXEnabled || !renderContext.m_EnablePostFX ? m_PostFXDisabledPSO.Get() : ( m_IsAutoExposureEnabled ? m_PostFXAutoExposurePSO.Get() : m_PostFXPSO.Get() ) );

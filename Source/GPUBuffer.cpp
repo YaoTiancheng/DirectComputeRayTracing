@@ -4,7 +4,7 @@
 #include "D3D12DescriptorPoolHeap.h"
 #include "D3D12MemoryArena.h"
 
-const SD3D12DescriptorHandle& GPUBuffer::GetSRV( DXGI_FORMAT format, uint32_t byteStride, uint32_t elementOffset, uint32_t numElement )
+SD3D12DescriptorHandle GPUBuffer::GetSRV( DXGI_FORMAT format, uint32_t byteStride, uint32_t elementOffset, uint32_t numElement )
 {
     SD3D12DescriptorHandle SRV;
     auto it = m_SRVs.find( { elementOffset, numElement } );
@@ -140,9 +140,9 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
     if ( usage != EGPUBufferUsage::Dynamic )
     {
         const D3D12_HEAP_TYPE heapType = usage == EGPUBufferUsage::Default ? D3D12_HEAP_TYPE_DEFAULT : D3D12_HEAP_TYPE_READBACK;
-        const D3D12_RESOURCE_STATES resourceStates = usage == EGPUBufferUsage::Default && !initialData ? resourceStates : D3D12_RESOURCE_STATE_COPY_DEST;
+        const D3D12_RESOURCE_STATES actualResourceStates = usage == EGPUBufferUsage::Default && !initialData ? resourceStates : D3D12_RESOURCE_STATE_COPY_DEST;
         if ( FAILED( D3D12Adapter::GetDevice()->CreateCommittedResource( &CD3DX12_HEAP_PROPERTIES( heapType ), D3D12_HEAP_FLAG_NONE, &bufferDesc,
-            resourceStates, nullptr, IID_PPV_ARGS( &D3DBuffer ) ) ) )
+            actualResourceStates, nullptr, IID_PPV_ARGS( &D3DBuffer ) ) ) )
         {
             return nullptr;
         }
@@ -280,7 +280,7 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
     }
 
     GPUBuffer* gpuBuffer = new GPUBuffer();
-    gpuBuffer->m_Buffer.Reset( buffer.Get() );
+    gpuBuffer->m_Buffer = buffer.Get();
     gpuBuffer->m_SRV = SRV;
     gpuBuffer->m_UAV = UAV;
     gpuBuffer->m_CBV = CBV;

@@ -9,7 +9,7 @@ class SceneLuminanceRenderer
 public:
     bool Init();
 
-    bool SetFilmTexture( uint32_t resolutionWidth, uint32_t resolutionHeight, const GPUTexturePtr& filmTexture );
+    bool ResizeInputResolution( uint32_t resolutionWidth, uint32_t resolutionHeight );
 
     void Dispatch( const CScene& scene, uint32_t resolutionWidth, uint32_t resolutionHeight );
 

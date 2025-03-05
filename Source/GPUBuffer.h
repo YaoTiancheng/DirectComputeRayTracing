@@ -41,7 +41,7 @@ public:
 
     const SD3D12DescriptorHandle& GetCBV() const { return m_CBV; }
 
-    const SD3D12DescriptorHandle& GetSRV( DXGI_FORMAT format, uint32_t byteStride, uint32_t elementOffset, uint32_t numElement );
+    SD3D12DescriptorHandle GetSRV( DXGI_FORMAT format, uint32_t byteStride, uint32_t elementOffset, uint32_t numElement );
 
     void* Map();
 

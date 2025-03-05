@@ -3,9 +3,9 @@
 #include "D3D12MemoryArena.h"
 
 template <typename TArena>
-TD3D12ArenaMemoryLocation<TArena> TD3D12MultiMemoryArena<TArena>::Allocate( const typename TArena::InitializerType& initializer, uint64_t byteSize, uint64_t alignment )
+TD3D12ArenaMemoryLocation<TArena> TD3D12MultiMemoryArena<TArena>::Allocate( uint64_t byteSize, uint64_t alignment )
 {
-    if ( byteSize > initializer.SizeInBytes )
+    if ( byteSize > m_Initializer.SizeInBytes )
     {
         return TD3D12ArenaMemoryLocation<TArena>();
     }
@@ -21,7 +21,7 @@ TD3D12ArenaMemoryLocation<TArena> TD3D12MultiMemoryArena<TArena>::Allocate( cons
 
     m_Arenas.emplace_back();
     TArena& newArena = m_Arenas.back();
-    if ( !newArena.Create( initializer ) )
+    if ( !newArena.Create( m_Initializer ) )
     {
         m_Arenas.pop_back();
         return TD3D12ArenaMemoryLocation<TArena>();
@@ -37,8 +37,8 @@ TD3D12ArenaMemoryLocation<TArena> TD3D12MultiMemoryArena<TArena>::Allocate( cons
     return allocation;
 }
 
-template TD3D12ArenaMemoryLocation<CD3D12HeapArena> TD3D12MultiMemoryArena<CD3D12HeapArena>::Allocate( const CD3D12HeapArena::InitializerType& initializer, uint64_t byteSize, uint64_t alignment );
-template TD3D12ArenaMemoryLocation<CD3D12BufferArena> TD3D12MultiMemoryArena<CD3D12BufferArena>::Allocate( const CD3D12BufferArena::InitializerType& initializer, uint64_t byteSize, uint64_t alignment );
+template TD3D12ArenaMemoryLocation<CD3D12HeapArena> TD3D12MultiMemoryArena<CD3D12HeapArena>::Allocate( uint64_t byteSize, uint64_t alignment );
+template TD3D12ArenaMemoryLocation<CD3D12BufferArena> TD3D12MultiMemoryArena<CD3D12BufferArena>::Allocate( uint64_t byteSize, uint64_t alignment );
 
 bool CD3D12HeapArena::Create( const CD3D12HeapArena::InitializerType& desc )
 {

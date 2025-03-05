@@ -49,7 +49,7 @@ namespace
 
     void FreeDescriptorHandle( ID3D12DescriptorHeap* heap, std::list<uint32_t>* freeEntries, const SD3D12DescriptorHandle& handle, uint32_t descriptorSize )
     {
-        const uint32_t entry = ( handle.CPU.ptr - heap->GetCPUDescriptorHandleForHeapStart().ptr ) / descriptorSize;
+        const uint32_t entry = (uint32_t)( ( handle.CPU.ptr - heap->GetCPUDescriptorHandleForHeapStart().ptr ) / descriptorSize );
         freeEntries->emplace_front( entry );
     }
 }
@@ -90,6 +90,8 @@ bool CD3D12GPUDescriptorHeap::Create( D3D12_DESCRIPTOR_HEAP_TYPE heapType, uint3
 
     m_Size = size;
     m_Top = 0;
+
+    return true;
 }
 
 void CD3D12GPUDescriptorHeap::Destroy()
@@ -123,7 +125,7 @@ using namespace D3D12Util;
 D3D12_GPU_DESCRIPTOR_HANDLE SD3D12DescriptorTableLayout::AllocateAndCopyToGPUDescriptorHeap( const SD3D12DescriptorHandle* SRVs, uint32_t SRVCount, const SD3D12DescriptorHandle* UAVs, uint32_t UAVCount )
 {
     SD3D12GPUDescriptorHeapHandle descriptorTable = D3D12Adapter::GetGPUDescriptorHeap()->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_SRVCount + m_UAVCount );
-    SD3D12DescriptorHandle* src[] = { SRVs, UAVs };
+    const SD3D12DescriptorHandle* src[] = { SRVs, UAVs };
     uint32_t offsets[] = { 0, m_SRVCount };
     uint32_t sizes[] = { SRVCount, UAVCount };
     assert( SRVCount <= m_SRVCount );
@@ -136,7 +138,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE SD3D12DescriptorTableLayout::AllocateAndCopyToGPUDes
 {
     assert( count <= m_SRVCount + m_UAVCount );
     SD3D12GPUDescriptorHeapHandle descriptorTable = D3D12Adapter::GetGPUDescriptorHeap()->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_SRVCount + m_UAVCount );
-    CopyDescriptors( descriptorTable.m_CPU, descriptors, count, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
+    CopyDescriptors( descriptorTable.m_CPU, descriptors, count, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
     return descriptorTable.m_GPU;
 }
 

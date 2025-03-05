@@ -114,6 +114,7 @@ public:
                 return false;
             }
         }
+        m_Initializer = initializer;
         return true;
     }
 
@@ -139,10 +140,11 @@ public:
         }
     }
 
-    TD3D12ArenaMemoryLocation<TArena> Allocate( const typename TArena::InitializerType& initializer, uint64_t byteSize, uint64_t alignment );
+    TD3D12ArenaMemoryLocation<TArena> Allocate( uint64_t byteSize, uint64_t alignment );
 
 private:
     std::list<TArena> m_Arenas;
+    typename TArena::InitializerType m_Initializer;
 };
 
 

@@ -77,7 +77,7 @@ bool SceneLuminanceRenderer::Init()
     return true;
 }
 
-bool SceneLuminanceRenderer::SetFilmTexture( uint32_t resolutionWidth, uint32_t resolutionHeight, const GPUTexturePtr& filmTexture )
+bool SceneLuminanceRenderer::ResizeInputResolution( uint32_t resolutionWidth, uint32_t resolutionHeight )
 {
     uint32_t sumLuminanceBlockCountX = uint32_t( std::ceilf( resolutionWidth / float( SL_BLOCKSIZE ) ) );
     sumLuminanceBlockCountX = uint32_t( std::ceilf( sumLuminanceBlockCountX / 2.0f ) );

@@ -2,6 +2,7 @@
 #include "DirectComputeRayTracing.h"
 #include "D3D12Adapter.h"
 #include "D3D12Resource.h"
+#include "D3D12DescriptorPoolHeap.h"
 #include "CommandLineArgs.h"
 #include "GPUTexture.h"
 #include "GPUBuffer.h"
@@ -27,9 +28,6 @@
 #include "../Shaders/SumLuminanceDef.inc.hlsl"
 
 using namespace DirectX;
-
-template <typename T>
-using ComPtr = Microsoft::WRL::ComPtr<T>;
 
 struct SRenderer
 {
@@ -301,7 +299,8 @@ bool SRenderer::Init()
     {
         return false;
     }
-    D3D12Adapter::GetCommandQueue()->ExecuteCommandLists( 1, &commandList );
+    ID3D12CommandList* commandLists[] = { commandList };
+    D3D12Adapter::GetCommandQueue()->ExecuteCommandLists( 1, commandLists );
     D3D12Adapter::WaitForGPU();
 
     return true;
@@ -460,7 +459,7 @@ void SRenderer::RenderOneFrame()
     commandList->OMSetRenderTargets( 1, &RTV.CPU, true, nullptr );
 
     DXGI_SWAP_CHAIN_DESC swapChainDesc;
-    GetSwapChain()->GetDesc( &swapChainDesc );
+    D3D12Adapter::GetSwapChain()->GetDesc( &swapChainDesc );
     viewport = { 0.0f, 0.0f, (float)swapChainDesc.BufferDesc.Width, (float)swapChainDesc.BufferDesc.Height, 0.0f, 1.0f };
     commandList->RSSetViewports( 1, &viewport );
 
@@ -503,15 +502,16 @@ void SRenderer::RenderOneFrame()
         LOG_STRING_FORMAT( "CommandList close failure: %x\n", hr );
     }
 
-    D3D12Adapter::GetCommandQueue()->ExecuteCommandLists( 1, &commandList );
-    Present( 0 );
+    ID3D12CommandList* commandLists[] = { commandList };
+    D3D12Adapter::GetCommandQueue()->ExecuteCommandLists( 1, commandLists );
+    D3D12Adapter::Present( 0 );
     D3D12Adapter::MoveToNextFrame();
 
     CD3D12Resource::FlushDelete();
 
     // State decay to common state
-    m_Scene->m_IsLightBufferRead = true;
-    m_Scene->m_IsMaterialBufferRead = true;
+    m_Scene.m_IsLightBufferRead = true;
+    m_Scene.m_IsMaterialBufferRead = true;
 }
 
 void SRenderer::UploadFrameConstantBuffer()
@@ -538,7 +538,7 @@ void SRenderer::ClearFilmTexture()
 
 bool SRenderer::HandleFilmResolutionChange()
 {
-    if ( !m_PostProcessing.SetTextures( m_Scene.m_ResolutionWidth, m_Scene.m_ResolutionHeight, m_Scene.m_FilmTexture, m_Scene.m_RenderResultTexture ) )
+    if ( !m_PostProcessing.OnFilmResolutionChange( m_Scene.m_ResolutionWidth, m_Scene.m_ResolutionHeight ) )
     {
         return false;
     }
@@ -555,7 +555,7 @@ bool SRenderer::HandleFilmResolutionChange()
 void SRenderer::UpdateRenderViewport()
 {
     DXGI_SWAP_CHAIN_DESC swapChainDesc;
-    GetSwapChain()->GetDesc( &swapChainDesc );
+    D3D12Adapter::GetSwapChain()->GetDesc( &swapChainDesc );
 
     uint32_t renderWidth = m_Scene.m_ResolutionWidth;
     uint32_t renderHeight = m_Scene.m_ResolutionHeight;
@@ -585,7 +585,7 @@ void SRenderer::ResizeBackbuffer( uint32_t backbufferWidth, uint32_t backbufferH
         backbuffer.reset();
     }
 
-    ResizeSwapChainBuffers( backbufferWidth, backbufferHeight );
+    D3D12Adapter::ResizeSwapChainBuffers( backbufferWidth, backbufferHeight );
 
     m_sRGBBackbuffers.resize( D3D12Adapter::GetBackbufferCount() );
     m_LinearBackbuffers.resize( D3D12Adapter::GetBackbufferCount() );
@@ -598,11 +598,11 @@ void SRenderer::ResizeBackbuffer( uint32_t backbufferWidth, uint32_t backbufferH
 
 void SRenderer::OnImGUI( SRenderContext* renderContext )
 {
-    if ( ImGui::GetIO().KeysDown[ VK_F1 ] && ImGui::GetIO().KeysDownDuration[ VK_F1 ] == 0.0f )
+    if ( ImGui::IsKeyPressed( ImGuiKey_F1, false ) )
     {
         m_ShowUI = !m_ShowUI;
     }
-    if ( ImGui::GetIO().KeysDown[ VK_F2 ] && ImGui::GetIO().KeysDownDuration[ VK_F2 ] == 0.0f )
+    if ( ImGui::IsKeyPressed( ImGuiKey_F2, false ) )
     {
         m_ShowRayTracingUI = !m_ShowRayTracingUI;
     }

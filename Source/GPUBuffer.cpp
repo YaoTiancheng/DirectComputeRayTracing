@@ -194,13 +194,6 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
                 memcpy_s( mappedData, byteWidth, initialData, byteWidth );
                 uploadContext.Unmap();
 
-                if ( resourceStates != D3D12_RESOURCE_STATE_COPY_DEST && resourceStates != D3D12_RESOURCE_STATE_COMMON )
-                {
-                    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
-                    D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( buffer.Get(), resourceStates, D3D12_RESOURCE_STATE_COPY_DEST );
-                    commandList->ResourceBarrier( 1, &barrier );
-                }
-
                 uploadContext.Upload();
 
                 if ( resourceStates != D3D12_RESOURCE_STATE_COPY_DEST )

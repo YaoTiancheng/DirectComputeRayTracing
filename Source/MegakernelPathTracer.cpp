@@ -38,12 +38,13 @@ struct SRayTracingConstants
     uint32_t            tileOffsetX;
     uint32_t            tileOffsetY;
     uint32_t            environmentLightIndex;
+    uint32_t            padding[ 32 ]; // Padding the structure to 256B
 };
 
 struct SDebugConstants
 {
     uint32_t m_IterationThreshold;
-    uint32_t m_Padding[ 3 ];
+    uint32_t m_Padding[ 63 ]; // Padding the structure to 256B
 };
 
 static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 15, 2 );

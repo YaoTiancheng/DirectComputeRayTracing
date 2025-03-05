@@ -180,7 +180,7 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             CD3D12ResourcePtr<GPUBuffer> batchConstantBuffers[ batchCount ];
             for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
             {
-                uint32_t initData[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 0, 0 };
+                uint32_t initData[ 64 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 0, 0 }; // Todo: Used a combined constant buffer
                 batchConstantBuffers[ batchIndex ].Reset( GPUBuffer::Create( sizeof( initData ), 1, DXGI_FORMAT_UNKNOWN, EGPUBufferUsage::Default,
                     EGPUBufferBindFlag_ConstantBuffer, initData, D3D12_RESOURCE_STATE_COPY_DEST ) );
             }

@@ -274,6 +274,10 @@ bool D3D12Adapter::Init( HWND hWnd )
         }
     }
 
+    // Bind descriptor heaps
+    ID3D12DescriptorHeap* heap = g_GPUDescriptorHeap.GetD3DHeap();
+    g_CommandList->SetDescriptorHeaps( 1, &heap );
+
     return true;
 }
 

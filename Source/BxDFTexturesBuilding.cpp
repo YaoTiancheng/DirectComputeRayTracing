@@ -194,7 +194,6 @@ SBxDFTextures BxDFTexturesBuilding::Build()
 
                 for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
                 {
-                    commandList->SetComputeRootConstantBufferView( 0, batchConstantBuffers[ batchIndex ]->GetGPUVirtualAddress() );
                     D3D12_RESOURCE_BARRIER barriers[ 2 ] = 
                     {
                         CD3DX12_RESOURCE_BARRIER::Transition( batchConstantBuffers[ batchIndex ]->GetBuffer(),
@@ -202,6 +201,7 @@ SBxDFTextures BxDFTexturesBuilding::Build()
                         CD3DX12_RESOURCE_BARRIER::UAV( accumulationTexture->GetTexture() ),
                     };
                     commandList->ResourceBarrier( batchIndex == 0 ? 1 : 2, barriers ); // No UAV barrier for the first batch
+                    commandList->SetComputeRootConstantBufferView( 0, batchConstantBuffers[ batchIndex ]->GetGPUVirtualAddress() );
                     commandList->Dispatch( 1, 1, 1 );
                 }
             }
@@ -210,13 +210,14 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             {
                 commandList->SetPipelineState( copyShader.Get() );
 
+                D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( accumulationTexture->GetTexture(),
+                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE );
+                commandList->ResourceBarrier( 1, &barrier );
+
                 D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable =
                     s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBRDF->GetUAV(), 1 );
                 commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
-
-                D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( accumulationTexture->GetTexture(), 
-                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE );
-                commandList->ResourceBarrier( 1, &barrier );
+                
                 commandList->Dispatch( 1, 1, 1 );
             }
 
@@ -271,14 +272,14 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             // Leaving
             for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
             {
-                uint32_t initData[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 0, 0 };
+                uint32_t initData[ 64 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 0, 0 }; // Todo: use a combined buffer
                 batchConstantBuffers[ batchIndex ].Reset( GPUBuffer::Create( sizeof( initData ), 1, DXGI_FORMAT_UNKNOWN, EGPUBufferUsage::Default,
                     EGPUBufferBindFlag_ConstantBuffer, initData, D3D12_RESOURCE_STATE_COPY_DEST ) );
             }
             // Entering
             for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
             {
-                uint32_t initData[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 1, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z };
+                uint32_t initData[ 64 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 1, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z }; // Todo: use a combined buffer
                 batchConstantBuffers[ batchIndex + batchCount ].Reset( GPUBuffer::Create( sizeof( initData ), 1, DXGI_FORMAT_UNKNOWN, EGPUBufferUsage::Default,
                     EGPUBufferBindFlag_ConstantBuffer, initData, D3D12_RESOURCE_STATE_COPY_DEST ) );
             }
@@ -296,7 +297,6 @@ SBxDFTextures BxDFTexturesBuilding::Build()
 
                 for ( uint32_t jobIndex = 0; jobIndex < batchCount * 2; ++jobIndex )
                 {
-                    commandList->SetComputeRootConstantBufferView( 0, batchConstantBuffers[ jobIndex ]->GetGPUVirtualAddress() );
                     D3D12_RESOURCE_BARRIER barriers[ 2 ] = 
                     {
                         CD3DX12_RESOURCE_BARRIER::Transition( batchConstantBuffers[ jobIndex ]->GetBuffer(),
@@ -304,6 +304,7 @@ SBxDFTextures BxDFTexturesBuilding::Build()
                         CD3DX12_RESOURCE_BARRIER::UAV( accumulationTexture->GetTexture() ),
                     };
                     commandList->ResourceBarrier( jobIndex == 0 ? 1 : 2, barriers ); // No UAV barrier for the first batch
+                    commandList->SetComputeRootConstantBufferView( 0, batchConstantBuffers[ jobIndex ]->GetGPUVirtualAddress() );
                     commandList->Dispatch( BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z / groupSizeZ );
                 }
             }
@@ -312,13 +313,14 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             {
                 commandList->SetPipelineState( copyShader.Get() );
 
-                D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable =
-                    s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBRDFDielectric->GetUAV(), 1 );
-                commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
-
                 D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( accumulationTexture->GetTexture(), 
                     D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE );
                 commandList->ResourceBarrier( 1, &barrier );
+
+                D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable =
+                    s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBRDFDielectric->GetUAV(), 1 );
+                commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
+                
                 commandList->Dispatch( BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2 / groupSizeZ );
             }
         }
@@ -368,14 +370,14 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             // Leaving
             for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
             {
-                uint32_t initData[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 0, 0 };
+                uint32_t initData[ 64 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 0, 0 }; // Todo: Use a combined buffer
                 batchConstantBuffers[ batchIndex ].Reset( GPUBuffer::Create( sizeof( initData ), 1, DXGI_FORMAT_UNKNOWN, EGPUBufferUsage::Default,
                     EGPUBufferBindFlag_ConstantBuffer, initData, D3D12_RESOURCE_STATE_COPY_DEST ) );
             }
             // Entering
             for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
             {
-                uint32_t initData[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 1, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z };
+                uint32_t initData[ 64 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 1, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z }; // Todo: Use a combined buffer
                 batchConstantBuffers[ batchIndex + batchCount ].Reset( GPUBuffer::Create( sizeof( initData ), 1, DXGI_FORMAT_UNKNOWN, EGPUBufferUsage::Default,
                     EGPUBufferBindFlag_ConstantBuffer, initData, D3D12_RESOURCE_STATE_COPY_DEST ) );
             }
@@ -393,7 +395,6 @@ SBxDFTextures BxDFTexturesBuilding::Build()
 
                 for ( uint32_t jobIndex = 0; jobIndex < batchCount * 2; ++jobIndex )
                 {
-                    commandList->SetComputeRootConstantBufferView( 0, batchConstantBuffers[ jobIndex ]->GetGPUVirtualAddress() );
                     D3D12_RESOURCE_BARRIER barriers[ 2 ] = 
                     {
                         CD3DX12_RESOURCE_BARRIER::Transition( batchConstantBuffers[ jobIndex ]->GetBuffer(),
@@ -401,6 +402,7 @@ SBxDFTextures BxDFTexturesBuilding::Build()
                         CD3DX12_RESOURCE_BARRIER::UAV( accumulationTexture->GetTexture() ),
                     };
                     commandList->ResourceBarrier( jobIndex == 0 ? 1 : 2, barriers ); // No UAV barrier for the first batch
+                    commandList->SetComputeRootConstantBufferView( 0, batchConstantBuffers[ jobIndex ]->GetGPUVirtualAddress() );
                     commandList->Dispatch( BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z / groupSizeZ );
                 }
             }
@@ -409,13 +411,14 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             {
                 commandList->SetPipelineState( copyShader.Get() );
 
-                D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable =
-                    s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBSDF->GetUAV(), 1 );
-                commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
-
                 D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( accumulationTexture->GetTexture(), 
                     D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE );
                 commandList->ResourceBarrier( 1, &barrier );
+
+                D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable =
+                    s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBSDF->GetUAV(), 1 );
+                commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
+                
                 commandList->Dispatch( BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2 / groupSizeZ );
             }
 

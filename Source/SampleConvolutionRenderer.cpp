@@ -42,7 +42,10 @@ bool CSampleConvolutionRenderer::Init()
     ComPtr<ID3DBlob> serializedRootSignature;
     ComPtr<ID3DBlob> error;
     HRESULT hr = D3D12SerializeVersionedRootSignature( &rootSignatureDesc, serializedRootSignature.GetAddressOf(), error.GetAddressOf() ); 
-    LOG_STRING_FORMAT( "Create sample convolution root signature with error: %s\n", (const char*)error->GetBufferPointer() );
+    if ( error )
+    {
+        LOG_STRING_FORMAT( "Create sample convolution root signature with error: %s\n", (const char*)error->GetBufferPointer() );
+    }
     if ( FAILED( hr ) )
     {
         return false;

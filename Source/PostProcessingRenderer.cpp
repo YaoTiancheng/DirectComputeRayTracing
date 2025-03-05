@@ -99,7 +99,9 @@ bool PostProcessingRenderer::Init()
         sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     }
     samplers[ 0 ].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    samplers[ 0 ].ShaderRegister = 0;
     samplers[ 1 ].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+    samplers[ 1 ].ShaderRegister = 1;
 
     // Create root signature
     {
@@ -107,12 +109,15 @@ bool PostProcessingRenderer::Init()
         rootParameters[ 0 ].InitAsConstantBufferView( 0 );
         SD3D12DescriptorTableRanges descriptorTableRanges;
         s_DescriptorTableLayout.InitRootParameter( &rootParameters[ 1 ], &descriptorTableRanges );
-        CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 2, rootParameters, 2, samplers );
+        CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 2, rootParameters, 2, samplers, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT );
 
         ComPtr<ID3DBlob> serializedRootSignature;
         ComPtr<ID3DBlob> error;
         HRESULT hr = D3D12SerializeVersionedRootSignature( &rootSignatureDesc, serializedRootSignature.GetAddressOf(), error.GetAddressOf() ); 
-        LOG_STRING_FORMAT( "Create post processing root signature with error: %s\n", (const char*)error->GetBufferPointer() );
+        if ( error )
+        {
+            LOG_STRING_FORMAT( "Create post processing root signature with error: %s\n", (const char*)error->GetBufferPointer() );
+        }
         if ( FAILED( hr ) )
         {
             return false;

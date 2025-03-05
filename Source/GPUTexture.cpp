@@ -108,7 +108,7 @@ GPUTexture* GPUTexture::CreateFromSwapChainInternal( const D3D12_RENDER_TARGET_V
         return nullptr;
     }
 
-    CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_RTV );
     SD3D12DescriptorHandle RTV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_RTV );
     if ( !RTV.IsValid() )
     {

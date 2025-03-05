@@ -15,6 +15,8 @@ namespace D3D12Adapter
 
     ID3D12GraphicsCommandList* GetCommandList();
 
+    ID3D12DebugCommandList1* GetDebugCommandList();
+
     ID3D12CommandQueue* GetCommandQueue();
 
     uint32_t GetBackbufferCount();

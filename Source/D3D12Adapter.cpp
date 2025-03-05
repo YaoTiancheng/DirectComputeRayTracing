@@ -18,6 +18,7 @@ ComPtr<ID3D12Device> g_Device;
 ComPtr<ID3D12CommandQueue> g_CommandQueue;
 ComPtr<IDXGISwapChain3> g_SwapChain;
 ComPtr<ID3D12GraphicsCommandList> g_CommandList;
+ComPtr<ID3D12DebugCommandList1> g_DebugCommandList;
 ComPtr<ID3D12CommandAllocator> g_CommandAllocators[ BACKBUFFER_COUNT ];
 ComPtr<ID3D12Fence> g_Fence;
 HANDLE g_FenceEvent = NULL;
@@ -54,6 +55,11 @@ IDXGISwapChain3* D3D12Adapter::GetSwapChain()
 ID3D12GraphicsCommandList* D3D12Adapter::GetCommandList()
 {
     return g_CommandList.Get();
+}
+
+ID3D12DebugCommandList1* D3D12Adapter::GetDebugCommandList()
+{
+    return g_DebugCommandList.Get();
 }
 
 ID3D12CommandQueue* D3D12Adapter::GetCommandQueue()
@@ -193,6 +199,11 @@ bool D3D12Adapter::Init( HWND hWnd )
         return false;
     }
 
+    if ( CommandLineArgs::Singleton()->UseDebugDevice() )
+    { 
+        g_CommandList.As( &g_DebugCommandList );
+    }
+
     hr = g_Device->CreateFence( g_FenceValues[ g_BackbufferIndex ], D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS( &g_Fence ) );
     if ( FAILED( hr ) )
     {
@@ -313,6 +324,7 @@ void D3D12Adapter::Destroy()
 
     CloseHandle( g_FenceEvent );
     g_Fence.Reset();
+    g_DebugCommandList.Reset();
     g_CommandList.Reset();
 
     for ( uint32_t index = 0; index < BACKBUFFER_COUNT; ++index )

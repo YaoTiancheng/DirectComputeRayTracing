@@ -65,7 +65,7 @@ bool CD3D12BufferArena::Create( const CD3D12BufferArena::InitializerType& initia
     bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
     bufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-    if ( FAILED( D3D12Adapter::GetDevice()->CreateCommittedResource( &initializer.m_HeapProperties, D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS, &bufferDesc,
+    if ( FAILED( D3D12Adapter::GetDevice()->CreateCommittedResource( &initializer.m_HeapProperties, D3D12_HEAP_FLAG_NONE, &bufferDesc,
         initializer.m_State, nullptr, IID_PPV_ARGS( m_Memory.GetAddressOf() ) ) ) )
     {
         return false;

@@ -162,7 +162,7 @@ bool D3D12Adapter::Init( HWND hWnd )
     swapChainDesc.Flags = g_SupportTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
 
     ComPtr<IDXGISwapChain1> swapChain;
-    hr = factory->CreateSwapChainForHwnd( g_Device.Get(), hWnd, &swapChainDesc, nullptr, nullptr, swapChain.GetAddressOf() );
+    hr = factory->CreateSwapChainForHwnd( g_CommandQueue.Get(), hWnd, &swapChainDesc, nullptr, nullptr, swapChain.GetAddressOf() );
     if ( FAILED( hr ) )
     {
         return false;

@@ -77,7 +77,8 @@ bool CWavefrontPathTracer::Create()
     rootParameters[ 0 ].InitAsConstantBufferView( 0 );
     rootParameters[ 1 ].InitAsConstantBufferView( 1 );
     rootParameters[ 2 ].InitAsConstantBufferView( 2 );
-    s_DescriptorTableLayout.InitRootParameter( &rootParameters[ 3 ] );
+    SD3D12DescriptorTableRanges descriptorTableRanges;
+    s_DescriptorTableLayout.InitRootParameter( &rootParameters[ 3 ], &descriptorTableRanges );
 
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 4, rootParameters, 1, &sampler );
 

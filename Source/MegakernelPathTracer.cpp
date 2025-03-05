@@ -65,14 +65,18 @@ bool CMegakernelPathTracer::Create()
     rootParameters[ 0 ].InitAsConstantBufferView( 0 );
     rootParameters[ 1 ].InitAsConstantBufferView( 1 );
     rootParameters[ 2 ].InitAsConstantBufferView( 2 );
-    s_DescriptorTableLayout.InitRootParameter( &rootParameters[ 3 ] );
+    SD3D12DescriptorTableRanges descriptorTableRanges;
+    s_DescriptorTableLayout.InitRootParameter( &rootParameters[ 3 ], &descriptorTableRanges );
 
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 4, rootParameters, 1, &sampler );
 
     ComPtr<ID3DBlob> serializedRootSignature;
     ComPtr<ID3DBlob> error;
     HRESULT hr = D3D12SerializeVersionedRootSignature( &rootSignatureDesc, serializedRootSignature.GetAddressOf(), error.GetAddressOf() ); 
-    LOG_STRING_FORMAT( "Create mega-kernel path tracing root signature with error: %s\n", (const char*)error->GetBufferPointer() );
+    if ( error )
+    { 
+        LOG_STRING_FORMAT( "Create mega-kernel path tracing root signature with error: %s\n", (const char*)error->GetBufferPointer() );
+    }
     if ( FAILED( hr ) )
     {
         return false;

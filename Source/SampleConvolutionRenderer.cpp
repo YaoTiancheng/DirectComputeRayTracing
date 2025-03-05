@@ -35,7 +35,8 @@ bool CSampleConvolutionRenderer::Init()
 {
     CD3DX12_ROOT_PARAMETER1 rootParameters[ 2 ];
     rootParameters[ 0 ].InitAsConstantBufferView( 0 );
-    s_DescriptorTableLayout.InitRootParameter( &rootParameters[ 1 ] );
+    SD3D12DescriptorTableRanges descriptorTableRanges;
+    s_DescriptorTableLayout.InitRootParameter( &rootParameters[ 1 ], &descriptorTableRanges );
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 2, rootParameters );
 
     ComPtr<ID3DBlob> serializedRootSignature;

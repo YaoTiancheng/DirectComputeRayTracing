@@ -13,7 +13,7 @@ TD3D12ArenaMemoryLocation<TArena> TD3D12MultiMemoryArena<TArena>::Allocate( uint
     for ( auto& arena : m_Arenas )
     {
         const uint64_t address = arena.Allocate( byteSize, alignment );
-        if ( address != 0 )
+        if ( address != 0xFFFFFFFFFFFFFFFFull )
         {
             return TD3D12ArenaMemoryLocation<TArena>( arena.GetMemory(), address );
         }

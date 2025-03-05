@@ -17,7 +17,7 @@ public:
         uint64_t newTop = offset + byteSize;
         if ( newTop > m_Size )
         {
-            return 0;
+            return 0xFFFFFFFFFFFFFFFFull;
         }
 
         m_Top = newTop;

@@ -68,7 +68,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>dxgi.lib;dxguid.lib;d3dcompiler.lib;Shlwapi.lib;MikkTSpace.lib;DDSTextureLoader12.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;Shlwapi.lib;MikkTSpace.lib;DDSTextureLoader12.lib;ImGui.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -89,7 +89,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>dxgi.lib;dxguid.lib;d3dcompiler.lib;Shlwapi.lib;MikkTSpace.lib;DDSTextureLoader12.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;Shlwapi.lib;MikkTSpace.lib;DDSTextureLoader12.lib;ImGui.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -111,20 +111,12 @@
     <ClInclude Include="Source\D3D12DescriptorPoolHeap.h" />
     <ClInclude Include="Source\D3D12DescriptorUtil.h" />
     <ClInclude Include="Source\ImGuiHelper.h" />
-    <ClInclude Include="Source\imgui\imgui_impl_dx12.h" />
     <ClInclude Include="Source\MathHelper.h" />
     <ClInclude Include="Source\SampleConvolutionRenderer.h" />
     <ClInclude Include="Source\D3D12Adapter.h" />
     <ClInclude Include="Source\Application.h" />
     <ClInclude Include="Resources\Resource.h" />
     <ClInclude Include="Source\ScopedRenderAnnotation.h" />
-    <ClInclude Include="Source\imgui\imconfig.h" />
-    <ClInclude Include="Source\imgui\imgui.h" />
-    <ClInclude Include="Source\imgui\imgui_impl_win32.h" />
-    <ClInclude Include="Source\imgui\imgui_internal.h" />
-    <ClInclude Include="Source\imgui\imstb_rectpack.h" />
-    <ClInclude Include="Source\imgui\imstb_textedit.h" />
-    <ClInclude Include="Source\imgui\imstb_truetype.h" />
     <ClInclude Include="Source\Logging.h" />
     <ClInclude Include="Source\MessageBox.h" />
     <ClInclude Include="Source\MegakernelPathTracer.h" />
@@ -155,8 +147,6 @@
     <ClCompile Include="Source\D3D12MemoryArena.cpp" />
     <ClCompile Include="Source\D3D12DescriptorHeap.cpp" />
     <ClCompile Include="Source\ImGuiHelper.cpp" />
-    <ClCompile Include="Source\imgui\imgui_impl_dx12.cpp" />
-    <ClCompile Include="Source\imgui\imgui_tables.cpp" />
     <ClCompile Include="Source\MathHelper.cpp" />
     <ClCompile Include="Source\SceneRayTrace.cpp" />
     <ClCompile Include="Source\SceneXMLLoading.cpp" />
@@ -164,26 +154,6 @@
     <ClCompile Include="Source\D3D12Adapter.cpp" />
     <ClCompile Include="Source\Application.cpp" />
     <ClCompile Include="Source\Logging.cpp" />
-    <ClCompile Include="Source\imgui\imgui.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="Source\imgui\imgui_demo.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="Source\imgui\imgui_draw.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="Source\imgui\imgui_impl_win32.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="Source\imgui\imgui_widgets.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
     <ClCompile Include="Source\MessageBox.cpp" />
     <ClCompile Include="Source\MegakernelPathTracer.cpp" />
     <ClCompile Include="Source\PostProcessingRenderer.cpp" />

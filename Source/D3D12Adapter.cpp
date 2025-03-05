@@ -55,12 +55,17 @@ ID3D12GraphicsCommandList* D3D12Adapter::GetCommandList()
     return g_CommandList.Get();
 }
 
+ID3D12CommandQueue* D3D12Adapter::GetCommandQueue()
+{
+    return g_CommandQueue.Get();
+}
+
 uint32_t D3D12Adapter::GetBackbufferCount()
 {
     return BACKBUFFER_COUNT;
 }
 
-uint32_t GetBackbufferIndex()
+uint32_t D3D12Adapter::GetBackbufferIndex()
 {
     return g_BackbufferIndex;
 }

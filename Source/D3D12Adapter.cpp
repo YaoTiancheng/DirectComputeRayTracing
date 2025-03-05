@@ -29,6 +29,7 @@ uint32_t g_DescriptorSizes[ D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES ];
 CD3D12DescriptorPoolHeap g_DescriptorPoolHeaps[ D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES ];
 CD3D12GPUDescriptorHeap g_GPUDescriptorHeap;
 SD3D12DescriptorHandle g_NullBufferSRV;
+SD3D12DescriptorHandle g_NullBufferUAV;
 
 struct SUploadMemoryArena
 {
@@ -103,6 +104,11 @@ ID3D12CommandSignature* D3D12Adapter::GetDispatchIndirectCommandSignature()
 SD3D12DescriptorHandle D3D12Adapter::GetNullBufferSRV()
 {
     return g_NullBufferSRV;
+}
+
+SD3D12DescriptorHandle D3D12Adapter::GetNullBufferUAV()
+{
+    return g_NullBufferUAV;
 }
 
 bool D3D12Adapter::Init( HWND hWnd )
@@ -217,15 +223,22 @@ bool D3D12Adapter::Init( HWND hWnd )
     // Create null SRV
     {
         g_NullBufferSRV = g_DescriptorPoolHeaps[ (uint32_t)D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ].Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+        g_NullBufferUAV = g_DescriptorPoolHeaps[ (uint32_t)D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ].Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
 
-        D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
-        desc.Format = DXGI_FORMAT_R8_UINT;
-        desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-        desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        desc.Buffer.FirstElement = 0;
-        desc.Buffer.NumElements = 0;
-        desc.Buffer.StructureByteStride = 0;
-        g_Device->CreateShaderResourceView( nullptr, &desc, g_NullBufferSRV.CPU );
+        {
+            D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
+            desc.Format = DXGI_FORMAT_R8_UINT;
+            desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+            desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            g_Device->CreateShaderResourceView( nullptr, &desc, g_NullBufferSRV.CPU );
+        }
+        
+        {
+            D3D12_UNORDERED_ACCESS_VIEW_DESC desc = {};
+            desc.Format = DXGI_FORMAT_R8_UINT;
+            desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+            g_Device->CreateUnorderedAccessView( nullptr, nullptr, &desc, g_NullBufferUAV.CPU );
+        }
     }
 
     if ( !g_GPUDescriptorHeap.Create( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, GPU_DESCRIPTOR_HEAP_SIZE ) )

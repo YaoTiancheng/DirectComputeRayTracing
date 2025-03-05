@@ -48,4 +48,6 @@ namespace D3D12Adapter
     ID3D12CommandSignature* GetDispatchIndirectCommandSignature();
 
     SD3D12DescriptorHandle GetNullBufferSRV();
+
+    SD3D12DescriptorHandle GetNullBufferUAV();
 }

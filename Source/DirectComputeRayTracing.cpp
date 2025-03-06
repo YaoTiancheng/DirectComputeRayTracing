@@ -2,7 +2,7 @@
 #include "DirectComputeRayTracing.h"
 #include "D3D12Adapter.h"
 #include "D3D12Resource.h"
-#include "D3D12DescriptorPoolHeap.h"
+#include "D3D12GPUDescriptorHeap.h"
 #include "CommandLineArgs.h"
 #include "GPUTexture.h"
 #include "GPUBuffer.h"
@@ -114,17 +114,14 @@ struct RayTracingFrameConstants
 
 static void AllocImGuiDescriptor( ImGui_ImplDX12_InitInfo* info, D3D12_CPU_DESCRIPTOR_HANDLE* out_cpu_desc_handle, D3D12_GPU_DESCRIPTOR_HANDLE* out_gpu_desc_handle )
 {
-    CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
-    SD3D12DescriptorHandle CPUDescriptor = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
-    D3D12_GPU_DESCRIPTOR_HANDLE GPUDescriptor = descriptorHeap->CalculateGPUDescriptorHandle( CPUDescriptor );
-    *out_cpu_desc_handle = CPUDescriptor.CPU;
-    *out_gpu_desc_handle = GPUDescriptor;
+    SD3D12GPUDescriptorHeapHandle descriptorHandle = D3D12Adapter::GetGPUDescriptorHeap()->GetReserved( 0 );
+    *out_cpu_desc_handle = descriptorHandle.m_CPU;
+    *out_gpu_desc_handle = descriptorHandle.m_GPU;
 }
 
 static void FreeImGuiDescriptor( ImGui_ImplDX12_InitInfo* info, D3D12_CPU_DESCRIPTOR_HANDLE cpu_desc_handle, D3D12_GPU_DESCRIPTOR_HANDLE gpu_desc_handle )
 {
-    CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
-    descriptorHeap->Free( cpu_desc_handle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    // Do nothing
 }
 
 static bool InitImGui( HWND hWnd )
@@ -151,7 +148,7 @@ static bool InitImGui( HWND hWnd )
     initInfo.CommandQueue = D3D12Adapter::GetCommandQueue();
     initInfo.NumFramesInFlight = D3D12Adapter::GetBackbufferCount();
     initInfo.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
-    initInfo.SrvDescriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV )->GetD3DHeap();
+    initInfo.SrvDescriptorHeap = D3D12Adapter::GetGPUDescriptorHeap()->GetD3DHeap();
     initInfo.SrvDescriptorAllocFn = AllocImGuiDescriptor;
     initInfo.SrvDescriptorFreeFn = FreeImGuiDescriptor;
     if ( !ImGui_ImplDX12_Init( &initInfo ) )

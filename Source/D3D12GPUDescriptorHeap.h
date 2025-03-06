@@ -20,11 +20,11 @@ class CD3D12GPUDescriptorHeap
 {
 public:
     CD3D12GPUDescriptorHeap()
-        : m_Size( 0 ), m_Top( 0 )
+        : m_Size( 0 ), m_Reserved( 0 ), m_Top( 0 )
     {
     }
 
-    bool Create( D3D12_DESCRIPTOR_HEAP_TYPE heapType, uint32_t size );
+    bool Create( D3D12_DESCRIPTOR_HEAP_TYPE heapType, uint32_t reserved, uint32_t size );
 
     void Destroy();
 
@@ -32,12 +32,15 @@ public:
 
     ID3D12DescriptorHeap* GetD3DHeap() const { return m_Heap.Get(); }
 
+    SD3D12GPUDescriptorHeapHandle GetReserved( uint32_t index ) const;
+
     SD3D12GPUDescriptorHeapHandle Allocate( D3D12_DESCRIPTOR_HEAP_TYPE type );
 
     SD3D12GPUDescriptorHeapHandle AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE type, uint32_t number );
 
 private:
     ComPtr<ID3D12DescriptorHeap> m_Heap;
+    uint32_t m_Reserved;
     uint32_t m_Top;
     uint32_t m_Size;
 };

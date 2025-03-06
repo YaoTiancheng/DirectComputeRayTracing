@@ -9,6 +9,7 @@ using namespace Microsoft::WRL;
 
 #define BACKBUFFER_COUNT 2
 #define GPU_DESCRIPTOR_HEAP_SIZE 1024
+#define GPU_DESCRIPTOR_HEAP_RESERVED 1 // Reserved for ImGui
 #define DESCRIPTOR_POOL_HEAP_SIZE_CBV_SRV_UAV 512
 #define DESCRIPTOR_POOL_HEAP_SIZE_RTV 8
 #define UPLOAD_BUFFER_ARENA_BYTESIZE 1 * 1024 * 1024
@@ -252,7 +253,7 @@ bool D3D12Adapter::Init( HWND hWnd )
         }
     }
 
-    if ( !g_GPUDescriptorHeap.Create( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, GPU_DESCRIPTOR_HEAP_SIZE ) )
+    if ( !g_GPUDescriptorHeap.Create( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, GPU_DESCRIPTOR_HEAP_RESERVED, GPU_DESCRIPTOR_HEAP_SIZE ) )
     {
         return false;
     }

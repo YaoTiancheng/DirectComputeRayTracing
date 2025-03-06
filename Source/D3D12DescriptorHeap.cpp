@@ -66,21 +66,13 @@ void CD3D12DescriptorPoolHeap::Free( const SD3D12DescriptorHandle& handle, D3D12
     FreeDescriptorHandle( m_Heap.Get(), &m_FreeEntries, handle, D3D12Adapter::GetDescriptorSize( type ) );
 }
 
-D3D12_GPU_DESCRIPTOR_HANDLE CD3D12DescriptorPoolHeap::CalculateGPUDescriptorHandle( SD3D12DescriptorHandle handle ) const
-{
-    SIZE_T delta = handle.CPU.ptr - m_Heap->GetCPUDescriptorHandleForHeapStart().ptr;
-    D3D12_GPU_DESCRIPTOR_HANDLE GPUDescriptor;
-    GPUDescriptor.ptr = m_Heap->GetGPUDescriptorHandleForHeapStart().ptr + (UINT64)delta;
-    return GPUDescriptor;
-}
-
-bool CD3D12GPUDescriptorHeap::Create( D3D12_DESCRIPTOR_HEAP_TYPE heapType, uint32_t size )
+bool CD3D12GPUDescriptorHeap::Create( D3D12_DESCRIPTOR_HEAP_TYPE heapType, uint32_t reserved, uint32_t size )
 {
     uint32_t backbufferCount = D3D12Adapter::GetBackbufferCount();
 
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
     heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    heapDesc.NumDescriptors = size * backbufferCount;
+    heapDesc.NumDescriptors = reserved + size * backbufferCount;
     heapDesc.Type = heapType;
     
     if ( FAILED( D3D12Adapter::GetDevice()->CreateDescriptorHeap( &heapDesc, IID_PPV_ARGS( m_Heap.GetAddressOf() ) ) ) )
@@ -89,6 +81,7 @@ bool CD3D12GPUDescriptorHeap::Create( D3D12_DESCRIPTOR_HEAP_TYPE heapType, uint3
     }
 
     m_Size = size;
+    m_Reserved = reserved;
     m_Top = 0;
 
     return true;
@@ -99,7 +92,18 @@ void CD3D12GPUDescriptorHeap::Destroy()
     m_Heap.Reset();
 
     m_Size = 0;
+    m_Reserved = 0;
     m_Top = 0;
+}
+
+SD3D12GPUDescriptorHeapHandle CD3D12GPUDescriptorHeap::GetReserved( uint32_t index ) const
+{
+    assert( index < m_Reserved );
+    SD3D12GPUDescriptorHeapHandle handle;
+    const uint32_t descriptorSize = D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    handle.m_CPU = CD3DX12_CPU_DESCRIPTOR_HANDLE( m_Heap->GetCPUDescriptorHandleForHeapStart(), index, descriptorSize );
+    handle.m_GPU = CD3DX12_GPU_DESCRIPTOR_HANDLE( m_Heap->GetGPUDescriptorHandleForHeapStart(), index, descriptorSize );
+    return handle;
 }
 
 SD3D12GPUDescriptorHeapHandle CD3D12GPUDescriptorHeap::Allocate( D3D12_DESCRIPTOR_HEAP_TYPE type )
@@ -112,7 +116,7 @@ SD3D12GPUDescriptorHeapHandle CD3D12GPUDescriptorHeap::AllocateRange( D3D12_DESC
     SD3D12GPUDescriptorHeapHandle handle = SD3D12GPUDescriptorHeapHandle::GetNull();
     if ( m_Top + number <= m_Size )
     {
-        uint32_t offset = D3D12Adapter::GetBackbufferIndex() * m_Size + m_Top;
+        uint32_t offset = D3D12Adapter::GetBackbufferIndex() * m_Size + m_Top + m_Reserved;
         handle.m_CPU = CD3DX12_CPU_DESCRIPTOR_HANDLE( m_Heap->GetCPUDescriptorHandleForHeapStart(), offset, D3D12Adapter::GetDescriptorSize( type ) );
         handle.m_GPU = CD3DX12_GPU_DESCRIPTOR_HANDLE( m_Heap->GetGPUDescriptorHandleForHeapStart(), offset, D3D12Adapter::GetDescriptorSize( type ) );
         m_Top += number;

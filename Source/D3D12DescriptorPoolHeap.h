@@ -15,10 +15,6 @@ public:
 
     void Free( const SD3D12DescriptorHandle& handle, D3D12_DESCRIPTOR_HEAP_TYPE type );
 
-    D3D12_GPU_DESCRIPTOR_HANDLE CalculateGPUDescriptorHandle( SD3D12DescriptorHandle handle ) const;
-
-    ID3D12DescriptorHeap* GetD3DHeap() const { return m_Heap.Get(); }
-
 private:
     ComPtr<ID3D12DescriptorHeap> m_Heap;
     std::list<uint32_t> m_FreeEntries; // TODO: merge continuous entries

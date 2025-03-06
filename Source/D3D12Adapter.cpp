@@ -206,6 +206,7 @@ bool D3D12Adapter::Init( HWND hWnd )
     }
 
     hr = g_Device->CreateFence( g_FenceValues[ g_BackbufferIndex ], D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS( &g_Fence ) );
+    g_FenceValues[ g_BackbufferIndex ]++;
     if ( FAILED( hr ) )
     {
         return false;

@@ -166,6 +166,7 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
     }
 
     CD3D12ComPtr<ID3D12Resource> buffer( D3DBuffer );
+    buffer->SetName( L"Buffer" );
 
     if ( initialData )
     {

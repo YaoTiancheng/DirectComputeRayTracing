@@ -4,6 +4,7 @@
 #include "D3D12GPUDescriptorHeap.h"
 #include "D3D12MemoryArena.h"
 #include "CommandLineArgs.h"
+#include "Logging.h"
 
 using namespace Microsoft::WRL;
 
@@ -26,6 +27,7 @@ HANDLE g_FenceEvent = NULL;
 uint64_t g_FenceValues[ BACKBUFFER_COUNT ] = {};
 bool g_SupportTearing = false;
 uint32_t g_BackbufferIndex = 0;
+uint32_t g_LastBackbufferIndex = 0;
 
 uint32_t g_DescriptorSizes[ D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES ];
 CD3D12DescriptorPoolHeap g_DescriptorPoolHeaps[ D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES ];
@@ -193,6 +195,7 @@ bool D3D12Adapter::Init( HWND hWnd )
     }
 
     g_BackbufferIndex = g_SwapChain->GetCurrentBackBufferIndex();
+    g_LastBackbufferIndex = g_BackbufferIndex;
 
     hr = g_Device->CreateCommandList( 0, D3D12_COMMAND_LIST_TYPE_DIRECT, g_CommandAllocators[ g_BackbufferIndex ].Get(), nullptr, IID_PPV_ARGS( &g_CommandList ) );
     if ( FAILED( hr ) )
@@ -349,24 +352,40 @@ void D3D12Adapter::Destroy()
     }
 }
 
-bool D3D12Adapter::WaitForGPU()
+bool D3D12Adapter::WaitForGPU( bool currentFrame )
 {
+    if ( !currentFrame && g_BackbufferIndex == g_LastBackbufferIndex )
+    {
+        // Current frame is the first frame, nothing to wait
+        return true;
+    }
+
     // Schedule a Signal command in the queue.
-    if ( FAILED( g_CommandQueue->Signal( g_Fence.Get(), g_FenceValues[ g_BackbufferIndex ] ) ) )
-    {
-        return false;
+    if ( currentFrame )
+    { 
+        if ( FAILED( g_CommandQueue->Signal( g_Fence.Get(), g_FenceValues[ g_BackbufferIndex ] ) ) )
+        {
+            return false;
+        }
     }
 
-    // Wait until the fence has been processed.
-    if ( FAILED( g_Fence->SetEventOnCompletion( g_FenceValues[ g_BackbufferIndex ], g_FenceEvent ) ) )
     {
-        return false;
+        const uint32_t backBufferIndex = currentFrame ? g_BackbufferIndex : g_LastBackbufferIndex;
+
+        // Wait until the fence has been processed.
+        if ( FAILED( g_Fence->SetEventOnCompletion( g_FenceValues[ backBufferIndex ], g_FenceEvent ) ) )
+        {
+            return false;
+        }
+
+        WaitForSingleObjectEx( g_FenceEvent, INFINITE, FALSE );
     }
 
-    WaitForSingleObjectEx( g_FenceEvent, INFINITE, FALSE );
-
-    // Increment the fence value for the current frame.
-    g_FenceValues[ g_BackbufferIndex ]++;
+    if ( currentFrame )
+    { 
+        // Increment the fence value for the current frame.
+        g_FenceValues[ g_BackbufferIndex ]++;
+    }
 
     return true;
 }
@@ -398,6 +417,7 @@ bool D3D12Adapter::MoveToNextFrame()
     }
 
     // Update the backbuffer index.
+    g_LastBackbufferIndex = g_BackbufferIndex;
     g_BackbufferIndex = g_SwapChain->GetCurrentBackBufferIndex();
 
     // If the next frame is not ready to be rendered yet, wait until it is ready.
@@ -428,7 +448,25 @@ void D3D12Adapter::ResizeSwapChainBuffers( uint32_t width, uint32_t height )
 {
     DXGI_SWAP_CHAIN_DESC swapChainDesc;
     g_SwapChain->GetDesc( &swapChainDesc );
-    g_SwapChain->ResizeBuffers( swapChainDesc.BufferCount, width, height, swapChainDesc.BufferDesc.Format, swapChainDesc.Flags );
+    HRESULT hr = g_SwapChain->ResizeBuffers( swapChainDesc.BufferCount, width, height, swapChainDesc.BufferDesc.Format, swapChainDesc.Flags );
+    if ( FAILED( hr ) )
+    {
+        LOG_STRING_FORMAT( "Failed to resize backbuffer: %x", hr );
+    }
+
+    const uint32_t backbufferIndex = g_SwapChain->GetCurrentBackBufferIndex();
+    if ( backbufferIndex != g_BackbufferIndex )
+    {
+        // The current back buffer is changed to a different one.
+        // But we have already increased the fence value of the "old current back buffer" to the current fence value, 
+        // So assign the current fence value to the "new current back buffer", and replace the fence value of the old one to the completed value.
+        const uint64_t currentFenceValue = g_FenceValues[ g_BackbufferIndex ];
+        g_FenceValues[ backbufferIndex ] = currentFenceValue;
+        g_FenceValues[ g_BackbufferIndex ] = g_Fence->GetCompletedValue();
+
+        g_BackbufferIndex = backbufferIndex;
+        g_LastBackbufferIndex = g_BackbufferIndex;
+    }
 }
 
 void D3D12Adapter::Present( UINT syncInterval )

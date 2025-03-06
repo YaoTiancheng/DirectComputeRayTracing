@@ -185,7 +185,7 @@ CDirectComputeRayTracing::~CDirectComputeRayTracing()
     delete s_Renderer;
     ShutDownImGui();
 
-    D3D12Adapter::WaitForGPU();
+    D3D12Adapter::WaitForGPU( false ); // Wait for the latest frame (the last frame) to finish
     CD3D12Resource::FlushDeleteAll();
     D3D12Adapter::Destroy();
 }
@@ -571,7 +571,7 @@ void SRenderer::UpdateRenderViewport()
 
 void SRenderer::ResizeBackbuffer( uint32_t backbufferWidth, uint32_t backbufferHeight )
 {
-    D3D12Adapter::WaitForGPU();
+    D3D12Adapter::WaitForGPU( false ); // Wait for the latest frame (the last frame) to finish
 
     for ( GPUTexturePtr& backbuffer : m_sRGBBackbuffers )
     {

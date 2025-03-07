@@ -78,20 +78,34 @@ namespace
 {
     bool InternalAllocateUploadContext( ID3D12Resource* destBuffer, GPUBuffer::SUploadContext* context )
     {
-        *context = {};
-
         const D3D12_RESOURCE_DESC desc = destBuffer->GetDesc();
 
         CD3D12MultiBufferArena* uploadBufferArena = D3D12Adapter::GetUploadBufferArena();
         SD3D12ArenaBufferLocation location = uploadBufferArena->Allocate( desc.Width, 1 );
-        if ( !location.IsValid() )
+        if ( location.IsValid() )
         {
-            return false;
+            context->m_SrcBuffer = location.m_Memory;
+            context->m_SrcOffset = location.m_Offset;
+        }
+        else
+        {
+            // Try to create a committed intermediate buffer
+            D3D12_RESOURCE_DESC intermediateDesc = CD3DX12_RESOURCE_DESC::Buffer( desc.Width );
+            D3D12_HEAP_PROPERTIES intermediateHeapProp = CD3DX12_HEAP_PROPERTIES( D3D12_HEAP_TYPE_UPLOAD );
+            ID3D12Resource* buffer = nullptr;
+            HRESULT hr = D3D12Adapter::GetDevice()->CreateCommittedResource( &intermediateHeapProp, D3D12_HEAP_FLAG_NONE, &intermediateDesc,
+                D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS( &buffer ) );
+            if ( FAILED ( hr ) )
+            {
+                return false;
+            }
+
+            context->m_CommittedBuffer.Reset( buffer );
+            context->m_SrcBuffer = buffer;
+            context->m_SrcOffset = 0;
         }
 
-        context->m_SrcBuffer = location.m_Memory;
         context->m_DestBuffer = destBuffer;
-        context->m_SrcOffset = location.m_Offset;
         context->m_ByteWidth = desc.Width;
 
         return true;
@@ -132,7 +146,7 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
     bufferDesc.Height = 1;
     bufferDesc.DepthOrArraySize = 1;
     bufferDesc.MipLevels = 1;
-    bufferDesc.Format = format;
+    bufferDesc.Format = DXGI_FORMAT_UNKNOWN;
     bufferDesc.SampleDesc.Count = 1;
     bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
     bufferDesc.Flags = hasUAV ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE;

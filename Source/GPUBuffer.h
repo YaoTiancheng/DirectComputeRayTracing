@@ -57,10 +57,11 @@ public:
 
         bool IsValid() const { return m_SrcBuffer && m_DestBuffer; }
 
-        ID3D12Resource* m_SrcBuffer;
-        ID3D12Resource* m_DestBuffer;
-        uint64_t m_SrcOffset;
-        uint64_t m_ByteWidth;
+        ID3D12Resource* m_SrcBuffer = nullptr;
+        ID3D12Resource* m_DestBuffer = nullptr;
+        uint64_t m_SrcOffset = 0;
+        uint64_t m_ByteWidth = 0;
+        CD3D12ComPtr<ID3D12Resource> m_CommittedBuffer;
     };
 
     bool AllocateUploadContext( SUploadContext* context ) const;

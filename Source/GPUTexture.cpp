@@ -4,7 +4,10 @@
 #include "D3D12DescriptorPoolHeap.h"
 #include "DDSTextureLoader12/DDSTextureLoader12.h"
 
-GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT format, uint32_t bindFlags, uint32_t arraySize, D3D12_RESOURCE_STATES resourceStates, const wchar_t* debugName )
+using namespace DirectX;
+
+GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT format, uint32_t bindFlags, uint32_t arraySize, D3D12_RESOURCE_STATES resourceStates,
+    const wchar_t* debugName, XMFLOAT4 clearColor )
 {
     const bool hasUAV = ( bindFlags & EGPUTextureBindFlag_UnorderedAccess ) != 0;
     const bool isRenderTarget = ( bindFlags & EGPUTextureBindFlag_RenderTarget ) != 0;
@@ -30,8 +33,9 @@ GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT for
     }
 
     CD3DX12_HEAP_PROPERTIES heapProperties( D3D12_HEAP_TYPE_DEFAULT );
+    CD3DX12_CLEAR_VALUE clearValue( format, (float*)&clearColor );
     if ( FAILED( D3D12Adapter::GetDevice()->CreateCommittedResource( &heapProperties, D3D12_HEAP_FLAG_NONE, &desc,
-        resourceStates, nullptr, IID_PPV_ARGS( texture.GetAddressOf() ) ) ) )
+        resourceStates, isRenderTarget ? &clearValue : nullptr, IID_PPV_ARGS( texture.GetAddressOf() ) ) ) )
     {
         return nullptr;
     }

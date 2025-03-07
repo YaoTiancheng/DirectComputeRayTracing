@@ -26,7 +26,7 @@ struct SConvolutionConstant
     float g_MitchellFactor5;
     float g_MitchellFactor6;
     uint32_t g_LanczosSincTau;
-    uint32_t padding[ 3 ];
+    uint8_t padding[ 204 ];
 };
 
 static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 2, 1 );
@@ -108,13 +108,6 @@ void CSampleConvolutionRenderer::Execute( const SRenderContext& renderContext, c
         commandList->SetComputeRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );
     }
 
-
-    SD3D12DescriptorHandle SRVs[] = { scene.m_SamplePositionTexture->GetSRV(), scene.m_SampleValueTexture->GetSRV() };
-    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( SRVs, (uint32_t)ARRAY_LENGTH( SRVs ), &scene.m_FilmTexture->GetUAV(), 1 );
-    commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
-
-    commandList->SetPipelineState( m_PSO.get() );
-
     // Barriers
     {
         D3D12_RESOURCE_BARRIER barriers[ 3 ];
@@ -134,6 +127,12 @@ void CSampleConvolutionRenderer::Execute( const SRenderContext& renderContext, c
 
         commandList->ResourceBarrier( barriersCount, barriers );
     }
+
+    SD3D12DescriptorHandle SRVs[] = { scene.m_SamplePositionTexture->GetSRV(), scene.m_SampleValueTexture->GetSRV() };
+    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( SRVs, (uint32_t)ARRAY_LENGTH( SRVs ), &scene.m_FilmTexture->GetUAV(), 1 );
+    commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
+
+    commandList->SetPipelineState( m_PSO.get() );
 
     uint32_t dispatchSizeX = renderContext.m_CurrentResolutionWidth / 8;
     dispatchSizeX += renderContext.m_CurrentResolutionWidth % 8 ? 1 : 0;

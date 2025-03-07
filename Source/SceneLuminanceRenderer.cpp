@@ -122,21 +122,16 @@ void SceneLuminanceRenderer::Dispatch( const CScene& scene, uint32_t resolutionW
 
     // Create constant buffer
     {   
-        uint32_t params[ 4 ];
+        uint32_t params[ 64 ];
         params[ 0 ] = sumLuminanceBlockCountX;
         params[ 1 ] = sumLuminanceBlockCountY;
         params[ 2 ] = resolutionWidth;
         params[ 3 ] = resolutionHeight;
-        CD3D12ResourcePtr<GPUBuffer> constantBuffer( GPUBuffer::Create( sizeof( uint32_t ) * 4, 0, DXGI_FORMAT_UNKNOWN, 
+        CD3D12ResourcePtr<GPUBuffer> constantBuffer( GPUBuffer::Create( sizeof( uint32_t ) * 64, 0, DXGI_FORMAT_UNKNOWN, 
             EGPUBufferUsage::Dynamic, EGPUBufferBindFlag_ConstantBuffer, params ) );
 
         commandList->SetComputeRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );
     }
-
-    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &scene.m_FilmTexture->GetSRV(), 1, &m_SumLuminanceBuffer1->GetUAV(), 1 );
-    commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
-
-    commandList->SetPipelineState( m_SumLuminanceTo1DPSO.Get() );
 
     // Barriers
     {
@@ -145,6 +140,10 @@ void SceneLuminanceRenderer::Dispatch( const CScene& scene, uint32_t resolutionW
         commandList->ResourceBarrier( 1, &barrier );
     }
 
+    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &scene.m_FilmTexture->GetSRV(), 1, &m_SumLuminanceBuffer1->GetUAV(), 1 );
+    commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
+
+    commandList->SetPipelineState( m_SumLuminanceTo1DPSO.Get() );
     commandList->Dispatch( sumLuminanceBlockCountX, sumLuminanceBlockCountY, 1 );
 
     // Switch the PSO
@@ -173,10 +172,10 @@ void SceneLuminanceRenderer::Dispatch( const CScene& scene, uint32_t resolutionW
 
         // Allocate a constant buffer
         {
-            uint32_t params[ 4 ];
+            uint32_t params[ 64 ];
             params[ 0 ] = blockCount;
             params[ 1 ] = threadGroupCount;
-            CD3D12ResourcePtr<GPUBuffer> constantBuffer( GPUBuffer::Create( sizeof( uint32_t ) * 4, 0, DXGI_FORMAT_UNKNOWN, 
+            CD3D12ResourcePtr<GPUBuffer> constantBuffer( GPUBuffer::Create( sizeof( uint32_t ) * 64, 0, DXGI_FORMAT_UNKNOWN, 
                 EGPUBufferUsage::Dynamic, EGPUBufferBindFlag_ConstantBuffer, params ) );
 
             commandList->SetComputeRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );

@@ -230,7 +230,7 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
     commandList->SetComputeRootConstantBufferView( 1, renderContext.m_RayTracingFrameConstantBuffer->GetGPUVirtualAddress() );
     commandList->SetComputeRootConstantBufferView( 2, m_DebugConstantsBuffer->GetGPUVirtualAddress() );
 
-    SD3D12DescriptorHandle environmentTextureSRV;
+    SD3D12DescriptorHandle environmentTextureSRV = D3D12Adapter::GetNullBufferSRV();
     if ( m_Scene->m_EnvironmentLight && m_Scene->m_EnvironmentLight->m_Texture )
     {
         environmentTextureSRV = m_Scene->m_EnvironmentLight->m_Texture->GetSRV();

@@ -107,7 +107,7 @@ bool SceneLuminanceRenderer::ResizeInputResolution( uint32_t resolutionWidth, ui
     return true;
 }
 
-void SceneLuminanceRenderer::Dispatch( const CScene& scene, uint32_t resolutionWidth, uint32_t resolutionHeight )
+void SceneLuminanceRenderer::Dispatch( CScene& scene, uint32_t resolutionWidth, uint32_t resolutionHeight )
 {
     ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
 
@@ -136,7 +136,8 @@ void SceneLuminanceRenderer::Dispatch( const CScene& scene, uint32_t resolutionW
     // Barriers
     {
         D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( scene.m_FilmTexture->GetTexture(),
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
+            scene.m_FilmTextureStates, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
+        scene.m_FilmTextureStates = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
         commandList->ResourceBarrier( 1, &barrier );
     }
 

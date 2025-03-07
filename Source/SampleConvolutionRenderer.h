@@ -8,7 +8,7 @@ class CSampleConvolutionRenderer
 public:
     bool Init();
 
-    void Execute( const SRenderContext& renderContext, const CScene& scene );
+    void Execute( const SRenderContext& renderContext, CScene& scene );
 
 private:
     void CompileShader( int32_t filterIndex );

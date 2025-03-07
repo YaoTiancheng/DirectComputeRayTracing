@@ -201,7 +201,7 @@ bool PostProcessingRenderer::OnFilmResolutionChange( uint32_t renderWidth, uint3
     return m_LuminanceRenderer.ResizeInputResolution( renderWidth, renderHeight );
 }
 
-void PostProcessingRenderer::ExecuteLuminanceCompute( const CScene& scene, const SRenderContext& renderContext )
+void PostProcessingRenderer::ExecuteLuminanceCompute( CScene& scene, const SRenderContext& renderContext )
 {
     if ( m_IsAutoExposureEnabled && m_IsPostFXEnabled && renderContext.m_EnablePostFX )
     {
@@ -209,7 +209,7 @@ void PostProcessingRenderer::ExecuteLuminanceCompute( const CScene& scene, const
     }
 }
 
-void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext, const CScene& scene )
+void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext, CScene& scene )
 {
     ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
 
@@ -235,8 +235,15 @@ void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext,
     vertexBufferView.StrideInBytes = sizeof( XMFLOAT4 );
 
     {
-        D3D12_RESOURCE_BARRIER barriers[ 2 ];
+        D3D12_RESOURCE_BARRIER barriers[ 3 ];
         uint32_t barrierCount = 0;
+
+        if ( scene.m_FilmTextureStates != D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE )
+        { 
+            barriers[ barrierCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( scene.m_FilmTexture->GetTexture(),
+                scene.m_FilmTextureStates, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
+            scene.m_FilmTextureStates = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
+        }
         if ( m_LuminanceRenderer.GetLuminanceResultBuffer() )
         {
             barriers[ barrierCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( m_LuminanceRenderer.GetLuminanceResultBuffer()->GetBuffer(),
@@ -246,7 +253,9 @@ void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext,
         {
             barriers[ barrierCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( scene.m_RenderResultTexture->GetTexture(),
                 D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET );
+            scene.m_IsRenderResultTextureRead = false;
         }
+        
         if ( barrierCount )
         { 
             commandList->ResourceBarrier( barrierCount, barriers );
@@ -267,7 +276,7 @@ void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext,
     commandList->DrawInstanced( 6, 1, 0, 0 );
 }
 
-void PostProcessingRenderer::ExecuteCopy( const CScene& scene )
+void PostProcessingRenderer::ExecuteCopy( CScene& scene )
 {
     ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
 
@@ -293,6 +302,7 @@ void PostProcessingRenderer::ExecuteCopy( const CScene& scene )
     {
         D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( scene.m_RenderResultTexture->GetTexture(),
             D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
+        scene.m_IsRenderResultTextureRead = true;
         commandList->ResourceBarrier( 1, &barrier );
     }
 

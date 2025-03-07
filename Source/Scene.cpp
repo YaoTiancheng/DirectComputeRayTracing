@@ -700,7 +700,7 @@ bool CScene::RecreateFilmTextures()
         return false;
     }
 
-    m_IsFilmTextureCleared = false;
+    m_FilmTextureStates = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
     m_IsSampleTexturesRead = true;
     m_IsRenderResultTextureRead = true;
 

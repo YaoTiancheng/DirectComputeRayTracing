@@ -11,7 +11,7 @@ public:
 
     bool ResizeInputResolution( uint32_t resolutionWidth, uint32_t resolutionHeight );
 
-    void Dispatch( const CScene& scene, uint32_t resolutionWidth, uint32_t resolutionHeight );
+    void Dispatch( CScene& scene, uint32_t resolutionWidth, uint32_t resolutionHeight );
 
     const GPUBuffer* GetLuminanceResultBuffer() const { return m_LuminanceResultBuffer; }
 

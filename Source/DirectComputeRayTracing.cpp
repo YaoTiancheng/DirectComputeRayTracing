@@ -352,12 +352,13 @@ void SRenderer::DispatchRayTracing( SRenderContext* renderContext )
     if ( m_IsFilmDirty || renderContext->m_IsResolutionChanged )
     {
         // Transition the film texture to RTV
+        if ( m_Scene.m_FilmTextureStates != D3D12_RESOURCE_STATE_RENDER_TARGET )
         {
             D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( m_Scene.m_FilmTexture->GetTexture(),
-                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET );
+                m_Scene.m_FilmTextureStates, D3D12_RESOURCE_STATE_RENDER_TARGET );
             D3D12Adapter::GetCommandList()->ResourceBarrier( 1, &barrier );
 
-            m_Scene.m_IsFilmTextureCleared = true;
+            m_Scene.m_FilmTextureStates = D3D12_RESOURCE_STATE_RENDER_TARGET;
         }
 
         ClearFilmTexture();
@@ -427,9 +428,6 @@ void SRenderer::RenderOneFrame()
         {
             m_SampleConvolutionRenderer.Execute( renderContext, m_Scene );
 
-            m_Scene.m_IsFilmTextureCleared = false;
-            m_Scene.m_IsSampleTexturesRead = true;
-
             m_PostProcessing.ExecuteLuminanceCompute( m_Scene, renderContext );
 
             RTV = m_Scene.m_RenderResultTexture->GetRTV();
@@ -441,8 +439,6 @@ void SRenderer::RenderOneFrame()
             commandList->RSSetScissorRects( 1, &scissorRect );
 
             m_PostProcessing.ExecutePostFX( renderContext, m_Scene );
-
-            m_Scene.m_IsRenderResultTextureRead = false;
         }
     }
 
@@ -476,7 +472,6 @@ void SRenderer::RenderOneFrame()
         commandList->RSSetScissorRects( 1, &scissorRect );
 
         m_PostProcessing.ExecuteCopy( m_Scene );
-        m_Scene.m_IsRenderResultTextureRead = true;
     }
 
     ImGUINewFrame();

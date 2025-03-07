@@ -14,11 +14,11 @@ public:
 
     bool OnFilmResolutionChange( uint32_t renderWidth, uint32_t renderHeight );
 
-    void ExecuteLuminanceCompute( const CScene& scene, const SRenderContext& renderContext );
+    void ExecuteLuminanceCompute( CScene& scene, const SRenderContext& renderContext );
 
-    void ExecutePostFX( const SRenderContext& renderContext, const CScene& scene );
+    void ExecutePostFX( const SRenderContext& renderContext, CScene& scene );
 
-    void ExecuteCopy( const CScene& scene );
+    void ExecuteCopy( CScene& scene );
 
     bool OnImGUI();
 

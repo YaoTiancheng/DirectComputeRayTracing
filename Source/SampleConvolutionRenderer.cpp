@@ -59,7 +59,7 @@ bool CSampleConvolutionRenderer::Init()
     return true;
 }
 
-void CSampleConvolutionRenderer::Execute( const SRenderContext& renderContext, const CScene& scene )
+void CSampleConvolutionRenderer::Execute( const SRenderContext& renderContext, CScene& scene )
 {
     ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
 
@@ -113,9 +113,8 @@ void CSampleConvolutionRenderer::Execute( const SRenderContext& renderContext, c
         D3D12_RESOURCE_BARRIER barriers[ 3 ];
         uint32_t barriersCount = 0;
 
-        barriers[ barriersCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( scene.m_FilmTexture->GetTexture(),
-            scene.m_IsFilmTextureCleared ? D3D12_RESOURCE_STATE_RENDER_TARGET : D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS );
+        barriers[ barriersCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( scene.m_FilmTexture->GetTexture(), scene.m_FilmTextureStates, D3D12_RESOURCE_STATE_UNORDERED_ACCESS );
+        scene.m_FilmTextureStates = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
         if ( !scene.m_IsSampleTexturesRead )
         {
@@ -123,6 +122,7 @@ void CSampleConvolutionRenderer::Execute( const SRenderContext& renderContext, c
                 D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
             barriers[ barriersCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( scene.m_SampleValueTexture->GetTexture(),
                 D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
+            scene.m_IsSampleTexturesRead = true;
         }
 
         commandList->ResourceBarrier( barriersCount, barriers );

@@ -208,9 +208,9 @@ public:
     CD3D12ResourcePtr<GPUTexture> m_RenderResultTexture;
 
     // Resource states
+    D3D12_RESOURCE_STATES m_FilmTextureStates;
     bool m_IsLightBufferRead = true;
     bool m_IsMaterialBufferRead = true;
-    bool m_IsFilmTextureCleared = false;
     bool m_IsSampleTexturesRead = false;
     bool m_IsRenderResultTextureRead = true;
 

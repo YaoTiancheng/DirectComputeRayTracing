@@ -413,6 +413,7 @@ void SRenderer::RenderOneFrame()
     D3D12Adapter::BeginCurrentFrame();
 
     D3D12_VIEWPORT viewport;
+    D3D12_RECT scissorRect;
     ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
     SD3D12DescriptorHandle RTV;
 
@@ -435,7 +436,9 @@ void SRenderer::RenderOneFrame()
             commandList->OMSetRenderTargets( 1, &RTV.CPU, true, nullptr );
 
             viewport = { 0.0f, 0.0f, (float)m_Scene.m_ResolutionWidth, (float)m_Scene.m_ResolutionHeight, 0.0f, 1.0f };
+            scissorRect = CD3DX12_RECT( 0, 0, m_Scene.m_ResolutionWidth, m_Scene.m_ResolutionHeight );
             commandList->RSSetViewports( 1, &viewport );
+            commandList->RSSetScissorRects( 1, &scissorRect );
 
             m_PostProcessing.ExecutePostFX( renderContext, m_Scene );
 
@@ -458,7 +461,9 @@ void SRenderer::RenderOneFrame()
     DXGI_SWAP_CHAIN_DESC swapChainDesc;
     D3D12Adapter::GetSwapChain()->GetDesc( &swapChainDesc );
     viewport = { 0.0f, 0.0f, (float)swapChainDesc.BufferDesc.Width, (float)swapChainDesc.BufferDesc.Height, 0.0f, 1.0f };
+    scissorRect = CD3DX12_RECT( 0, 0, swapChainDesc.BufferDesc.Width, swapChainDesc.BufferDesc.Height );
     commandList->RSSetViewports( 1, &viewport );
+    commandList->RSSetScissorRects( 1, &scissorRect );
 
     XMFLOAT4 clearColor = { 0.0f, 0.0f, 0.0f, 0.0f };
     commandList->ClearRenderTargetView( RTV.CPU, (float*)&clearColor, 0, nullptr );
@@ -466,7 +471,9 @@ void SRenderer::RenderOneFrame()
     if ( m_Scene.m_HasValidScene )
     {
         viewport = { (float)m_RenderViewport.m_TopLeftX, (float)m_RenderViewport.m_TopLeftY, (float)m_RenderViewport.m_Width, (float)m_RenderViewport.m_Height, 0.0f, 1.0f };
+        scissorRect = CD3DX12_RECT( m_RenderViewport.m_TopLeftX, m_RenderViewport.m_TopLeftY, m_RenderViewport.m_Width, m_RenderViewport.m_Height );
         commandList->RSSetViewports( 1, &viewport );
+        commandList->RSSetScissorRects( 1, &scissorRect );
 
         m_PostProcessing.ExecuteCopy( m_Scene );
         m_Scene.m_IsRenderResultTextureRead = true;

@@ -40,9 +40,9 @@ GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT for
         return nullptr;
     }
 
-    CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    TD3D12DescriptorPoolHeapRef<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV> descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV>();
 
-    SD3D12DescriptorHandle SRV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    SD3D12DescriptorHandle SRV = descriptorHeap.Allocate();
     if ( !SRV )
     {
         return nullptr;
@@ -52,10 +52,10 @@ GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT for
     SD3D12DescriptorHandle UAV;
     if ( hasUAV )
     {
-        UAV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+        UAV = descriptorHeap.Allocate();
         if ( !UAV )
         {
-            descriptorHeap->Free( SRV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+            descriptorHeap.Free( SRV );
             return nullptr;
         }
         D3D12Adapter::GetDevice()->CreateUnorderedAccessView( texture.Get(), nullptr, nullptr, UAV.CPU );
@@ -64,13 +64,13 @@ GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT for
     SD3D12DescriptorHandle RTV;
     if ( isRenderTarget )
     {
-        RTV = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_RTV )->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_RTV );
+        RTV = D3D12Adapter::GetDescriptorPoolHeap<D3D12_DESCRIPTOR_HEAP_TYPE_RTV>().Allocate();
         if ( !RTV )
         {
-            descriptorHeap->Free( SRV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+            descriptorHeap.Free( SRV );
             if ( UAV )
             {
-                descriptorHeap->Free( UAV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+                descriptorHeap.Free( UAV );
             }
         }
         D3D12Adapter::GetDevice()->CreateRenderTargetView( texture.Get(), nullptr, RTV.CPU );
@@ -112,8 +112,8 @@ GPUTexture* GPUTexture::CreateFromSwapChainInternal( const D3D12_RENDER_TARGET_V
         return nullptr;
     }
 
-    CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_RTV );
-    SD3D12DescriptorHandle RTV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_RTV );
+    TD3D12DescriptorPoolHeapRef<D3D12_DESCRIPTOR_HEAP_TYPE_RTV> descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap<D3D12_DESCRIPTOR_HEAP_TYPE_RTV>();
+    SD3D12DescriptorHandle RTV = descriptorHeap.Allocate();
     if ( !RTV.IsValid() )
     {
         return nullptr;
@@ -162,8 +162,8 @@ GPUTexture* GPUTexture::CreateFromFile( const wchar_t* filename )
     commandList->ResourceBarrier( 1, &barrier );
 
     // Create SRV
-    CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
-    SD3D12DescriptorHandle SRV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    TD3D12DescriptorPoolHeapRef<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV> descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV>();
+    SD3D12DescriptorHandle SRV = descriptorHeap.Allocate();
     if ( !SRV )
     {
         return nullptr;
@@ -179,21 +179,21 @@ GPUTexture* GPUTexture::CreateFromFile( const wchar_t* filename )
 GPUTexture::~GPUTexture()
 {
     {
-        CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+        TD3D12DescriptorPoolHeapRef<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV> descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV>();
         if ( m_SRV )
         { 
-            descriptorHeap->Free( m_SRV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+            descriptorHeap.Free( m_SRV );
         }
         if ( m_UAV )
         { 
-            descriptorHeap->Free( m_UAV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+            descriptorHeap.Free( m_UAV );
         }
     }
     {
-        CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_RTV );
+        TD3D12DescriptorPoolHeapRef<D3D12_DESCRIPTOR_HEAP_TYPE_RTV> descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap<D3D12_DESCRIPTOR_HEAP_TYPE_RTV>();
         if ( m_RTV )
         {
-            descriptorHeap->Free( m_RTV, D3D12_DESCRIPTOR_HEAP_TYPE_RTV );
+            descriptorHeap.Free( m_RTV );
         }
     }
 }

@@ -85,10 +85,14 @@ uint32_t D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE type )
     return g_DescriptorSizes[ (uint32_t)type ];
 }
 
-CD3D12DescriptorPoolHeap* D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE heapType )
+template<D3D12_DESCRIPTOR_HEAP_TYPE HeapType>
+TD3D12DescriptorPoolHeapRef<HeapType> D3D12Adapter::GetDescriptorPoolHeap()
 {
-    return &g_DescriptorPoolHeaps[ (uint32_t)heapType ];
+    return TD3D12DescriptorPoolHeapRef<HeapType>( &g_DescriptorPoolHeaps[ (uint32_t)HeapType ] );
 }
+
+template TD3D12DescriptorPoolHeapRef<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV> D3D12Adapter::GetDescriptorPoolHeap();
+template TD3D12DescriptorPoolHeapRef<D3D12_DESCRIPTOR_HEAP_TYPE_RTV> D3D12Adapter::GetDescriptorPoolHeap();
 
 CD3D12GPUDescriptorHeap* D3D12Adapter::GetGPUDescriptorHeap()
 {

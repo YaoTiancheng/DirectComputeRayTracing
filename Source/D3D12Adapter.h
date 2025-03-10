@@ -2,7 +2,8 @@
 
 #include "D3D12DescriptorHandle.h"
 
-class CD3D12DescriptorPoolHeap;
+template <D3D12_DESCRIPTOR_HEAP_TYPE HeapType>
+class TD3D12DescriptorPoolHeapRef;
 class CD3D12GPUDescriptorHeap;
 class CD3D12MultiHeapArena;
 class CD3D12MultiBufferArena;
@@ -39,7 +40,8 @@ namespace D3D12Adapter
 
     void Present( UINT syncInterval );
 
-    CD3D12DescriptorPoolHeap* GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE heapType );
+    template <D3D12_DESCRIPTOR_HEAP_TYPE HeapType>
+    TD3D12DescriptorPoolHeapRef<HeapType> GetDescriptorPoolHeap();
 
     CD3D12GPUDescriptorHeap* GetGPUDescriptorHeap();
 

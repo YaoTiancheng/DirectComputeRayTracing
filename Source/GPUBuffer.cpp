@@ -10,7 +10,7 @@ SD3D12DescriptorHandle GPUBuffer::GetSRV( DXGI_FORMAT format, uint32_t byteStrid
     auto it = m_SRVs.find( { elementOffset, numElement } );
     if ( it == m_SRVs.end() )
     {
-        CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+        TD3D12DescriptorPoolHeapRef<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV> descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV>();
 
         D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
         desc.Format = format;
@@ -20,7 +20,7 @@ SD3D12DescriptorHandle GPUBuffer::GetSRV( DXGI_FORMAT format, uint32_t byteStrid
         desc.Buffer.NumElements = numElement;
         desc.Buffer.StructureByteStride = byteStride;
         desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
-        SRV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+        SRV = descriptorHeap.Allocate();
         if ( SRV.IsValid() )
         {
             D3D12Adapter::GetDevice()->CreateShaderResourceView( m_Buffer.Get(), &desc, SRV.CPU );
@@ -119,18 +119,18 @@ bool GPUBuffer::AllocateUploadContext( GPUBuffer::SUploadContext* context ) cons
 
 GPUBuffer::~GPUBuffer()
 {
-    CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    TD3D12DescriptorPoolHeapRef<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV> descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV>();
     for ( auto& it : m_SRVs )
     {
-        descriptorHeap->Free( it.second, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+        descriptorHeap.Free( it.second );
     }
     if ( m_UAV.IsValid() )
     {
-        descriptorHeap->Free( m_UAV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+        descriptorHeap.Free( m_UAV );
     }
     if ( m_CBV.IsValid() )
     {
-        descriptorHeap->Free( m_CBV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+        descriptorHeap.Free( m_CBV );
     }
 }
 
@@ -221,7 +221,7 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
         }
     }
 
-    CD3D12DescriptorPoolHeap* descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    TD3D12DescriptorPoolHeapRef<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV> descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV>();
 
     SD3D12DescriptorHandle SRV;
     if ( hasSRV )
@@ -234,7 +234,7 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
         desc.Buffer.NumElements = byteWidth / byteStride;
         desc.Buffer.StructureByteStride = isStructured ? byteStride : 0;
         desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
-        SRV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+        SRV = descriptorHeap.Allocate();
         if ( !SRV.IsValid() )
         {
             return nullptr;
@@ -253,12 +253,12 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
         desc.Buffer.StructureByteStride = isStructured ? byteStride : 0;
         desc.Buffer.CounterOffsetInBytes = 0;
         desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
-        UAV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+        UAV = descriptorHeap.Allocate();
         if ( !UAV.IsValid() )
         {
             if ( hasSRV )
             {
-                descriptorHeap->Free( SRV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+                descriptorHeap.Free( SRV );
             }
             return nullptr;
         }
@@ -271,16 +271,16 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
         D3D12_CONSTANT_BUFFER_VIEW_DESC desc;
         desc.BufferLocation = buffer->GetGPUVirtualAddress();
         desc.SizeInBytes = byteWidth;
-        CBV = descriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+        CBV = descriptorHeap.Allocate();
         if ( !CBV.IsValid() )
         {
             if ( hasSRV )
             { 
-                descriptorHeap->Free( SRV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+                descriptorHeap.Free( SRV );
             }
             if ( hasUAV )
             { 
-                descriptorHeap->Free( UAV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+                descriptorHeap.Free( UAV );
             }
             return nullptr;
         }

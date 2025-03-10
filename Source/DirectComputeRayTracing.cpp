@@ -182,10 +182,11 @@ CDirectComputeRayTracing::CDirectComputeRayTracing( HWND hWnd )
 
 CDirectComputeRayTracing::~CDirectComputeRayTracing()
 {
+    D3D12Adapter::WaitForGPU( false ); // Wait for the latest frame (the last frame) to finish
+
     delete s_Renderer;
     ShutDownImGui();
 
-    D3D12Adapter::WaitForGPU( false ); // Wait for the latest frame (the last frame) to finish
     CD3D12Resource::FlushDeleteAll();
     D3D12Adapter::Destroy();
 }

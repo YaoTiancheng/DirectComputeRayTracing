@@ -1,9 +1,16 @@
 #pragma once
 
+enum EShaderCompileFlag
+{
+    EShaderCompileFlag_None = 0,
+    EShaderCompileFlag_SkipOptimization = 0x1
+};
+
+
 class GfxShader
 {
 public:
-    static GfxShader* CreateFromFile( const wchar_t* filename, const std::vector<D3D_SHADER_MACRO>& defines );
+    static GfxShader* CreateFromFile( const wchar_t* filename, const std::vector<D3D_SHADER_MACRO>& defines, uint32_t compileFlags = EShaderCompileFlag_None );
 
     ~GfxShader();
 
@@ -26,7 +33,7 @@ private:
 class ComputeShader
 {
 public:
-    static ComputeShader* CreateFromFile( const wchar_t* filename, const std::vector<D3D_SHADER_MACRO>& defines );
+    static ComputeShader* CreateFromFile( const wchar_t* filename, const std::vector<D3D_SHADER_MACRO>& defines, uint32_t compileFlags = EShaderCompileFlag_None );
 
     ~ComputeShader();
 

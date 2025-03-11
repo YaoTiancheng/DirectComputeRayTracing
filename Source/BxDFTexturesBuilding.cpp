@@ -31,7 +31,7 @@ struct SKernelCompilationParams
 
 static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 1, 1 );
 
-static CD3D12ComPtr<ID3D12PipelineState> CompileAndCreateKernel( const char* kernelName, const SKernelCompilationParams& params, ID3D12RootSignature* rootSignature )
+static CD3D12ComPtr<ID3D12PipelineState> CompileAndCreateKernel( const char* kernelName, const SKernelCompilationParams& params, ID3D12RootSignature* rootSignature, uint32_t compileFlags )
 {
     std::vector<D3D_SHADER_MACRO> shaderDefines;
 
@@ -88,7 +88,7 @@ static CD3D12ComPtr<ID3D12PipelineState> CompileAndCreateKernel( const char* ker
 
     shaderDefines.push_back( { NULL, NULL } );
 
-    ComputeShaderPtr shader( ComputeShader::CreateFromFile( L"Shaders\\BxDFTexturesBuilding.hlsl", shaderDefines ) );
+    ComputeShaderPtr shader( ComputeShader::CreateFromFile( L"Shaders\\BxDFTexturesBuilding.hlsl", shaderDefines, compileFlags ) );
     if ( !shader )
     {
         return CD3D12ComPtr<ID3D12PipelineState>();
@@ -158,11 +158,11 @@ SBxDFTextures BxDFTexturesBuilding::Build()
         compilationParams.m_BxDFType = 0;
         compilationParams.m_HasFresnel = false;
 
-        CD3D12ComPtr<ID3D12PipelineState> integralShader = CompileAndCreateKernel( "INTEGRATE_COOKTORRANCE_BXDF", compilationParams, rootSignature.Get() );
-        CD3D12ComPtr<ID3D12PipelineState> copyShader = CompileAndCreateKernel( "COPY", compilationParams, rootSignature.Get() );
+        CD3D12ComPtr<ID3D12PipelineState> integralShader = CompileAndCreateKernel( "INTEGRATE_COOKTORRANCE_BXDF", compilationParams, rootSignature.Get(), EShaderCompileFlag_SkipOptimization );
+        CD3D12ComPtr<ID3D12PipelineState> copyShader = CompileAndCreateKernel( "COPY", compilationParams, rootSignature.Get(), EShaderCompileFlag_None );
 
         compilationParams.m_SampleCount = BXDFTEX_BRDF_SIZE_X;
-        CD3D12ComPtr<ID3D12PipelineState> averageShader = CompileAndCreateKernel( "INTEGRATE_AVERAGE", compilationParams, rootSignature.Get() );
+        CD3D12ComPtr<ID3D12PipelineState> averageShader = CompileAndCreateKernel( "INTEGRATE_AVERAGE", compilationParams, rootSignature.Get(), EShaderCompileFlag_SkipOptimization );
 
         commandList->SetComputeRootSignature( rootSignature.Get() );
 
@@ -257,8 +257,8 @@ SBxDFTextures BxDFTexturesBuilding::Build()
         compilationParams.m_BxDFType = 0;
         compilationParams.m_HasFresnel = true;
 
-        CD3D12ComPtr<ID3D12PipelineState> integralShader = CompileAndCreateKernel( "INTEGRATE_COOKTORRANCE_BXDF", compilationParams, rootSignature.Get() );
-        CD3D12ComPtr<ID3D12PipelineState> copyShader = CompileAndCreateKernel( "COPY", compilationParams, rootSignature.Get() );
+        CD3D12ComPtr<ID3D12PipelineState> integralShader = CompileAndCreateKernel( "INTEGRATE_COOKTORRANCE_BXDF", compilationParams, rootSignature.Get(), EShaderCompileFlag_SkipOptimization );
+        CD3D12ComPtr<ID3D12PipelineState> copyShader = CompileAndCreateKernel( "COPY", compilationParams, rootSignature.Get(), EShaderCompileFlag_None );
         if ( integralShader && copyShader )
         {
             SCOPED_RENDER_ANNOTATION( commandList, L"Integrate CookTorrance BRDF Dielectric" );
@@ -349,11 +349,11 @@ SBxDFTextures BxDFTexturesBuilding::Build()
         compilationParams.m_BxDFType = 1;
         compilationParams.m_HasFresnel = true;
 
-        CD3D12ComPtr<ID3D12PipelineState> integralShader = CompileAndCreateKernel( "INTEGRATE_COOKTORRANCE_BXDF", compilationParams, rootSignature.Get() );
-        CD3D12ComPtr<ID3D12PipelineState> copyShader = CompileAndCreateKernel( "COPY", compilationParams, rootSignature.Get() );
+        CD3D12ComPtr<ID3D12PipelineState> integralShader = CompileAndCreateKernel( "INTEGRATE_COOKTORRANCE_BXDF", compilationParams, rootSignature.Get(), EShaderCompileFlag_SkipOptimization );
+        CD3D12ComPtr<ID3D12PipelineState> copyShader = CompileAndCreateKernel( "COPY", compilationParams, rootSignature.Get(), EShaderCompileFlag_None );
 
         compilationParams.m_SampleCount = BXDFTEX_BRDF_DIELECTRIC_SIZE_X;
-        CD3D12ComPtr<ID3D12PipelineState> averageShader = CompileAndCreateKernel( "INTEGRATE_AVERAGE", compilationParams, rootSignature.Get() );
+        CD3D12ComPtr<ID3D12PipelineState> averageShader = CompileAndCreateKernel( "INTEGRATE_AVERAGE", compilationParams, rootSignature.Get(), EShaderCompileFlag_SkipOptimization );
 
         if ( integralShader && copyShader && averageShader )
         {

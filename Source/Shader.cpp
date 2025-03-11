@@ -3,12 +3,25 @@
 #include "D3D12Adapter.h"
 #include "CommandLineArgs.h"
 
-static ID3DBlob* CompileFromFile( LPCWSTR filename, LPCSTR entryPoint, LPCSTR target, const std::vector<D3D_SHADER_MACRO>& defines )
+static ID3DBlob* CompileFromFile( LPCWSTR filename, LPCSTR entryPoint, LPCSTR target, const std::vector<D3D_SHADER_MACRO>& defines, uint32_t compileFlags )
 {
     ID3DBlob* shaderBlob = nullptr;
     ID3DBlob* errorBlob = nullptr;
-    UINT flags1 = CommandLineArgs::Singleton()->ShaderDebugEnabled() ? D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_PREFER_FLOW_CONTROL : D3DCOMPILE_OPTIMIZATION_LEVEL3;
-         flags1 |= D3DCOMPILE_IEEE_STRICTNESS;
+    UINT flags1 = D3DCOMPILE_IEEE_STRICTNESS;
+    const bool shaderDebugEnabled = CommandLineArgs::Singleton()->ShaderDebugEnabled();
+    if ( shaderDebugEnabled )
+    {
+        flags1 |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_PREFER_FLOW_CONTROL;
+    }
+    if ( ( compileFlags & EShaderCompileFlag_SkipOptimization ) != 0 )
+    {
+        flags1 |= D3DCOMPILE_SKIP_OPTIMIZATION;
+    }
+    else if ( !shaderDebugEnabled )
+    {
+        flags1 |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
+    }
+
     HRESULT hr  = D3DCompileFromFile( filename, defines.data(), D3D_COMPILE_STANDARD_FILE_INCLUDE, entryPoint, target, flags1, 0, &shaderBlob, &errorBlob );
     if ( errorBlob )
     {
@@ -23,13 +36,13 @@ static ID3DBlob* CompileFromFile( LPCWSTR filename, LPCSTR entryPoint, LPCSTR ta
     return shaderBlob;
 }
 
-GfxShader* GfxShader::CreateFromFile( const wchar_t* filename, const std::vector<D3D_SHADER_MACRO>& defines )
+GfxShader* GfxShader::CreateFromFile( const wchar_t* filename, const std::vector<D3D_SHADER_MACRO>& defines, uint32_t compileFlags )
 {
-    ID3DBlob* vertexShaderBlob = CompileFromFile( filename, "MainVS", "vs_5_0", defines );
+    ID3DBlob* vertexShaderBlob = CompileFromFile( filename, "MainVS", "vs_5_0", defines, compileFlags );
     if ( !vertexShaderBlob )
         return nullptr;
 
-    ID3DBlob* pixelShaderBlob = CompileFromFile( filename, "MainPS", "ps_5_0", defines );
+    ID3DBlob* pixelShaderBlob = CompileFromFile( filename, "MainPS", "ps_5_0", defines, compileFlags );
     if ( !pixelShaderBlob )
     {
         vertexShaderBlob->Release();
@@ -56,9 +69,9 @@ GfxShader::~GfxShader()
         m_PixelShader->Release();
 }
 
-ComputeShader* ComputeShader::CreateFromFile( const wchar_t* filename, const std::vector<D3D_SHADER_MACRO>& defines )
+ComputeShader* ComputeShader::CreateFromFile( const wchar_t* filename, const std::vector<D3D_SHADER_MACRO>& defines, uint32_t compileFlags )
 {
-    ID3DBlob* shaderBlob = CompileFromFile( filename, "main", "cs_5_0", defines );
+    ID3DBlob* shaderBlob = CompileFromFile( filename, "main", "cs_5_0", defines, compileFlags );
     if ( !shaderBlob )
         return nullptr;
 

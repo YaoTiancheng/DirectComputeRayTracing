@@ -359,7 +359,8 @@ void CMegakernelPathTracer::OnImGUI()
 {
     if ( ImGui::CollapsingHeader( "Megakernel Path Tracer" ) )
     {
-        if ( ImGui::InputInt( "Render Tile Size", (int*)&m_TileSize, 16, 32, ImGuiInputTextFlags_EnterReturnsTrue ) )
+        ImGui::InputInt( "Render Tile Size", (int*)&m_TileSize, 16, 32 );
+        if ( ImGui::IsItemDeactivatedAfterEdit() )
         {
             m_TileSize = std::max( (uint32_t)16, m_TileSize );
             m_FilmClearTrigger = true;

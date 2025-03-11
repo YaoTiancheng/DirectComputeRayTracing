@@ -41,7 +41,7 @@ struct SMeshLight
 struct SEnvironmentLight
 {
     DirectX::XMFLOAT3 m_Color;
-    GPUTexturePtr m_Texture;
+    CD3D12ResourcePtr<GPUTexture> m_Texture;
     std::string m_TextureFileName;
 
     bool CreateTextureFromFile();

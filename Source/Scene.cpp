@@ -710,8 +710,8 @@ bool CScene::RecreateFilmTextures()
 bool SEnvironmentLight::CreateTextureFromFile()
 {
     std::wstring filename = StringConversion::UTF8StringToUTF16WString( m_TextureFileName );
-    m_Texture.reset( GPUTexture::CreateFromFile( filename.c_str() ) );
-    return m_Texture.get() != nullptr;
+    m_Texture.Reset( GPUTexture::CreateFromFile( filename.c_str() ) );
+    return m_Texture.Get() != nullptr;
 }
 
 void SPunctualLight::SetEulerAnglesFromDirection( const DirectX::XMFLOAT3& scalarDirection )

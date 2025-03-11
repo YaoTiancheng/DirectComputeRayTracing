@@ -809,7 +809,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                     }
                     else
                     {
-                        bool hadEnvironmentTexture = m_Scene.m_EnvironmentLight->m_Texture != nullptr;
+                        bool hadEnvironmentTexture = m_Scene.m_EnvironmentLight->m_Texture.Get() != nullptr;
                         m_Scene.m_EnvironmentLight.reset();
                         if ( hadEnvironmentTexture )
                         {
@@ -935,9 +935,9 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 if ( GetOpenFileNameA( &ofn ) == TRUE )
                 {
                     m_Scene.m_EnvironmentLight->m_TextureFileName = filepath;
-                    bool hasEnvTexturePreviously = m_Scene.m_EnvironmentLight->m_Texture.get() != nullptr;
+                    bool hasEnvTexturePreviously = m_Scene.m_EnvironmentLight->m_Texture.Get() != nullptr;
                     m_Scene.m_EnvironmentLight->CreateTextureFromFile();
-                    bool hasEnvTextureCurrently = m_Scene.m_EnvironmentLight->m_Texture.get() != nullptr;
+                    bool hasEnvTextureCurrently = m_Scene.m_EnvironmentLight->m_Texture.Get() != nullptr;
                     if ( hasEnvTexturePreviously != hasEnvTextureCurrently )
                     {
                         m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
@@ -951,7 +951,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 if ( ImGui::Button( "Clear##ClearEnvImage" ) )
                 {
                     m_Scene.m_EnvironmentLight->m_TextureFileName = "";
-                    m_Scene.m_EnvironmentLight->m_Texture.reset();
+                    m_Scene.m_EnvironmentLight->m_Texture.Reset();
                     m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
                     m_IsFilmDirty = true;
                 }

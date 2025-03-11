@@ -168,7 +168,19 @@ GPUTexture* GPUTexture::CreateFromFile( const wchar_t* filename )
     {
         return nullptr;
     }
-    D3D12Adapter::GetDevice()->CreateShaderResourceView( texture.Get(), nullptr, SRV.CPU );
+
+    {
+        D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
+        if ( isCubemap )
+        {
+            D3D12_RESOURCE_DESC textureDesc = texture->GetDesc();
+            desc.Format = textureDesc.Format;
+            desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+            desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            desc.TextureCube.MipLevels = -1;
+        }
+        D3D12Adapter::GetDevice()->CreateShaderResourceView( texture.Get(), isCubemap ? &desc : nullptr, SRV.CPU );
+    }
 
     GPUTexture* gpuTexture = new GPUTexture();
     gpuTexture->m_Texture = texture.Get();

@@ -468,7 +468,8 @@ void SRenderer::RenderOneFrame()
     if ( m_Scene.m_HasValidScene )
     {
         viewport = { (float)m_RenderViewport.m_TopLeftX, (float)m_RenderViewport.m_TopLeftY, (float)m_RenderViewport.m_Width, (float)m_RenderViewport.m_Height, 0.0f, 1.0f };
-        scissorRect = CD3DX12_RECT( m_RenderViewport.m_TopLeftX, m_RenderViewport.m_TopLeftY, m_RenderViewport.m_Width, m_RenderViewport.m_Height );
+        scissorRect = CD3DX12_RECT( m_RenderViewport.m_TopLeftX, m_RenderViewport.m_TopLeftY,
+            m_RenderViewport.m_TopLeftX + m_RenderViewport.m_Width, m_RenderViewport.m_TopLeftY + m_RenderViewport.m_Height );
         commandList->RSSetViewports( 1, &viewport );
         commandList->RSSetScissorRects( 1, &scissorRect );
 

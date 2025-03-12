@@ -95,12 +95,14 @@ bool CWavefrontPathTracer::Create()
         return false;
     }
 
-    if ( FAILED( D3D12Adapter::GetDevice()->CreateRootSignature( 0, serializedRootSignature->GetBufferPointer(), serializedRootSignature->GetBufferSize(), IID_PPV_ARGS( m_RootSignature.GetAddressOf() ) ) ) )
+    ID3D12RootSignature* rootSignature = nullptr;
+    if ( FAILED( D3D12Adapter::GetDevice()->CreateRootSignature( 0, serializedRootSignature->GetBufferPointer(), serializedRootSignature->GetBufferSize(), IID_PPV_ARGS( &rootSignature ) ) ) )
     {
         return false;
     }
+    m_RootSignature.Reset( rootSignature );
 
-    m_RayBuffer.reset( GPUBuffer::CreateStructured(
+    m_RayBuffer.Reset( GPUBuffer::CreateStructured(
           s_PathPoolLaneCount * 32
         , 32
         , EGPUBufferUsage::Default
@@ -108,7 +110,7 @@ bool CWavefrontPathTracer::Create()
     if ( !m_RayBuffer )
         return false;
 
-    m_RayHitBuffer.reset( GPUBuffer::CreateStructured(
+    m_RayHitBuffer.Reset( GPUBuffer::CreateStructured(
           s_PathPoolLaneCount * 20
         , 20
         , EGPUBufferUsage::Default
@@ -116,7 +118,7 @@ bool CWavefrontPathTracer::Create()
     if ( !m_RayHitBuffer )
         return false;
 
-    m_ShadowRayBuffer.reset( GPUBuffer::CreateStructured(
+    m_ShadowRayBuffer.Reset( GPUBuffer::CreateStructured(
           s_PathPoolLaneCount * 32
         , 32
         , EGPUBufferUsage::Default
@@ -124,7 +126,7 @@ bool CWavefrontPathTracer::Create()
     if ( !m_ShadowRayBuffer )
         return false;
 
-    m_PixelPositionBuffer.reset( GPUBuffer::CreateStructured(
+    m_PixelPositionBuffer.Reset( GPUBuffer::CreateStructured(
           s_PathPoolLaneCount * 8
         , 8
         , EGPUBufferUsage::Default
@@ -132,7 +134,7 @@ bool CWavefrontPathTracer::Create()
     if ( !m_PixelPositionBuffer )
         return false;
 
-    m_PixelSampleBuffer.reset( GPUBuffer::CreateStructured(
+    m_PixelSampleBuffer.Reset( GPUBuffer::CreateStructured(
           s_PathPoolLaneCount * 8
         , 8
         , EGPUBufferUsage::Default
@@ -140,7 +142,7 @@ bool CWavefrontPathTracer::Create()
     if ( !m_PixelSampleBuffer )
         return false;
 
-    m_RngBuffer.reset( GPUBuffer::CreateStructured(
+    m_RngBuffer.Reset( GPUBuffer::CreateStructured(
           s_PathPoolLaneCount * 16
         , 16
         , EGPUBufferUsage::Default
@@ -148,7 +150,7 @@ bool CWavefrontPathTracer::Create()
     if ( !m_RngBuffer )
         return false;
 
-    m_LightSamplingResultsBuffer.reset( GPUBuffer::Create(
+    m_LightSamplingResultsBuffer.Reset( GPUBuffer::Create(
           s_PathPoolLaneCount * 16
         , 16
         , DXGI_FORMAT_R32G32B32A32_FLOAT
@@ -157,7 +159,7 @@ bool CWavefrontPathTracer::Create()
     if ( !m_LightSamplingResultsBuffer )
         return false;
 
-    m_PathAccumulationBuffer.reset( GPUBuffer::CreateStructured(
+    m_PathAccumulationBuffer.Reset( GPUBuffer::CreateStructured(
           s_PathPoolLaneCount * 32
         , 32
         , EGPUBufferUsage::Default
@@ -165,7 +167,7 @@ bool CWavefrontPathTracer::Create()
     if ( !m_PathAccumulationBuffer )
         return false;
 
-    m_FlagsBuffer.reset( GPUBuffer::Create(
+    m_FlagsBuffer.Reset( GPUBuffer::Create(
           s_PathPoolLaneCount * 4
         , 4
         , DXGI_FORMAT_R32_UINT
@@ -174,7 +176,7 @@ bool CWavefrontPathTracer::Create()
     if ( !m_FlagsBuffer )
         return false;
 
-    m_NextBlockIndexBuffer.reset( GPUBuffer::Create(
+    m_NextBlockIndexBuffer.Reset( GPUBuffer::Create(
           4
         , 4
         , DXGI_FORMAT_R32_UINT
@@ -185,7 +187,7 @@ bool CWavefrontPathTracer::Create()
 
     for ( uint32_t i = 0; i < 4; ++i )
     {
-        m_IndirectArgumentBuffer[ i ].reset( GPUBuffer::Create(
+        m_IndirectArgumentBuffer[ i ].Reset( GPUBuffer::Create(
               12
             , 4
             , DXGI_FORMAT_R32_UINT
@@ -194,7 +196,7 @@ bool CWavefrontPathTracer::Create()
         if ( !m_IndirectArgumentBuffer[ i ] )
             return false;
 
-        m_QueueBuffers[ i ].reset( GPUBuffer::Create(
+        m_QueueBuffers[ i ].Reset( GPUBuffer::Create(
               sizeof( uint32_t ) * s_PathPoolLaneCount
             , sizeof( uint32_t )
             , DXGI_FORMAT_R32_UINT
@@ -206,7 +208,7 @@ bool CWavefrontPathTracer::Create()
 
     for ( uint32_t i = 0; i < 2; ++i )
     {
-        m_QueueCounterBuffers[ i ].reset( GPUBuffer::Create(
+        m_QueueCounterBuffers[ i ].Reset( GPUBuffer::Create(
               16
             , 4
             , DXGI_FORMAT_R32_UINT
@@ -215,7 +217,7 @@ bool CWavefrontPathTracer::Create()
         if ( !m_QueueCounterBuffers[ i ] )
             return false;
 
-        m_QueueConstantsBuffers[ i ].reset( GPUBuffer::Create(
+        m_QueueConstantsBuffers[ i ].Reset( GPUBuffer::Create(
               256
             , 4
             , DXGI_FORMAT_R32_UINT
@@ -227,7 +229,7 @@ bool CWavefrontPathTracer::Create()
 
     for ( uint32_t i = 0; i < s_QueueCounterStagingBufferCount; ++i )
     {
-        m_QueueCounterStagingBuffer[ i ].reset( GPUBuffer::Create(
+        m_QueueCounterStagingBuffer[ i ].Reset( GPUBuffer::Create(
               16
             , 4
             , DXGI_FORMAT_R32_UINT
@@ -237,7 +239,7 @@ bool CWavefrontPathTracer::Create()
             return false;
     }
 
-    m_ControlConstantBuffer.reset( GPUBuffer::Create(
+    m_ControlConstantBuffer.Reset( GPUBuffer::Create(
           sizeof( SControlConstants )
         , 0
         , DXGI_FORMAT_UNKNOWN
@@ -246,7 +248,7 @@ bool CWavefrontPathTracer::Create()
     if ( !m_ControlConstantBuffer )
         return false;
 
-    m_NewPathConstantBuffer.reset( GPUBuffer::Create(
+    m_NewPathConstantBuffer.Reset( GPUBuffer::Create(
           sizeof( SNewPathConstants )
         , 0
         , DXGI_FORMAT_UNKNOWN
@@ -255,7 +257,7 @@ bool CWavefrontPathTracer::Create()
     if ( !m_NewPathConstantBuffer )
         return false;
 
-    m_MaterialConstantBuffer.reset( GPUBuffer::Create(
+    m_MaterialConstantBuffer.Reset( GPUBuffer::Create(
           sizeof( SMaterialConstants )
         , 0
         , DXGI_FORMAT_UNKNOWN
@@ -269,41 +271,41 @@ bool CWavefrontPathTracer::Create()
 
 void CWavefrontPathTracer::Destroy()
 {
-    m_RayBuffer.reset();
-    m_RayHitBuffer.reset();
-    m_ShadowRayBuffer.reset();
-    m_PixelPositionBuffer.reset();
-    m_PixelSampleBuffer.reset();
-    m_RngBuffer.reset();
-    m_LightSamplingResultsBuffer.reset();
-    m_PathAccumulationBuffer.reset();
-    m_FlagsBuffer.reset();
-    m_NextBlockIndexBuffer.reset();
+    m_RayBuffer.Reset();
+    m_RayHitBuffer.Reset();
+    m_ShadowRayBuffer.Reset();
+    m_PixelPositionBuffer.Reset();
+    m_PixelSampleBuffer.Reset();
+    m_RngBuffer.Reset();
+    m_LightSamplingResultsBuffer.Reset();
+    m_PathAccumulationBuffer.Reset();
+    m_FlagsBuffer.Reset();
+    m_NextBlockIndexBuffer.Reset();
 
     for ( uint32_t i = 0; i < 4; ++i )
     {
-        m_IndirectArgumentBuffer[ i ].reset();
-        m_QueueBuffers[ i ].reset();
+        m_IndirectArgumentBuffer[ i ].Reset();
+        m_QueueBuffers[ i ].Reset();
     }
 
     for ( uint32_t i = 0; i < 2; ++i )
     {
-        m_QueueCounterBuffers[ i ].reset();
-        m_QueueConstantsBuffers[ i ].reset();
+        m_QueueCounterBuffers[ i ].Reset();
+        m_QueueConstantsBuffers[ i ].Reset();
     }
 
     for ( uint32_t i = 0; i < s_QueueCounterStagingBufferCount; ++i )
     {
-        m_QueueCounterStagingBuffer[ i ].reset();
+        m_QueueCounterStagingBuffer[ i ].Reset();
     }
 
-    m_ControlConstantBuffer.reset();
-    m_NewPathConstantBuffer.reset();
-    m_MaterialConstantBuffer.reset();
+    m_ControlConstantBuffer.Reset();
+    m_NewPathConstantBuffer.Reset();
+    m_MaterialConstantBuffer.Reset();
 
     for ( uint32_t i = 0; i < (uint32_t)EShaderKernel::_Count; ++i )
     {
-        m_PSOs[ i ].reset();
+        m_PSOs[ i ].Reset();
     }
 
     m_RootSignature.Reset();
@@ -425,7 +427,7 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SB
             commandList->SetComputeRootDescriptorTable( 3, descriptorTable );
 
             commandList->SetComputeRootConstantBufferView( 0, m_ControlConstantBuffer->GetGPUVirtualAddress() );
-            commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::SetIdle ].get() );
+            commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::SetIdle ].Get() );
             // Reset all path to idle
             commandList->Dispatch( CalculateDispatchGroupCount( s_PathPoolLaneCount ), 1, 1 );
         }
@@ -548,7 +550,7 @@ bool CWavefrontPathTracer::CompileAndCreateShader( EShaderKernel kernel )
         return false;
     }
 
-    m_PSOs[ (uint32_t)kernel ].reset( PSO, SD3D12ComDeferredDeleter() );
+    m_PSOs[ (uint32_t)kernel ].Reset( PSO );
 
     return true;
 }
@@ -582,7 +584,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
     {
         SCOPED_RENDER_ANNOTATION( commandList, L"Clear new path & material queues" );
 
-        GPUBufferPtr queueCounterBuffer = m_QueueCounterBuffers[ 1 ];
+        GPUBuffer* queueCounterBuffer = m_QueueCounterBuffers[ 1 ].Get();
         SD3D12GPUDescriptorHeapHandle queueCounterDescriptor = GPUDescriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
         D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, queueCounterDescriptor.m_CPU, queueCounterBuffer->GetUAV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
 
@@ -653,7 +655,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
         commandList->SetComputeRootConstantBufferView( 0, m_ControlConstantBuffer->GetGPUVirtualAddress() );
         commandList->SetComputeRootDescriptorTable( 3, descriptorTable );
-        commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::Control ].get() );
+        commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::Control ].Get() );
         commandList->Dispatch( CalculateDispatchGroupCount( s_PathPoolLaneCount ), 1, 1 );
     }
 
@@ -669,7 +671,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
     {
         SCOPED_RENDER_ANNOTATION( commandList, L"Clear extension & shadow raycast queues" );
 
-        GPUBufferPtr queueCounterBuffer = m_QueueCounterBuffers[ 0 ];
+        GPUBuffer* queueCounterBuffer = m_QueueCounterBuffers[ 0 ].Get();
         SD3D12GPUDescriptorHeapHandle queueCounterDescriptor = GPUDescriptorHeap->Allocate( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
         D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, queueCounterDescriptor.m_CPU, queueCounterBuffer->GetUAV().CPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
 
@@ -717,7 +719,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
         D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &SRV, 1, &UAV, 1 );
 
         commandList->SetComputeRootDescriptorTable( 3, descriptorTable );
-        commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::FillIndirectArguments ].get() );
+        commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::FillIndirectArguments ].Get() );
         commandList->Dispatch( 1, 1, 1 );
     }
 
@@ -739,7 +741,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
         D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &SRV, 1, &UAV, 1 );
 
         commandList->SetComputeRootDescriptorTable( 3, descriptorTable );
-        commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::FillIndirectArguments ].get() );
+        commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::FillIndirectArguments ].Get() );
         commandList->Dispatch( 1, 1, 1 );
     }
 
@@ -797,7 +799,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
         commandList->SetComputeRootConstantBufferView( 1, renderContext.m_RayTracingFrameConstantBuffer->GetGPUVirtualAddress() );
         commandList->SetComputeRootConstantBufferView( 2, m_NewPathConstantBuffer->GetGPUVirtualAddress() );
         commandList->SetComputeRootDescriptorTable( 3, descriptorTable );
-        commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::NewPath ].get() );
+        commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::NewPath ].Get() );
         commandList->ExecuteIndirect( D3D12Adapter::GetDispatchIndirectCommandSignature(), 1, m_IndirectArgumentBuffer[ (int)EShaderKernel::NewPath ]->GetBuffer(), 0, nullptr, 0 );
     }
 
@@ -902,7 +904,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
         commandList->SetComputeRootConstantBufferView( 0, m_QueueConstantsBuffers[ 1 ]->GetGPUVirtualAddress() );
         commandList->SetComputeRootConstantBufferView( 1, m_MaterialConstantBuffer->GetGPUVirtualAddress() );
         commandList->SetComputeRootDescriptorTable( 3, descriptorTable );
-        commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::Material ].get() );
+        commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::Material ].Get() );
         commandList->ExecuteIndirect( D3D12Adapter::GetDispatchIndirectCommandSignature(), 1, m_IndirectArgumentBuffer[ (int)EShaderKernel::Material ]->GetBuffer(), 0, nullptr, 0 );
     }
 
@@ -946,7 +948,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
         D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &SRV, 1, &UAV, 1 );
 
         commandList->SetComputeRootDescriptorTable( 3, descriptorTable );
-        commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::FillIndirectArguments ].get() );
+        commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::FillIndirectArguments ].Get() );
         commandList->Dispatch( 1, 1, 1 );
     }
 
@@ -967,7 +969,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
         D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &SRV, 1, &UAV, 1 );
 
         commandList->SetComputeRootDescriptorTable( 3, descriptorTable );
-        commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::FillIndirectArguments ].get() );
+        commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::FillIndirectArguments ].Get() );
         commandList->Dispatch( 1, 1, 1 );
     }
 
@@ -1005,7 +1007,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
         commandList->SetComputeRootDescriptorTable( 3, descriptorTable );
         commandList->SetComputeRootConstantBufferView( 0, m_QueueConstantsBuffers[ 0 ]->GetGPUVirtualAddress() );
-        commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::ExtensionRayCast ].get() );
+        commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::ExtensionRayCast ].Get() );
         commandList->ExecuteIndirect( D3D12Adapter::GetDispatchIndirectCommandSignature(), 1, m_IndirectArgumentBuffer[ (int)EShaderKernel::ExtensionRayCast ]->GetBuffer(), 0, nullptr, 0 );
     }
 
@@ -1041,7 +1043,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
 
         commandList->SetComputeRootDescriptorTable( 3, descriptorTable );
         commandList->SetComputeRootConstantBufferView( 0, m_QueueConstantsBuffers[ 0 ]->GetGPUVirtualAddress() );
-        commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::ShadowRayCast ].get() );
+        commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::ShadowRayCast ].Get() );
         commandList->ExecuteIndirect( D3D12Adapter::GetDispatchIndirectCommandSignature(), 1, m_IndirectArgumentBuffer[ (int)EShaderKernel::ShadowRayCast ]->GetBuffer(), 0, nullptr, 0 );
     }
 }

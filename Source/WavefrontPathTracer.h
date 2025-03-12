@@ -1,6 +1,7 @@
 #pragma once
 
 #include "PathTracer.h"
+#include "D3D12Resource.h"
 
 class CScene;
 
@@ -54,29 +55,29 @@ private:
 
     CScene* m_Scene;
 
-    ComPtr<ID3D12RootSignature> m_RootSignature;
-    std::shared_ptr<ID3D12PipelineState> m_PSOs[ (int)EShaderKernel::_Count ];
+    CD3D12ComPtr<ID3D12RootSignature> m_RootSignature;
+    CD3D12ComPtr<ID3D12PipelineState> m_PSOs[ (int)EShaderKernel::_Count ];
 
-    GPUBufferPtr m_RayBuffer;
-    GPUBufferPtr m_RayHitBuffer;
-    GPUBufferPtr m_ShadowRayBuffer;
-    GPUBufferPtr m_PixelPositionBuffer;
-    GPUBufferPtr m_PixelSampleBuffer;
-    GPUBufferPtr m_RngBuffer;
-    GPUBufferPtr m_LightSamplingResultsBuffer;
-    GPUBufferPtr m_PathAccumulationBuffer;
-    GPUBufferPtr m_FlagsBuffer;
-    GPUBufferPtr m_NextBlockIndexBuffer;
-    GPUBufferPtr m_IndirectArgumentBuffer[ 4 ];
-    GPUBufferPtr m_QueueBuffers[ 4 ];
-    GPUBufferPtr m_QueueCounterBuffers[ 2 ];
-    GPUBufferPtr m_QueueConstantsBuffers[ 2 ];
-    GPUBufferPtr m_ControlConstantBuffer;
-    GPUBufferPtr m_NewPathConstantBuffer;
-    GPUBufferPtr m_MaterialConstantBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_RayBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_RayHitBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_ShadowRayBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_PixelPositionBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_PixelSampleBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_RngBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_LightSamplingResultsBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_PathAccumulationBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_FlagsBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_NextBlockIndexBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_IndirectArgumentBuffer[ 4 ];
+    CD3D12ResourcePtr<GPUBuffer> m_QueueBuffers[ 4 ];
+    CD3D12ResourcePtr<GPUBuffer> m_QueueCounterBuffers[ 2 ];
+    CD3D12ResourcePtr<GPUBuffer> m_QueueConstantsBuffers[ 2 ];
+    CD3D12ResourcePtr<GPUBuffer> m_ControlConstantBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_NewPathConstantBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_MaterialConstantBuffer;
 
     static const uint32_t s_QueueCounterStagingBufferCount = 2;
-    GPUBufferPtr m_QueueCounterStagingBuffer[ s_QueueCounterStagingBufferCount ];
+    CD3D12ResourcePtr<GPUBuffer> m_QueueCounterStagingBuffer[ s_QueueCounterStagingBufferCount ];
     uint32_t m_QueueCounterStagingBufferIndex = 0;
 
     bool m_NewImage = true;

@@ -156,7 +156,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE SD3D12DescriptorTableLayout::AllocateAndCopyToGPUDes
     }
     if ( m_UAVCount > UAVCount )
     {
-        FillDescriptors( descriptorTable.m_CPU, UAVCount, m_UAVCount - UAVCount, D3D12Adapter::GetNullBufferUAV() );
+        FillDescriptors( descriptorTable.m_CPU, m_SRVCount + UAVCount, m_UAVCount - UAVCount, D3D12Adapter::GetNullBufferUAV() );
     }
 
     return descriptorTable.m_GPU;

@@ -36,6 +36,7 @@ struct SControlConstants
     uint32_t g_BlockCounts[ 2 ];
     uint32_t g_BlockDimension[ 2 ];
     uint32_t g_FilmDimension[ 2 ];
+    uint8_t padding[ 208 ];
 };
 
 struct SNewPathConstants
@@ -49,7 +50,7 @@ struct SNewPathConstants
     uint32_t g_BladeCount;
     XMFLOAT2 g_BladeVertexPos;
     float g_ApertureBaseAngle;
-    uint32_t padding;
+    uint8_t padding[ 148 ];
 };
 
 struct SMaterialConstants
@@ -57,7 +58,7 @@ struct SMaterialConstants
     uint32_t g_LightCount;
     uint32_t g_MaxBounceCount;
     uint32_t g_EnvironmentLightIndex;
-    uint32_t padding;
+    uint8_t padding[ 244 ];
 };
 
 bool CWavefrontPathTracer::Create()
@@ -215,7 +216,7 @@ bool CWavefrontPathTracer::Create()
             return false;
 
         m_QueueConstantsBuffers[ i ].reset( GPUBuffer::Create(
-              16
+              256
             , 4
             , DXGI_FORMAT_R32_UINT
             , EGPUBufferUsage::Default
@@ -696,7 +697,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
     {
         SCOPED_RENDER_ANNOTATION( commandList, L"Copy new path & material queue counter" );
 
-        commandList->CopyResource( m_QueueConstantsBuffers[ 1 ]->GetBuffer(), m_QueueCounterBuffers[ 1 ]->GetBuffer() );
+        commandList->CopyBufferRegion( m_QueueConstantsBuffers[ 1 ]->GetBuffer(), 0, m_QueueCounterBuffers[ 1 ]->GetBuffer(), 0, 16 );
     }
 
     // Barriers
@@ -711,7 +712,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
     {
         SCOPED_RENDER_ANNOTATION( commandList, L"Fill new path indirect arg" );
 
-        SD3D12DescriptorHandle SRV = m_QueueCounterBuffers[ 1 ]->GetSRV( DXGI_FORMAT_R32_UINT, 4, 1, 1 );
+        SD3D12DescriptorHandle SRV = m_QueueCounterBuffers[ 1 ]->GetSRV( DXGI_FORMAT_R32_UINT, 0, 1, 1 );
         SD3D12DescriptorHandle UAV = m_IndirectArgumentBuffer[ (int)EShaderKernel::NewPath ]->GetUAV();
         D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &SRV, 1, &UAV, 1 );
 
@@ -733,7 +734,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
     {
         SCOPED_RENDER_ANNOTATION( commandList, L"Fill material indirect arg" );
 
-        SD3D12DescriptorHandle SRV = m_QueueCounterBuffers[ 1 ]->GetSRV( DXGI_FORMAT_R32_UINT, 4, 0, 1 );
+        SD3D12DescriptorHandle SRV = m_QueueCounterBuffers[ 1 ]->GetSRV( DXGI_FORMAT_R32_UINT, 0, 0, 1 );
         SD3D12DescriptorHandle UAV = m_IndirectArgumentBuffer[ (int)EShaderKernel::Material ]->GetUAV();
         D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &SRV, 1, &UAV, 1 );
 
@@ -859,7 +860,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
     {
         SCOPED_RENDER_ANNOTATION( commandList, L"Material" );
 
-        SD3D12DescriptorHandle environmentTextureSRV;
+        SD3D12DescriptorHandle environmentTextureSRV = D3D12Adapter::GetNullBufferSRV();
         if ( m_Scene->m_EnvironmentLight && m_Scene->m_EnvironmentLight->m_Texture )
         {
             environmentTextureSRV = m_Scene->m_EnvironmentLight->m_Texture->GetSRV();
@@ -925,7 +926,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
     {
         SCOPED_RENDER_ANNOTATION( commandList, L"Copy extension & shadow raycast queue counters" );
 
-        commandList->CopyResource( m_QueueConstantsBuffers[ 0 ]->GetBuffer(), m_QueueCounterBuffers[ 0 ]->GetBuffer() );
+        commandList->CopyBufferRegion( m_QueueConstantsBuffers[ 0 ]->GetBuffer(), 0, m_QueueCounterBuffers[ 0 ]->GetBuffer(), 0, 16 );
     }
 
     // Barriers
@@ -940,7 +941,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
     {
         SCOPED_RENDER_ANNOTATION( commandList, L"Fill extension raycast indirect arg" );
 
-        SD3D12DescriptorHandle SRV = m_QueueCounterBuffers[ 0 ]->GetSRV( DXGI_FORMAT_R32_UINT, 4, 0, 1 );
+        SD3D12DescriptorHandle SRV = m_QueueCounterBuffers[ 0 ]->GetSRV( DXGI_FORMAT_R32_UINT, 0, 0, 1 );
         SD3D12DescriptorHandle UAV = m_IndirectArgumentBuffer[ (int)EShaderKernel::ExtensionRayCast ]->GetUAV();
         D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &SRV, 1, &UAV, 1 );
 
@@ -961,7 +962,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
     {
         SCOPED_RENDER_ANNOTATION( commandList, L"Fill shadow raycast indirect arg" );
 
-        SD3D12DescriptorHandle SRV = m_QueueCounterBuffers[ 0 ]->GetSRV( DXGI_FORMAT_R32_UINT, 4, 1, 1 );
+        SD3D12DescriptorHandle SRV = m_QueueCounterBuffers[ 0 ]->GetSRV( DXGI_FORMAT_R32_UINT, 0, 1, 1 );
         SD3D12DescriptorHandle UAV = m_IndirectArgumentBuffer[ (int)EShaderKernel::ShadowRayCast ]->GetUAV();
         D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &SRV, 1, &UAV, 1 );
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "PathTracer.h"
+#include "D3D12Resource.h"
 
 class CScene;
 
@@ -45,11 +46,11 @@ private:
 private:
     CScene* m_Scene;
 
-    ComPtr<ID3D12RootSignature> m_RootSignature;
-    std::shared_ptr<ID3D12PipelineState> m_PSO;
+    CD3D12ComPtr<ID3D12RootSignature> m_RootSignature;
+    CD3D12ComPtr<ID3D12PipelineState> m_PSO;
 
-    GPUBufferPtr m_RayTracingConstantsBuffer;
-    GPUBufferPtr m_DebugConstantsBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_RayTracingConstantsBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_DebugConstantsBuffer;
 
     uint32_t m_TileSize;
     uint32_t m_CurrentTileIndex;

@@ -83,12 +83,14 @@ bool CMegakernelPathTracer::Create()
         return false;
     }
 
-    if ( FAILED( D3D12Adapter::GetDevice()->CreateRootSignature( 0, serializedRootSignature->GetBufferPointer(), serializedRootSignature->GetBufferSize(), IID_PPV_ARGS( m_RootSignature.GetAddressOf() ) ) ) )
+    ID3D12RootSignature* rootSignature = nullptr;
+    if ( FAILED( D3D12Adapter::GetDevice()->CreateRootSignature( 0, serializedRootSignature->GetBufferPointer(), serializedRootSignature->GetBufferSize(), IID_PPV_ARGS( &rootSignature ) ) ) )
     {
         return false;
     }
+    m_RootSignature.Reset( rootSignature );
 
-    m_RayTracingConstantsBuffer.reset( GPUBuffer::Create(
+    m_RayTracingConstantsBuffer.Reset( GPUBuffer::Create(
           sizeof( SRayTracingConstants )
         , 0
         , DXGI_FORMAT_UNKNOWN
@@ -97,7 +99,7 @@ bool CMegakernelPathTracer::Create()
     if ( !m_RayTracingConstantsBuffer )
         return false;
 
-    m_DebugConstantsBuffer.reset( GPUBuffer::Create(
+    m_DebugConstantsBuffer.Reset( GPUBuffer::Create(
           sizeof( SDebugConstants )
         , 0
         , DXGI_FORMAT_UNKNOWN
@@ -112,9 +114,9 @@ bool CMegakernelPathTracer::Create()
 void CMegakernelPathTracer::Destroy()
 {
     m_RootSignature.Reset();
-    m_PSO.reset();
-    m_RayTracingConstantsBuffer.reset();
-    m_DebugConstantsBuffer.reset();
+    m_PSO.Reset();
+    m_RayTracingConstantsBuffer.Reset();
+    m_DebugConstantsBuffer.Reset();
 }
 
 void CMegakernelPathTracer::OnSceneLoaded()
@@ -259,7 +261,7 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
     D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( srcDescriptors, (uint32_t)ARRAY_LENGTH( srcDescriptors ) );
     commandList->SetComputeRootDescriptorTable( 3, descriptorTable );
 
-    commandList->SetPipelineState( m_PSO.get() );
+    commandList->SetPipelineState( m_PSO.Get() );
     
     uint32_t dispatchThreadWidth = renderContext.m_IsSmallResolutionEnabled ? renderContext.m_CurrentResolutionWidth : m_TileSize;
     uint32_t dispatchThreadHeight = renderContext.m_IsSmallResolutionEnabled ? renderContext.m_CurrentResolutionHeight : m_TileSize;
@@ -340,7 +342,7 @@ bool CMegakernelPathTracer::CompileAndCreateRayTracingKernel()
         return false;
     }
 
-    m_PSO.reset( PSO, SD3D12ComDeferredDeleter() );
+    m_PSO.Reset( PSO );
 
     return true;
 }

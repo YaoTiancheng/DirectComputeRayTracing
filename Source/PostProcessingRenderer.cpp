@@ -60,29 +60,25 @@ bool PostProcessingRenderer::Init()
     }
 
     // Compile shaders
-    std::vector<D3D_SHADER_MACRO> shaderDefines;
-    shaderDefines.push_back( { NULL, NULL } );
+    std::vector<DxcDefine> shaderDefines;
     GfxShaderPtr postFXShader( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
     if ( !postFXShader )
         return false;
 
     shaderDefines.clear();
-    shaderDefines.push_back( { "DISABLE_POST_FX", "0" } );
-    shaderDefines.push_back( { NULL, NULL } );
+    shaderDefines.push_back( { L"DISABLE_POST_FX", L"0" } );
     GfxShaderPtr postFXDisabledShader( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
     if ( !postFXDisabledShader )
         return false;
 
     shaderDefines.clear();
-    shaderDefines.push_back( { "AUTO_EXPOSURE", "0" } );
-    shaderDefines.push_back( { NULL, NULL } );
+    shaderDefines.push_back( { L"AUTO_EXPOSURE", L"0" } );
     GfxShaderPtr postFXAutoExposureShader( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
     if ( !postFXAutoExposureShader )
         return false;
 
     shaderDefines.clear();
-    shaderDefines.push_back( { "COPY", "0" } );
-    shaderDefines.push_back( { NULL, NULL } );
+    shaderDefines.push_back( { L"COPY", L"0" } );
     GfxShaderPtr copyShader( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
     if ( !copyShader )
         return false;

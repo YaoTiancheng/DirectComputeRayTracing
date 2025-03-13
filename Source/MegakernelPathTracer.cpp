@@ -21,6 +21,9 @@ using namespace D3D12Util;
 #define CS_GROUP_SIZE_X 16
 #define CS_GROUP_SIZE_Y 8
 
+#define STRINGIFY( s ) STRINGIFY2( s )
+#define STRINGIFY2( s ) L#s
+
 struct SRayTracingConstants
 {
     DirectX::XMFLOAT4X4 cameraTransform;
@@ -287,42 +290,41 @@ bool CMegakernelPathTracer::IsImageComplete()
 
 bool CMegakernelPathTracer::CompileAndCreateRayTracingKernel()
 {
-    std::vector<D3D_SHADER_MACRO> rayTracingShaderDefines;
+    std::vector<DxcDefine> rayTracingShaderDefines;
 
     static const uint32_t s_MaxRadix10IntegerBufferLengh = 12;
-    char buffer_TraversalStackSize[ s_MaxRadix10IntegerBufferLengh ];
-    _itoa( m_Scene->m_BVHTraversalStackSize, buffer_TraversalStackSize, 10 );
-    rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_STACK_SIZE", buffer_TraversalStackSize } );
+    wchar_t buffer_TraversalStackSize[ s_MaxRadix10IntegerBufferLengh ];
+    _itow( m_Scene->m_BVHTraversalStackSize, buffer_TraversalStackSize, 10 );
+    rayTracingShaderDefines.push_back( { L"RT_BVH_TRAVERSAL_STACK_SIZE", buffer_TraversalStackSize } );
 
-    char buffer_TraversalGroupSize[ s_MaxRadix10IntegerBufferLengh ];
-    _itoa( CS_GROUP_SIZE_X * CS_GROUP_SIZE_Y, buffer_TraversalGroupSize, 10 );
-    rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_GROUP_SIZE", buffer_TraversalGroupSize } );
+    wchar_t buffer_TraversalGroupSize[ s_MaxRadix10IntegerBufferLengh ];
+    _itow( CS_GROUP_SIZE_X * CS_GROUP_SIZE_Y, buffer_TraversalGroupSize, 10 );
+    rayTracingShaderDefines.push_back( { L"RT_BVH_TRAVERSAL_GROUP_SIZE", buffer_TraversalGroupSize } );
 
-    rayTracingShaderDefines.push_back( { "GROUP_SIZE_X", DCRT_STRINGIFY_MACRO_VALUE( CS_GROUP_SIZE_X ) } );
-    rayTracingShaderDefines.push_back( { "GROUP_SIZE_Y", DCRT_STRINGIFY_MACRO_VALUE( CS_GROUP_SIZE_Y ) } );
+    rayTracingShaderDefines.push_back( { L"GROUP_SIZE_X", STRINGIFY( CS_GROUP_SIZE_X ) } );
+    rayTracingShaderDefines.push_back( { L"GROUP_SIZE_Y", STRINGIFY( CS_GROUP_SIZE_Y ) } );
 
     if ( m_Scene->m_IsGGXVNDFSamplingEnabled )
     {
-        rayTracingShaderDefines.push_back( { "GGX_SAMPLE_VNDF", "0" } );
+        rayTracingShaderDefines.push_back( { L"GGX_SAMPLE_VNDF", L"0" } );
     }
     if ( !m_Scene->m_TraverseBVHFrontToBack )
     {
-        rayTracingShaderDefines.push_back( { "BVH_NO_FRONT_TO_BACK_TRAVERSAL", "0" } );
+        rayTracingShaderDefines.push_back( { L"BVH_NO_FRONT_TO_BACK_TRAVERSAL", L"0" } );
     }
     if ( m_Scene->m_IsLightVisible )
     {
-        rayTracingShaderDefines.push_back( { "LIGHT_VISIBLE", "0" } );
+        rayTracingShaderDefines.push_back( { L"LIGHT_VISIBLE", L"0" } );
     }
     if ( m_Scene->m_EnvironmentLight && m_Scene->m_EnvironmentLight->m_Texture )
     {
-        rayTracingShaderDefines.push_back( { "HAS_ENV_TEXTURE", "0" } );
+        rayTracingShaderDefines.push_back( { L"HAS_ENV_TEXTURE", L"0" } );
     }
-    static const char* s_RayTracingOutputDefines[] = { "MEGAKERNEL", "OUTPUT_NORMAL", "OUTPUT_TANGENT", "OUTPUT_ALBEDO", "OUTPUT_NEGATIVE_NDOTV", "OUTPUT_BACKFACE", "OUTPUT_ITERATION_COUNT" };
+    static const wchar_t* s_RayTracingOutputDefines[] = { L"MEGAKERNEL", L"OUTPUT_NORMAL", L"OUTPUT_TANGENT", L"OUTPUT_ALBEDO", L"OUTPUT_NEGATIVE_NDOTV", L"OUTPUT_BACKFACE", L"OUTPUT_ITERATION_COUNT" };
     if ( s_RayTracingOutputDefines[ m_OutputType ] )
     {
-        rayTracingShaderDefines.push_back( { s_RayTracingOutputDefines[ m_OutputType ], "0" } );
+        rayTracingShaderDefines.push_back( { s_RayTracingOutputDefines[ m_OutputType ], L"0" } );
     }
-    rayTracingShaderDefines.push_back( { NULL, NULL } );
 
     ComputeShaderPtr rayTracingShader( ComputeShader::CreateFromFile( L"Shaders\\MegakernelPathTracing.hlsl", rayTracingShaderDefines ) );
     if ( !rayTracingShader )

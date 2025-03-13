@@ -35,8 +35,8 @@ float3 OffsetRayOrigin( float3 p, float3 n, float3 d )
     n *= sign( dot( n, d ) );
 
     int3 of_i = int3( s_IntScale * n );
-    float3 p_i = asfloat( asint( p ) + ( ( p < 0 ) ? -of_i : of_i ) );
-    return abs( p ) < s_Origin ? p + s_FloatScale * n : p_i;
+    float3 p_i = asfloat( asint( p ) + select( p < 0, -of_i, of_i ) );
+    return select( abs( p ) < s_Origin, p + s_FloatScale * n, p_i );
 }
 
 float2 SampleAperture( float3 samples, float apertureRadius, uint bladeCount, float2 vertexPos, float bladeAngle, float baseAngle )

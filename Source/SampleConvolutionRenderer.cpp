@@ -144,11 +144,10 @@ void CSampleConvolutionRenderer::Execute( const SRenderContext& renderContext, C
 void CSampleConvolutionRenderer::CompileShader( int32_t filterIndex )
 {
     // Compile shader
-    const char* filterDefines[] = { "FILTER_BOX", "FILTER_TRIANGLE", "FILTER_GAUSSIAN", "FILTER_MITCHELL", "FILTER_LANCZOS_SINC" };
-    std::vector<D3D_SHADER_MACRO> shaderDefines;
+    const wchar_t* filterDefines[] = { L"FILTER_BOX", L"FILTER_TRIANGLE", L"FILTER_GAUSSIAN", L"FILTER_MITCHELL", L"FILTER_LANCZOS_SINC" };
+    std::vector<DxcDefine> shaderDefines;
     assert( filterIndex < ARRAY_LENGTH( filterDefines ) );
-    shaderDefines.push_back( { filterDefines[ filterIndex ], "" } );
-    shaderDefines.push_back( { NULL, NULL } );
+    shaderDefines.push_back( { filterDefines[ filterIndex ], L"" } );
     ComputeShaderPtr shader( ComputeShader::CreateFromFile( L"Shaders\\SampleConvolution.hlsl", shaderDefines ) );
     if ( !shader )
     {

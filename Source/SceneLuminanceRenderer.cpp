@@ -19,13 +19,12 @@ bool SceneLuminanceRenderer::Init()
 {
     ComputeShaderPtr sumLuminanceToSingleShader, sumLuminanceTo1DShader;
     {
-        std::vector<D3D_SHADER_MACRO> sumLuminanceShaderDefines;
-        sumLuminanceShaderDefines.push_back( { NULL, NULL } );
+        std::vector<DxcDefine> sumLuminanceShaderDefines;
         sumLuminanceToSingleShader.reset( ComputeShader::CreateFromFile( L"Shaders\\SumLuminance.hlsl", sumLuminanceShaderDefines ) );
         if ( !sumLuminanceToSingleShader )
             return false;
 
-        sumLuminanceShaderDefines.insert( sumLuminanceShaderDefines.begin(), { "REDUCE_TO_1D", "0" } );
+        sumLuminanceShaderDefines.push_back( { L"REDUCE_TO_1D", L"0" } );
         sumLuminanceTo1DShader.reset( ComputeShader::CreateFromFile( L"Shaders\\SumLuminance.hlsl", sumLuminanceShaderDefines ) );
         if ( !sumLuminanceTo1DShader )
             return false;

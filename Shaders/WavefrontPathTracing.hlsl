@@ -181,6 +181,7 @@ RWBuffer<uint> g_ExtensionRayQueue              : register( u4 );
 RWBuffer<uint> g_RayCounter                     : register( u5 );
 
 [numthreads( 32, 1, 1 )]
+[WaveSize( 32 )]
 void main( uint threadId : SV_DispatchThreadID, uint3 groupId : SV_GroupID, uint gtid : SV_GroupThreadID )
 {
     if ( threadId >= g_NewPathRayCount )
@@ -215,13 +216,13 @@ void main( uint threadId : SV_DispatchThreadID, uint3 groupId : SV_GroupID, uint
     uint lastGroupIndex = groupCount - 1;
     uint activeLaneCount = groupId.x != lastGroupIndex ? 32 : ( g_NewPathRayCount - lastGroupIndex * 32 );
     uint rayIndexBase = 0;
-    if ( WaveIsFirstLane( gtid ) )
+    if ( WaveIsFirstLane() )
     {
         InterlockedAdd( g_RayCounter[ 0 ], activeLaneCount, rayIndexBase );
     }
 
-    uint laneIndex = WaveGetLaneIndex( gtid );
-    rayIndexBase = WaveReadLaneFirst32( laneIndex, rayIndexBase );
+    uint laneIndex = WaveGetLaneIndex();
+    rayIndexBase = WaveReadLaneFirst( rayIndexBase );
     g_ExtensionRayQueue[ rayIndexBase + laneIndex ] = pathIndex;
 }
 
@@ -271,6 +272,7 @@ RWBuffer<uint> g_ShadowRayQueue                         : register( u8 );
 #include "BSDFs.inc.hlsl"
 
 [numthreads( 32, 1, 1 )]
+[WaveSize( 32 )]
 void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
 {
     if ( threadId >= g_MaterialRayCount )
@@ -401,10 +403,10 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
     g_PathAccumulation[ pathIndex ] = pathAccumulation;
     g_LightSamplingResults[ pathIndex ] = float4( lightSamplingResult, 0.f );
 
-    uint laneIndex = WaveGetLaneIndex( gtid );
+    uint laneIndex = WaveGetLaneIndex();
     // Write extension ray indices
     {
-        uint rayMask = WaveActiveBallot32( laneIndex, !shouldTerminate );
+        uint rayMask = WaveActiveBallot( !shouldTerminate ).x;
         uint rayCount = countbits( rayMask );
         uint rayIndexBase = 0;
         if ( laneIndex == 0 )
@@ -412,8 +414,8 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
             InterlockedAdd( g_RayCounters[ 0 ], rayCount, rayIndexBase );
         }
 
-        rayIndexBase = WaveReadLaneFirst32( laneIndex, rayIndexBase );
-        uint rayIndexOffset = WavePrefixCountBits32( laneIndex, rayMask );
+        rayIndexBase = WaveReadLaneFirst( rayIndexBase );
+        uint rayIndexOffset = WavePrefixCountBits32( rayMask );
         if ( !shouldTerminate )
         {
             g_ExtensionRayQueue[ rayIndexBase + rayIndexOffset ] = pathIndex;
@@ -421,7 +423,7 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
     }
     // Write shadow ray indices
     {
-        uint rayMask = WaveActiveBallot32( laneIndex, hasShadowRay );
+        uint rayMask = WaveActiveBallot( hasShadowRay ).x;
         uint rayCount = countbits( rayMask );
         uint rayIndexBase = 0;
         if ( laneIndex == 0 )
@@ -429,8 +431,8 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
             InterlockedAdd( g_RayCounters[ 1 ], rayCount, rayIndexBase );
         }
 
-        rayIndexBase = WaveReadLaneFirst32( laneIndex, rayIndexBase );
-        uint rayIndexOffset = WavePrefixCountBits32( laneIndex, rayMask );
+        rayIndexBase = WaveReadLaneFirst( rayIndexBase );
+        uint rayIndexOffset = WavePrefixCountBits32( rayMask );
         if ( hasShadowRay )
         {
             g_ShadowRayQueue[ rayIndexBase + rayIndexOffset ] = pathIndex;
@@ -466,6 +468,7 @@ RWTexture2D<float2> g_SamplePositionTexture : register( u7 );
 RWTexture2D<float3> g_SampleValueTexture    : register( u8 );
 
 [numthreads( 32, 1, 1 )]
+[WaveSize( 32 )]
 void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
 {
     bool isIdle = false;
@@ -495,8 +498,8 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
         }
     }
 
-    uint laneIndex = WaveGetLaneIndex( gtid );
-    uint nonIdleLaneMask = WaveActiveBallot32( laneIndex, !isIdle );
+    uint laneIndex = WaveGetLaneIndex();
+    uint nonIdleLaneMask = WaveActiveBallot( !isIdle ).x;
     uint nonIdleLaneCount = countbits( nonIdleLaneMask );
     // Write material queue
     if ( nonIdleLaneCount > 0 )
@@ -507,8 +510,8 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
             InterlockedAdd( g_QueueCounters[ 0 ], nonIdleLaneCount, rayIndexBase );
         }
 
-        rayIndexBase = WaveReadLaneFirst32( laneIndex, rayIndexBase );
-        uint rayIndexOffset = WavePrefixCountBits32( laneIndex, nonIdleLaneMask );
+        rayIndexBase = WaveReadLaneFirst( rayIndexBase );
+        uint rayIndexOffset = WavePrefixCountBits32( nonIdleLaneMask );
         if ( !isIdle )
         {
             g_MaterialQueue[ rayIndexBase + rayIndexOffset ] = threadId;
@@ -523,7 +526,7 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
         }
 
         uint totalBlockCount = g_BlockCounts.x * g_BlockCounts.y;
-        nextBlockIndex = WaveReadLaneFirst32( laneIndex, nextBlockIndex );
+        nextBlockIndex = WaveReadLaneFirst( nextBlockIndex );
         if ( nextBlockIndex < totalBlockCount )
         {
             uint blockPosX = nextBlockIndex % g_BlockCounts.x;
@@ -534,7 +537,7 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
             uint pixelPosY = blockPosY * g_BlockDimension.y + lanePosY;
             bool isClipped = pixelPosX >= g_FilmDimension.x || pixelPosY >= g_FilmDimension.y;
 
-            uint nonClipedLaneMask = WaveActiveBallot32( laneIndex, !isClipped );
+            uint nonClipedLaneMask = WaveActiveBallot( !isClipped ).x;
             uint nonClipedLaneCount = countbits( nonClipedLaneMask );
             uint rayIndexBase = 0;
             if ( laneIndex == 0 )
@@ -542,8 +545,8 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
                 InterlockedAdd( g_QueueCounters[ 1 ], nonClipedLaneCount, rayIndexBase );
             }
 
-            rayIndexBase = WaveReadLaneFirst32( laneIndex, rayIndexBase );
-            uint rayIndexOffset = WavePrefixCountBits32( laneIndex, nonClipedLaneMask );
+            rayIndexBase = WaveReadLaneFirst( rayIndexBase );
+            uint rayIndexOffset = WavePrefixCountBits32( nonClipedLaneMask );
             if ( !isClipped )
             {
                 g_PixelPositions[ threadId ] = uint2( pixelPosX, pixelPosY );

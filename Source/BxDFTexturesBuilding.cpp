@@ -31,34 +31,35 @@ struct SKernelCompilationParams
 
 static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 1, 1 );
 
-static CD3D12ComPtr<ID3D12PipelineState> CompileAndCreateKernel( const char* kernelName, const SKernelCompilationParams& params, ID3D12RootSignature* rootSignature, uint32_t compileFlags )
+static CD3D12ComPtr<ID3D12PipelineState> CompileAndCreateKernel( const wchar_t* kernelName, const SKernelCompilationParams& params, ID3D12RootSignature* rootSignature,
+    uint32_t compileFlags = EShaderCompileFlag_None )
 {
-    std::vector<D3D_SHADER_MACRO> shaderDefines;
+    std::vector<DxcDefine> shaderDefines;
 
-    shaderDefines.push_back( { "GGX_SAMPLE_VNDF", "" } );
+    shaderDefines.push_back( { L"GGX_SAMPLE_VNDF", L"" } );
 
     if ( kernelName )
     {
-        shaderDefines.push_back( { kernelName, "" } );
+        shaderDefines.push_back( { kernelName, L"" } );
     }
 
     if ( params.m_HasFresnel )
     {
-        shaderDefines.push_back( { "HAS_FRESNEL", "" } );
+        shaderDefines.push_back( { L"HAS_FRESNEL", L"" } );
     }
 
     if ( params.m_BxDFType == 1 )
     {
-        shaderDefines.push_back( { "REFRACTION_NO_SCALE_FACTOR", "" } );
+        shaderDefines.push_back( { L"REFRACTION_NO_SCALE_FACTOR", L"" } );
     }
 
-    char sharedBuffer[ 512 ];
+    wchar_t sharedBuffer[ 512 ];
     int sharedBufferStart = 0;
-    const int sharedBufferSize = sizeof( sharedBuffer );
+    const int sharedBufferSize = (int)ARRAY_LENGTH( sharedBuffer );
 #define ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( name, value, format ) \
     if ( sharedBufferStart < sharedBufferSize - 1 ) \
     { \
-        int len = sprintf_s( sharedBuffer + sharedBufferStart, sharedBufferSize - sharedBufferStart, format, value ); \
+        int len = swprintf_s( sharedBuffer + sharedBufferStart, sharedBufferSize - sharedBufferStart, format, value ); \
         if ( len > 0 ) \
         { \
             shaderDefines.push_back( { name, sharedBuffer + sharedBufferStart } ); \
@@ -74,19 +75,17 @@ static CD3D12ComPtr<ID3D12PipelineState> CompileAndCreateKernel( const char* ker
         assert( "Shared buffer is too small!" ); \
     }
 
-    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( "LUT_INTERVAL_X", params.m_LutIntervalX, "%f" );
-    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( "LUT_INTERVAL_Y", params.m_LutIntervalY, "%f" );
-    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( "LUT_INTERVAL_Z", params.m_LutIntervalZ, "%f" );
-    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( "LUT_START_Z", params.m_LutStartZ, "%f" );
-    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( "SAMPLE_WEIGHT", params.m_SampleWeight, "%f" );
-    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( "SAMPLE_COUNT", params.m_SampleCount, "%d" );
-    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( "GROUP_SIZE_X", params.m_GroupSizeX, "%d" );
-    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( "GROUP_SIZE_Y", params.m_GroupSizeY, "%d" );
-    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( "GROUP_SIZE_Z", params.m_GroupSizeZ, "%d" );
-    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( "BXDF_TYPE", params.m_BxDFType, "%d" );
+    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( L"LUT_INTERVAL_X", params.m_LutIntervalX, L"%f" );
+    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( L"LUT_INTERVAL_Y", params.m_LutIntervalY, L"%f" );
+    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( L"LUT_INTERVAL_Z", params.m_LutIntervalZ, L"%f" );
+    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( L"LUT_START_Z", params.m_LutStartZ, L"%f" );
+    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( L"SAMPLE_WEIGHT", params.m_SampleWeight, L"%f" );
+    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( L"SAMPLE_COUNT", params.m_SampleCount, L"%d" );
+    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( L"GROUP_SIZE_X", params.m_GroupSizeX, L"%d" );
+    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( L"GROUP_SIZE_Y", params.m_GroupSizeY, L"%d" );
+    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( L"GROUP_SIZE_Z", params.m_GroupSizeZ, L"%d" );
+    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( L"BXDF_TYPE", params.m_BxDFType, L"%d" );
 #undef ADD_SHADER_DEFINE_WITH_SHARED_BUFFER
-
-    shaderDefines.push_back( { NULL, NULL } );
 
     ComputeShaderPtr shader( ComputeShader::CreateFromFile( L"Shaders\\BxDFTexturesBuilding.hlsl", shaderDefines, compileFlags ) );
     if ( !shader )
@@ -158,11 +157,11 @@ SBxDFTextures BxDFTexturesBuilding::Build()
         compilationParams.m_BxDFType = 0;
         compilationParams.m_HasFresnel = false;
 
-        CD3D12ComPtr<ID3D12PipelineState> integralShader = CompileAndCreateKernel( "INTEGRATE_COOKTORRANCE_BXDF", compilationParams, rootSignature.Get(), EShaderCompileFlag_SkipOptimization );
-        CD3D12ComPtr<ID3D12PipelineState> copyShader = CompileAndCreateKernel( "COPY", compilationParams, rootSignature.Get(), EShaderCompileFlag_None );
+        CD3D12ComPtr<ID3D12PipelineState> integralShader = CompileAndCreateKernel( L"INTEGRATE_COOKTORRANCE_BXDF", compilationParams, rootSignature.Get() );
+        CD3D12ComPtr<ID3D12PipelineState> copyShader = CompileAndCreateKernel( L"COPY", compilationParams, rootSignature.Get() );
 
         compilationParams.m_SampleCount = BXDFTEX_BRDF_SIZE_X;
-        CD3D12ComPtr<ID3D12PipelineState> averageShader = CompileAndCreateKernel( "INTEGRATE_AVERAGE", compilationParams, rootSignature.Get(), EShaderCompileFlag_SkipOptimization );
+        CD3D12ComPtr<ID3D12PipelineState> averageShader = CompileAndCreateKernel( L"INTEGRATE_AVERAGE", compilationParams, rootSignature.Get() );
 
         commandList->SetComputeRootSignature( rootSignature.Get() );
 
@@ -257,8 +256,8 @@ SBxDFTextures BxDFTexturesBuilding::Build()
         compilationParams.m_BxDFType = 0;
         compilationParams.m_HasFresnel = true;
 
-        CD3D12ComPtr<ID3D12PipelineState> integralShader = CompileAndCreateKernel( "INTEGRATE_COOKTORRANCE_BXDF", compilationParams, rootSignature.Get(), EShaderCompileFlag_SkipOptimization );
-        CD3D12ComPtr<ID3D12PipelineState> copyShader = CompileAndCreateKernel( "COPY", compilationParams, rootSignature.Get(), EShaderCompileFlag_None );
+        CD3D12ComPtr<ID3D12PipelineState> integralShader = CompileAndCreateKernel( L"INTEGRATE_COOKTORRANCE_BXDF", compilationParams, rootSignature.Get() );
+        CD3D12ComPtr<ID3D12PipelineState> copyShader = CompileAndCreateKernel( L"COPY", compilationParams, rootSignature.Get() );
         if ( integralShader && copyShader )
         {
             SCOPED_RENDER_ANNOTATION( commandList, L"Integrate CookTorrance BRDF Dielectric" );
@@ -349,11 +348,11 @@ SBxDFTextures BxDFTexturesBuilding::Build()
         compilationParams.m_BxDFType = 1;
         compilationParams.m_HasFresnel = true;
 
-        CD3D12ComPtr<ID3D12PipelineState> integralShader = CompileAndCreateKernel( "INTEGRATE_COOKTORRANCE_BXDF", compilationParams, rootSignature.Get(), EShaderCompileFlag_SkipOptimization );
-        CD3D12ComPtr<ID3D12PipelineState> copyShader = CompileAndCreateKernel( "COPY", compilationParams, rootSignature.Get(), EShaderCompileFlag_None );
+        CD3D12ComPtr<ID3D12PipelineState> integralShader = CompileAndCreateKernel( L"INTEGRATE_COOKTORRANCE_BXDF", compilationParams, rootSignature.Get() );
+        CD3D12ComPtr<ID3D12PipelineState> copyShader = CompileAndCreateKernel( L"COPY", compilationParams, rootSignature.Get() );
 
         compilationParams.m_SampleCount = BXDFTEX_BRDF_DIELECTRIC_SIZE_X;
-        CD3D12ComPtr<ID3D12PipelineState> averageShader = CompileAndCreateKernel( "INTEGRATE_AVERAGE", compilationParams, rootSignature.Get(), EShaderCompileFlag_SkipOptimization );
+        CD3D12ComPtr<ID3D12PipelineState> averageShader = CompileAndCreateKernel( L"INTEGRATE_AVERAGE", compilationParams, rootSignature.Get() );
 
         if ( integralShader && copyShader && averageShader )
         {

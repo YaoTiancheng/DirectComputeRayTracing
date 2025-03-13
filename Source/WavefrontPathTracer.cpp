@@ -501,41 +501,39 @@ bool CWavefrontPathTracer::AcquireFilmClearTrigger()
 
 bool CWavefrontPathTracer::CompileAndCreateShader( EShaderKernel kernel )
 {
-    std::vector<D3D_SHADER_MACRO> rayTracingShaderDefines;
+    std::vector<DxcDefine> rayTracingShaderDefines;
 
     static const uint32_t s_MaxRadix10IntegerBufferLengh = 12;
-    char buffer_TraversalStackSize[ s_MaxRadix10IntegerBufferLengh ];
-    _itoa( m_Scene->m_BVHTraversalStackSize, buffer_TraversalStackSize, 10 );
+    wchar_t buffer_TraversalStackSize[ s_MaxRadix10IntegerBufferLengh ];
+    _itow( m_Scene->m_BVHTraversalStackSize, buffer_TraversalStackSize, 10 );
 
-    rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_STACK_SIZE", buffer_TraversalStackSize } );
+    rayTracingShaderDefines.push_back( { L"RT_BVH_TRAVERSAL_STACK_SIZE", buffer_TraversalStackSize } );
 
-    rayTracingShaderDefines.push_back( { "RT_BVH_TRAVERSAL_GROUP_SIZE", "32" } );
+    rayTracingShaderDefines.push_back( { L"RT_BVH_TRAVERSAL_GROUP_SIZE", L"32" } );
 
     if ( m_Scene->m_IsGGXVNDFSamplingEnabled )
     {
-        rayTracingShaderDefines.push_back( { "GGX_SAMPLE_VNDF", "0" } );
+        rayTracingShaderDefines.push_back( { L"GGX_SAMPLE_VNDF", L"0" } );
     }
     if ( !m_Scene->m_TraverseBVHFrontToBack )
     {
-        rayTracingShaderDefines.push_back( { "BVH_NO_FRONT_TO_BACK_TRAVERSAL", "0" } );
+        rayTracingShaderDefines.push_back( { L"BVH_NO_FRONT_TO_BACK_TRAVERSAL", L"0" } );
     }
     if ( m_Scene->m_IsLightVisible )
     {
-        rayTracingShaderDefines.push_back( { "LIGHT_VISIBLE", "0" } );
+        rayTracingShaderDefines.push_back( { L"LIGHT_VISIBLE", L"0" } );
     }
     if ( m_Scene->m_EnvironmentLight && m_Scene->m_EnvironmentLight->m_Texture )
     {
-        rayTracingShaderDefines.push_back( { "HAS_ENV_TEXTURE", "0" } );
+        rayTracingShaderDefines.push_back( { L"HAS_ENV_TEXTURE", L"0" } );
     }
-    rayTracingShaderDefines.push_back( { NULL, NULL } );
 
-    const char* s_KernelDefines[] = { "EXTENSION_RAY_CAST", "SHADOW_RAY_CAST", "NEW_PATH", "MATERIAL", "CONTROL", "FILL_INDIRECT_ARGUMENTS", "SET_IDLE" };
-    rayTracingShaderDefines.insert( rayTracingShaderDefines.begin(), { s_KernelDefines[ (int)kernel ], "0" } );
+    const wchar_t* s_KernelDefines[] = { L"EXTENSION_RAY_CAST", L"SHADOW_RAY_CAST", L"NEW_PATH", L"MATERIAL", L"CONTROL", L"FILL_INDIRECT_ARGUMENTS", L"SET_IDLE" };
+    rayTracingShaderDefines.push_back( { s_KernelDefines[ (int)kernel ], L"0" } );
 
     ComputeShaderPtr shader( ComputeShader::CreateFromFile( L"Shaders\\WavefrontPathTracing.hlsl", rayTracingShaderDefines ) );
     if ( !shader )
     {
-        CMessagebox::GetSingleton().AppendFormat( "Failed to compile ray tracing shader kernel \"%s\".\n", s_KernelDefines[ (int)kernel ] );
         return false;
     }
 

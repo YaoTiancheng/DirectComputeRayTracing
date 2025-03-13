@@ -23,7 +23,6 @@
 #include "d3dx12.h"
 #include <dxgi1_5.h>
 #include <dxgidebug.h>
-#include <d3dcompiler.h>
 #include <DirectXMath.h>
 #include <DirectXCollision.h>
 #include <wrl/client.h>
@@ -40,15 +39,15 @@
 #include <fstream>
 #include <sstream>
 
+#include "DirectXShaderCompiler/inc/dxcapi.h"
+#include "DirectXShaderCompiler/inc/d3d12shader.h"
+
 #define _USE_MATH_DEFINES
 #include <math.h>
 
 #include "PointerTypes.h"
 
 #define ARRAY_LENGTH( arr ) std::size( arr )
-
-#define DCRT_STRINGIFY_MACRO_VALUE( s ) DCRT_STRINGIFY_MACRO( s )
-#define DCRT_STRINGIFY_MACRO( s ) #s
 
 using Microsoft::WRL::ComPtr;
 

@@ -2,47 +2,100 @@
 #include "Shader.h"
 #include "D3D12Adapter.h"
 #include "CommandLineArgs.h"
+#include "Logging.h"
 
-static ID3DBlob* CompileFromFile( LPCWSTR filename, LPCSTR entryPoint, LPCSTR target, const std::vector<D3D_SHADER_MACRO>& defines, uint32_t compileFlags )
+static IDxcBlob* CompileFromFile( LPCWSTR filename, LPCWSTR entryPoint, LPCWSTR target, const std::vector<DxcDefine>& defines, uint32_t compileFlags )
 {
-    ID3DBlob* shaderBlob = nullptr;
-    ID3DBlob* errorBlob = nullptr;
-    UINT flags1 = D3DCOMPILE_IEEE_STRICTNESS;
+    ComPtr<IDxcUtils> utils;
+    ComPtr<IDxcCompiler3> compiler;
+    DxcCreateInstance( CLSID_DxcUtils, IID_PPV_ARGS( utils.GetAddressOf() ) );
+    DxcCreateInstance( CLSID_DxcCompiler, IID_PPV_ARGS( compiler.GetAddressOf() ) );
+
+    ComPtr<IDxcIncludeHandler> includeHandler;
+    utils->CreateDefaultIncludeHandler( includeHandler.GetAddressOf() );
+
+    std::vector<const wchar_t*> arguments;
+    arguments.reserve( 4 );
+    arguments.emplace_back( L"-Gis" ); // IEEE strictness
     const bool shaderDebugEnabled = CommandLineArgs::Singleton()->ShaderDebugEnabled();
-    if ( shaderDebugEnabled )
+    const bool disableOptimizations = shaderDebugEnabled || ( compileFlags & EShaderCompileFlag_SkipOptimization ) != 0;
+    if ( shaderDebugEnabled | disableOptimizations )
     {
-        flags1 |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_PREFER_FLOW_CONTROL;
+        if ( shaderDebugEnabled )
+        { 
+            arguments.emplace_back( L"-Zi" ); // Enable debug information
+            arguments.emplace_back( L"-Qembed_debug" ); // Embed PDB in shader container
+        }
+        if ( disableOptimizations )
+        {
+            arguments.emplace_back( L"-Od" ); // Disable optimizations
+        }
     }
-    if ( ( compileFlags & EShaderCompileFlag_SkipOptimization ) != 0 )
+    else 
     {
-        flags1 |= D3DCOMPILE_SKIP_OPTIMIZATION;
-    }
-    else if ( !shaderDebugEnabled )
-    {
-        flags1 |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
+        arguments.emplace_back( L"-O3" );
     }
 
-    HRESULT hr  = D3DCompileFromFile( filename, defines.data(), D3D_COMPILE_STANDARD_FILE_INCLUDE, entryPoint, target, flags1, 0, &shaderBlob, &errorBlob );
-    if ( errorBlob )
-    {
-        OutputDebugStringA( (char*)errorBlob->GetBufferPointer() );
-        errorBlob->Release();
-    }
+    ComPtr<IDxcCompilerArgs> compilerArgs;
+    HRESULT hr = utils->BuildArguments( filename, entryPoint, target, arguments.data(), (uint32_t)arguments.size(), defines.data(), (uint32_t)defines.size(),
+        compilerArgs.GetAddressOf() );
     if ( FAILED( hr ) )
     {
-        if ( shaderBlob )
-            shaderBlob->Release();
+        return nullptr;
     }
-    return shaderBlob;
+
+    ComPtr<IDxcResult> result;
+    bool needRecompile = false;
+    do
+    { 
+        ComPtr<IDxcBlobEncoding> blobEncoding;
+        hr = utils->LoadFile( filename, nullptr, blobEncoding.GetAddressOf() );
+        if ( FAILED( hr ) )
+        {
+            return nullptr;
+        }
+
+        DxcBuffer source;
+        source.Ptr = blobEncoding->GetBufferPointer();
+        source.Size = blobEncoding->GetBufferSize();
+        source.Encoding = DXC_CP_ACP;
+
+        hr = compiler->Compile( &source, compilerArgs->GetArguments(), compilerArgs->GetCount(), includeHandler.Get(), IID_PPV_ARGS( result.GetAddressOf() ) );
+        if ( FAILED( hr ) )
+        {
+            return nullptr;
+        }
+
+        ComPtr<IDxcBlobUtf8> errors;
+        hr = result->GetOutput( DXC_OUT_ERRORS, IID_PPV_ARGS( errors.GetAddressOf() ), nullptr );
+        if ( errors && errors->GetStringLength() > 0 )
+        {
+            LOG_STRING( errors->GetStringPointer() );
+        }
+
+        result->GetStatus( &hr );
+        needRecompile = false;
+        if ( FAILED( hr ) )
+        {
+            const char* errorText = errors ? errors->GetStringPointer() : nullptr;
+            needRecompile = MessageBoxA( NULL, errorText, "Shader Compiler Failure", MB_RETRYCANCEL | MB_TASKMODAL ) == IDRETRY;
+        }
+    }
+    while ( needRecompile );
+
+    IDxcBlob* shaderObject = nullptr;
+    ComPtr<IDxcBlobUtf16> shaderName;
+    hr = result->GetOutput( DXC_OUT_OBJECT, IID_PPV_ARGS( &shaderObject ), shaderName.GetAddressOf() );
+    return shaderObject;
 }
 
-GfxShader* GfxShader::CreateFromFile( const wchar_t* filename, const std::vector<D3D_SHADER_MACRO>& defines, uint32_t compileFlags )
+GfxShader* GfxShader::CreateFromFile( const wchar_t* filename, const std::vector<DxcDefine>& defines, uint32_t compileFlags )
 {
-    ID3DBlob* vertexShaderBlob = CompileFromFile( filename, "MainVS", "vs_5_0", defines, compileFlags );
+    IDxcBlob* vertexShaderBlob = CompileFromFile( filename, L"MainVS", L"vs_6_0", defines, compileFlags );
     if ( !vertexShaderBlob )
         return nullptr;
 
-    ID3DBlob* pixelShaderBlob = CompileFromFile( filename, "MainPS", "ps_5_0", defines, compileFlags );
+    IDxcBlob* pixelShaderBlob = CompileFromFile( filename, L"MainPS", L"ps_6_0", defines, compileFlags );
     if ( !pixelShaderBlob )
     {
         vertexShaderBlob->Release();
@@ -69,9 +122,9 @@ GfxShader::~GfxShader()
         m_PixelShader->Release();
 }
 
-ComputeShader* ComputeShader::CreateFromFile( const wchar_t* filename, const std::vector<D3D_SHADER_MACRO>& defines, uint32_t compileFlags )
+ComputeShader* ComputeShader::CreateFromFile( const wchar_t* filename, const std::vector<DxcDefine>& defines, uint32_t compileFlags )
 {
-    ID3DBlob* shaderBlob = CompileFromFile( filename, "main", "cs_5_0", defines, compileFlags );
+    IDxcBlob* shaderBlob = CompileFromFile( filename, L"main", L"cs_6_6", defines, compileFlags );
     if ( !shaderBlob )
         return nullptr;
 

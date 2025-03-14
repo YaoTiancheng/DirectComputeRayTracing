@@ -266,6 +266,12 @@ bool CWavefrontPathTracer::Create()
     if ( !m_MaterialConstantBuffer )
         return false;
 
+    if ( s_QueueCounterStagingBufferCount <= D3D12Adapter::GetBackbufferCount() )
+    {
+        // We have maximum of "backbuffercount" number of frames in flight, the number of read back staging buffer must be at least backbuffercount + 1
+        return false;
+    }
+
     return true;
 }
 
@@ -450,11 +456,16 @@ void CWavefrontPathTracer::Render( const SRenderContext& renderContext, const SB
                 commandList->CopyResource( m_QueueCounterStagingBuffer[ i ]->GetBuffer(), m_QueueCounterBuffers[ 1 ]->GetBuffer() );
                 m_QueueCounterStagingBufferIndex = 0;
             }
+            m_StagingBufferReadyCountdown = D3D12Adapter::GetBackbufferCount();
         }
         else
         {
             commandList->CopyResource( m_QueueCounterStagingBuffer[ m_QueueCounterStagingBufferIndex ]->GetBuffer(), m_QueueCounterBuffers[ 1 ]->GetBuffer() );
             m_QueueCounterStagingBufferIndex = ( m_QueueCounterStagingBufferIndex + 1 ) % s_QueueCounterStagingBufferCount;
+            if ( m_StagingBufferReadyCountdown > 0 )
+            {
+                m_StagingBufferReadyCountdown--;
+            }
         }
     }
 
@@ -468,12 +479,17 @@ void CWavefrontPathTracer::ResetImage()
 
 bool CWavefrontPathTracer::IsImageComplete()
 {
-    if ( void* address = m_QueueCounterStagingBuffer[ m_QueueCounterStagingBufferIndex ]->Map() )
+    if ( m_StagingBufferReadyCountdown == 0 )
     {
-        uint32_t* counters = (uint32_t*)address;
-        bool areAllQueuesEmpty = !counters[ 0 ] && !counters[ 1 ];
-        m_QueueCounterStagingBuffer[ m_QueueCounterStagingBufferIndex ]->Unmap();
-        return areAllQueuesEmpty;
+        if ( void* address = m_QueueCounterStagingBuffer[ m_QueueCounterStagingBufferIndex ]->Map() )
+        {
+            uint32_t* counters = (uint32_t*)address;
+            const uint32_t materialQueueCounter = counters[ 0 ];
+            const uint32_t newPathQueueCounter = counters[ 1 ];
+            const bool areAllQueuesEmpty = !materialQueueCounter && !newPathQueueCounter; // We're done rendering an image if both material and new path queues were drain
+            m_QueueCounterStagingBuffer[ m_QueueCounterStagingBufferIndex ]->Unmap();
+            return areAllQueuesEmpty;
+        }
     }
     return false;
 }

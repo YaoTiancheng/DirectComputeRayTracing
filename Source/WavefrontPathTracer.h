@@ -76,9 +76,10 @@ private:
     CD3D12ResourcePtr<GPUBuffer> m_NewPathConstantBuffer;
     CD3D12ResourcePtr<GPUBuffer> m_MaterialConstantBuffer;
 
-    static const uint32_t s_QueueCounterStagingBufferCount = 2;
+    static const uint32_t s_QueueCounterStagingBufferCount = 3;
     CD3D12ResourcePtr<GPUBuffer> m_QueueCounterStagingBuffer[ s_QueueCounterStagingBufferCount ];
     uint32_t m_QueueCounterStagingBufferIndex = 0;
+    uint32_t m_StagingBufferReadyCountdown = s_QueueCounterStagingBufferCount;
 
     bool m_NewImage = true;
     bool m_FilmClearTrigger = false;

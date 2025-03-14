@@ -155,7 +155,8 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
     {
         const D3D12_HEAP_TYPE heapType = usage == EGPUBufferUsage::Default ? D3D12_HEAP_TYPE_DEFAULT : D3D12_HEAP_TYPE_READBACK;
         const D3D12_RESOURCE_STATES actualResourceStates = usage == EGPUBufferUsage::Default && !initialData ? resourceStates : D3D12_RESOURCE_STATE_COPY_DEST;
-        if ( FAILED( D3D12Adapter::GetDevice()->CreateCommittedResource( &CD3DX12_HEAP_PROPERTIES( heapType ), D3D12_HEAP_FLAG_NONE, &bufferDesc,
+        D3D12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES( heapType );
+        if ( FAILED( D3D12Adapter::GetDevice()->CreateCommittedResource( &heapProperties, D3D12_HEAP_FLAG_NONE, &bufferDesc,
             actualResourceStates, nullptr, IID_PPV_ARGS( &D3DBuffer ) ) ) )
         {
             return nullptr;

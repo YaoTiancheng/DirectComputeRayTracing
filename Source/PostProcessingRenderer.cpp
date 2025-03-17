@@ -24,13 +24,12 @@ XMFLOAT4 s_ScreenQuadVertices[ 6 ] =
     {  1.0f, -1.0f,  0.0f,  1.0f },
 };
 
-struct SConvolutionConstant
+struct SPostProcessingConstant
 {
     float m_ReciprocalPixelCount;
     float m_MaxWhiteSqr;
     float m_TexcoordScale;
     float m_EV100;
-    uint8_t m_Padding[ 240 ];
 };
 
 static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 2, 0 );
@@ -103,7 +102,7 @@ bool PostProcessingRenderer::Init()
     // Create root signature
     {
         CD3DX12_ROOT_PARAMETER1 rootParameters[ 2 ];
-        rootParameters[ 0 ].InitAsConstantBufferView( 0 );
+        rootParameters[ 0 ].InitAsConstants( 4, 0 );
         SD3D12DescriptorTableRanges descriptorTableRanges;
         s_DescriptorTableLayout.InitRootParameter( &rootParameters[ 1 ], &descriptorTableRanges );
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 2, rootParameters, 2, samplers, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT );
@@ -211,19 +210,11 @@ void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext,
 
     SCOPED_RENDER_ANNOTATION( commandList, L"PostFX" );
 
-    SConvolutionConstant constants;
+    SPostProcessingConstant constants;
     constants.m_ReciprocalPixelCount = 1.0f / ( renderContext.m_CurrentResolutionWidth * renderContext.m_CurrentResolutionHeight );
     constants.m_MaxWhiteSqr = m_LuminanceWhite * m_LuminanceWhite;
     constants.m_TexcoordScale = renderContext.m_CurrentResolutionRatio;
     constants.m_EV100 = m_CalculateEV100FromCamera ? CalculateEV100( scene.m_RelativeAperture, scene.m_ShutterTime, scene.m_ISO ) : m_ManualEV100;
-
-    CD3D12ResourcePtr<GPUBuffer> constantBuffer( GPUBuffer::Create(
-          sizeof( SConvolutionConstant )
-        , 0
-        , DXGI_FORMAT_UNKNOWN
-        , EGPUBufferUsage::Dynamic
-        , EGPUBufferBindFlag_ConstantBuffer
-        , &constants ) );
 
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView = {};
     vertexBufferView.BufferLocation = m_ScreenQuadVerticesBuffer->GetGPUVirtualAddress();
@@ -259,7 +250,7 @@ void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext,
     }
         
     commandList->SetGraphicsRootSignature( m_RootSignature.Get() );
-    commandList->SetGraphicsRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );
+    commandList->SetGraphicsRoot32BitConstants( 0, 4, &constants, 0 );
 
     SD3D12DescriptorHandle SRVs[] = { scene.m_FilmTexture->GetSRV(),
         m_LuminanceRenderer.GetLuminanceResultBuffer() ? m_LuminanceRenderer.GetLuminanceResultBuffer()->GetSRV() : D3D12Adapter::GetNullBufferSRV() };
@@ -278,16 +269,8 @@ void PostProcessingRenderer::ExecuteCopy( CScene& scene )
 
     SCOPED_RENDER_ANNOTATION( commandList, L"Copy" );
     
-    SConvolutionConstant constants;
+    SPostProcessingConstant constants;
     constants.m_TexcoordScale = 1.0f;
-
-    CD3D12ResourcePtr<GPUBuffer> constantBuffer( GPUBuffer::Create(
-          sizeof( SConvolutionConstant )
-        , 0
-        , DXGI_FORMAT_UNKNOWN
-        , EGPUBufferUsage::Dynamic
-        , EGPUBufferBindFlag_ConstantBuffer
-        , &constants ) );
 
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView = {};
     vertexBufferView.BufferLocation = m_ScreenQuadVerticesBuffer->GetGPUVirtualAddress();
@@ -303,7 +286,7 @@ void PostProcessingRenderer::ExecuteCopy( CScene& scene )
     }
 
     commandList->SetGraphicsRootSignature( m_RootSignature.Get() );
-    commandList->SetGraphicsRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );
+    commandList->SetGraphicsRoot32BitConstants( 0, 4, &constants, 0 );
 
     D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &scene.m_RenderResultTexture->GetSRV(), 1, nullptr, 0 );
     commandList->SetGraphicsRootDescriptorTable( 1, descriptorTable );

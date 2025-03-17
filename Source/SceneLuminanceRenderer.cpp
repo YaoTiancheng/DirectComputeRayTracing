@@ -33,7 +33,7 @@ bool SceneLuminanceRenderer::Init()
     // Create root signature
     {
         CD3DX12_ROOT_PARAMETER1 rootParameters[ 2 ];
-        rootParameters[ 0 ].InitAsConstantBufferView( 0 );
+        rootParameters[ 0 ].InitAsConstants( 4, 0 );
         SD3D12DescriptorTableRanges descriptorTableRanges;
         s_DescriptorTableLayout.InitRootParameter( &rootParameters[ 1 ], &descriptorTableRanges );
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 2, rootParameters );
@@ -119,17 +119,14 @@ void SceneLuminanceRenderer::Dispatch( CScene& scene, uint32_t resolutionWidth, 
 
     commandList->SetComputeRootSignature( m_RootSignature.Get() );
 
-    // Create constant buffer
+    // Set constant buffer
     {   
-        uint32_t params[ 64 ];
+        uint32_t params[ 4 ];
         params[ 0 ] = sumLuminanceBlockCountX;
         params[ 1 ] = sumLuminanceBlockCountY;
         params[ 2 ] = resolutionWidth;
         params[ 3 ] = resolutionHeight;
-        CD3D12ResourcePtr<GPUBuffer> constantBuffer( GPUBuffer::Create( sizeof( uint32_t ) * 64, 0, DXGI_FORMAT_UNKNOWN, 
-            EGPUBufferUsage::Dynamic, EGPUBufferBindFlag_ConstantBuffer, params ) );
-
-        commandList->SetComputeRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );
+        commandList->SetComputeRoot32BitConstants( 0, 4, params, 0 );
     }
 
     // Barriers
@@ -172,13 +169,10 @@ void SceneLuminanceRenderer::Dispatch( CScene& scene, uint32_t resolutionWidth, 
 
         // Allocate a constant buffer
         {
-            uint32_t params[ 64 ];
+            uint32_t params[ 4 ];
             params[ 0 ] = blockCount;
             params[ 1 ] = threadGroupCount;
-            CD3D12ResourcePtr<GPUBuffer> constantBuffer( GPUBuffer::Create( sizeof( uint32_t ) * 64, 0, DXGI_FORMAT_UNKNOWN, 
-                EGPUBufferUsage::Dynamic, EGPUBufferBindFlag_ConstantBuffer, params ) );
-
-            commandList->SetComputeRootConstantBufferView( 0, constantBuffer->GetGPUVirtualAddress() );
+            commandList->SetComputeRoot32BitConstants( 0, 4, params, 0 );
         }
 
         commandList->Dispatch( threadGroupCount, 1, 1 );

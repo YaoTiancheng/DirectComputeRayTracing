@@ -3,7 +3,6 @@
 #include "BxDFTexturesBuilding.h"
 #include "Shader.h"
 #include "GPUTexture.h"
-#include "GPUBuffer.h"
 #include "D3D12Adapter.h"
 #include "D3D12DescriptorUtil.h"
 #include "D3D12Resource.h"
@@ -111,7 +110,7 @@ SBxDFTextures BxDFTexturesBuilding::Build()
     CD3D12ComPtr<ID3D12RootSignature> rootSignature;
     {
         CD3DX12_ROOT_PARAMETER1 rootParameters[ 2 ];
-        rootParameters[ 0 ].InitAsConstantBufferView( 0 );
+        rootParameters[ 0 ].InitAsConstants( 4, 0 );
         SD3D12DescriptorTableRanges descriptorTableRanges;
         s_DescriptorTableLayout.InitRootParameter( &rootParameters[ 1 ], &descriptorTableRanges );
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 2, rootParameters );
@@ -176,14 +175,6 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             outputTextures.m_CookTorranceBRDFAverage.reset( GPUTexture::Create( BXDFTEX_BRDF_SIZE_Y, 1, DXGI_FORMAT_R16_UNORM, EGPUTextureBindFlag_UnorderedAccess,
                 1, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBRDFAverage" ) );
 
-            CD3D12ResourcePtr<GPUBuffer> batchConstantBuffers[ batchCount ];
-            for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
-            {
-                uint32_t initData[ 64 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 0, 0 }; // Todo: Used a combined constant buffer
-                batchConstantBuffers[ batchIndex ].Reset( GPUBuffer::Create( sizeof( initData ), 1, DXGI_FORMAT_UNKNOWN, EGPUBufferUsage::Default,
-                    EGPUBufferBindFlag_ConstantBuffer, initData, D3D12_RESOURCE_STATE_COPY_DEST ) );
-            }
-
             // 1. Integral
             {
                 commandList->SetPipelineState( integralShader.Get() );
@@ -193,14 +184,14 @@ SBxDFTextures BxDFTexturesBuilding::Build()
 
                 for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
                 {
-                    D3D12_RESOURCE_BARRIER barriers[ 2 ] = 
-                    {
-                        CD3DX12_RESOURCE_BARRIER::Transition( batchConstantBuffers[ batchIndex ]->GetBuffer(),
-                            D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER ),
-                        CD3DX12_RESOURCE_BARRIER::UAV( accumulationTexture->GetTexture() ),
-                    };
-                    commandList->ResourceBarrier( batchIndex == 0 ? 1 : 2, barriers ); // No UAV barrier for the first batch
-                    commandList->SetComputeRootConstantBufferView( 0, batchConstantBuffers[ batchIndex ]->GetGPUVirtualAddress() );
+                    if ( batchIndex > 0 )
+                    { 
+                        // No UAV barrier for the first batch
+                        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV( accumulationTexture->GetTexture() );
+                        commandList->ResourceBarrier( 1, &barrier ); 
+                    }
+                    uint32_t constants[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 0, 0 };
+                    commandList->SetComputeRoot32BitConstants( 0, 4, constants, 0 );
                     commandList->Dispatch( 1, 1, 1 );
                 }
             }
@@ -266,22 +257,6 @@ SBxDFTextures BxDFTexturesBuilding::Build()
                 EGPUTextureBindFlag_UnorderedAccess, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBRDFDielectric Accumulation" ) );
             outputTextures.m_CookTorranceBRDFDielectric.reset( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_X, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R16_UNORM,
                 EGPUTextureBindFlag_UnorderedAccess, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBRDFDielectric" ) );
-            
-            CD3D12ResourcePtr<GPUBuffer> batchConstantBuffers[ batchCount * 2 ];
-            // Leaving
-            for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
-            {
-                uint32_t initData[ 64 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 0, 0 }; // Todo: use a combined buffer
-                batchConstantBuffers[ batchIndex ].Reset( GPUBuffer::Create( sizeof( initData ), 1, DXGI_FORMAT_UNKNOWN, EGPUBufferUsage::Default,
-                    EGPUBufferBindFlag_ConstantBuffer, initData, D3D12_RESOURCE_STATE_COPY_DEST ) );
-            }
-            // Entering
-            for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
-            {
-                uint32_t initData[ 64 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 1, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z }; // Todo: use a combined buffer
-                batchConstantBuffers[ batchIndex + batchCount ].Reset( GPUBuffer::Create( sizeof( initData ), 1, DXGI_FORMAT_UNKNOWN, EGPUBufferUsage::Default,
-                    EGPUBufferBindFlag_ConstantBuffer, initData, D3D12_RESOURCE_STATE_COPY_DEST ) );
-            }
 
             assert( BXDFTEX_BRDF_DIELECTRIC_SIZE_X % groupSizeX == 0 );
             assert( BXDFTEX_BRDF_DIELECTRIC_SIZE_Y % groupSizeY == 0 );
@@ -294,16 +269,30 @@ SBxDFTextures BxDFTexturesBuilding::Build()
                 D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( nullptr, 0, &accumulationTexture->GetUAV(), 1 );
                 commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
 
-                for ( uint32_t jobIndex = 0; jobIndex < batchCount * 2; ++jobIndex )
+                // Leaving
+                for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
                 {
-                    D3D12_RESOURCE_BARRIER barriers[ 2 ] = 
+                    if ( batchIndex > 0 )
+                    { 
+                        // No UAV barrier for the first batch
+                        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV( accumulationTexture->GetTexture() );
+                        commandList->ResourceBarrier( 1, &barrier ); 
+                    }
+                    uint32_t constants[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 0, 0 };
+                    commandList->SetComputeRoot32BitConstants( 0, 4, constants, 0 );
+                    commandList->Dispatch( BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z / groupSizeZ );
+                }
+                // Entering
+                for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
+                {
+                    if ( batchIndex > 0 )
                     {
-                        CD3DX12_RESOURCE_BARRIER::Transition( batchConstantBuffers[ jobIndex ]->GetBuffer(),
-                            D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER ),
-                        CD3DX12_RESOURCE_BARRIER::UAV( accumulationTexture->GetTexture() ),
-                    };
-                    commandList->ResourceBarrier( jobIndex == 0 ? 1 : 2, barriers ); // No UAV barrier for the first batch
-                    commandList->SetComputeRootConstantBufferView( 0, batchConstantBuffers[ jobIndex ]->GetGPUVirtualAddress() );
+                        // No UAV barrier for the first batch
+                        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV( accumulationTexture->GetTexture() );
+                        commandList->ResourceBarrier( 1, &barrier ); 
+                    }
+                    uint32_t constants[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 1, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z };
+                    commandList->SetComputeRoot32BitConstants( 0, 4, constants, 0 );
                     commandList->Dispatch( BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z / groupSizeZ );
                 }
             }
@@ -365,22 +354,6 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             outputTextures.m_CookTorranceBSDFAverage.reset( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z, DXGI_FORMAT_R16_UNORM,
                 EGPUTextureBindFlag_UnorderedAccess, 2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBSDFAverage" ) );
 
-            CD3D12ResourcePtr<GPUBuffer> batchConstantBuffers[ batchCount * 2 ];
-            // Leaving
-            for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
-            {
-                uint32_t initData[ 64 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 0, 0 }; // Todo: Use a combined buffer
-                batchConstantBuffers[ batchIndex ].Reset( GPUBuffer::Create( sizeof( initData ), 1, DXGI_FORMAT_UNKNOWN, EGPUBufferUsage::Default,
-                    EGPUBufferBindFlag_ConstantBuffer, initData, D3D12_RESOURCE_STATE_COPY_DEST ) );
-            }
-            // Entering
-            for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
-            {
-                uint32_t initData[ 64 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 1, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z }; // Todo: Use a combined buffer
-                batchConstantBuffers[ batchIndex + batchCount ].Reset( GPUBuffer::Create( sizeof( initData ), 1, DXGI_FORMAT_UNKNOWN, EGPUBufferUsage::Default,
-                    EGPUBufferBindFlag_ConstantBuffer, initData, D3D12_RESOURCE_STATE_COPY_DEST ) );
-            }
-
             assert( BXDFTEX_BRDF_DIELECTRIC_SIZE_X % groupSizeX == 0 );
             assert( BXDFTEX_BRDF_DIELECTRIC_SIZE_Y % groupSizeY == 0 );
             assert( BXDFTEX_BRDF_DIELECTRIC_SIZE_Z % groupSizeZ == 0 );
@@ -392,16 +365,30 @@ SBxDFTextures BxDFTexturesBuilding::Build()
                 D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( nullptr, 0, &accumulationTexture->GetUAV(), 1 );
                 commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
 
-                for ( uint32_t jobIndex = 0; jobIndex < batchCount * 2; ++jobIndex )
+                // Leaving
+                for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
                 {
-                    D3D12_RESOURCE_BARRIER barriers[ 2 ] = 
+                    if ( batchIndex > 0 )
+                    { 
+                        // No UAV barrier for the first batch
+                        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV( accumulationTexture->GetTexture() );
+                        commandList->ResourceBarrier( 1, &barrier ); 
+                    }
+                    uint32_t constants[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 0, 0 };
+                    commandList->SetComputeRoot32BitConstants( 0, 4, constants, 0 );
+                    commandList->Dispatch( BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z / groupSizeZ );
+                }
+                // Entering
+                for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
+                {
+                    if ( batchIndex > 0 )
                     {
-                        CD3DX12_RESOURCE_BARRIER::Transition( batchConstantBuffers[ jobIndex ]->GetBuffer(),
-                            D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER ),
-                        CD3DX12_RESOURCE_BARRIER::UAV( accumulationTexture->GetTexture() ),
-                    };
-                    commandList->ResourceBarrier( jobIndex == 0 ? 1 : 2, barriers ); // No UAV barrier for the first batch
-                    commandList->SetComputeRootConstantBufferView( 0, batchConstantBuffers[ jobIndex ]->GetGPUVirtualAddress() );
+                        // No UAV barrier for the first batch
+                        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV( accumulationTexture->GetTexture() );
+                        commandList->ResourceBarrier( 1, &barrier ); 
+                    }
+                    uint32_t constants[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 1, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z };
+                    commandList->SetComputeRoot32BitConstants( 0, 4, constants, 0 );
                     commandList->Dispatch( BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z / groupSizeZ );
                 }
             }

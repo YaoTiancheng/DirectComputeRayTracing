@@ -50,7 +50,6 @@ private:
     CD3D12ComPtr<ID3D12PipelineState> m_PSO;
 
     CD3D12ResourcePtr<GPUBuffer> m_RayTracingConstantsBuffer;
-    CD3D12ResourcePtr<GPUBuffer> m_DebugConstantsBuffer;
 
     uint32_t m_TileSize;
     uint32_t m_CurrentTileIndex;

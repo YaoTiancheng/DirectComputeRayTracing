@@ -44,12 +44,6 @@ struct SRayTracingConstants
     uint32_t            padding[ 32 ]; // Padding the structure to 256B
 };
 
-struct SDebugConstants
-{
-    uint32_t m_IterationThreshold;
-    uint32_t m_Padding[ 63 ]; // Padding the structure to 256B
-};
-
 static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 15, 2 );
 
 bool CMegakernelPathTracer::Create()
@@ -68,7 +62,7 @@ bool CMegakernelPathTracer::Create()
     CD3DX12_ROOT_PARAMETER1 rootParameters[ 4 ];
     rootParameters[ 0 ].InitAsConstantBufferView( 0 );
     rootParameters[ 1 ].InitAsConstantBufferView( 1 );
-    rootParameters[ 2 ].InitAsConstantBufferView( 2 );
+    rootParameters[ 2 ].InitAsConstants( 1, 2 );
     SD3D12DescriptorTableRanges descriptorTableRanges;
     s_DescriptorTableLayout.InitRootParameter( &rootParameters[ 3 ], &descriptorTableRanges );
 
@@ -102,15 +96,6 @@ bool CMegakernelPathTracer::Create()
     if ( !m_RayTracingConstantsBuffer )
         return false;
 
-    m_DebugConstantsBuffer.Reset( GPUBuffer::Create(
-          sizeof( SDebugConstants )
-        , 0
-        , DXGI_FORMAT_UNKNOWN
-        , EGPUBufferUsage::Default
-        , EGPUBufferBindFlag_ConstantBuffer ) );
-    if ( !m_DebugConstantsBuffer )
-        return false;
-
     return true;
 }
 
@@ -119,7 +104,6 @@ void CMegakernelPathTracer::Destroy()
     m_RootSignature.Reset();
     m_PSO.Reset();
     m_RayTracingConstantsBuffer.Reset();
-    m_DebugConstantsBuffer.Reset();
 }
 
 void CMegakernelPathTracer::OnSceneLoaded()
@@ -165,36 +149,14 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
             constants->environmentLightIndex = m_Scene->m_EnvironmentLight ? (uint32_t)m_Scene->m_MeshLights.size() : LIGHT_INDEX_INVALID; // Environment light is right after the mesh lights.
 
             rayTracingConstantBufferUpload.Unmap();
+            rayTracingConstantBufferUpload.Upload();
         }
-    }
-
-    GPUBuffer::SUploadContext debugConstantBufferUpload;
-    if ( m_OutputType > 0 )
-    {
-        if ( m_DebugConstantsBuffer->AllocateUploadContext( &debugConstantBufferUpload ) )
-        {
-            SDebugConstants* constants = (SDebugConstants*)debugConstantBufferUpload.Map();
-            if ( constants )
-            {
-                constants->m_IterationThreshold = m_IterationThreshold;
-                debugConstantBufferUpload.Unmap();
-            }
-        }
-    }
-
-    if ( rayTracingConstantBufferUpload.IsValid() )
-    {
-        rayTracingConstantBufferUpload.Upload();
-    }
-    if ( debugConstantBufferUpload.IsValid() )
-    {
-        debugConstantBufferUpload.Upload();
     }
 
     // Barriers
     {
         std::vector<D3D12_RESOURCE_BARRIER> barriers;
-        barriers.reserve( 7 );
+        barriers.reserve( 6 );
 
         barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( renderContext.m_RayTracingFrameConstantBuffer->GetBuffer(),
             D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER ) );
@@ -220,11 +182,6 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
                 D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
             m_Scene->m_IsMaterialBufferRead = true;
         }
-        if ( m_OutputType > 0 )
-        { 
-            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_DebugConstantsBuffer->GetBuffer(),
-                D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER ) );
-        }
 
         commandList->ResourceBarrier( (uint32_t)barriers.size(), barriers.data() );
     }
@@ -233,7 +190,11 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
 
     commandList->SetComputeRootConstantBufferView( 0, m_RayTracingConstantsBuffer->GetGPUVirtualAddress() );
     commandList->SetComputeRootConstantBufferView( 1, renderContext.m_RayTracingFrameConstantBuffer->GetGPUVirtualAddress() );
-    commandList->SetComputeRootConstantBufferView( 2, m_DebugConstantsBuffer->GetGPUVirtualAddress() );
+    if ( m_OutputType > 0 )
+    { 
+        uint32_t iterationThreshold = m_IterationThreshold;
+        commandList->SetComputeRoot32BitConstant( 2, iterationThreshold, 0 );
+    }
 
     SD3D12DescriptorHandle environmentTextureSRV = D3D12Adapter::GetNullBufferSRV();
     if ( m_Scene->m_EnvironmentLight && m_Scene->m_EnvironmentLight->m_Texture )

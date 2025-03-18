@@ -4,6 +4,8 @@
 #include "D3D12DescriptorPoolHeap.h"
 #include "D3D12MemoryArena.h"
 
+#define BUFFER_NEED_DEFAULT_CBV 0
+
 SD3D12DescriptorHandle GPUBuffer::GetSRV( DXGI_FORMAT format, uint32_t byteStride, uint32_t elementOffset, uint32_t numElement )
 {
     SD3D12DescriptorHandle SRV;
@@ -138,7 +140,11 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
 {
     const bool hasUAV = ( bindFlags & EGPUBufferBindFlag_UnorderedAccess ) != 0;
     const bool hasSRV = ( bindFlags & EGPUBufferBindFlag_ShaderResource ) != 0;
+#if BUFFER_NEED_DEFAULT_CBV
     const bool hasCBV = ( bindFlags & EGPUBufferBindFlag_ConstantBuffer ) != 0;
+#else
+    const bool hasCBV = false;
+#endif
 
     D3D12_RESOURCE_DESC bufferDesc = {};
     bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;

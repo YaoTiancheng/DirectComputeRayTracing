@@ -12,7 +12,7 @@
 
 using namespace D3D12Util;
 
-struct SConvolutionConstant
+struct alignas( 256 ) SConvolutionConstant
 {
     uint32_t g_Resolution[ 2 ];
     float g_FilterRadius;
@@ -26,7 +26,6 @@ struct SConvolutionConstant
     float g_MitchellFactor5;
     float g_MitchellFactor6;
     uint32_t g_LanczosSincTau;
-    uint8_t padding[ 204 ];
 };
 
 static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 2, 1 );

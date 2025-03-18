@@ -28,7 +28,7 @@ static const uint32_t s_BlockDimensionCount = 2;
 
 static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 15, 9 );
 
-struct SControlConstants
+struct alignas( 256 ) SControlConstants
 {
     XMFLOAT4 g_Background;
     uint32_t g_PathCount;
@@ -36,10 +36,9 @@ struct SControlConstants
     uint32_t g_BlockCounts[ 2 ];
     uint32_t g_BlockDimension[ 2 ];
     uint32_t g_FilmDimension[ 2 ];
-    uint8_t padding[ 208 ];
 };
 
-struct SNewPathConstants
+struct alignas( 256 ) SNewPathConstants
 {
     XMFLOAT4X4 g_CameraTransform;
     uint32_t g_Resolution[ 2 ];
@@ -50,15 +49,13 @@ struct SNewPathConstants
     uint32_t g_BladeCount;
     XMFLOAT2 g_BladeVertexPos;
     float g_ApertureBaseAngle;
-    uint8_t padding[ 148 ];
 };
 
-struct SMaterialConstants
+struct alignas( 256 ) SMaterialConstants
 {
     uint32_t g_LightCount;
     uint32_t g_MaxBounceCount;
     uint32_t g_EnvironmentLightIndex;
-    uint8_t padding[ 244 ];
 };
 
 bool CWavefrontPathTracer::Create()

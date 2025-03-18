@@ -106,10 +106,9 @@ struct SRenderer
 
 SRenderer* s_Renderer = nullptr;
 
-struct RayTracingFrameConstants
+struct alignas( 256 ) RayTracingFrameConstants
 {
     uint32_t frameSeed;
-    uint32_t padding[ 63 ];
 };
 
 static void AllocImGuiDescriptor( ImGui_ImplDX12_InitInfo* info, D3D12_CPU_DESCRIPTOR_HANDLE* out_cpu_desc_handle, D3D12_GPU_DESCRIPTOR_HANDLE* out_gpu_desc_handle )

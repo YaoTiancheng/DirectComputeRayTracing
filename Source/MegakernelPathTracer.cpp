@@ -24,7 +24,7 @@ using namespace D3D12Util;
 #define STRINGIFY( s ) STRINGIFY2( s )
 #define STRINGIFY2( s ) L#s
 
-struct SRayTracingConstants
+struct alignas( 256 ) SRayTracingConstants
 {
     DirectX::XMFLOAT4X4 cameraTransform;
     DirectX::XMFLOAT2   filmSize;
@@ -41,7 +41,6 @@ struct SRayTracingConstants
     uint32_t            tileOffsetX;
     uint32_t            tileOffsetY;
     uint32_t            environmentLightIndex;
-    uint32_t            padding[ 32 ]; // Padding the structure to 256B
 };
 
 static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 15, 2 );

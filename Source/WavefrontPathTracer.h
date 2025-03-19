@@ -71,7 +71,6 @@ private:
     CD3D12ResourcePtr<GPUBuffer> m_IndirectArgumentBuffer[ 4 ];
     CD3D12ResourcePtr<GPUBuffer> m_QueueBuffers[ 4 ];
     CD3D12ResourcePtr<GPUBuffer> m_QueueCounterBuffers[ 2 ];
-    CD3D12ResourcePtr<GPUBuffer> m_QueueConstantsBuffers[ 2 ];
     CD3D12ResourcePtr<GPUBuffer> m_ControlConstantBuffer;
     CD3D12ResourcePtr<GPUBuffer> m_NewPathConstantBuffer;
     CD3D12ResourcePtr<GPUBuffer> m_MaterialConstantBuffer;

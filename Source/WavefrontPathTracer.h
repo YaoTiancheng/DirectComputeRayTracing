@@ -8,10 +8,7 @@ class CScene;
 class CWavefrontPathTracer : public CPathTracer
 {
 public:
-    explicit CWavefrontPathTracer( CScene* scene )
-        : m_Scene( scene )
-    {
-    }
+    explicit CWavefrontPathTracer( CScene* scene );
 
     virtual ~CWavefrontPathTracer()
     {
@@ -85,4 +82,5 @@ private:
 
     uint32_t m_IterationPerFrame = 2;
     uint32_t m_BlockDimensionIndex = 0;
+    uint32_t m_BarrierMode;
 };

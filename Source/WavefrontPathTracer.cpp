@@ -19,6 +19,11 @@
 using namespace DirectX;
 using namespace D3D12Util;
 
+enum EBarrierMode : uint32_t
+{
+    BarrierMode_BeforeUse = 0, BarrierMode_AfterUse = 1, BarrierMode_Split = 2
+};
+
 static const uint32_t s_WavefrontSize = 32;
 static const uint32_t s_PathPoolSize = 8192;
 static const uint32_t s_PathPoolLaneCount = s_PathPoolSize * s_WavefrontSize;
@@ -57,6 +62,12 @@ struct alignas( 256 ) SMaterialConstants
     uint32_t g_MaxBounceCount;
     uint32_t g_EnvironmentLightIndex;
 };
+
+CWavefrontPathTracer::CWavefrontPathTracer( CScene* scene )
+    : m_Scene( scene )
+    , m_BarrierMode( BarrierMode_AfterUse )
+{
+}
 
 bool CWavefrontPathTracer::Create()
 {
@@ -491,6 +502,12 @@ void CWavefrontPathTracer::OnImGUI()
         {
             m_FilmClearTrigger = true;
         }
+
+        const char* barrierModeNames[] = { "BeforeUse", "AfterUse", "Split" };
+        if ( ImGui::Combo( "Barrier Mode", (int*)&m_BarrierMode, barrierModeNames, IM_ARRAYSIZE( barrierModeNames ) ) )
+        {
+            m_FilmClearTrigger = true;
+        }
     }
 }
 
@@ -565,6 +582,14 @@ void CWavefrontPathTracer::GetBlockDimension( uint32_t* width, uint32_t* height 
 
 void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderContext, const SBxDFTextures& BxDFTextures, bool isInitialIteration )
 {
+    D3D12_RESOURCE_BARRIER_FLAGS barrierFlagBegin = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    D3D12_RESOURCE_BARRIER_FLAGS barrierFlagEnd = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    if ( m_BarrierMode == BarrierMode_Split )
+    {
+        barrierFlagBegin = D3D12_RESOURCE_BARRIER_FLAG_BEGIN_ONLY;
+        barrierFlagEnd = D3D12_RESOURCE_BARRIER_FLAG_END_ONLY;
+    }
+
     ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
 
     SCOPED_RENDER_ANNOTATION( commandList, L"Iteration" );
@@ -897,7 +922,7 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
     // Barrier
     {
         std::vector<D3D12_RESOURCE_BARRIER> barriers;
-        barriers.reserve( 2 );
+        barriers.reserve( 8 );
 
         barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_QueueCounterBuffers[ 0 ]->GetBuffer(),
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE ) );
@@ -906,6 +931,26 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
         {
             barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_IndirectArgumentBuffer[ (int)EShaderKernel::ExtensionRayCast ]->GetBuffer(),
                 D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS ) );
+        }
+
+        if ( m_BarrierMode == BarrierMode_AfterUse || m_BarrierMode == BarrierMode_Split )
+        {
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_RayBuffer->GetBuffer(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, barrierFlagBegin ) );
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_QueueBuffers[ (int)EShaderKernel::ExtensionRayCast ]->GetBuffer(),
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, barrierFlagBegin ) );
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_RayHitBuffer->GetBuffer(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, barrierFlagBegin ) );
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_ShadowRayBuffer->GetBuffer(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, barrierFlagBegin ) );
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_QueueBuffers[ (int)EShaderKernel::ShadowRayCast ]->GetBuffer(),
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, barrierFlagBegin ) );
+
+            if ( !isInitialIteration )
+            {
+                barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_IndirectArgumentBuffer[ (int)EShaderKernel::ShadowRayCast ]->GetBuffer(),
+                    D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, barrierFlagBegin ) ); // Could begin earlier
+            }
         }
 
         commandList->ResourceBarrier( (uint32_t)barriers.size(), barriers.data() );
@@ -925,11 +970,14 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
     }
 
     // Barriers
-    if ( !isInitialIteration )
-    {
-        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( m_IndirectArgumentBuffer[ (int)EShaderKernel::ShadowRayCast ]->GetBuffer(),
-            D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS );
-        commandList->ResourceBarrier( 1, &barrier );
+    if ( m_BarrierMode == BarrierMode_BeforeUse || m_BarrierMode == BarrierMode_Split )
+    { 
+        if ( !isInitialIteration )
+        {
+            D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( m_IndirectArgumentBuffer[ (int)EShaderKernel::ShadowRayCast ]->GetBuffer(),
+                D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, barrierFlagEnd );
+            commandList->ResourceBarrier( 1, &barrier );
+        }
     }
 
     // Fill indirect args for shadow raycast
@@ -948,12 +996,22 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
     // Barriers
     {
         std::vector<D3D12_RESOURCE_BARRIER> barriers;
-        barriers.reserve( 4 );
+        barriers.reserve( 5 );
 
-        barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_RayBuffer->GetBuffer(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE ) );
-        barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_QueueBuffers[ (int)EShaderKernel::ExtensionRayCast ]->GetBuffer(),
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE ) );
-        barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_RayHitBuffer->GetBuffer(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS ) );
+        if ( m_BarrierMode == BarrierMode_BeforeUse || m_BarrierMode == BarrierMode_Split )
+        { 
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_RayBuffer->GetBuffer(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, barrierFlagEnd ) );
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_QueueBuffers[ (int)EShaderKernel::ExtensionRayCast ]->GetBuffer(),
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, barrierFlagEnd ) );
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_RayHitBuffer->GetBuffer(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, barrierFlagEnd ) );
+        }
+        if ( m_BarrierMode == BarrierMode_AfterUse || m_BarrierMode == BarrierMode_Split )
+        {
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_IndirectArgumentBuffer[ (int)EShaderKernel::ShadowRayCast ]->GetBuffer(),
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, barrierFlagBegin ) );
+        }
         barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_IndirectArgumentBuffer[ (int)EShaderKernel::ExtensionRayCast ]->GetBuffer(), 
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT ) );
 
@@ -985,15 +1043,25 @@ void CWavefrontPathTracer::RenderOneIteration( const SRenderContext& renderConte
     // Barriers
     {
         std::vector<D3D12_RESOURCE_BARRIER> barriers;
+        barriers.reserve( 4 );
 
-        barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_ShadowRayBuffer->GetBuffer(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE ) );
-        barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_QueueBuffers[ (int)EShaderKernel::ShadowRayCast ]->GetBuffer(),
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE ) );
+        if ( m_BarrierMode == BarrierMode_BeforeUse || m_BarrierMode == BarrierMode_Split )
+        { 
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_ShadowRayBuffer->GetBuffer(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, barrierFlagEnd ) );
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_QueueBuffers[ (int)EShaderKernel::ShadowRayCast ]->GetBuffer(),
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, barrierFlagEnd ) );
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_IndirectArgumentBuffer[ (int)EShaderKernel::ShadowRayCast ]->GetBuffer(),
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, barrierFlagEnd ) );
+        }
+#if 0
         barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::UAV( m_FlagsBuffer->GetBuffer() ) );
-        barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_IndirectArgumentBuffer[ (int)EShaderKernel::ShadowRayCast ]->GetBuffer(),
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT ) );
-
-        commandList->ResourceBarrier( (uint32_t)barriers.size(), barriers.data() );
+#endif
+        
+        if ( !barriers.empty() )
+        {
+            commandList->ResourceBarrier( (uint32_t)barriers.size(), barriers.data() );
+        }
     }
 
     // Shadow raycast

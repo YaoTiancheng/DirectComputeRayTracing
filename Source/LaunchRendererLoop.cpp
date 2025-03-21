@@ -101,7 +101,7 @@ bool SRenderer::Init()
         }
     }
 
-    if ( !m_SampleConvolutionRenderer.Init() )
+    if ( !InitSampleConvolution() )
         return false;
 
     if ( !m_PostProcessing.Init() )
@@ -335,7 +335,7 @@ void SRenderer::RenderOneFrame()
 
         if ( m_PathTracer[ m_ActivePathTracerIndex ]->IsImageComplete() || renderContext.m_IsSmallResolutionEnabled )
         {
-            m_SampleConvolutionRenderer.Execute( renderContext, m_Scene );
+            ExecuteSampleConvolution( renderContext );
 
             m_PostProcessing.ExecuteLuminanceCompute( m_Scene, renderContext );
 

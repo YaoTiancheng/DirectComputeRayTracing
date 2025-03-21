@@ -119,7 +119,6 @@
     <ClInclude Include="Source\D3D12DescriptorPoolHeap.h" />
     <ClInclude Include="Source\D3D12DescriptorUtil.h" />
     <ClInclude Include="Source\MathHelper.h" />
-    <ClInclude Include="Source\SampleConvolutionRenderer.h" />
     <ClInclude Include="Source\D3D12Adapter.h" />
     <ClInclude Include="Source\Application.h" />
     <ClInclude Include="Resources\Resource.h" />
@@ -157,7 +156,7 @@
     <ClCompile Include="Source\MathHelper.cpp" />
     <ClCompile Include="Source\SceneRayTrace.cpp" />
     <ClCompile Include="Source\SceneXMLLoading.cpp" />
-    <ClCompile Include="Source\SampleConvolutionRenderer.cpp" />
+    <ClCompile Include="Source\SampleConvolution.cpp" />
     <ClCompile Include="Source\D3D12Adapter.cpp" />
     <ClCompile Include="Source\Application.cpp" />
     <ClCompile Include="Source\Logging.cpp" />

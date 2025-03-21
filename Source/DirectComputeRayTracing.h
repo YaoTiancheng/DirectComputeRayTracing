@@ -4,7 +4,6 @@
 #include "Rectangle.h"
 #include "Timers.h"
 #include "BxDFTexturesBuilding.h"
-#include "SampleConvolutionRenderer.h"
 #include "PostProcessingRenderer.h"
 
 class CPathTracer;
@@ -47,6 +46,10 @@ public:
 
         void OnImGUI( SRenderContext* renderContext );
 
+        bool InitSampleConvolution();
+
+        void ExecuteSampleConvolution( const SRenderContext& renderContext );
+
         struct MainLoopPrivate;
 
         HWND m_hWnd;
@@ -66,8 +69,11 @@ public:
         CScene m_Scene;
         CPathTracer* m_PathTracer[ 2 ] = { nullptr, nullptr };
         uint32_t m_ActivePathTracerIndex = 0;
-        CSampleConvolutionRenderer m_SampleConvolutionRenderer;
         PostProcessingRenderer m_PostProcessing;
+
+        int32_t m_SampleConvolutionFilterIndex = -1;
+        ComPtr<ID3D12RootSignature> m_SampleConvolutionRootSignature;
+        std::shared_ptr<ID3D12PipelineState> m_SampleConvolutionPSO;
 
         enum class EFrameSeedType { FrameIndex = 0, SampleCount = 1, Fixed = 2, _Count = 3 };
         EFrameSeedType m_FrameSeedType = EFrameSeedType::SampleCount;

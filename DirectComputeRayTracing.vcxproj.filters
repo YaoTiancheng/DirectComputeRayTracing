@@ -102,9 +102,6 @@
     <ClInclude Include="Source\ScopedRenderAnnotation.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Source\SampleConvolutionRenderer.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Source\MathHelper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -191,7 +188,7 @@
     <ClCompile Include="Source\WavefrontPathTracer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Source\SampleConvolutionRenderer.cpp">
+    <ClCompile Include="Source\SampleConvolution.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\SceneXMLLoading.cpp">

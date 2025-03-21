@@ -154,6 +154,24 @@ bool D3D12Adapter::Init( HWND hWnd )
         return false;
     }
 
+    // Requires shader mode 6.6
+    {
+        D3D12_FEATURE_DATA_SHADER_MODEL featureData;
+        featureData.HighestShaderModel = D3D_SHADER_MODEL_6_6;
+        HRESULT hr =  D3D12Adapter::GetDevice()->CheckFeatureSupport( D3D12_FEATURE_SHADER_MODEL, &featureData, sizeof( featureData ) );
+        if ( FAILED( hr ) )
+        {
+            LOG_STRING_FORMAT( "Failed to check shader model support with result %x.\n", hr );
+            return false;
+        }
+
+        if ( featureData.HighestShaderModel < D3D_SHADER_MODEL_6_6 )
+        {
+            LOG_STRING_FORMAT( "Requires shader model 6.6, but highest supported shader model is %x.\n", (uint32_t)featureData.HighestShaderModel );
+            return false;
+        }
+    }
+
     // Describe and create the command queue.
     D3D12_COMMAND_QUEUE_DESC queueDesc = {};
     queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;

@@ -111,9 +111,6 @@
     <ClInclude Include="Source\Constants.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Source\ImGuiHelper.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Source\BxDFTexturesBuilding.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -179,7 +176,7 @@
     <ClCompile Include="Source\Logging.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Source\DirectComputeRayTracing.cpp">
+    <ClCompile Include="Source\LaunchRendererLoop.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\MegakernelPathTracer.cpp">
@@ -212,7 +209,7 @@
     <ClCompile Include="Source\SceneRayTrace.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Source\ImGuiHelper.cpp">
+    <ClCompile Include="Source\ImGui.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\BxDFTexturesBuilding.cpp">

@@ -1,115 +1,33 @@
 #include "stdafx.h"
 #include "DirectComputeRayTracing.h"
 #include "D3D12Adapter.h"
-#include "D3D12Resource.h"
 #include "D3D12GPUDescriptorHeap.h"
-#include "CommandLineArgs.h"
-#include "GPUTexture.h"
-#include "GPUBuffer.h"
-#include "Logging.h"
-#include "StringConversion.h"
-#include "Camera.h"
-#include "PostProcessingRenderer.h"
-#include "Timers.h"
-#include "Rectangle.h"
-#include "BxDFTexturesBuilding.h"
-#include "RenderContext.h"
-#include "MegakernelPathTracer.h"
-#include "WavefrontPathTracer.h"
-#include "Scene.h"
-#include "MessageBox.h"
 #include "ScopedRenderAnnotation.h"
-#include "SampleConvolutionRenderer.h"
-#include "Constants.h"
+#include "PathTracer.h"
+#include "RenderContext.h"
+#include "MessageBox.h"
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_dx12.h"
 #include "imgui/imgui_impl_win32.h"
-#include "ImGuiHelper.h"
-#include "../Shaders/SumLuminanceDef.inc.hlsl"
 
 using namespace DirectX;
+using SRenderer = CDirectComputeRayTracing::SRenderer;
 
-struct SRenderer
+static bool DragFloat3RadianInDegree( const char* label, float v[3], float v_speed = 1.f, float v_min = 0.f, float v_max = 0.f, const char* format = "%.3f", ImGuiSliderFlags flags = 0 )
 {
-    explicit SRenderer( HWND hWnd )
-        : m_hWnd( hWnd )
-    {
+    XMFLOAT3 eulerAnglesDeg;
+    eulerAnglesDeg.x = XMConvertToDegrees( v[ 0 ] );
+    eulerAnglesDeg.y = XMConvertToDegrees( v[ 1 ] );
+    eulerAnglesDeg.z = XMConvertToDegrees( v[ 2 ] );
+    if ( ImGui::DragFloat3( label, (float*)&eulerAnglesDeg, v_speed, v_min, v_max, format, flags ) )
+    { 
+        v[ 0 ] = XMConvertToRadians( eulerAnglesDeg.x );
+        v[ 1 ] = XMConvertToRadians( eulerAnglesDeg.y );
+        v[ 2 ] = XMConvertToRadians( eulerAnglesDeg.z );
+        return true;
     }
-
-    ~SRenderer();
-
-    bool OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam );
-
-    bool Init();
-
-    bool LoadScene( const char* filepath, bool reset );
-
-    void DispatchRayTracing( SRenderContext* renderContext );
-
-    void RenderOneFrame();
-
-    void UploadFrameConstantBuffer();
-
-    void ClearFilmTexture();
-
-    bool HandleFilmResolutionChange();
-
-    void UpdateRenderViewport();
-
-    void ResizeBackbuffer( uint32_t backbufferWidth, uint32_t backbufferHeight );
-
-    void OnImGUI( SRenderContext* renderContext );
-
-    HWND m_hWnd;
-
-    uint32_t m_FrameSeed = 0;
-
-    bool m_IsLightGPUBufferDirty;
-    bool m_IsMaterialGPUBufferDirty;
-    bool m_IsFilmDirty = true;
-    bool m_IsLastFrameFilmDirty = true;
-
-    SBxDFTextures m_BxDFTextures;
-    std::vector<GPUTexturePtr> m_sRGBBackbuffers;
-    std::vector<GPUTexturePtr> m_LinearBackbuffers;
-    GPUBufferPtr m_RayTracingFrameConstantBuffer;
-
-    CScene m_Scene;
-    CPathTracer* m_PathTracer[ 2 ] = { nullptr, nullptr };
-    uint32_t m_ActivePathTracerIndex = 0;
-    CSampleConvolutionRenderer m_SampleConvolutionRenderer;
-    PostProcessingRenderer m_PostProcessing;
-
-    enum class EFrameSeedType { FrameIndex = 0, SampleCount = 1, Fixed = 2, _Count = 3 };
-    EFrameSeedType m_FrameSeedType = EFrameSeedType::SampleCount;
-
-    uint32_t m_NewResolutionWidth;
-    uint32_t m_NewResolutionHeight;
-    uint32_t m_SmallResolutionWidth = 480;
-    uint32_t m_SmallResolutionHeight = 270;
-
-    FrameTimer m_FrameTimer;
-
-    SRectangle m_RenderViewport;
-
-    bool m_RayTracingHasHit = false;
-    SRayHit m_RayTracingHit;
-    uint32_t m_RayTracingPixelPos[ 2 ] = { 0, 0 };
-    float m_RayTracingSubPixelPos[ 2 ] = { 0.f, 0.f };
-
-    uint32_t m_SPP;
-    uint32_t m_CursorPixelPosOnRenderViewport[ 2 ];
-    uint32_t m_CursorPixelPosOnFilm[ 2 ];
-    bool m_ShowUI = true;
-    bool m_ShowRayTracingUI = false;
-};
-
-SRenderer* s_Renderer = nullptr;
-
-struct alignas( 256 ) RayTracingFrameConstants
-{
-    uint32_t frameSeed;
-};
+    return false;
+}
 
 static void AllocImGuiDescriptor( ImGui_ImplDX12_InitInfo* info, D3D12_CPU_DESCRIPTOR_HANDLE* out_cpu_desc_handle, D3D12_GPU_DESCRIPTOR_HANDLE* out_gpu_desc_handle )
 {
@@ -123,7 +41,14 @@ static void FreeImGuiDescriptor( ImGui_ImplDX12_InitInfo* info, D3D12_CPU_DESCRI
     // Do nothing
 }
 
-static bool InitImGui( HWND hWnd )
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam );
+
+bool SRenderer::ProcessImGuiWindowMessage( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
+{
+    return ImGui_ImplWin32_WndProcHandler( hWnd, msg, wParam, lParam );
+}
+
+bool SRenderer::InitImGui( HWND hWnd )
 {
     IMGUI_CHECKVERSION();
 
@@ -160,444 +85,27 @@ static bool InitImGui( HWND hWnd )
     return true;
 }
 
-static void ShutDownImGui()
+void SRenderer::ShutdownImGui()
 {
     ImGui_ImplDX12_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
 }
 
-static void ImGUINewFrame()
+void SRenderer::DrawImGui( ID3D12GraphicsCommandList* commandList )
 {
-    ImGui_ImplDX12_NewFrame();
-    ImGui_ImplWin32_NewFrame();
-    ImGui::NewFrame();
-}
-
-CDirectComputeRayTracing::CDirectComputeRayTracing( HWND hWnd )
-{
-    s_Renderer = new SRenderer( hWnd );
-}
-
-CDirectComputeRayTracing::~CDirectComputeRayTracing()
-{
-    D3D12Adapter::WaitForGPU( false ); // Wait for the latest frame (the last frame) to finish
-
-    delete s_Renderer;
-    ShutDownImGui();
-
-    CD3D12Resource::FlushDeleteAll();
-    D3D12Adapter::Destroy();
-}
-
-bool CDirectComputeRayTracing::Init()
-{
-    if ( !D3D12Adapter::Init( s_Renderer->m_hWnd ) )
-        return false;
-
-    if ( !InitImGui( s_Renderer->m_hWnd ) )
-        return false;
-
-    return s_Renderer->Init();
-}
-
-void CDirectComputeRayTracing::RenderOneFrame()
-{
-    s_Renderer->RenderOneFrame();
-}
-
-// Forward declare message handler from imgui_impl_win32.cpp
-extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam );
-
-bool CDirectComputeRayTracing::OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam )
-{
-    if ( ImGui_ImplWin32_WndProcHandler( s_Renderer->m_hWnd, message, wParam, lParam ) )
-        return true;
-
-    if ( message == WM_SIZE )
-    {
-        UINT width = LOWORD( lParam );
-        UINT height = HIWORD( lParam );
-        s_Renderer->ResizeBackbuffer( width, height );
-        s_Renderer->UpdateRenderViewport();
-    }
-
-    return s_Renderer->OnWndMessage( message, wParam, lParam );
-}
-
-SRenderer::~SRenderer()
-{
-    m_PathTracer[ m_ActivePathTracerIndex ]->Destroy();
-    for ( auto& it : m_PathTracer )
-    {
-        delete it;
-    }
-}
-
-bool SRenderer::OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam )
-{
-    return m_Scene.m_Camera.OnWndMessage( message, wParam, lParam );
-}
-
-bool SRenderer::Init()
-{
-    CD3D12Resource::CreateDeferredDeleteQueue();
-
-    m_PathTracer[ 0 ] = new CMegakernelPathTracer( &m_Scene );
-    m_PathTracer[ 1 ] = new CWavefrontPathTracer( &m_Scene );
-
-    if ( !m_PathTracer[ m_ActivePathTracerIndex ]->Create() )
-    {
-        return false;
-    }
-
-    m_BxDFTextures = BxDFTexturesBuilding::Build();
-    if ( !m_BxDFTextures.AllTexturesSet() )
-    {
-        return false;
-    }
-
-    m_RayTracingFrameConstantBuffer.reset( GPUBuffer::Create( 
-          sizeof( RayTracingFrameConstants )
-        , 0
-        , DXGI_FORMAT_UNKNOWN
-        , EGPUBufferUsage::Default
-        , EGPUBufferBindFlag_ConstantBuffer ) );
-    if ( !m_RayTracingFrameConstantBuffer )
-        return false;
-
-    m_sRGBBackbuffers.resize( D3D12Adapter::GetBackbufferCount() );
-    m_LinearBackbuffers.resize( D3D12Adapter::GetBackbufferCount() );
-    for ( uint32_t index = 0; index < D3D12Adapter::GetBackbufferCount(); ++index )
-    { 
-        m_sRGBBackbuffers[ index ].reset( GPUTexture::CreateFromSwapChain( DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, index ) );
-        if ( !m_sRGBBackbuffers[ index ] )
-        { 
-            return false;
-        }
-
-        m_LinearBackbuffers[ index ].reset( GPUTexture::CreateFromSwapChain( index ) );
-        if ( !m_LinearBackbuffers[ index ] )
-        { 
-            return false;
-        }
-    }
-
-    if ( !m_SampleConvolutionRenderer.Init() )
-        return false;
-
-    if ( !m_PostProcessing.Init() )
-        return false;
-
-    LoadScene( CommandLineArgs::Singleton()->GetFilename().c_str(), true );
-
-    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
-    if ( FAILED( commandList->Close() ) )
-    {
-        return false;
-    }
-    ID3D12CommandList* commandLists[] = { commandList };
-    D3D12Adapter::GetCommandQueue()->ExecuteCommandLists( 1, commandLists );
-    D3D12Adapter::WaitForGPU();
-
-    return true;
-}
-
-bool SRenderer::LoadScene( const char* filepath, bool reset )
-{
-    m_IsFilmDirty = true; // Clear film in case scene reset failed and ray tracing being disabled.
-
-    if ( reset )
-    {
-        m_Scene.Reset();
-    }
-
-    bool loadSceneResult = m_Scene.LoadFromFile( filepath );
-    if ( !loadSceneResult )
-    {
-        return false;
-    }
-
-    m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
-
-    if ( !HandleFilmResolutionChange() )
-    {
-        return false;
-    }
-
-    m_NewResolutionWidth = m_Scene.m_ResolutionWidth;
-    m_NewResolutionHeight = m_Scene.m_ResolutionHeight;
-
-    m_IsMaterialGPUBufferDirty = true;
-    m_IsLightGPUBufferDirty = true;
-
-    m_RayTracingHasHit = false;
-
-    return true;
-}
-
-void SRenderer::DispatchRayTracing( SRenderContext* renderContext )
-{
-    m_IsFilmDirty = m_IsFilmDirty || m_IsLightGPUBufferDirty || m_IsMaterialGPUBufferDirty || m_Scene.m_Camera.IsDirty() || m_PathTracer[ m_ActivePathTracerIndex ]->AcquireFilmClearTrigger();
-
-    renderContext->m_IsResolutionChanged = ( m_IsFilmDirty != m_IsLastFrameFilmDirty );
-    renderContext->m_IsSmallResolutionEnabled = m_IsFilmDirty;
-
-    m_IsLastFrameFilmDirty = m_IsFilmDirty;
-
-    renderContext->m_CurrentResolutionWidth = renderContext->m_IsSmallResolutionEnabled ? m_SmallResolutionWidth : m_Scene.m_ResolutionWidth;
-    renderContext->m_CurrentResolutionRatio = (float)renderContext->m_CurrentResolutionWidth / m_Scene.m_ResolutionWidth;
-    renderContext->m_CurrentResolutionHeight = renderContext->m_IsSmallResolutionEnabled ? m_SmallResolutionHeight : m_Scene.m_ResolutionHeight;
-
-    if ( m_IsFilmDirty || renderContext->m_IsResolutionChanged )
-    {
-        // Transition the film texture to RTV
-        if ( m_Scene.m_FilmTextureStates != D3D12_RESOURCE_STATE_RENDER_TARGET )
-        {
-            D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( m_Scene.m_FilmTexture->GetTexture(),
-                m_Scene.m_FilmTextureStates, D3D12_RESOURCE_STATE_RENDER_TARGET );
-            D3D12Adapter::GetCommandList()->ResourceBarrier( 1, &barrier );
-
-            m_Scene.m_FilmTextureStates = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        }
-
-        ClearFilmTexture();
-
-        if ( m_FrameSeedType == EFrameSeedType::SampleCount )
-        {
-            m_FrameSeed = 0;
-        }
-
-        m_SPP = 0;
-
-        m_PathTracer[ m_ActivePathTracerIndex ]->ResetImage();
-    }
-
-    if ( m_IsLightGPUBufferDirty )
-    {
-        m_Scene.UpdateLightGPUData();
-    }
-
-    if ( m_IsMaterialGPUBufferDirty )
-    {
-        m_Scene.UpdateMaterialGPUData();
-    }
-
-    UploadFrameConstantBuffer();
-
-    m_PathTracer[ m_ActivePathTracerIndex ]->Render( *renderContext, m_BxDFTextures );
-
-    if ( m_PathTracer[ m_ActivePathTracerIndex ]->IsImageComplete() )
-    {
-        if ( m_FrameSeedType != EFrameSeedType::Fixed )
-        {
-            m_FrameSeed++;
-        }
-
-        ++m_SPP;
-    }
-    
-    m_Scene.m_Camera.ClearDirty();
-    m_IsLightGPUBufferDirty = false;
-    m_IsMaterialGPUBufferDirty = false;
-    m_IsFilmDirty = false;
-}
-
-void SRenderer::RenderOneFrame()
-{
-    m_FrameTimer.BeginFrame();
-
-    SRenderContext renderContext;
-    renderContext.m_EnablePostFX = true;
-    renderContext.m_RayTracingFrameConstantBuffer = m_RayTracingFrameConstantBuffer;
-
-    D3D12Adapter::BeginCurrentFrame();
-
-    D3D12_VIEWPORT viewport;
-    D3D12_RECT scissorRect;
-    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
-    SD3D12DescriptorHandle RTV;
-
-    if ( m_Scene.m_HasValidScene )
-    { 
-        m_Scene.m_Camera.Update( m_FrameTimer.GetCurrentFrameDeltaTime() );
-
-        DispatchRayTracing( &renderContext );
-
-        if ( m_PathTracer[ m_ActivePathTracerIndex ]->IsImageComplete() || renderContext.m_IsSmallResolutionEnabled )
-        {
-            m_SampleConvolutionRenderer.Execute( renderContext, m_Scene );
-
-            m_PostProcessing.ExecuteLuminanceCompute( m_Scene, renderContext );
-
-            RTV = m_Scene.m_RenderResultTexture->GetRTV();
-            commandList->OMSetRenderTargets( 1, &RTV.CPU, true, nullptr );
-
-            viewport = { 0.0f, 0.0f, (float)m_Scene.m_ResolutionWidth, (float)m_Scene.m_ResolutionHeight, 0.0f, 1.0f };
-            scissorRect = CD3DX12_RECT( 0, 0, m_Scene.m_ResolutionWidth, m_Scene.m_ResolutionHeight );
-            commandList->RSSetViewports( 1, &viewport );
-            commandList->RSSetScissorRects( 1, &scissorRect );
-
-            m_PostProcessing.ExecutePostFX( renderContext, m_Scene );
-        }
-    }
-
-    const uint32_t backbufferIndex = D3D12Adapter::GetBackbufferIndex();
-
-    // Transition the current backbuffer
-    {
-        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( m_sRGBBackbuffers[ backbufferIndex ]->GetTexture(),
-            D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET );
-        commandList->ResourceBarrier( 1, &barrier );
-    }
-
-    RTV = m_sRGBBackbuffers[ backbufferIndex ]->GetRTV();
-    commandList->OMSetRenderTargets( 1, &RTV.CPU, true, nullptr );
-
-    DXGI_SWAP_CHAIN_DESC swapChainDesc;
-    D3D12Adapter::GetSwapChain()->GetDesc( &swapChainDesc );
-    viewport = { 0.0f, 0.0f, (float)swapChainDesc.BufferDesc.Width, (float)swapChainDesc.BufferDesc.Height, 0.0f, 1.0f };
-    scissorRect = CD3DX12_RECT( 0, 0, swapChainDesc.BufferDesc.Width, swapChainDesc.BufferDesc.Height );
-    commandList->RSSetViewports( 1, &viewport );
-    commandList->RSSetScissorRects( 1, &scissorRect );
-
-    XMFLOAT4 clearColor = { 0.0f, 0.0f, 0.0f, 0.0f };
-    commandList->ClearRenderTargetView( RTV.CPU, (float*)&clearColor, 0, nullptr );
-
-    if ( m_Scene.m_HasValidScene )
-    {
-        viewport = { (float)m_RenderViewport.m_TopLeftX, (float)m_RenderViewport.m_TopLeftY, (float)m_RenderViewport.m_Width, (float)m_RenderViewport.m_Height, 0.0f, 1.0f };
-        scissorRect = CD3DX12_RECT( m_RenderViewport.m_TopLeftX, m_RenderViewport.m_TopLeftY,
-            m_RenderViewport.m_TopLeftX + m_RenderViewport.m_Width, m_RenderViewport.m_TopLeftY + m_RenderViewport.m_Height );
-        commandList->RSSetViewports( 1, &viewport );
-        commandList->RSSetScissorRects( 1, &scissorRect );
-
-        m_PostProcessing.ExecuteCopy( m_Scene );
-    }
-
-    ImGUINewFrame();
-    OnImGUI( &renderContext );
     ImGui::Render();
 
-    RTV = m_LinearBackbuffers[ backbufferIndex ]->GetRTV();
-    commandList->OMSetRenderTargets( 1, &RTV.CPU, true, nullptr );
-
-    {
-        SCOPED_RENDER_ANNOTATION( commandList, L"ImGUI" );
-        ImGui_ImplDX12_RenderDrawData( ImGui::GetDrawData(), commandList );
-    }
-
-    commandList->OMSetRenderTargets( 0, nullptr, true, nullptr );
-
-    // Transition the current backbuffer
-    {
-        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( m_sRGBBackbuffers[ backbufferIndex ]->GetTexture(),
-            D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT );
-        commandList->ResourceBarrier( 1, &barrier );
-    }
-
-    HRESULT hr = commandList->Close();
-    if ( FAILED( hr ) )
-    {
-        LOG_STRING_FORMAT( "CommandList close failure: %x\n", hr );
-    }
-
-    ID3D12CommandList* commandLists[] = { commandList };
-    D3D12Adapter::GetCommandQueue()->ExecuteCommandLists( 1, commandLists );
-    D3D12Adapter::Present( 0 );
-    D3D12Adapter::MoveToNextFrame();
-
-    CD3D12Resource::FlushDelete();
-
-    // State decay to common state
-    m_Scene.m_IsLightBufferRead = true;
-    m_Scene.m_IsMaterialBufferRead = true;
-}
-
-void SRenderer::UploadFrameConstantBuffer()
-{
-    GPUBuffer::SUploadContext context = {};
-    if ( m_RayTracingFrameConstantBuffer->AllocateUploadContext( &context ) )
-    {
-        RayTracingFrameConstants* constants = (RayTracingFrameConstants*)context.Map();
-        if ( constants )
-        {
-            constants->frameSeed = m_FrameSeed;
-            context.Unmap();
-            context.Upload(); // No barrier needed because of implicit state promotion
-        }
-    }
-}
-
-void SRenderer::ClearFilmTexture()
-{
-    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
-    const float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-    commandList->ClearRenderTargetView( m_Scene.m_FilmTexture->GetRTV().CPU, clearColor, 0, nullptr );
-}
-
-bool SRenderer::HandleFilmResolutionChange()
-{
-    if ( !m_PostProcessing.OnFilmResolutionChange( m_Scene.m_ResolutionWidth, m_Scene.m_ResolutionHeight ) )
-    {
-        return false;
-    }
-
-    UpdateRenderViewport();
-
-    // Aspect ratio might change due to rounding error, but this is neglectable
-    m_SmallResolutionWidth = std::max( 1u, (uint32_t)std::roundf( m_Scene.m_ResolutionWidth * 0.25f ) );
-    m_SmallResolutionHeight = std::max( 1u, (uint32_t)std::roundf( m_Scene.m_ResolutionHeight * 0.25f ) );
-
-    return true;
-}
-
-void SRenderer::UpdateRenderViewport()
-{
-    DXGI_SWAP_CHAIN_DESC swapChainDesc;
-    D3D12Adapter::GetSwapChain()->GetDesc( &swapChainDesc );
-
-    uint32_t renderWidth = m_Scene.m_ResolutionWidth;
-    uint32_t renderHeight = m_Scene.m_ResolutionHeight;
-    float scale = (float)swapChainDesc.BufferDesc.Width / renderWidth;
-    float desiredViewportHeight = renderHeight * scale;
-    if ( desiredViewportHeight > swapChainDesc.BufferDesc.Height )
-    {
-        scale = (float)swapChainDesc.BufferDesc.Height / renderHeight;
-    }
-
-    m_RenderViewport.m_Width = uint32_t( renderWidth * scale );
-    m_RenderViewport.m_Height = uint32_t( renderHeight * scale );
-    m_RenderViewport.m_TopLeftX = uint32_t( (swapChainDesc.BufferDesc.Width - m_RenderViewport.m_Width ) * 0.5f );
-    m_RenderViewport.m_TopLeftY = uint32_t( (swapChainDesc.BufferDesc.Height - m_RenderViewport.m_Height ) * 0.5f );
-}
-
-void SRenderer::ResizeBackbuffer( uint32_t backbufferWidth, uint32_t backbufferHeight )
-{
-    D3D12Adapter::WaitForGPU( false ); // Wait for the latest frame (the last frame) to finish
-
-    for ( GPUTexturePtr& backbuffer : m_sRGBBackbuffers )
-    {
-        backbuffer.reset();
-    }
-    for ( GPUTexturePtr& backbuffer : m_LinearBackbuffers )
-    {
-        backbuffer.reset();
-    }
-
-    D3D12Adapter::ResizeSwapChainBuffers( backbufferWidth, backbufferHeight );
-
-    m_sRGBBackbuffers.resize( D3D12Adapter::GetBackbufferCount() );
-    m_LinearBackbuffers.resize( D3D12Adapter::GetBackbufferCount() );
-    for ( uint32_t index = 0; index < D3D12Adapter::GetBackbufferCount(); ++index )
-    {
-        m_sRGBBackbuffers[ index ].reset( GPUTexture::CreateFromSwapChain( DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, index ) );
-        m_LinearBackbuffers[ index ].reset( GPUTexture::CreateFromSwapChain( index ) );
-    }
+    SCOPED_RENDER_ANNOTATION( commandList, L"ImGUI" );
+    ImGui_ImplDX12_RenderDrawData( ImGui::GetDrawData(), commandList );
 }
 
 void SRenderer::OnImGUI( SRenderContext* renderContext )
 {
+    ImGui_ImplDX12_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
+
     if ( ImGui::IsKeyPressed( ImGuiKey_F1, false ) )
     {
         m_ShowUI = !m_ShowUI;
@@ -892,7 +400,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
                 if ( selection->m_IsDirectionalLight )
                 {
-                    if ( ImGuiHelper::DragFloat3RadianInDegree( "Euler Angles", (float*)&selection->m_EulerAngles, 1.f ) )
+                    if ( DragFloat3RadianInDegree( "Euler Angles", (float*)&selection->m_EulerAngles, 1.f ) )
                         m_IsLightGPUBufferDirty = true;
 
                     XMFLOAT3 direction = selection->CalculateDirection();
@@ -1134,5 +642,3 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
         }
     }
 }
-
-

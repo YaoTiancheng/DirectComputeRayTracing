@@ -4,7 +4,6 @@
 #include "Rectangle.h"
 #include "Timers.h"
 #include "BxDFTexturesBuilding.h"
-#include "PostProcessingRenderer.h"
 
 class CPathTracer;
 struct SRenderContext;
@@ -50,6 +49,20 @@ public:
 
         void ExecuteSampleConvolution( const SRenderContext& renderContext );
 
+        bool InitPostProcessing();
+
+        void ExecutePostProcessing( const SRenderContext& renderContext );
+
+        void ExecuteCopy();
+
+        bool OnPostProcessingImGui();
+
+        bool InitSceneLuminance();
+
+        bool ResizeSceneLuminanceInputResolution( uint32_t resolutionWidth, uint32_t resolutionHeight );
+
+        void DispatchSceneLuminanceCompute( const SRenderContext& renderContext );
+
         HWND m_hWnd;
 
         uint32_t m_FrameSeed = 0;
@@ -67,11 +80,32 @@ public:
         CScene m_Scene;
         CPathTracer* m_PathTracer[ 2 ] = { nullptr, nullptr };
         uint32_t m_ActivePathTracerIndex = 0;
-        PostProcessingRenderer m_PostProcessing;
 
         int32_t m_SampleConvolutionFilterIndex = -1;
         ComPtr<ID3D12RootSignature> m_SampleConvolutionRootSignature;
         std::shared_ptr<ID3D12PipelineState> m_SampleConvolutionPSO;
+
+        ComPtr<ID3D12RootSignature> m_SceneLuminanceRootSignature;
+        ComPtr<ID3D12PipelineState> m_SumLuminanceTo1DPSO;
+        ComPtr<ID3D12PipelineState> m_SumLuminanceToSinglePSO;
+
+        CD3D12ResourcePtr<GPUBuffer> m_SumLuminanceBuffer0;
+        CD3D12ResourcePtr<GPUBuffer> m_SumLuminanceBuffer1;
+        GPUBuffer* m_LuminanceResultBuffer = nullptr;
+
+        GPUBufferPtr m_ScreenQuadVerticesBuffer;
+
+        ComPtr<ID3D12RootSignature> m_PostProcessingRootSignature;
+        ComPtr<ID3D12PipelineState> m_PostFXPSO;
+        ComPtr<ID3D12PipelineState> m_PostFXAutoExposurePSO;
+        ComPtr<ID3D12PipelineState> m_PostFXDisabledPSO;
+        ComPtr<ID3D12PipelineState> m_CopyPSO;
+
+        float m_LuminanceWhite = 1.f;
+        float m_ManualEV100 = 15.f;
+        bool m_IsPostFXEnabled = true;
+        bool m_IsAutoExposureEnabled = true;
+        bool m_CalculateEV100FromCamera = true;
 
         enum class EFrameSeedType { FrameIndex = 0, SampleCount = 1, Fixed = 2, _Count = 3 };
         EFrameSeedType m_FrameSeedType = EFrameSeedType::SampleCount;

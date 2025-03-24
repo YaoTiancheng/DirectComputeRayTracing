@@ -236,7 +236,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
         m_PathTracer[ m_ActivePathTracerIndex ]->OnImGUI();
 
-        m_PostProcessing.OnImGUI();
+        OnPostProcessingImGui();
 
         ImGui::PopItemWidth();
         ImGui::End();

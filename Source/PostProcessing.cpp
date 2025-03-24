@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "PostProcessingRenderer.h"
+#include "DirectComputeRayTracing.h"
 #include "D3D12Adapter.h"
 #include "D3D12DescriptorUtil.h"
 #include "GPUBuffer.h"
@@ -7,12 +7,12 @@
 #include "Shader.h"
 #include "RenderContext.h"
 #include "ScopedRenderAnnotation.h"
-#include "Scene.h"
 #include "Logging.h"
 #include "imgui/imgui.h"
 
 using namespace DirectX;
 using namespace D3D12Util;
+using SRenderer = CDirectComputeRayTracing::SRenderer;
 
 XMFLOAT4 s_ScreenQuadVertices[ 6 ] =
 {
@@ -42,18 +42,9 @@ namespace
     }
 }
 
-PostProcessingRenderer::PostProcessingRenderer()
-    : m_IsPostFXEnabled( true )
-    , m_IsAutoExposureEnabled( true )
-    , m_LuminanceWhite( 1.0f )
-    , m_CalculateEV100FromCamera( true )
-    , m_ManualEV100( 15.f )
+bool SRenderer::InitPostProcessing()
 {
-}
-
-bool PostProcessingRenderer::Init()
-{
-    if ( !m_LuminanceRenderer.Init() )
+    if ( !InitSceneLuminance() )
     {
         return false;
     }
@@ -119,7 +110,8 @@ bool PostProcessingRenderer::Init()
             return false;
         }
 
-        if ( FAILED( D3D12Adapter::GetDevice()->CreateRootSignature( 0, serializedRootSignature->GetBufferPointer(), serializedRootSignature->GetBufferSize(), IID_PPV_ARGS( m_RootSignature.GetAddressOf() ) ) ) )
+        if ( FAILED( D3D12Adapter::GetDevice()->CreateRootSignature( 0, serializedRootSignature->GetBufferPointer(), serializedRootSignature->GetBufferSize(),
+            IID_PPV_ARGS( m_PostProcessingRootSignature.GetAddressOf() ) ) ) )
         {
             return false;
         }
@@ -133,7 +125,7 @@ bool PostProcessingRenderer::Init()
     // Create PSO
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.InputLayout = { screenQuadInputElementDesc, 1 };
-    psoDesc.pRootSignature = m_RootSignature.Get();
+    psoDesc.pRootSignature = m_PostProcessingRootSignature.Get();
     psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC( D3D12_DEFAULT );
     psoDesc.BlendState = CD3DX12_BLEND_DESC( D3D12_DEFAULT );
     psoDesc.DepthStencilState.DepthEnable = false;
@@ -191,20 +183,7 @@ bool PostProcessingRenderer::Init()
     return true;
 }
 
-bool PostProcessingRenderer::OnFilmResolutionChange( uint32_t renderWidth, uint32_t renderHeight )
-{
-    return m_LuminanceRenderer.ResizeInputResolution( renderWidth, renderHeight );
-}
-
-void PostProcessingRenderer::ExecuteLuminanceCompute( CScene& scene, const SRenderContext& renderContext )
-{
-    if ( m_IsAutoExposureEnabled && m_IsPostFXEnabled && renderContext.m_EnablePostFX )
-    {
-        m_LuminanceRenderer.Dispatch( scene, renderContext.m_CurrentResolutionWidth, renderContext.m_CurrentResolutionHeight );
-    }
-}
-
-void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext, CScene& scene )
+void SRenderer::ExecutePostProcessing( const SRenderContext& renderContext )
 {
     ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
 
@@ -214,7 +193,7 @@ void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext,
     constants.m_ReciprocalPixelCount = 1.0f / ( renderContext.m_CurrentResolutionWidth * renderContext.m_CurrentResolutionHeight );
     constants.m_MaxWhiteSqr = m_LuminanceWhite * m_LuminanceWhite;
     constants.m_TexcoordScale = renderContext.m_CurrentResolutionRatio;
-    constants.m_EV100 = m_CalculateEV100FromCamera ? CalculateEV100( scene.m_RelativeAperture, scene.m_ShutterTime, scene.m_ISO ) : m_ManualEV100;
+    constants.m_EV100 = m_CalculateEV100FromCamera ? CalculateEV100( m_Scene.m_RelativeAperture, m_Scene.m_ShutterTime, m_Scene.m_ISO ) : m_ManualEV100;
 
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView = {};
     vertexBufferView.BufferLocation = m_ScreenQuadVerticesBuffer->GetGPUVirtualAddress();
@@ -225,22 +204,22 @@ void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext,
         D3D12_RESOURCE_BARRIER barriers[ 3 ];
         uint32_t barrierCount = 0;
 
-        if ( scene.m_FilmTextureStates != D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE )
+        if ( m_Scene.m_FilmTextureStates != D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE )
         { 
-            barriers[ barrierCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( scene.m_FilmTexture->GetTexture(),
-                scene.m_FilmTextureStates, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
-            scene.m_FilmTextureStates = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
+            barriers[ barrierCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( m_Scene.m_FilmTexture->GetTexture(),
+                m_Scene.m_FilmTextureStates, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
+            m_Scene.m_FilmTextureStates = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
         }
-        if ( m_LuminanceRenderer.GetLuminanceResultBuffer() )
+        if ( m_LuminanceResultBuffer )
         {
-            barriers[ barrierCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( m_LuminanceRenderer.GetLuminanceResultBuffer()->GetBuffer(),
+            barriers[ barrierCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( m_LuminanceResultBuffer->GetBuffer(),
                 D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
         }
-        if ( scene.m_IsRenderResultTextureRead )
+        if ( m_Scene.m_IsRenderResultTextureRead )
         {
-            barriers[ barrierCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( scene.m_RenderResultTexture->GetTexture(),
+            barriers[ barrierCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( m_Scene.m_RenderResultTexture->GetTexture(),
                 D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET );
-            scene.m_IsRenderResultTextureRead = false;
+            m_Scene.m_IsRenderResultTextureRead = false;
         }
         
         if ( barrierCount )
@@ -249,11 +228,11 @@ void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext,
         }
     }
         
-    commandList->SetGraphicsRootSignature( m_RootSignature.Get() );
+    commandList->SetGraphicsRootSignature( m_PostProcessingRootSignature.Get() );
     commandList->SetGraphicsRoot32BitConstants( 0, 4, &constants, 0 );
 
-    SD3D12DescriptorHandle SRVs[] = { scene.m_FilmTexture->GetSRV(),
-        m_LuminanceRenderer.GetLuminanceResultBuffer() ? m_LuminanceRenderer.GetLuminanceResultBuffer()->GetSRV() : D3D12Adapter::GetNullBufferSRV() };
+    SD3D12DescriptorHandle SRVs[] = { m_Scene.m_FilmTexture->GetSRV(),
+        m_LuminanceResultBuffer ? m_LuminanceResultBuffer->GetSRV() : D3D12Adapter::GetNullBufferSRV() };
     D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( SRVs, (uint32_t)ARRAY_LENGTH( SRVs ), nullptr, 0 );
     commandList->SetGraphicsRootDescriptorTable( 1, descriptorTable );
 
@@ -263,7 +242,7 @@ void PostProcessingRenderer::ExecutePostFX( const SRenderContext& renderContext,
     commandList->DrawInstanced( 6, 1, 0, 0 );
 }
 
-void PostProcessingRenderer::ExecuteCopy( CScene& scene )
+void SRenderer::ExecuteCopy()
 {
     ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
 
@@ -277,18 +256,18 @@ void PostProcessingRenderer::ExecuteCopy( CScene& scene )
     vertexBufferView.SizeInBytes = sizeof( s_ScreenQuadVertices );
     vertexBufferView.StrideInBytes = sizeof( XMFLOAT4 );
 
-    if ( !scene.m_IsRenderResultTextureRead )
+    if ( !m_Scene.m_IsRenderResultTextureRead )
     {
-        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( scene.m_RenderResultTexture->GetTexture(),
+        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( m_Scene.m_RenderResultTexture->GetTexture(),
             D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
-        scene.m_IsRenderResultTextureRead = true;
+        m_Scene.m_IsRenderResultTextureRead = true;
         commandList->ResourceBarrier( 1, &barrier );
     }
 
-    commandList->SetGraphicsRootSignature( m_RootSignature.Get() );
+    commandList->SetGraphicsRootSignature( m_PostProcessingRootSignature.Get() );
     commandList->SetGraphicsRoot32BitConstants( 0, 4, &constants, 0 );
 
-    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &scene.m_RenderResultTexture->GetSRV(), 1, nullptr, 0 );
+    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &m_Scene.m_RenderResultTexture->GetSRV(), 1, nullptr, 0 );
     commandList->SetGraphicsRootDescriptorTable( 1, descriptorTable );
 
     commandList->SetPipelineState( m_CopyPSO.Get() );
@@ -297,7 +276,7 @@ void PostProcessingRenderer::ExecuteCopy( CScene& scene )
     commandList->DrawInstanced( 6, 1, 0, 0 );
 }
 
-bool PostProcessingRenderer::OnImGUI()
+bool SRenderer::OnPostProcessingImGui()
 {
     if ( ImGui::CollapsingHeader( "Post Processing" ) )
     {

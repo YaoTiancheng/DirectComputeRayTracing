@@ -90,7 +90,7 @@ bool SRenderer::Init()
     if ( !InitSampleConvolution() )
         return false;
 
-    if ( !m_PostProcessing.Init() )
+    if ( !InitPostProcessing() )
         return false;
 
     LoadScene( CommandLineArgs::Singleton()->GetFilename().c_str(), true );
@@ -323,7 +323,7 @@ void SRenderer::RenderOneFrame()
         {
             ExecuteSampleConvolution( renderContext );
 
-            m_PostProcessing.ExecuteLuminanceCompute( m_Scene, renderContext );
+            DispatchSceneLuminanceCompute( renderContext );
 
             RTV = m_Scene.m_RenderResultTexture->GetRTV();
             commandList->OMSetRenderTargets( 1, &RTV.CPU, true, nullptr );
@@ -333,7 +333,7 @@ void SRenderer::RenderOneFrame()
             commandList->RSSetViewports( 1, &viewport );
             commandList->RSSetScissorRects( 1, &scissorRect );
 
-            m_PostProcessing.ExecutePostFX( renderContext, m_Scene );
+            ExecutePostProcessing( renderContext );
         }
     }
 
@@ -367,7 +367,7 @@ void SRenderer::RenderOneFrame()
         commandList->RSSetViewports( 1, &viewport );
         commandList->RSSetScissorRects( 1, &scissorRect );
 
-        m_PostProcessing.ExecuteCopy( m_Scene );
+        ExecuteCopy();
     }
 
     OnImGUI( &renderContext );
@@ -406,7 +406,7 @@ void SRenderer::RenderOneFrame()
 
 bool SRenderer::HandleFilmResolutionChange()
 {
-    if ( !m_PostProcessing.OnFilmResolutionChange( m_Scene.m_ResolutionWidth, m_Scene.m_ResolutionHeight ) )
+    if ( !ResizeSceneLuminanceInputResolution( m_Scene.m_ResolutionWidth, m_Scene.m_ResolutionHeight ) )
     {
         return false;
     }

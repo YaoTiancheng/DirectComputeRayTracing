@@ -128,11 +128,9 @@
     <ClInclude Include="Source\MegakernelPathTracer.h" />
     <ClInclude Include="Source\PathTracer.h" />
     <ClInclude Include="Source\PointerTypes.h" />
-    <ClInclude Include="Source\PostProcessingRenderer.h" />
     <ClInclude Include="Source\Rectangle.h" />
     <ClInclude Include="Source\RenderContext.h" />
     <ClInclude Include="Source\Scene.h" />
-    <ClInclude Include="Source\SceneLuminanceRenderer.h" />
     <ClInclude Include="Source\StringConversion.h" />
     <ClInclude Include="Source\Timers.h" />
     <ClInclude Include="Source\Shader.h" />
@@ -162,9 +160,9 @@
     <ClCompile Include="Source\Logging.cpp" />
     <ClCompile Include="Source\MessageBox.cpp" />
     <ClCompile Include="Source\MegakernelPathTracer.cpp" />
-    <ClCompile Include="Source\PostProcessingRenderer.cpp" />
+    <ClCompile Include="Source\PostProcessing.cpp" />
     <ClCompile Include="Source\Scene.cpp" />
-    <ClCompile Include="Source\SceneLuminanceRenderer.cpp" />
+    <ClCompile Include="Source\SceneLuminance.cpp" />
     <ClCompile Include="Source\Shader.cpp" />
     <ClCompile Include="Source\GPUBuffer.cpp" />
     <ClCompile Include="Source\GPUTexture.cpp" />

@@ -14,20 +14,6 @@
 
 using namespace DirectX;
 using SRenderer = CDirectComputeRayTracing::SRenderer;
-using Private = CDirectComputeRayTracing::SRenderer::MainLoopPrivate;
-
-struct CDirectComputeRayTracing::SRenderer::MainLoopPrivate
-{
-    static void DispatchRayTracing( SRenderer*, SRenderContext* );
-
-    static void UploadFrameConstantBuffer( SRenderer* );
-
-    static void ClearFilmTexture( SRenderer* );
-
-    static void UpdateRenderViewport( SRenderer* );
-
-    static void ResizeBackbuffer( SRenderer*, uint32_t, uint32_t );
-};
 
 struct alignas( 256 ) RayTracingFrameConstants
 {
@@ -130,7 +116,7 @@ SRenderer::~SRenderer()
     }
 }
 
-void Private::UpdateRenderViewport( SRenderer* r )
+static void UpdateRenderViewport( SRenderer* r )
 {
     DXGI_SWAP_CHAIN_DESC swapChainDesc;
     D3D12Adapter::GetSwapChain()->GetDesc( &swapChainDesc );
@@ -150,7 +136,7 @@ void Private::UpdateRenderViewport( SRenderer* r )
     r->m_RenderViewport.m_TopLeftY = uint32_t( (swapChainDesc.BufferDesc.Height - r->m_RenderViewport.m_Height ) * 0.5f );
 }
 
-void Private::ResizeBackbuffer( SRenderer* r, uint32_t backbufferWidth, uint32_t backbufferHeight )
+static void ResizeBackbuffer( SRenderer* r, uint32_t backbufferWidth, uint32_t backbufferHeight )
 {
     D3D12Adapter::WaitForGPU( false ); // Wait for the latest frame (the last frame) to finish
 
@@ -183,8 +169,8 @@ bool SRenderer::OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam )
     {
         UINT width = LOWORD( lParam );
         UINT height = HIWORD( lParam );
-        MainLoopPrivate::ResizeBackbuffer( this, width, height );
-        MainLoopPrivate::UpdateRenderViewport( this );
+        ResizeBackbuffer( this, width, height );
+        UpdateRenderViewport( this );
     }
 
     return m_Scene.m_Camera.OnWndMessage( message, wParam, lParam );
@@ -223,7 +209,7 @@ bool SRenderer::LoadScene( const char* filepath, bool reset )
     return true;
 }
 
-void Private::UploadFrameConstantBuffer( SRenderer* r )
+static void UploadFrameConstantBuffer( SRenderer* r )
 {
     GPUBuffer::SUploadContext context = {};
     if ( r->m_RayTracingFrameConstantBuffer->AllocateUploadContext( &context ) )
@@ -238,14 +224,14 @@ void Private::UploadFrameConstantBuffer( SRenderer* r )
     }
 }
 
-void Private::ClearFilmTexture( SRenderer* r )
+static void ClearFilmTexture( SRenderer* r )
 {
     ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
     const float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
     commandList->ClearRenderTargetView( r->m_Scene.m_FilmTexture->GetRTV().CPU, clearColor, 0, nullptr );
 }
 
-void Private::DispatchRayTracing( SRenderer* r, SRenderContext* renderContext )
+static void DispatchRayTracing( SRenderer* r, SRenderContext* renderContext )
 {
     r->m_IsFilmDirty = r->m_IsFilmDirty || r->m_IsLightGPUBufferDirty || r->m_IsMaterialGPUBufferDirty || r->m_Scene.m_Camera.IsDirty() || r->m_PathTracer[ r->m_ActivePathTracerIndex ]->AcquireFilmClearTrigger();
 
@@ -272,7 +258,7 @@ void Private::DispatchRayTracing( SRenderer* r, SRenderContext* renderContext )
 
         ClearFilmTexture( r );
 
-        if ( r->m_FrameSeedType == EFrameSeedType::SampleCount )
+        if ( r->m_FrameSeedType == SRenderer::EFrameSeedType::SampleCount )
         {
             r->m_FrameSeed = 0;
         }
@@ -298,7 +284,7 @@ void Private::DispatchRayTracing( SRenderer* r, SRenderContext* renderContext )
 
     if ( r->m_PathTracer[ r->m_ActivePathTracerIndex ]->IsImageComplete() )
     {
-        if ( r->m_FrameSeedType != EFrameSeedType::Fixed )
+        if ( r->m_FrameSeedType != SRenderer::EFrameSeedType::Fixed )
         {
             r->m_FrameSeed++;
         }
@@ -331,7 +317,7 @@ void SRenderer::RenderOneFrame()
     { 
         m_Scene.m_Camera.Update( m_FrameTimer.GetCurrentFrameDeltaTime() );
 
-        MainLoopPrivate::DispatchRayTracing( this, &renderContext );
+        DispatchRayTracing( this, &renderContext );
 
         if ( m_PathTracer[ m_ActivePathTracerIndex ]->IsImageComplete() || renderContext.m_IsSmallResolutionEnabled )
         {
@@ -425,7 +411,7 @@ bool SRenderer::HandleFilmResolutionChange()
         return false;
     }
 
-    Private::UpdateRenderViewport( this );
+    UpdateRenderViewport( this );
 
     // Aspect ratio might change due to rounding error, but this is neglectable
     m_SmallResolutionWidth = std::max( 1u, (uint32_t)std::roundf( m_Scene.m_ResolutionWidth * 0.25f ) );

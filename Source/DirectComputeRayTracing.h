@@ -50,8 +50,6 @@ public:
 
         void ExecuteSampleConvolution( const SRenderContext& renderContext );
 
-        struct MainLoopPrivate;
-
         HWND m_hWnd;
 
         uint32_t m_FrameSeed = 0;

@@ -18,11 +18,6 @@
 
 SamplerState UVClampSampler;
 
-cbuffer RayTracingFrameConstants : register( b1 )
-{
-    uint g_FrameSeed;
-}
-
 // Based on "A Fast and Robust Method for Avoiding Self Intersection" by Carsten Wächter and Nikolaus Binder
 float3 OffsetRayOrigin( float3 p, float3 n, float3 d )
 {

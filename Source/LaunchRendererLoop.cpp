@@ -13,12 +13,6 @@
 #include "ScopedRenderAnnotation.h"
 
 using namespace DirectX;
-using SRenderer = CDirectComputeRayTracing::SRenderer;
-
-struct alignas( 256 ) RayTracingFrameConstants
-{
-    uint32_t frameSeed;
-};
 
 CDirectComputeRayTracing::CDirectComputeRayTracing( HWND hWnd )
 {
@@ -47,8 +41,8 @@ bool SRenderer::Init()
 
     CD3D12Resource::CreateDeferredDeleteQueue();
 
-    m_PathTracer[ 0 ] = new CMegakernelPathTracer( &m_Scene );
-    m_PathTracer[ 1 ] = new CWavefrontPathTracer( &m_Scene );
+    m_PathTracer[ 0 ] = new CMegakernelPathTracer();
+    m_PathTracer[ 1 ] = new CWavefrontPathTracer();
 
     if ( !m_PathTracer[ m_ActivePathTracerIndex ]->Create() )
     {
@@ -60,15 +54,6 @@ bool SRenderer::Init()
     {
         return false;
     }
-
-    m_RayTracingFrameConstantBuffer.reset( GPUBuffer::Create( 
-          sizeof( RayTracingFrameConstants )
-        , 0
-        , DXGI_FORMAT_UNKNOWN
-        , EGPUBufferUsage::Default
-        , EGPUBufferBindFlag_ConstantBuffer ) );
-    if ( !m_RayTracingFrameConstantBuffer )
-        return false;
 
     m_sRGBBackbuffers.resize( D3D12Adapter::GetBackbufferCount() );
     m_LinearBackbuffers.resize( D3D12Adapter::GetBackbufferCount() );
@@ -191,7 +176,7 @@ bool SRenderer::LoadScene( const char* filepath, bool reset )
         return false;
     }
 
-    m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
+    m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
 
     if ( !HandleFilmResolutionChange() )
     {
@@ -207,21 +192,6 @@ bool SRenderer::LoadScene( const char* filepath, bool reset )
     m_RayTracingHasHit = false;
 
     return true;
-}
-
-static void UploadFrameConstantBuffer( SRenderer* r )
-{
-    GPUBuffer::SUploadContext context = {};
-    if ( r->m_RayTracingFrameConstantBuffer->AllocateUploadContext( &context ) )
-    {
-        RayTracingFrameConstants* constants = (RayTracingFrameConstants*)context.Map();
-        if ( constants )
-        {
-            constants->frameSeed = r->m_FrameSeed;
-            context.Unmap();
-            context.Upload(); // No barrier needed because of implicit state promotion
-        }
-    }
 }
 
 static void ClearFilmTexture( SRenderer* r )
@@ -278,9 +248,7 @@ static void DispatchRayTracing( SRenderer* r, SRenderContext* renderContext )
         r->m_Scene.UpdateMaterialGPUData();
     }
 
-    UploadFrameConstantBuffer( r );
-
-    r->m_PathTracer[ r->m_ActivePathTracerIndex ]->Render( *renderContext, r->m_BxDFTextures );
+    r->m_PathTracer[ r->m_ActivePathTracerIndex ]->Render( r, *renderContext );
 
     if ( r->m_PathTracer[ r->m_ActivePathTracerIndex ]->IsImageComplete() )
     {
@@ -304,7 +272,6 @@ void SRenderer::RenderOneFrame()
 
     SRenderContext renderContext;
     renderContext.m_EnablePostFX = true;
-    renderContext.m_RayTracingFrameConstantBuffer = m_RayTracingFrameConstantBuffer;
 
     D3D12Adapter::BeginCurrentFrame();
 

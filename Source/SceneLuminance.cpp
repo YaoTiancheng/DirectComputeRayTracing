@@ -11,7 +11,6 @@
 #include "../Shaders/SumLuminanceDef.inc.hlsl"
 
 using namespace D3D12Util;
-using SRenderer = CDirectComputeRayTracing::SRenderer;
 
 static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 1, 1 );
 

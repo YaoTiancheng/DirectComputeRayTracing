@@ -155,6 +155,7 @@ cbuffer CameraConstants : register( b0 )
     uint g_BladeCount;
     float2 g_BladeVertexPos;
     float g_ApertureBaseAngle;
+    uint g_FrameSeed;
 }
 
 Buffer<uint> g_PathIndices                      : register( t0 );

@@ -7,9 +7,8 @@
 #include "Shader.h"
 #include "GPUBuffer.h"
 #include "GPUTexture.h"
-#include "Scene.h"
+#include "DirectComputeRayTracing.h"
 #include "RenderContext.h"
-#include "BxDFTextures.h"
 #include "MessageBox.h"
 #include "ScopedRenderAnnotation.h"
 #include "imgui/imgui.h"
@@ -41,6 +40,7 @@ struct alignas( 256 ) SRayTracingConstants
     uint32_t            tileOffsetX;
     uint32_t            tileOffsetY;
     uint32_t            environmentLightIndex;
+    uint32_t            frameSeed;
 };
 
 static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 15, 2 );
@@ -58,14 +58,13 @@ bool CMegakernelPathTracer::Create()
     sampler.MaxLOD = D3D12_FLOAT32_MAX;
     sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
-    CD3DX12_ROOT_PARAMETER1 rootParameters[ 4 ];
+    CD3DX12_ROOT_PARAMETER1 rootParameters[ 3 ];
     rootParameters[ 0 ].InitAsConstantBufferView( 0 );
-    rootParameters[ 1 ].InitAsConstantBufferView( 1 );
-    rootParameters[ 2 ].InitAsConstants( 1, 2 );
+    rootParameters[ 1 ].InitAsConstants( 1, 1 );
     SD3D12DescriptorTableRanges descriptorTableRanges;
-    s_DescriptorTableLayout.InitRootParameter( &rootParameters[ 3 ], &descriptorTableRanges );
+    s_DescriptorTableLayout.InitRootParameter( &rootParameters[ 2 ], &descriptorTableRanges );
 
-    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 4, rootParameters, 1, &sampler );
+    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 3, rootParameters, 1, &sampler );
 
     ComPtr<ID3DBlob> serializedRootSignature;
     ComPtr<ID3DBlob> error;
@@ -105,14 +104,17 @@ void CMegakernelPathTracer::Destroy()
     m_RayTracingConstantsBuffer.Reset();
 }
 
-void CMegakernelPathTracer::OnSceneLoaded()
+void CMegakernelPathTracer::OnSceneLoaded( SRenderer* renderer )
 {
-    CompileAndCreateRayTracingKernel();
+    CompileAndCreateRayTracingKernel( renderer );
     m_FilmClearTrigger = true;
 }
 
-void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const SBxDFTextures& BxDFTextures )
+void CMegakernelPathTracer::Render( SRenderer* renderer, const SRenderContext& renderContext )
 {
+    CScene* scene = &renderer->m_Scene;
+    SBxDFTextures* BxDFTextures = &renderer->m_BxDFTextures;
+
     ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
 
     SCOPED_RENDER_ANNOTATION( commandList, L"Dispatch rays" );
@@ -128,24 +130,26 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
         {
             constants->resolutionX = renderContext.m_CurrentResolutionWidth;
             constants->resolutionY = renderContext.m_CurrentResolutionHeight;
-            m_Scene->m_Camera.GetTransformMatrix( &constants->cameraTransform );
-            constants->filmDistance = m_Scene->CalculateFilmDistance();
-            constants->filmSize = m_Scene->m_FilmSize;
-            constants->lightCount = m_Scene->GetLightCount();
-            constants->maxBounceCount = m_Scene->m_MaxBounceCount;
-            constants->apertureRadius = m_Scene->CalculateApertureDiameter() * 0.5f;
-            constants->focalDistance = m_Scene->m_FocalDistance;
-            constants->apertureBaseAngle = m_Scene->m_ApertureRotation;
-            constants->bladeCount = m_Scene->m_ApertureBladeCount;
+            scene->m_Camera.GetTransformMatrix( &constants->cameraTransform );
+            constants->filmDistance = scene->CalculateFilmDistance();
+            constants->filmSize = scene->m_FilmSize;
+            constants->lightCount = scene->GetLightCount();
+            constants->maxBounceCount = scene->m_MaxBounceCount;
+            constants->apertureRadius = scene->CalculateApertureDiameter() * 0.5f;
+            constants->focalDistance = scene->m_FocalDistance;
+            constants->apertureBaseAngle = scene->m_ApertureRotation;
+            constants->bladeCount = scene->m_ApertureBladeCount;
 
-            float halfBladeAngle = DirectX::XM_PI / m_Scene->m_ApertureBladeCount;
+            float halfBladeAngle = DirectX::XM_PI / scene->m_ApertureBladeCount;
             constants->bladeVertexPos.x = cosf( halfBladeAngle ) * constants->apertureRadius;
             constants->bladeVertexPos.y = sinf( halfBladeAngle ) * constants->apertureRadius;
 
             constants->tileOffsetX = ( m_CurrentTileIndex % tileCountX ) * m_TileSize;
             constants->tileOffsetY = ( m_CurrentTileIndex / tileCountX ) * m_TileSize;
 
-            constants->environmentLightIndex = m_Scene->m_EnvironmentLight ? (uint32_t)m_Scene->m_MeshLights.size() : LIGHT_INDEX_INVALID; // Environment light is right after the mesh lights.
+            constants->environmentLightIndex = scene->m_EnvironmentLight ? (uint32_t)scene->m_MeshLights.size() : LIGHT_INDEX_INVALID; // Environment light is right after the mesh lights.
+
+            constants->frameSeed = renderer->m_FrameSeed;
 
             rayTracingConstantBufferUpload.Unmap();
             rayTracingConstantBufferUpload.Upload();
@@ -155,31 +159,29 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
     // Barriers
     {
         std::vector<D3D12_RESOURCE_BARRIER> barriers;
-        barriers.reserve( 6 );
+        barriers.reserve( 5 );
 
-        barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( renderContext.m_RayTracingFrameConstantBuffer->GetBuffer(),
-            D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER ) );
         barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_RayTracingConstantsBuffer->GetBuffer(),
             D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER ) );
-        if ( m_Scene->m_IsSampleTexturesRead )
+        if ( scene->m_IsSampleTexturesRead )
         {
-            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_Scene->m_SamplePositionTexture->GetTexture(),
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( scene->m_SamplePositionTexture->GetTexture(),
                 D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS ) );
-            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_Scene->m_SampleValueTexture->GetTexture(),
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( scene->m_SampleValueTexture->GetTexture(),
                 D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS ) );
-            m_Scene->m_IsSampleTexturesRead = false;
+            scene->m_IsSampleTexturesRead = false;
         }
-        if ( !m_Scene->m_IsLightBufferRead )
+        if ( !scene->m_IsLightBufferRead )
         {
-            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_Scene->m_LightsBuffer->GetBuffer(),
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( scene->m_LightsBuffer->GetBuffer(),
                 D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
-            m_Scene->m_IsLightBufferRead = true;
+            scene->m_IsLightBufferRead = true;
         }
-        if ( !m_Scene->m_IsMaterialBufferRead )
+        if ( !scene->m_IsMaterialBufferRead )
         {
-            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_Scene->m_MaterialsBuffer->GetBuffer(),
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( scene->m_MaterialsBuffer->GetBuffer(),
                 D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
-            m_Scene->m_IsMaterialBufferRead = true;
+            scene->m_IsMaterialBufferRead = true;
         }
 
         commandList->ResourceBarrier( (uint32_t)barriers.size(), barriers.data() );
@@ -188,41 +190,40 @@ void CMegakernelPathTracer::Render( const SRenderContext& renderContext, const S
     commandList->SetComputeRootSignature( m_RootSignature.Get() );
 
     commandList->SetComputeRootConstantBufferView( 0, m_RayTracingConstantsBuffer->GetGPUVirtualAddress() );
-    commandList->SetComputeRootConstantBufferView( 1, renderContext.m_RayTracingFrameConstantBuffer->GetGPUVirtualAddress() );
     if ( m_OutputType > 0 )
     { 
         uint32_t iterationThreshold = m_IterationThreshold;
-        commandList->SetComputeRoot32BitConstant( 2, iterationThreshold, 0 );
+        commandList->SetComputeRoot32BitConstant( 1, iterationThreshold, 0 );
     }
 
     SD3D12DescriptorHandle environmentTextureSRV = D3D12Adapter::GetNullBufferSRV();
-    if ( m_Scene->m_EnvironmentLight && m_Scene->m_EnvironmentLight->m_Texture )
+    if ( scene->m_EnvironmentLight && scene->m_EnvironmentLight->m_Texture )
     {
-        environmentTextureSRV = m_Scene->m_EnvironmentLight->m_Texture->GetSRV();
+        environmentTextureSRV = scene->m_EnvironmentLight->m_Texture->GetSRV();
     }
     SD3D12DescriptorHandle srcDescriptors[ 17 ] =
     {
-          m_Scene->m_VerticesBuffer->GetSRV()
-        , m_Scene->m_TrianglesBuffer->GetSRV()
-        , m_Scene->m_LightsBuffer->GetSRV()
-        , BxDFTextures.m_CookTorranceBRDF->GetSRV()
-        , BxDFTextures.m_CookTorranceBRDFAverage->GetSRV()
-        , BxDFTextures.m_CookTorranceBRDFDielectric->GetSRV()
-        , BxDFTextures.m_CookTorranceBSDF->GetSRV()
-        , BxDFTextures.m_CookTorranceBSDFAverage->GetSRV()
-        , m_Scene->m_BVHNodesBuffer ? m_Scene->m_BVHNodesBuffer->GetSRV() : D3D12Adapter::GetNullBufferSRV()
-        , m_Scene->m_InstanceTransformsBuffer->GetSRV( DXGI_FORMAT_UNKNOWN, sizeof( XMFLOAT4X3 ), 0, (uint32_t)m_Scene->m_InstanceTransforms.size() )
-        , m_Scene->m_InstanceTransformsBuffer->GetSRV( DXGI_FORMAT_UNKNOWN, sizeof( XMFLOAT4X3 ), (uint32_t)m_Scene->m_InstanceTransforms.size(), (uint32_t)m_Scene->m_InstanceTransforms.size() )
-        , m_Scene->m_MaterialIdsBuffer->GetSRV()
-        , m_Scene->m_MaterialsBuffer->GetSRV()
-        , m_Scene->m_InstanceLightIndicesBuffer->GetSRV()
+          scene->m_VerticesBuffer->GetSRV()
+        , scene->m_TrianglesBuffer->GetSRV()
+        , scene->m_LightsBuffer->GetSRV()
+        , BxDFTextures->m_CookTorranceBRDF->GetSRV()
+        , BxDFTextures->m_CookTorranceBRDFAverage->GetSRV()
+        , BxDFTextures->m_CookTorranceBRDFDielectric->GetSRV()
+        , BxDFTextures->m_CookTorranceBSDF->GetSRV()
+        , BxDFTextures->m_CookTorranceBSDFAverage->GetSRV()
+        , scene->m_BVHNodesBuffer ? scene->m_BVHNodesBuffer->GetSRV() : D3D12Adapter::GetNullBufferSRV()
+        , scene->m_InstanceTransformsBuffer->GetSRV( DXGI_FORMAT_UNKNOWN, sizeof( XMFLOAT4X3 ), 0, (uint32_t)scene->m_InstanceTransforms.size() )
+        , scene->m_InstanceTransformsBuffer->GetSRV( DXGI_FORMAT_UNKNOWN, sizeof( XMFLOAT4X3 ), (uint32_t)scene->m_InstanceTransforms.size(), (uint32_t)scene->m_InstanceTransforms.size() )
+        , scene->m_MaterialIdsBuffer->GetSRV()
+        , scene->m_MaterialsBuffer->GetSRV()
+        , scene->m_InstanceLightIndicesBuffer->GetSRV()
         , environmentTextureSRV
-        , m_Scene->m_SamplePositionTexture->GetUAV()
-        , m_Scene->m_SampleValueTexture->GetUAV()
+        , scene->m_SamplePositionTexture->GetUAV()
+        , scene->m_SampleValueTexture->GetUAV()
     };
 
     D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( srcDescriptors, (uint32_t)ARRAY_LENGTH( srcDescriptors ) );
-    commandList->SetComputeRootDescriptorTable( 3, descriptorTable );
+    commandList->SetComputeRootDescriptorTable( 2, descriptorTable );
 
     commandList->SetPipelineState( m_PSO.Get() );
     
@@ -248,13 +249,15 @@ bool CMegakernelPathTracer::IsImageComplete()
     return AreAllTilesRendered();
 }
 
-bool CMegakernelPathTracer::CompileAndCreateRayTracingKernel()
+bool CMegakernelPathTracer::CompileAndCreateRayTracingKernel( SRenderer* renderer )
 {
+    CScene* scene = &renderer->m_Scene;
+
     std::vector<DxcDefine> rayTracingShaderDefines;
 
     static const uint32_t s_MaxRadix10IntegerBufferLengh = 12;
     wchar_t buffer_TraversalStackSize[ s_MaxRadix10IntegerBufferLengh ];
-    _itow( m_Scene->m_BVHTraversalStackSize, buffer_TraversalStackSize, 10 );
+    _itow( scene->m_BVHTraversalStackSize, buffer_TraversalStackSize, 10 );
     rayTracingShaderDefines.push_back( { L"RT_BVH_TRAVERSAL_STACK_SIZE", buffer_TraversalStackSize } );
 
     wchar_t buffer_TraversalGroupSize[ s_MaxRadix10IntegerBufferLengh ];
@@ -264,19 +267,19 @@ bool CMegakernelPathTracer::CompileAndCreateRayTracingKernel()
     rayTracingShaderDefines.push_back( { L"GROUP_SIZE_X", STRINGIFY( CS_GROUP_SIZE_X ) } );
     rayTracingShaderDefines.push_back( { L"GROUP_SIZE_Y", STRINGIFY( CS_GROUP_SIZE_Y ) } );
 
-    if ( m_Scene->m_IsGGXVNDFSamplingEnabled )
+    if ( scene->m_IsGGXVNDFSamplingEnabled )
     {
         rayTracingShaderDefines.push_back( { L"GGX_SAMPLE_VNDF", L"0" } );
     }
-    if ( !m_Scene->m_TraverseBVHFrontToBack )
+    if ( !scene->m_TraverseBVHFrontToBack )
     {
         rayTracingShaderDefines.push_back( { L"BVH_NO_FRONT_TO_BACK_TRAVERSAL", L"0" } );
     }
-    if ( m_Scene->m_IsLightVisible )
+    if ( scene->m_IsLightVisible )
     {
         rayTracingShaderDefines.push_back( { L"LIGHT_VISIBLE", L"0" } );
     }
-    if ( m_Scene->m_EnvironmentLight && m_Scene->m_EnvironmentLight->m_Texture )
+    if ( scene->m_EnvironmentLight && scene->m_EnvironmentLight->m_Texture )
     {
         rayTracingShaderDefines.push_back( { L"HAS_ENV_TEXTURE", L"0" } );
     }
@@ -319,7 +322,7 @@ bool CMegakernelPathTracer::AreAllTilesRendered() const
     return m_CurrentTileIndex == 0;
 }
 
-void CMegakernelPathTracer::OnImGUI()
+void CMegakernelPathTracer::OnImGUI( SRenderer* renderer )
 {
     if ( ImGui::CollapsingHeader( "Megakernel Path Tracer" ) )
     {
@@ -333,7 +336,7 @@ void CMegakernelPathTracer::OnImGUI()
         static const char* s_OutputNames[] = { "Path Tracing", "Shading Normal", "Shading Tangent", "Albedo", "Negative NdotV", "Backface", "Iteration Count"};
         if ( ImGui::Combo( "Output", (int*)&m_OutputType, s_OutputNames, IM_ARRAYSIZE( s_OutputNames ) ) )
         {
-            CompileAndCreateRayTracingKernel();
+            CompileAndCreateRayTracingKernel( renderer );
             m_FilmClearTrigger = true;
         }
         

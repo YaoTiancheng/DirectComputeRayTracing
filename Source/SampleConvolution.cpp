@@ -10,7 +10,6 @@
 #include "ScopedRenderAnnotation.h"
 
 using namespace D3D12Util;
-using SRenderer = CDirectComputeRayTracing::SRenderer;
 
 struct alignas( 256 ) SConvolutionConstant
 {

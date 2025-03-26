@@ -11,7 +11,6 @@
 #include "imgui/imgui_impl_win32.h"
 
 using namespace DirectX;
-using SRenderer = CDirectComputeRayTracing::SRenderer;
 
 static bool DragFloat3RadianInDegree( const char* label, float v[3], float v_speed = 1.f, float v_min = 0.f, float v_max = 0.f, const char* format = "%.3f", ImGuiSliderFlags flags = 0 )
 {
@@ -165,7 +164,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 m_PathTracer[ m_ActivePathTracerIndex ]->ResetImage();
                 if ( m_Scene.m_HasValidScene )
                 {
-                    m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
+                    m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
                 }
                 m_IsFilmDirty = true;
             }
@@ -217,24 +216,24 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
             if ( ImGui::Checkbox( "GGX VNDF Sampling", &m_Scene.m_IsGGXVNDFSamplingEnabled ) )
             {
-                m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
+                m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
                 m_IsFilmDirty = true;
             }
 
             if ( ImGui::Checkbox( "Traverse BVH Front-to-back", &m_Scene.m_TraverseBVHFrontToBack ) )
             {
-                m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
+                m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
                 m_IsFilmDirty = true;
             }
 
             if ( ImGui::Checkbox( "Lights Visble to Camera", &m_Scene.m_IsLightVisible ) )
             {
-                m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
+                m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
                 m_IsFilmDirty = true;
             }
         }
 
-        m_PathTracer[ m_ActivePathTracerIndex ]->OnImGUI();
+        m_PathTracer[ m_ActivePathTracerIndex ]->OnImGUI( this );
 
         OnPostProcessingImGui();
 
@@ -322,7 +321,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                         if ( hadEnvironmentTexture )
                         {
                             // Allow the path tracer switching to a kernel without sampling the environment texture
-                            m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
+                            m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
                         }
 
                         m_Scene.m_ObjectSelection.m_IsEnvironmentLightSelected = false;
@@ -448,7 +447,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                     bool hasEnvTextureCurrently = m_Scene.m_EnvironmentLight->m_Texture.Get() != nullptr;
                     if ( hasEnvTexturePreviously != hasEnvTextureCurrently )
                     {
-                        m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
+                        m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
                     }
                     m_IsFilmDirty = true;
                 }
@@ -460,7 +459,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 {
                     m_Scene.m_EnvironmentLight->m_TextureFileName = "";
                     m_Scene.m_EnvironmentLight->m_Texture.Reset();
-                    m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded();
+                    m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
                     m_IsFilmDirty = true;
                 }
             }

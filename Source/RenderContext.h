@@ -8,6 +8,4 @@ struct SRenderContext
     bool      m_IsResolutionChanged;
     bool      m_IsSmallResolutionEnabled;
     bool      m_EnablePostFX;
-
-    GPUBufferPtr m_RayTracingFrameConstantBuffer;
 };

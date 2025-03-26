@@ -4,11 +4,12 @@
 #include "D3D12Resource.h"
 
 class CScene;
+struct SBxDFTextures;
 
 class CWavefrontPathTracer : public CPathTracer
 {
 public:
-    explicit CWavefrontPathTracer( CScene* scene );
+    CWavefrontPathTracer();
 
     virtual ~CWavefrontPathTracer()
     {
@@ -18,15 +19,15 @@ public:
 
     virtual void Destroy() override;
 
-    virtual void OnSceneLoaded() override;
+    virtual void OnSceneLoaded( SRenderer* renderer ) override;
 
-    virtual void Render( const SRenderContext& renderContext, const SBxDFTextures& BxDFTextures ) override;
+    virtual void Render( SRenderer* renderer, const SRenderContext& renderContext ) override;
 
     virtual void ResetImage() override;
 
     virtual bool IsImageComplete() override;
 
-    virtual void OnImGUI();
+    virtual void OnImGUI( SRenderer* renderer );
 
     virtual bool AcquireFilmClearTrigger();
 
@@ -44,13 +45,11 @@ private:
         , _Count
     };
 
-    bool CompileAndCreateShader( EShaderKernel kernel );
+    bool CompileAndCreateShader( CScene* scene, EShaderKernel kernel );
 
     void GetBlockDimension( uint32_t* width, uint32_t* height );
 
-    void RenderOneIteration( const SRenderContext& renderContext, const SBxDFTextures& BxDFTextures, bool isInitialIteration );
-
-    CScene* m_Scene;
+    void RenderOneIteration( CScene* scene, const SBxDFTextures& BxDFTextures, bool isInitialIteration );
 
     CD3D12ComPtr<ID3D12RootSignature> m_RootSignature;
     CD3D12ComPtr<ID3D12PipelineState> m_PSOs[ (int)EShaderKernel::_Count ];

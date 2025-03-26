@@ -12,7 +12,6 @@
 
 using namespace DirectX;
 using namespace D3D12Util;
-using SRenderer = CDirectComputeRayTracing::SRenderer;
 
 XMFLOAT4 s_ScreenQuadVertices[ 6 ] =
 {

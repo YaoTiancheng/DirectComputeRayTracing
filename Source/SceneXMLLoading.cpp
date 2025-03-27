@@ -117,6 +117,46 @@ namespace
         return defaultValue;
     }
 
+    bool TryGetAttribute( xml_node<>* node, const char* attributeName, std::string_view* attributeValue )
+    {
+        xml_attribute<>* attribute = node->first_attribute( attributeName );
+        if ( !attribute )
+        {
+            return false;
+        }
+
+        *attributeValue = std::string_view( attribute->value(), attribute->value_size() );
+        return true;
+    }
+
+    bool TryEvaluateValueString( std::string_view original, const std::unordered_map<std::string_view, std::string_view>& defaultParameters, std::string_view* actual )
+    {
+        if ( original.length() == 0 )
+        {
+            *actual = original;
+            return true;
+        }
+
+        if ( original[ 0 ] == '$' )
+        {
+            std::string_view defaultParameterName( original.data() + 1, original.length() - 1 );
+            auto iter = defaultParameters.find( defaultParameterName );
+            if ( iter != defaultParameters.end() )
+            {
+                *actual = iter->second;
+                return true;
+            }
+            else
+            {
+                LOG_STRING_FORMAT( "Failed to find default parameter with name %.*s\n", defaultParameterName.length(), defaultParameterName.data() );
+                return false;
+            }
+        }
+
+        *actual = original;
+        return true;
+    }
+
     void SplitByDelimeter( std::string_view string, char delimeter, std::vector<std::string_view>* subStrings )
     {
         const char* p = string.data();
@@ -160,7 +200,7 @@ namespace
     SValue* BuildValueGraph( CValueList* valueList, xml_document<>* doc, std::vector<std::pair<std::string_view, SValue*>>* rootObjectValues )
     {
         std::unordered_set<std::string_view> objectTagNames = { "scene", "integrator", "sensor", "sampler", "film", "bsdf", "sampler", "rfilter", "emitter", "shape" };
-        std::unordered_set<std::string_view> valueTagNames = { "float", "integer", "boolean", "string", "rgb" };
+        std::unordered_set<std::string_view> valueTagNames = { "float", "integer", "boolean", "string", "point", "vector", "rgb" };
 
         xml_node<>* sceneNode = doc->first_node( "scene" );
         if ( !sceneNode )
@@ -169,6 +209,36 @@ namespace
             return nullptr;
         }
 
+        std::vector<std::string_view> parameterSplit;
+
+        // Scene version verification
+        {
+            xml_attribute<>* versionAttribute = sceneNode->first_attribute( "version" );
+            if ( !versionAttribute )
+            {
+                LOG_STRING( "Cannot find version attribute at the scene node.\n" );
+                return nullptr;
+            }
+
+            SplitByDelimeter( std::string_view( versionAttribute->value(), versionAttribute->value_size() ), '.', &parameterSplit );
+            if ( parameterSplit.size() == 3 )
+            {
+                int32_t majorVersion = atoi( parameterSplit[ 0 ].data() );
+                if ( majorVersion < 3 )
+                {
+                    LOG_STRING_FORMAT( "Unsupported scene version %.*s.\n", versionAttribute->value_size(), versionAttribute->value() );
+                    return nullptr;
+                }
+            }
+            else
+            {
+                LOG_STRING_FORMAT( "Unsupported scene version format %.*s.\n", versionAttribute->value_size(), versionAttribute->value() );
+                return nullptr;
+            }
+        }
+
+        std::unordered_map<std::string_view, std::string_view> defaultParameters;
+
         std::stack<xml_node<>*> nodesStack;
         std::stack<SValue*> valuesStack;
         xml_node<>* currentNode = sceneNode;
@@ -176,7 +246,6 @@ namespace
         SValue* sceneValue = nullptr;
         parentValue->SetAsObject();
         SValue* currentValue = nullptr;
-        std::vector<std::string_view> parameterSplit;
         std::unordered_map<std::string_view, std::pair<std::string_view, SValue*>> objectMap;
         while ( currentNode )
         {
@@ -205,7 +274,11 @@ namespace
                     SValue* typeValue = valueList->AllocateValue();
                     currentValue->InsertObjectField( "type", typeValue );
                     typeValue->m_Type = EValueType::eString;
-                    typeValue->m_String = { attribute->value(), attribute->value_size() };
+                    if ( !TryEvaluateValueString( std::string_view( attribute->value(), attribute->value_size() ), defaultParameters, &typeValue->m_String ) )
+                    {
+                        LOG_STRING_FORMAT( "Evaluating type string %.*s failed.\n", attribute->value_size(), attribute->value() );
+                        return nullptr;
+                    }
 
                     attribute = attribute->next_attribute( "id", 0 );
                     if ( attribute != nullptr )
@@ -255,8 +328,15 @@ namespace
                         }
                         else
                         {
+                            std::string_view evaluatedValueString( valueAttribute->value(), valueAttribute->value_size() );
+                            if ( !TryEvaluateValueString( evaluatedValueString, defaultParameters, &evaluatedValueString ) )
+                            {
+                                LOG_STRING_FORMAT( "Evaluating value string %.*s failed.\n", valueAttribute->value_size(), valueAttribute->value() );
+                                return nullptr;
+                            }
+
                             parameterSplit.clear();
-                            SplitBySpace( { valueAttribute->value(), valueAttribute->value_size() }, &parameterSplit );
+                            SplitBySpace( evaluatedValueString, &parameterSplit );
                             if ( parameterSplit.size() != 16 )
                             {
                                 LOG_STRING_FORMAT( "Unrecognized matrix value \'%.*s\'.\n", valueAttribute->value_size(), valueAttribute->value() );
@@ -284,30 +364,6 @@ namespace
 
                     childNode = childNode->next_sibling();
                 }
-
-                currentNode = currentNode->next_sibling();
-            }
-            else if ( strncmp( currentNode->name(), "vector", currentNode->name_size() ) == 0 )
-            {
-                xml_attribute<>* nameAttribute = currentNode->first_attribute( "name", 0 );
-                if ( !nameAttribute )
-                {
-                    LOG_STRING_FORMAT( "Expect a name attribute from tag \'%.*s\'.\n", currentNode->name_size(), currentNode->name() );
-                    return nullptr;
-                }
-                currentValue = valueList->AllocateValue();
-                parentValue->InsertObjectField( { nameAttribute->value(), nameAttribute->value_size() }, currentValue );
-                currentValue->m_Type = EValueType::eVector;
-                
-                xml_attribute<>* valueXAttribute = currentNode->first_attribute( "x", 0 );
-                xml_attribute<>* valueYAttribute = currentNode->first_attribute( "y", 0 );
-                xml_attribute<>* valueZAttribute = currentNode->first_attribute( "z", 0 );
-
-                currentValue->m_Vector.x = valueXAttribute ? (float)atof( valueXAttribute->value() ) : 0.f;
-                currentValue->m_Vector.y = valueYAttribute ? (float)atof( valueYAttribute->value() ) : 0.f;
-                currentValue->m_Vector.z = valueZAttribute ? (float)atof( valueZAttribute->value() ) : 0.f;
-                // Mitsuba scene is in right handed coordinate system, convert to left handed one.
-                currentValue->m_Vector.x = -currentValue->m_Vector.x;
 
                 currentNode = currentNode->next_sibling();
             }
@@ -354,24 +410,32 @@ namespace
                     return nullptr;
                 }
 
+                // Value string could references a default parameter, must evaluate the value string to get the actual value string before parsing.
+                std::string_view evaluatedValueString( valueAttribute->value(), valueAttribute->value_size() );
+                if ( !TryEvaluateValueString( evaluatedValueString, defaultParameters, &evaluatedValueString ) )
+                {
+                    LOG_STRING_FORMAT( "Evaluating value string %.*s failed.\n", valueAttribute->value_size(), valueAttribute->value() );
+                    return nullptr;
+                }
+
                 if ( strncmp( currentNode->name(), "integer", currentNode->name_size() ) == 0 )
                 {
                     currentValue->m_Type = EValueType::eInteger;
-                    currentValue->m_Integer = (int32_t)atoi( valueAttribute->value() );
+                    currentValue->m_Integer = (int32_t)atoi( evaluatedValueString.data() );
                 }
                 else if ( strncmp( currentNode->name(), "float", currentNode->name_size() ) == 0 )
                 {
                     currentValue->m_Type = EValueType::eFloat;
-                    currentValue->m_Float = (float)atof( valueAttribute->value() );
+                    currentValue->m_Float = (float)atof( evaluatedValueString.data() );
                 }
                 else if ( strncmp( currentNode->name(), "boolean", currentNode->name_size() ) == 0 )
                 {
                     currentValue->m_Type = EValueType::eBoolean;
-                    if ( strncmp( valueAttribute->value(), "false", valueAttribute->value_size() ) == 0 )
+                    if ( strncmp( evaluatedValueString.data(), "false", evaluatedValueString.length() ) == 0 )
                     {
                         currentValue->m_Boolean = false;
                     }
-                    else if ( strncmp( valueAttribute->value(), "true", valueAttribute->value_size() ) == 0 )
+                    else if ( strncmp( evaluatedValueString.data(), "true", evaluatedValueString.length() ) == 0 )
                     {
                         currentValue->m_Boolean = true;
                     }
@@ -384,13 +448,28 @@ namespace
                 else if ( strncmp( currentNode->name(), "string", currentNode->name_size() ) == 0 )
                 {
                     currentValue->m_Type = EValueType::eString;
-                    currentValue->m_String = { valueAttribute->value(), valueAttribute->value_size() };
+                    currentValue->m_String = evaluatedValueString;
+                }
+                else if ( strncmp( currentNode->name(), "point", currentNode->name_size() ) == 0 ||
+                    strncmp( currentNode->name(), "vector", currentNode->name_size() ) == 0  )
+                {
+                    currentValue->m_Type = EValueType::eVector;
+                    parameterSplit.clear();
+                    SplitByComma( evaluatedValueString, &parameterSplit );
+                    if ( parameterSplit.size() != 3 )
+                    {
+                        LOG_STRING( "Unrecognized point/vector value.\n" );
+                        return nullptr;
+                    }
+                    currentValue->m_Vector.x = (float)atof( parameterSplit[ 0 ].data() );
+                    currentValue->m_Vector.y = (float)atof( parameterSplit[ 1 ].data() );
+                    currentValue->m_Vector.z = (float)atof( parameterSplit[ 2 ].data() );
                 }
                 else if ( strncmp( currentNode->name(), "rgb", currentNode->name_size() ) == 0 )
                 {
                     currentValue->m_Type = EValueType::eRGB;
                     parameterSplit.clear();
-                    SplitByComma( { valueAttribute->value(), valueAttribute->value_size() }, &parameterSplit );
+                    SplitByComma( evaluatedValueString, &parameterSplit );
                     if ( parameterSplit.size() != 3 )
                     {
                         LOG_STRING( "Unrecognized RGB value.\n" );
@@ -399,6 +478,19 @@ namespace
                     currentValue->m_RGB.x = (float)atof( parameterSplit[ 0 ].data() );
                     currentValue->m_RGB.y = (float)atof( parameterSplit[ 1 ].data() );
                     currentValue->m_RGB.z = (float)atof( parameterSplit[ 2 ].data() );
+                }
+
+                currentNode = currentNode->next_sibling();
+            }
+            else if ( strncmp( "default", currentNode->name(), currentNode->name_size() ) == 0 )
+            {
+                std::string_view name, value;
+                if ( TryGetAttribute( currentNode, "name", &name ) )
+                {
+                    if ( TryGetAttribute( currentNode, "value", &value ) )
+                    {
+                        defaultParameters.insert( std::make_pair( name, value ) );
+                    }
                 }
 
                 currentNode = currentNode->next_sibling();
@@ -554,8 +646,8 @@ namespace
 
         if ( hasDielectricIOR )
         {
-            SValue* intIORValue = BSDF.FindValue( "intIOR" );
-            SValue* extIORValue = BSDF.FindValue( "extIOR" );
+            SValue* intIORValue = BSDF.FindValue( "int_ior" );
+            SValue* extIORValue = BSDF.FindValue( "ext_ior" );
             float intIOR = 1.49f, extIOR = 1.000277f;
             if ( intIORValue )
             {
@@ -584,7 +676,7 @@ namespace
         else if ( hasConductorIOR )
         {
             SValue* etaValue = BSDF.FindValue( "eta" );
-            SValue* extEtaValue = BSDF.FindValue( "extEta" );
+            SValue* extEtaValue = BSDF.FindValue( "ext_eta" );
             XMFLOAT3 eta = { 0.0f, 0.0f, 0.0f };
             float extEta = 1.000277f;
             if ( etaValue )
@@ -606,7 +698,7 @@ namespace
                 }
                 else
                 {
-                    LOG_STRING( "Non-float extEta value is not supported.\n" );
+                    LOG_STRING( "Non-float ext_eta value is not supported.\n" );
                 }
             }
             material->m_IOR.x = eta.x / extEta;
@@ -632,7 +724,7 @@ namespace
         if ( hasDiffuseReflectance )
         {
             XMFLOAT3 albedo = { 0.5f, 0.5f, 0.5f };
-            SValue* diffuseReflectanceValue = BSDF.FindValue( !hasDielectricIOR ? "reflectance" : "diffuseReflectance" );
+            SValue* diffuseReflectanceValue = BSDF.FindValue( !hasDielectricIOR ? "reflectance" : "diffuse_reflectance" );
             if ( diffuseReflectanceValue )
             {
                 if ( diffuseReflectanceValue->m_Type == EValueType::eRGB )
@@ -748,7 +840,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
             SValue* typeValue = rootObjectValue.second->FindValue( "type" );
             if ( strncmp( "path", typeValue->m_String.data(), typeValue->m_String.length() ) == 0 )
             {
-                SValue* maxDepthValue = rootObjectValue.second->FindValue( "maxDepth" );
+                SValue* maxDepthValue = rootObjectValue.second->FindValue( "max_depth" );
                 if ( maxDepthValue )
                 {
                     m_MaxBounceCount = maxDepthValue->m_Integer;
@@ -861,7 +953,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
             m_FilmSize.x = 0.035f;
             m_FilmSize.y = m_FilmSize.x / std::fmax( aspect, 0.0001f );
 
-            SValue* focalLengthValue = rootObjectValue.second->FindValue( "focalLength" );
+            SValue* focalLengthValue = rootObjectValue.second->FindValue( "focal_length" );
             if ( focalLengthValue )
             {
                 float focalLengthMilliMeter = (float)atof( focalLengthValue->m_String.data() );
@@ -869,7 +961,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
 
                 if ( m_CameraType == ECameraType::PinHole )
                 {
-                    LOG_STRING( "Using focalLength for PinHole camera is not supported.\n" );
+                    LOG_STRING( "Using focal length for PinHole camera is not supported.\n" );
                 }
             }
             else
@@ -892,7 +984,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
 
             if ( m_CameraType == ECameraType::PinHole )
             {
-                std::string_view fovAxis = FindChildString( rootObjectValue.second, "fovAxis", "x" );
+                std::string_view fovAxis = FindChildString( rootObjectValue.second, "fov_axis", "x" );
                 if ( strncmp( "x", fovAxis.data(), fovAxis.length() ) == 0 )
                 {
                 }
@@ -902,15 +994,15 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                 }
                 else
                 {
-                    LOG_STRING_FORMAT( "Unsupported fovAxis \'%.*s\'.\n", fovAxis.length(), fovAxis.data() );
+                    LOG_STRING_FORMAT( "Unsupported fov_axis \'%.*s\'.\n", fovAxis.length(), fovAxis.data() );
                 }
             }
             else if ( m_CameraType == ECameraType::ThinLens )
             {
-                SValue* apertureRadiusValue = rootObjectValue.second->FindValue( "apertureRadius" );
+                SValue* apertureRadiusValue = rootObjectValue.second->FindValue( "aperture_radius" );
                 m_RelativeAperture = apertureRadiusValue ? m_FocalLength / ( apertureRadiusValue->m_Float * 2 ) : 8.0f;
             
-                SValue* focalDistanceValue = rootObjectValue.second->FindValue( "focusDistance" );
+                SValue* focalDistanceValue = rootObjectValue.second->FindValue( "focus_distance" );
                 m_FocalDistance = focalDistanceValue ? focalDistanceValue->m_Float : 2.0f;
             }
         }

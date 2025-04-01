@@ -1,5 +1,5 @@
 # DirectComputeRayTracing
-Unidirectional MC path tracer using D3D11 compute shader.
+Unidirectional MC path tracer using D3D12 compute shader.
 
 ## Features
 - Two level BVH acceleration structure
@@ -12,7 +12,7 @@ Unidirectional MC path tracer using D3D11 compute shader.
 - Physically based BRDFs and BSDFs
 - Kulla-Conty multiscattering approximation
 - Both megakernel and wavefront implementations
-- Loading scene from obj file and partial support of mistuba 0.6 scene format
+- Loading scene from obj file and partial support of mistuba 3.0 scene format
 
 ## Screen shots
 ![Coffee](https://onedrive.live.com/embed?resid=46FF59C600EB91ED%213291&authkey=%21APZWQq3g0SL42sI&width=2562&height=1453)

@@ -1,5 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="packages\Microsoft.Direct3D.D3D12.1.613.2\build\native\Microsoft.Direct3D.D3D12.props" Condition="Exists('packages\Microsoft.Direct3D.D3D12.1.613.2\build\native\Microsoft.Direct3D.D3D12.props')" />
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
       <Configuration>Debug</Configuration>
@@ -67,8 +68,12 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;Shlwapi.lib;MikkTSpace.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;dxguid.lib;dxcompiler.lib;Shlwapi.lib;MikkTSpace.lib;DDSTextureLoader12.lib;ImGui.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)DirectXShaderCompiler\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(SolutionDir)DirectXShaderCompiler\bin\dxcompiler.dll" "$(OutDir)" /f /y</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -88,11 +93,16 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;Shlwapi.lib;MikkTSpace.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;dxguid.lib;dxcompiler.lib;Shlwapi.lib;MikkTSpace.lib;DDSTextureLoader12.lib;ImGui.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)DirectXShaderCompiler\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(SolutionDir)DirectXShaderCompiler\bin\dxcompiler.dll" "$(OutDir)" /f /y</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Shaders\CppTypes.h" />
+    <None Include="packages.config" />
     <None Include="Shaders\Vertex.inc.hlsl">
       <FileType>Document</FileType>
     </None>
@@ -101,41 +111,30 @@
     <ClInclude Include="Source\BxDFTexturesBuilding.h" />
     <ClInclude Include="Source\Camera.h" />
     <ClInclude Include="Source\CommandLineArgs.h" />
-    <ClInclude Include="Source\ComputeJob.h" />
     <ClInclude Include="Source\Constants.h" />
-    <ClInclude Include="Source\ImGuiHelper.h" />
+    <ClInclude Include="Source\D3D12GPUDescriptorHeap.h" />
+    <ClInclude Include="Source\D3D12Resource.h" />
+    <ClInclude Include="Source\D3D12MemoryArena.h" />
+    <ClInclude Include="Source\D3D12DescriptorHandle.h" />
+    <ClInclude Include="Source\D3D12DescriptorPoolHeap.h" />
+    <ClInclude Include="Source\D3D12DescriptorUtil.h" />
     <ClInclude Include="Source\MathHelper.h" />
-    <ClInclude Include="Source\SampleConvolutionRenderer.h" />
-    <ClInclude Include="Source\D3D11RenderSystem.h" />
+    <ClInclude Include="Source\D3D12Adapter.h" />
     <ClInclude Include="Source\Application.h" />
-    <ClInclude Include="Source\DDSTextureLoader.h" />
     <ClInclude Include="Resources\Resource.h" />
     <ClInclude Include="Source\ScopedRenderAnnotation.h" />
-    <ClInclude Include="Source\GraphicsJob.h" />
-    <ClInclude Include="Source\imgui\imconfig.h" />
-    <ClInclude Include="Source\imgui\imgui.h" />
-    <ClInclude Include="Source\imgui\imgui_impl_dx11.h" />
-    <ClInclude Include="Source\imgui\imgui_impl_win32.h" />
-    <ClInclude Include="Source\imgui\imgui_internal.h" />
-    <ClInclude Include="Source\imgui\imstb_rectpack.h" />
-    <ClInclude Include="Source\imgui\imstb_textedit.h" />
-    <ClInclude Include="Source\imgui\imstb_truetype.h" />
     <ClInclude Include="Source\Logging.h" />
     <ClInclude Include="Source\MessageBox.h" />
     <ClInclude Include="Source\MegakernelPathTracer.h" />
     <ClInclude Include="Source\PathTracer.h" />
     <ClInclude Include="Source\PointerTypes.h" />
-    <ClInclude Include="Source\PostProcessingRenderer.h" />
     <ClInclude Include="Source\Rectangle.h" />
     <ClInclude Include="Source\RenderContext.h" />
-    <ClInclude Include="Source\RenderJobHelper.h" />
     <ClInclude Include="Source\Scene.h" />
-    <ClInclude Include="Source\SceneLuminanceRenderer.h" />
     <ClInclude Include="Source\StringConversion.h" />
     <ClInclude Include="Source\Timers.h" />
     <ClInclude Include="Source\Shader.h" />
     <ClInclude Include="Source\GPUBuffer.h" />
-    <ClInclude Include="Source\GPUResourceCreationFlag.h" />
     <ClInclude Include="Source\GPUTexture.h" />
     <ClInclude Include="Source\DirectComputeRayTracing.h" />
     <ClInclude Include="Source\stdafx.h" />
@@ -148,51 +147,26 @@
     <ClCompile Include="Source\BxDFTexturesBuilding.cpp" />
     <ClCompile Include="Source\Camera.cpp" />
     <ClCompile Include="Source\CommandLineArgs.cpp" />
-    <ClCompile Include="Source\ComputeJob.cpp" />
-    <ClCompile Include="Source\ImGuiHelper.cpp" />
+    <ClCompile Include="Source\D3D12Resource.cpp" />
+    <ClCompile Include="Source\D3D12MemoryArena.cpp" />
+    <ClCompile Include="Source\D3D12DescriptorHeap.cpp" />
+    <ClCompile Include="Source\ImGui.cpp" />
     <ClCompile Include="Source\MathHelper.cpp" />
     <ClCompile Include="Source\SceneRayTrace.cpp" />
     <ClCompile Include="Source\SceneXMLLoading.cpp" />
-    <ClCompile Include="Source\SampleConvolutionRenderer.cpp" />
-    <ClCompile Include="Source\D3D11RenderSystem.cpp" />
+    <ClCompile Include="Source\SampleConvolution.cpp" />
+    <ClCompile Include="Source\D3D12Adapter.cpp" />
     <ClCompile Include="Source\Application.cpp" />
-    <ClCompile Include="Source\DDSTextureLoader.cpp" />
     <ClCompile Include="Source\Logging.cpp" />
-    <ClCompile Include="Source\GraphicsJob.cpp" />
-    <ClCompile Include="Source\imgui\imgui.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="Source\imgui\imgui_demo.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="Source\imgui\imgui_draw.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="Source\imgui\imgui_impl_dx11.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="Source\imgui\imgui_impl_win32.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="Source\imgui\imgui_widgets.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
     <ClCompile Include="Source\MessageBox.cpp" />
     <ClCompile Include="Source\MegakernelPathTracer.cpp" />
-    <ClCompile Include="Source\PostProcessingRenderer.cpp" />
-    <ClCompile Include="Source\RenderJobHelper.cpp" />
+    <ClCompile Include="Source\PostProcessing.cpp" />
     <ClCompile Include="Source\Scene.cpp" />
-    <ClCompile Include="Source\SceneLuminanceRenderer.cpp" />
+    <ClCompile Include="Source\SceneLuminance.cpp" />
     <ClCompile Include="Source\Shader.cpp" />
     <ClCompile Include="Source\GPUBuffer.cpp" />
     <ClCompile Include="Source\GPUTexture.cpp" />
-    <ClCompile Include="Source\DirectComputeRayTracing.cpp" />
+    <ClCompile Include="Source\LaunchRendererLoop.cpp" />
     <ClCompile Include="Source\stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
@@ -410,5 +384,15 @@
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
+    <Import Project="packages\Microsoft.Direct3D.D3D12.1.613.2\build\native\Microsoft.Direct3D.D3D12.targets" Condition="Exists('packages\Microsoft.Direct3D.D3D12.1.613.2\build\native\Microsoft.Direct3D.D3D12.targets')" />
+    <Import Project="packages\WinPixEventRuntime.1.0.240308001\build\WinPixEventRuntime.targets" Condition="Exists('packages\WinPixEventRuntime.1.0.240308001\build\WinPixEventRuntime.targets')" />
   </ImportGroup>
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('packages\Microsoft.Direct3D.D3D12.1.613.2\build\native\Microsoft.Direct3D.D3D12.props')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Microsoft.Direct3D.D3D12.1.613.2\build\native\Microsoft.Direct3D.D3D12.props'))" />
+    <Error Condition="!Exists('packages\Microsoft.Direct3D.D3D12.1.613.2\build\native\Microsoft.Direct3D.D3D12.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Microsoft.Direct3D.D3D12.1.613.2\build\native\Microsoft.Direct3D.D3D12.targets'))" />
+    <Error Condition="!Exists('packages\WinPixEventRuntime.1.0.240308001\build\WinPixEventRuntime.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\WinPixEventRuntime.1.0.240308001\build\WinPixEventRuntime.targets'))" />
+  </Target>
 </Project>

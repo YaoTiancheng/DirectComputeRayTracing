@@ -18,10 +18,11 @@
 #include <vector>
 #include <stack>
 
-#include <d3d11_1.h>
-#include <D3Dcommon.h>
+#include "d3d12.h"
+#include "d3d12sdklayers.h"
+#include "d3dx12.h"
 #include <dxgi1_5.h>
-#include <d3dcompiler.h>
+#include <dxgidebug.h>
 #include <DirectXMath.h>
 #include <DirectXCollision.h>
 #include <wrl/client.h>
@@ -38,6 +39,9 @@
 #include <fstream>
 #include <sstream>
 
+#include "DirectXShaderCompiler/inc/dxcapi.h"
+#include "DirectXShaderCompiler/inc/d3d12shader.h"
+
 #define _USE_MATH_DEFINES
 #include <math.h>
 
@@ -45,5 +49,6 @@
 
 #define ARRAY_LENGTH( arr ) std::size( arr )
 
-#define DCRT_STRINGIFY_MACRO_VALUE( s ) DCRT_STRINGIFY_MACRO( s )
-#define DCRT_STRINGIFY_MACRO( s ) #s
+using Microsoft::WRL::ComPtr;
+
+#include "pix3.h"

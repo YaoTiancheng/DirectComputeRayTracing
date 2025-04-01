@@ -1,26 +1,31 @@
 #include "stdafx.h"
 #include "GPUBuffer.h"
-#include "D3D11RenderSystem.h"
+#include "D3D12Adapter.h"
+#include "D3D12DescriptorPoolHeap.h"
+#include "D3D12MemoryArena.h"
 
-ID3D11ShaderResourceView* GPUBuffer::GetSRV( uint32_t elementOffset, uint32_t numElement )
+#define BUFFER_NEED_DEFAULT_CBV 0
+
+SD3D12DescriptorHandle GPUBuffer::GetSRV( DXGI_FORMAT format, uint32_t byteStride, uint32_t elementOffset, uint32_t numElement )
 {
-    ID3D11ShaderResourceView* SRV = nullptr;
+    SD3D12DescriptorHandle SRV;
     auto it = m_SRVs.find( { elementOffset, numElement } );
     if ( it == m_SRVs.end() )
     {
-        D3D11_SHADER_RESOURCE_VIEW_DESC defaultSRVDesc;
-        assert( m_SRV != nullptr );
-        m_SRV->GetDesc( &defaultSRVDesc );
+        TD3D12DescriptorPoolHeapRef<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV> descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV>();
 
-        D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc;
-        SRVDesc.Format = defaultSRVDesc.Format;
-        SRVDesc.ViewDimension = defaultSRVDesc.ViewDimension;
-        SRVDesc.Buffer.ElementOffset = elementOffset;
-        SRVDesc.Buffer.NumElements = numElement;
-        GetDevice()->CreateShaderResourceView( m_Buffer, &SRVDesc, &SRV );
-
-        if ( SRV )
+        D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
+        desc.Format = format;
+        desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        desc.Buffer.FirstElement = elementOffset;
+        desc.Buffer.NumElements = numElement;
+        desc.Buffer.StructureByteStride = byteStride;
+        desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+        SRV = descriptorHeap.Allocate();
+        if ( SRV.IsValid() )
         {
+            D3D12Adapter::GetDevice()->CreateShaderResourceView( m_Buffer.Get(), &desc, SRV.CPU );
             m_SRVs.insert( { { elementOffset, numElement }, SRV } );
         }
     }
@@ -28,132 +33,274 @@ ID3D11ShaderResourceView* GPUBuffer::GetSRV( uint32_t elementOffset, uint32_t nu
     {
         SRV = it->second;
     }
-    assert( SRV != nullptr );
+    assert( SRV.IsValid() );
     return SRV;
 }
 
 void* GPUBuffer::Map()
 {
-    D3D11_MAPPED_SUBRESOURCE mappedSubresource;
-    ZeroMemory( &mappedSubresource, sizeof( D3D11_MAPPED_SUBRESOURCE ) );
-    HRESULT hr = GetDeviceContext()->Map( m_Buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource );
-    if ( FAILED( hr ) )
+    void* mappedData = nullptr;
+    if ( FAILED( m_Buffer->Map( 0, nullptr, &mappedData ) ) )
+    {
         return nullptr;
-    return mappedSubresource.pData;
-}
-
-void* GPUBuffer::Map( D3D11_MAP mapType, uint32_t flags )
-{
-    D3D11_MAPPED_SUBRESOURCE mappedSubresource;
-    ZeroMemory( &mappedSubresource, sizeof( D3D11_MAPPED_SUBRESOURCE ) );
-    HRESULT hr = GetDeviceContext()->Map( m_Buffer, 0, mapType, flags, &mappedSubresource );
-    if ( FAILED( hr ) )
-        return nullptr;
-    return mappedSubresource.pData;
+    }
+    return mappedData;
 }
 
 void GPUBuffer::Unmap()
 {
-    GetDeviceContext()->Unmap( m_Buffer, 0 );
+    m_Buffer->Unmap( 0, nullptr );
 }
 
-GPUBuffer::GPUBuffer()
-    : m_Buffer( nullptr )
-    , m_SRV( nullptr )
-    , m_UAV( nullptr )
+uint8_t* GPUBuffer::SUploadContext::Map()
 {
+    void* mappedData = nullptr;
+    if ( FAILED( m_SrcBuffer->Map( 0, nullptr, &mappedData ) ) )
+    {
+        return nullptr;
+    }
+    return (uint8_t*)mappedData + m_SrcOffset;
+}
+
+void GPUBuffer::SUploadContext::Unmap()
+{
+    D3D12_RANGE range;
+    range.Begin = m_SrcOffset;
+    range.End = m_SrcOffset + m_ByteWidth;
+    m_SrcBuffer->Unmap( 0, &range );
+}
+
+void GPUBuffer::SUploadContext::Upload()
+{
+    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
+    commandList->CopyBufferRegion( m_DestBuffer, 0, m_SrcBuffer, m_SrcOffset, m_ByteWidth );
+}
+
+namespace
+{
+    bool InternalAllocateUploadContext( ID3D12Resource* destBuffer, GPUBuffer::SUploadContext* context )
+    {
+        const D3D12_RESOURCE_DESC desc = destBuffer->GetDesc();
+
+        CD3D12MultiBufferArena* uploadBufferArena = D3D12Adapter::GetUploadBufferArena();
+        SD3D12ArenaBufferLocation location = uploadBufferArena->Allocate( desc.Width, 1 );
+        if ( location.IsValid() )
+        {
+            context->m_SrcBuffer = location.m_Memory;
+            context->m_SrcOffset = location.m_Offset;
+        }
+        else
+        {
+            // Try to create a committed intermediate buffer
+            D3D12_RESOURCE_DESC intermediateDesc = CD3DX12_RESOURCE_DESC::Buffer( desc.Width );
+            D3D12_HEAP_PROPERTIES intermediateHeapProp = CD3DX12_HEAP_PROPERTIES( D3D12_HEAP_TYPE_UPLOAD );
+            ID3D12Resource* buffer = nullptr;
+            HRESULT hr = D3D12Adapter::GetDevice()->CreateCommittedResource( &intermediateHeapProp, D3D12_HEAP_FLAG_NONE, &intermediateDesc,
+                D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS( &buffer ) );
+            if ( FAILED ( hr ) )
+            {
+                return false;
+            }
+
+            context->m_CommittedBuffer.Reset( buffer );
+            context->m_SrcBuffer = buffer;
+            context->m_SrcOffset = 0;
+        }
+
+        context->m_DestBuffer = destBuffer;
+        context->m_ByteWidth = desc.Width;
+
+        return true;
+    }
+}
+
+bool GPUBuffer::AllocateUploadContext( GPUBuffer::SUploadContext* context ) const
+{
+    return InternalAllocateUploadContext( m_Buffer.Get(), context );
 }
 
 GPUBuffer::~GPUBuffer()
 {
+    TD3D12DescriptorPoolHeapRef<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV> descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV>();
     for ( auto& it : m_SRVs )
     {
-        it.second->Release();
+        descriptorHeap.Free( it.second );
     }
-    if ( m_UAV )
+    if ( m_UAV.IsValid() )
     {
-        m_UAV->Release();
-        m_UAV = nullptr;
+        descriptorHeap.Free( m_UAV );
     }
-    if ( m_Buffer )
+    if ( m_CBV.IsValid() )
     {
-        m_Buffer->Release();
-        m_Buffer = nullptr;
+        descriptorHeap.Free( m_CBV );
     }
 }
 
-GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORMAT format, D3D11_USAGE usage, uint32_t bindFlags, bool isStructured, uint32_t flags, const void* initialData )
+GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORMAT format, EGPUBufferUsage usage, uint32_t bindFlags, bool isStructured, const void* initialData, D3D12_RESOURCE_STATES resourceStates )
 {
-    bool CPUWriteable = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_CPUWriteable ) != 0;
-    bool CPUReadable = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_CPUReadable ) != 0;
-    bool hasUAV = ( bindFlags & D3D11_BIND_UNORDERED_ACCESS ) != 0;
-    bool hasSRV = ( bindFlags & D3D11_BIND_SHADER_RESOURCE ) != 0;
-    bool indirectArgs = ( flags & GPUResourceCreationFlags::GPUResourceCreationFlags_IndirectArgs ) != 0;
+    const bool hasUAV = ( bindFlags & EGPUBufferBindFlag_UnorderedAccess ) != 0;
+    const bool hasSRV = ( bindFlags & EGPUBufferBindFlag_ShaderResource ) != 0;
+#if BUFFER_NEED_DEFAULT_CBV
+    const bool hasCBV = ( bindFlags & EGPUBufferBindFlag_ConstantBuffer ) != 0;
+#else
+    const bool hasCBV = false;
+#endif
 
-    D3D11_BUFFER_DESC bufferDesc;
-    ZeroMemory( &bufferDesc, sizeof( bufferDesc ) );
-    bufferDesc.ByteWidth = byteWidth;
-    bufferDesc.Usage = usage;
-    bufferDesc.BindFlags = bindFlags;
-    bufferDesc.CPUAccessFlags = CPUWriteable ? D3D11_CPU_ACCESS_WRITE : 0;
-    bufferDesc.CPUAccessFlags |= CPUReadable ? D3D11_CPU_ACCESS_READ : 0;
-    bufferDesc.StructureByteStride = byteStride;
-    bufferDesc.MiscFlags = isStructured ? D3D11_RESOURCE_MISC_BUFFER_STRUCTURED : 0;
-    bufferDesc.MiscFlags |= indirectArgs ? D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS : 0;
-
-    D3D11_SUBRESOURCE_DATA subresourceData;
-    subresourceData.pSysMem = initialData;
-    subresourceData.SysMemPitch = 0;
-    subresourceData.SysMemSlicePitch = 0;
-
-    ID3D11Buffer* buffer = nullptr;
-    D3D11_SUBRESOURCE_DATA* initialDataPtr = initialData != nullptr ? &subresourceData : nullptr;
-    HRESULT hr = GetDevice()->CreateBuffer( &bufferDesc, initialDataPtr, &buffer );
-    if ( FAILED( hr ) )
+    D3D12_RESOURCE_DESC bufferDesc = {};
+    bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    bufferDesc.Width = byteWidth;
+    bufferDesc.Height = 1;
+    bufferDesc.DepthOrArraySize = 1;
+    bufferDesc.MipLevels = 1;
+    bufferDesc.Format = DXGI_FORMAT_UNKNOWN;
+    bufferDesc.SampleDesc.Count = 1;
+    bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    bufferDesc.Flags = hasUAV ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE;
+    ID3D12Resource* D3DBuffer = nullptr;
+    if ( usage != EGPUBufferUsage::Dynamic )
     {
-        return nullptr;
+        const D3D12_HEAP_TYPE heapType = usage == EGPUBufferUsage::Default ? D3D12_HEAP_TYPE_DEFAULT : D3D12_HEAP_TYPE_READBACK;
+        const D3D12_RESOURCE_STATES actualResourceStates = usage == EGPUBufferUsage::Default && !initialData ? resourceStates : D3D12_RESOURCE_STATE_COPY_DEST;
+        D3D12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES( heapType );
+        if ( FAILED( D3D12Adapter::GetDevice()->CreateCommittedResource( &heapProperties, D3D12_HEAP_FLAG_NONE, &bufferDesc,
+            actualResourceStates, nullptr, IID_PPV_ARGS( &D3DBuffer ) ) ) )
+        {
+            return nullptr;
+        }
+    }
+    else
+    {
+        // todo: Placed resource for constant buffers seems to be an overkill. Use buffer sub-allocation instead.
+
+        CD3D12MultiHeapArena* uploadHeapArena = D3D12Adapter::GetUploadHeapArena();
+        SD3D12ArenaHeapLocation location = uploadHeapArena->Allocate( byteWidth, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT );
+        if ( !location.IsValid() )
+        {
+            return nullptr;
+        }
+
+        if ( FAILED( D3D12Adapter::GetDevice()->CreatePlacedResource( location.m_Memory, location.m_Offset, &bufferDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS( &D3DBuffer ) ) ) )
+        {
+            return nullptr;
+        }
     }
 
-    ID3D11ShaderResourceView* SRV = nullptr;
+    CD3D12ComPtr<ID3D12Resource> buffer( D3DBuffer );
+    buffer->SetName( L"Buffer" );
+
+    if ( initialData )
+    {
+        assert( usage != EGPUBufferUsage::Staging );
+        if ( usage == EGPUBufferUsage::Dynamic )
+        {
+            void* mappedData = nullptr;
+            if ( FAILED( buffer->Map( 0, nullptr, &mappedData ) ) )
+            {
+                return nullptr;
+            }
+            memcpy_s( mappedData, byteWidth, initialData, byteWidth );
+            buffer->Unmap( 0, nullptr );
+        }
+        else if ( usage == EGPUBufferUsage::Default )
+        {
+            SUploadContext uploadContext;
+            if ( !InternalAllocateUploadContext( buffer.Get(), &uploadContext ) )
+            {
+                return nullptr;
+            }
+
+            uint8_t* mappedData = uploadContext.Map();
+            if ( mappedData )
+            { 
+                memcpy_s( mappedData, byteWidth, initialData, byteWidth );
+                uploadContext.Unmap();
+
+                uploadContext.Upload();
+
+                if ( resourceStates != D3D12_RESOURCE_STATE_COPY_DEST )
+                {
+                    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
+                    D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( buffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, resourceStates );
+                    commandList->ResourceBarrier( 1, &barrier );
+                }
+            }
+        }
+    }
+
+    TD3D12DescriptorPoolHeapRef<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV> descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV>();
+
+    SD3D12DescriptorHandle SRV;
     if ( hasSRV )
     {
-        D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc;
-        SRVDesc.Format = isStructured ? DXGI_FORMAT_UNKNOWN : format;
-        SRVDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
-        SRVDesc.Buffer.ElementOffset = 0;
-        SRVDesc.Buffer.NumElements = byteWidth / byteStride;
-        hr = GetDevice()->CreateShaderResourceView( buffer, &SRVDesc, &SRV );
-        if ( FAILED( hr ) )
+        D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
+        desc.Format = isStructured ? DXGI_FORMAT_UNKNOWN : format;
+        desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        desc.Buffer.FirstElement = 0;
+        desc.Buffer.NumElements = byteWidth / byteStride;
+        desc.Buffer.StructureByteStride = isStructured ? byteStride : 0;
+        desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+        SRV = descriptorHeap.Allocate();
+        if ( !SRV.IsValid() )
         {
-            buffer->Release();
             return nullptr;
         }
+        D3D12Adapter::GetDevice()->CreateShaderResourceView( buffer.Get(), &desc, SRV.CPU );
     }
 
-    ID3D11UnorderedAccessView* UAV = nullptr;
+    SD3D12DescriptorHandle UAV;
     if ( hasUAV )
     {
-        D3D11_UNORDERED_ACCESS_VIEW_DESC UAVDesc;
-        UAVDesc.Format = isStructured ? DXGI_FORMAT_UNKNOWN : format;
-        UAVDesc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
-        UAVDesc.Buffer.FirstElement = 0;
-        UAVDesc.Buffer.NumElements = byteWidth / byteStride;
-        UAVDesc.Buffer.Flags = 0;
-        hr = GetDevice()->CreateUnorderedAccessView( buffer, &UAVDesc, &UAV );
-        if ( FAILED( hr ) )
+        D3D12_UNORDERED_ACCESS_VIEW_DESC desc;
+        desc.Format = isStructured ? DXGI_FORMAT_UNKNOWN : format;
+        desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+        desc.Buffer.FirstElement = 0;
+        desc.Buffer.NumElements = byteWidth / byteStride;
+        desc.Buffer.StructureByteStride = isStructured ? byteStride : 0;
+        desc.Buffer.CounterOffsetInBytes = 0;
+        desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+        UAV = descriptorHeap.Allocate();
+        if ( !UAV.IsValid() )
         {
-            UAV->Release();
-            buffer->Release();
+            if ( hasSRV )
+            {
+                descriptorHeap.Free( SRV );
+            }
             return nullptr;
         }
+        D3D12Adapter::GetDevice()->CreateUnorderedAccessView( buffer.Get(), nullptr, &desc, UAV.CPU );
+    }
+
+    SD3D12DescriptorHandle CBV;
+    if ( hasCBV )
+    {
+        D3D12_CONSTANT_BUFFER_VIEW_DESC desc;
+        desc.BufferLocation = buffer->GetGPUVirtualAddress();
+        desc.SizeInBytes = byteWidth;
+        CBV = descriptorHeap.Allocate();
+        if ( !CBV.IsValid() )
+        {
+            if ( hasSRV )
+            { 
+                descriptorHeap.Free( SRV );
+            }
+            if ( hasUAV )
+            { 
+                descriptorHeap.Free( UAV );
+            }
+            return nullptr;
+        }
+        D3D12Adapter::GetDevice()->CreateConstantBufferView( &desc, CBV.CPU );
     }
 
     GPUBuffer* gpuBuffer = new GPUBuffer();
-    gpuBuffer->m_Buffer = buffer;
+    gpuBuffer->m_Buffer = buffer.Get();
     gpuBuffer->m_SRV = SRV;
     gpuBuffer->m_UAV = UAV;
+    gpuBuffer->m_CBV = CBV;
 
-    if ( SRV )
+    if ( SRV.IsValid() )
     {
         gpuBuffer->m_SRVs.insert( { { 0, byteWidth / byteStride }, SRV } );
     }
@@ -161,12 +308,12 @@ GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORM
     return gpuBuffer;
 }
 
-GPUBuffer* GPUBuffer::CreateStructured( uint32_t byteWidth, uint32_t byteStride, D3D11_USAGE usage, uint32_t bindFlags, uint32_t flags, const void* initialData )
+GPUBuffer* GPUBuffer::CreateStructured( uint32_t byteWidth, uint32_t byteStride, EGPUBufferUsage usage, uint32_t bindFlags, const void* initialData, D3D12_RESOURCE_STATES resourceStates )
 {
-    return Create( byteWidth, byteStride, DXGI_FORMAT_UNKNOWN, usage, bindFlags, true, flags, initialData );
+    return Create( byteWidth, byteStride, DXGI_FORMAT_UNKNOWN, usage, bindFlags, true, initialData, resourceStates );
 }
 
-GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORMAT format, D3D11_USAGE usage, uint32_t bindFlags, uint32_t flags, const void* initialData )
+GPUBuffer* GPUBuffer::Create( uint32_t byteWidth, uint32_t byteStride, DXGI_FORMAT format, EGPUBufferUsage usage, uint32_t bindFlags, const void* initialData, D3D12_RESOURCE_STATES resourceStates )
 {
-    return Create( byteWidth, byteStride, format, usage, bindFlags, false, flags, initialData );
+    return Create( byteWidth, byteStride, format, usage, bindFlags, false, initialData, resourceStates );
 }

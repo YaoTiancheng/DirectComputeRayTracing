@@ -1,14 +1,20 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.28010.2026
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.34729.46
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectComputeRayTracing", "DirectComputeRayTracing.vcxproj", "{5376CBD2-3B00-46A2-AB27-CB4D9855CD3B}"
 	ProjectSection(ProjectDependencies) = postProject
+		{1CF4EE1D-37BB-48D0-9F73-574901F8659F} = {1CF4EE1D-37BB-48D0-9F73-574901F8659F}
 		{DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6} = {DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6}
+		{736FB8FF-AD55-4F63-A7A2-BF3DC3294CFF} = {736FB8FF-AD55-4F63-A7A2-BF3DC3294CFF}
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MikkTSpace", "MikkTSpace\MikkTSpace.vcxproj", "{DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DDSTextureLoader12", "DDSTextureLoader12\DDSTextureLoader12.vcxproj", "{1CF4EE1D-37BB-48D0-9F73-574901F8659F}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ImGui", "ImGui\ImGui.vcxproj", "{736FB8FF-AD55-4F63-A7A2-BF3DC3294CFF}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -24,6 +30,14 @@ Global
 		{DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6}.Debug|x64.Build.0 = Debug|x64
 		{DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6}.Release|x64.ActiveCfg = Release|x64
 		{DBD94448-BB71-4CEE-A9D3-AB36E07EE0C6}.Release|x64.Build.0 = Release|x64
+		{1CF4EE1D-37BB-48D0-9F73-574901F8659F}.Debug|x64.ActiveCfg = Debug|x64
+		{1CF4EE1D-37BB-48D0-9F73-574901F8659F}.Debug|x64.Build.0 = Debug|x64
+		{1CF4EE1D-37BB-48D0-9F73-574901F8659F}.Release|x64.ActiveCfg = Release|x64
+		{1CF4EE1D-37BB-48D0-9F73-574901F8659F}.Release|x64.Build.0 = Release|x64
+		{736FB8FF-AD55-4F63-A7A2-BF3DC3294CFF}.Debug|x64.ActiveCfg = Debug|x64
+		{736FB8FF-AD55-4F63-A7A2-BF3DC3294CFF}.Debug|x64.Build.0 = Debug|x64
+		{736FB8FF-AD55-4F63-A7A2-BF3DC3294CFF}.Release|x64.ActiveCfg = Release|x64
+		{736FB8FF-AD55-4F63-A7A2-BF3DC3294CFF}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

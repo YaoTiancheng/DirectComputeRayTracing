@@ -16,8 +16,8 @@ struct VertexOut
 Texture2D               g_FilmTexture     : register( t0 );
 StructuredBuffer<float> g_LuminanceBuffer : register( t1 );
 
-SamplerState LinearSampler;
-SamplerState PointSampler;
+SamplerState LinearSampler : register( s0 );
+SamplerState PointSampler : register( s1 );
 
 float ComputeEV100FromAverageLuminance( float avgLum )
 {

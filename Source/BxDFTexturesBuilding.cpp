@@ -3,11 +3,15 @@
 #include "BxDFTexturesBuilding.h"
 #include "Shader.h"
 #include "GPUTexture.h"
-#include "GPUBuffer.h"
-#include "ComputeJob.h"
+#include "D3D12Adapter.h"
+#include "D3D12DescriptorUtil.h"
+#include "D3D12Resource.h"
 #include "ScopedRenderAnnotation.h"
 #include "MathHelper.h"
+#include "Logging.h"
 #include "../Shaders/BxDFTextureDef.inc.hlsl"
+
+using namespace D3D12Util;
 
 struct SKernelCompilationParams
 {
@@ -24,34 +28,37 @@ struct SKernelCompilationParams
     bool m_HasFresnel;
 };
 
-static ComputeShaderPtr CompileAndCreateKernel( const char* kernelName, const SKernelCompilationParams& params )
-{
-    std::vector<D3D_SHADER_MACRO> shaderDefines;
+static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 1, 1 );
 
-    shaderDefines.push_back( { "GGX_SAMPLE_VNDF", "" } );
+static CD3D12ComPtr<ID3D12PipelineState> CompileAndCreateKernel( const wchar_t* kernelName, const SKernelCompilationParams& params, ID3D12RootSignature* rootSignature,
+    uint32_t compileFlags = EShaderCompileFlag_None )
+{
+    std::vector<DxcDefine> shaderDefines;
+
+    shaderDefines.push_back( { L"GGX_SAMPLE_VNDF", L"" } );
 
     if ( kernelName )
     {
-        shaderDefines.push_back( { kernelName, "" } );
+        shaderDefines.push_back( { kernelName, L"" } );
     }
 
     if ( params.m_HasFresnel )
     {
-        shaderDefines.push_back( { "HAS_FRESNEL", "" } );
+        shaderDefines.push_back( { L"HAS_FRESNEL", L"" } );
     }
 
     if ( params.m_BxDFType == 1 )
     {
-        shaderDefines.push_back( { "REFRACTION_NO_SCALE_FACTOR", "" } );
+        shaderDefines.push_back( { L"REFRACTION_NO_SCALE_FACTOR", L"" } );
     }
 
-    char sharedBuffer[ 512 ];
+    wchar_t sharedBuffer[ 512 ];
     int sharedBufferStart = 0;
-    const int sharedBufferSize = sizeof( sharedBuffer );
+    const int sharedBufferSize = (int)ARRAY_LENGTH( sharedBuffer );
 #define ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( name, value, format ) \
     if ( sharedBufferStart < sharedBufferSize - 1 ) \
     { \
-        int len = sprintf_s( sharedBuffer + sharedBufferStart, sharedBufferSize - sharedBufferStart, format, value ); \
+        int len = swprintf_s( sharedBuffer + sharedBufferStart, sharedBufferSize - sharedBufferStart, format, value ); \
         if ( len > 0 ) \
         { \
             shaderDefines.push_back( { name, sharedBuffer + sharedBufferStart } ); \
@@ -67,27 +74,70 @@ static ComputeShaderPtr CompileAndCreateKernel( const char* kernelName, const SK
         assert( "Shared buffer is too small!" ); \
     }
 
-    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( "LUT_INTERVAL_X", params.m_LutIntervalX, "%f" );
-    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( "LUT_INTERVAL_Y", params.m_LutIntervalY, "%f" );
-    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( "LUT_INTERVAL_Z", params.m_LutIntervalZ, "%f" );
-    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( "LUT_START_Z", params.m_LutStartZ, "%f" );
-    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( "SAMPLE_WEIGHT", params.m_SampleWeight, "%f" );
-    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( "SAMPLE_COUNT", params.m_SampleCount, "%d" );
-    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( "GROUP_SIZE_X", params.m_GroupSizeX, "%d" );
-    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( "GROUP_SIZE_Y", params.m_GroupSizeY, "%d" );
-    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( "GROUP_SIZE_Z", params.m_GroupSizeZ, "%d" );
-    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( "BXDF_TYPE", params.m_BxDFType, "%d" );
+    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( L"LUT_INTERVAL_X", params.m_LutIntervalX, L"%f" );
+    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( L"LUT_INTERVAL_Y", params.m_LutIntervalY, L"%f" );
+    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( L"LUT_INTERVAL_Z", params.m_LutIntervalZ, L"%f" );
+    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( L"LUT_START_Z", params.m_LutStartZ, L"%f" );
+    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( L"SAMPLE_WEIGHT", params.m_SampleWeight, L"%f" );
+    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( L"SAMPLE_COUNT", params.m_SampleCount, L"%d" );
+    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( L"GROUP_SIZE_X", params.m_GroupSizeX, L"%d" );
+    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( L"GROUP_SIZE_Y", params.m_GroupSizeY, L"%d" );
+    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( L"GROUP_SIZE_Z", params.m_GroupSizeZ, L"%d" );
+    ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( L"BXDF_TYPE", params.m_BxDFType, L"%d" );
 #undef ADD_SHADER_DEFINE_WITH_SHARED_BUFFER
 
-    shaderDefines.push_back( { NULL, NULL } );
+    ComputeShaderPtr shader( ComputeShader::CreateFromFile( L"Shaders\\BxDFTexturesBuilding.hlsl", shaderDefines, compileFlags ) );
+    if ( !shader )
+    {
+        return CD3D12ComPtr<ID3D12PipelineState>();
+    }
 
-    ComputeShaderPtr shader( ComputeShader::CreateFromFile( L"Shaders\\BxDFTexturesBuilding.hlsl", shaderDefines ) );
-    return shader;
+    // Create PSO
+    D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+    psoDesc.pRootSignature = rootSignature;
+    psoDesc.CS = shader->GetShaderBytecode();
+    psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
+    ID3D12PipelineState* PSO = nullptr;
+    D3D12Adapter::GetDevice()->CreateComputePipelineState( &psoDesc, IID_PPV_ARGS( &PSO ) );
+
+    return CD3D12ComPtr<ID3D12PipelineState>( PSO );
 }
 
 SBxDFTextures BxDFTexturesBuilding::Build()
 {
     SBxDFTextures outputTextures;
+
+    CD3D12ComPtr<ID3D12RootSignature> rootSignature;
+    {
+        CD3DX12_ROOT_PARAMETER1 rootParameters[ 2 ];
+        rootParameters[ 0 ].InitAsConstants( 4, 0 );
+        SD3D12DescriptorTableRanges descriptorTableRanges;
+        s_DescriptorTableLayout.InitRootParameter( &rootParameters[ 1 ], &descriptorTableRanges );
+        CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 2, rootParameters );
+
+        ComPtr<ID3DBlob> serializedRootSignature;
+        ComPtr<ID3DBlob> error;
+        HRESULT hr = D3D12SerializeVersionedRootSignature( &rootSignatureDesc, serializedRootSignature.GetAddressOf(), error.GetAddressOf() );
+        if ( error )
+        {
+            LOG_STRING_FORMAT( "Create BxDFTextureBuilding root signature with error: %s\n", (const char*)error->GetBufferPointer() );
+        }
+        if ( FAILED( hr ) )
+        {
+            return outputTextures;
+        }
+
+        ID3D12RootSignature* D3D12RootSignature = nullptr;
+        if ( FAILED( D3D12Adapter::GetDevice()->CreateRootSignature( 0, serializedRootSignature->GetBufferPointer(), serializedRootSignature->GetBufferSize(),
+            IID_PPV_ARGS( &D3D12RootSignature ) ) ) )
+        {
+            return outputTextures;
+        }
+
+        rootSignature.Reset( D3D12RootSignature );
+    }
+
+    ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
 
     {
         const uint32_t sampleCountPerBatch = 4096;
@@ -106,54 +156,71 @@ SBxDFTextures BxDFTexturesBuilding::Build()
         compilationParams.m_BxDFType = 0;
         compilationParams.m_HasFresnel = false;
 
-        ComputeShaderPtr integralShader = CompileAndCreateKernel( "INTEGRATE_COOKTORRANCE_BXDF", compilationParams );
-        ComputeShaderPtr copyShader = CompileAndCreateKernel( "COPY", compilationParams );
+        CD3D12ComPtr<ID3D12PipelineState> integralShader = CompileAndCreateKernel( L"INTEGRATE_COOKTORRANCE_BXDF", compilationParams, rootSignature.Get() );
+        CD3D12ComPtr<ID3D12PipelineState> copyShader = CompileAndCreateKernel( L"COPY", compilationParams, rootSignature.Get() );
 
         compilationParams.m_SampleCount = BXDFTEX_BRDF_SIZE_X;
-        ComputeShaderPtr averageShader = CompileAndCreateKernel( "INTEGRATE_AVERAGE", compilationParams );
+        CD3D12ComPtr<ID3D12PipelineState> averageShader = CompileAndCreateKernel( L"INTEGRATE_AVERAGE", compilationParams, rootSignature.Get() );
+
+        commandList->SetComputeRootSignature( rootSignature.Get() );
 
         if ( integralShader && copyShader && averageShader )
         {
-            SCOPED_RENDER_ANNOTATION( L"Integrate CookTorrance BRDF" );
+            SCOPED_RENDER_ANNOTATION( commandList, L"Integrate CookTorrance BRDF" );
 
-            GPUTexturePtr accumulationTexture( GPUTexture::Create( BXDFTEX_BRDF_SIZE_X, BXDFTEX_BRDF_SIZE_Y, DXGI_FORMAT_R32_FLOAT, GPUResourceCreationFlags_HasUAV, 1, nullptr, "CookTorranceBRDF Accumulation" ) );
-            outputTextures.m_CookTorranceBRDF.reset( GPUTexture::Create( BXDFTEX_BRDF_SIZE_X, BXDFTEX_BRDF_SIZE_Y, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_HasUAV, 1, nullptr, "CookTorranceBRDF" ) );
-            outputTextures.m_CookTorranceBRDFAverage.reset( GPUTexture::Create( BXDFTEX_BRDF_SIZE_Y, 1, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_HasUAV, 1, nullptr, "CookTorranceBRDFAverage" ) );
+            CD3D12ResourcePtr<GPUTexture> accumulationTexture( GPUTexture::Create( BXDFTEX_BRDF_SIZE_X, BXDFTEX_BRDF_SIZE_Y, DXGI_FORMAT_R32_FLOAT, EGPUTextureBindFlag_UnorderedAccess,
+                1, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBRDF Accumulation" ) );
+            outputTextures.m_CookTorranceBRDF.reset( GPUTexture::Create( BXDFTEX_BRDF_SIZE_X, BXDFTEX_BRDF_SIZE_Y, DXGI_FORMAT_R16_UNORM, EGPUTextureBindFlag_UnorderedAccess,
+                1, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBRDF" ) );
+            outputTextures.m_CookTorranceBRDFAverage.reset( GPUTexture::Create( BXDFTEX_BRDF_SIZE_Y, 1, DXGI_FORMAT_R16_UNORM, EGPUTextureBindFlag_UnorderedAccess,
+                1, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBRDFAverage" ) );
 
-            GPUBufferPtr batchConstantBuffers[ batchCount ];
-            for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
+            // 1. Integral
             {
-                uint32_t initData[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 0, 0 };
-                batchConstantBuffers[ batchIndex ].reset( GPUBuffer::Create( sizeof( initData ), 1, DXGI_FORMAT_UNKNOWN, D3D11_USAGE_IMMUTABLE, D3D11_BIND_CONSTANT_BUFFER, GPUResourceCreationFlags_None, initData ) );
+                commandList->SetPipelineState( integralShader.Get() );
+
+                D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( nullptr, 0, &accumulationTexture->GetUAV(), 1 );
+                commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
+
+                for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
+                {
+                    if ( batchIndex > 0 )
+                    { 
+                        // No UAV barrier for the first batch
+                        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV( accumulationTexture->GetTexture() );
+                        commandList->ResourceBarrier( 1, &barrier ); 
+                    }
+                    uint32_t constants[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 0, 0 };
+                    commandList->SetComputeRoot32BitConstants( 0, 4, constants, 0 );
+                    commandList->Dispatch( 1, 1, 1 );
+                }
             }
 
-            ComputeJob batchJob;
-            batchJob.m_DispatchSizeX = BXDFTEX_BRDF_SIZE_X;
-            batchJob.m_DispatchSizeY = BXDFTEX_BRDF_SIZE_Y;
-            batchJob.m_DispatchSizeZ = 1;
-
-            batchJob.m_Shader = integralShader.get();
-            for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
+            // 2. Copy
             {
-                batchJob.m_UAVs.clear();
-                batchJob.m_UAVs.push_back( accumulationTexture->GetUAV() );
-                batchJob.m_ConstantBuffers.clear();
-                batchJob.m_ConstantBuffers.push_back( batchConstantBuffers[ batchIndex ]->GetBuffer() );
-                batchJob.Dispatch();
+                commandList->SetPipelineState( copyShader.Get() );
+
+                D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( accumulationTexture->GetTexture(),
+                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE );
+                commandList->ResourceBarrier( 1, &barrier );
+
+                D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable =
+                    s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBRDF->GetUAV(), 1 );
+                commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
+                
+                commandList->Dispatch( 1, 1, 1 );
             }
 
-            batchJob.m_Shader = copyShader.get();
-            batchJob.m_UAVs.clear();
-            batchJob.m_UAVs.push_back( outputTextures.m_CookTorranceBRDF->GetUAV() );
-            batchJob.m_SRVs.push_back( accumulationTexture->GetSRV() );
-            batchJob.Dispatch();
-        
-            batchJob.m_DispatchSizeX = 1;
-            batchJob.m_DispatchSizeY = 1;
-            batchJob.m_Shader = averageShader.get();
-            batchJob.m_UAVs.clear();
-            batchJob.m_UAVs.push_back( outputTextures.m_CookTorranceBRDFAverage->GetUAV() );
-            batchJob.Dispatch();
+            // 3. Average
+            {
+                commandList->SetPipelineState( averageShader.Get() );
+
+                D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable =
+                    s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBRDFAverage->GetUAV(), 1 );
+                commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
+
+                commandList->Dispatch( 1, 1, 1 );
+            }
         }
     }
 
@@ -180,53 +247,70 @@ SBxDFTextures BxDFTexturesBuilding::Build()
         compilationParams.m_BxDFType = 0;
         compilationParams.m_HasFresnel = true;
 
-        ComputeShaderPtr integralShader = CompileAndCreateKernel( "INTEGRATE_COOKTORRANCE_BXDF", compilationParams );
-        ComputeShaderPtr copyShader = CompileAndCreateKernel( "COPY", compilationParams );
+        CD3D12ComPtr<ID3D12PipelineState> integralShader = CompileAndCreateKernel( L"INTEGRATE_COOKTORRANCE_BXDF", compilationParams, rootSignature.Get() );
+        CD3D12ComPtr<ID3D12PipelineState> copyShader = CompileAndCreateKernel( L"COPY", compilationParams, rootSignature.Get() );
         if ( integralShader && copyShader )
         {
-            SCOPED_RENDER_ANNOTATION( L"Integrate CookTorrance BRDF Dielectric" );
+            SCOPED_RENDER_ANNOTATION( commandList, L"Integrate CookTorrance BRDF Dielectric" );
 
-            GPUTexturePtr accumulationTexture( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_X, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R32_FLOAT, GPUResourceCreationFlags_HasUAV, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, nullptr, "CookTorranceBRDFDielectric Accumulation" ) );
-            outputTextures.m_CookTorranceBRDFDielectric.reset( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_X, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_HasUAV, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, nullptr, "CookTorranceBRDFDielectric" ) );
-            
-            GPUBufferPtr batchConstantBuffers[ batchCount * 2 ];
-            // Leaving
-            for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
-            {
-                uint32_t initData[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 0, 0 };
-                batchConstantBuffers[ batchIndex ].reset( GPUBuffer::Create( sizeof( initData ), 1, DXGI_FORMAT_UNKNOWN, D3D11_USAGE_IMMUTABLE, D3D11_BIND_CONSTANT_BUFFER, GPUResourceCreationFlags_None, initData ) );
-            }
-            // Entering
-            for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
-            {
-                uint32_t initData[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 1, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z };
-                batchConstantBuffers[ batchIndex + batchCount ].reset( GPUBuffer::Create( sizeof( initData ), 1, DXGI_FORMAT_UNKNOWN, D3D11_USAGE_IMMUTABLE, D3D11_BIND_CONSTANT_BUFFER, GPUResourceCreationFlags_None, initData ) );
-            }
+            CD3D12ResourcePtr<GPUTexture> accumulationTexture( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_X, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R32_FLOAT,
+                EGPUTextureBindFlag_UnorderedAccess, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBRDFDielectric Accumulation" ) );
+            outputTextures.m_CookTorranceBRDFDielectric.reset( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_X, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R16_UNORM,
+                EGPUTextureBindFlag_UnorderedAccess, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBRDFDielectric" ) );
 
-            ComputeJob batchJob;
             assert( BXDFTEX_BRDF_DIELECTRIC_SIZE_X % groupSizeX == 0 );
             assert( BXDFTEX_BRDF_DIELECTRIC_SIZE_Y % groupSizeY == 0 );
             assert( BXDFTEX_BRDF_DIELECTRIC_SIZE_Z % groupSizeZ == 0 );
-            batchJob.m_DispatchSizeX = BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX;
-            batchJob.m_DispatchSizeY = BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY;
-            batchJob.m_DispatchSizeZ = BXDFTEX_BRDF_DIELECTRIC_SIZE_Z / groupSizeZ;
 
-            batchJob.m_Shader = integralShader.get();
-            for ( uint32_t jobIndex = 0; jobIndex < batchCount * 2; ++jobIndex )
+            // 1. Integral
             {
-                batchJob.m_UAVs.clear();
-                batchJob.m_UAVs.push_back( accumulationTexture->GetUAV() );
-                batchJob.m_ConstantBuffers.clear();
-                batchJob.m_ConstantBuffers.push_back( batchConstantBuffers[ jobIndex ]->GetBuffer() );
-                batchJob.Dispatch();
+                commandList->SetPipelineState( integralShader.Get() );
+
+                D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( nullptr, 0, &accumulationTexture->GetUAV(), 1 );
+                commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
+
+                // Leaving
+                for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
+                {
+                    if ( batchIndex > 0 )
+                    { 
+                        // No UAV barrier for the first batch
+                        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV( accumulationTexture->GetTexture() );
+                        commandList->ResourceBarrier( 1, &barrier ); 
+                    }
+                    uint32_t constants[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 0, 0 };
+                    commandList->SetComputeRoot32BitConstants( 0, 4, constants, 0 );
+                    commandList->Dispatch( BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z / groupSizeZ );
+                }
+                // Entering
+                for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
+                {
+                    if ( batchIndex > 0 )
+                    {
+                        // No UAV barrier for the first batch
+                        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV( accumulationTexture->GetTexture() );
+                        commandList->ResourceBarrier( 1, &barrier ); 
+                    }
+                    uint32_t constants[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 1, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z };
+                    commandList->SetComputeRoot32BitConstants( 0, 4, constants, 0 );
+                    commandList->Dispatch( BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z / groupSizeZ );
+                }
             }
 
-            batchJob.m_Shader = copyShader.get();
-            batchJob.m_DispatchSizeZ = BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2 / groupSizeZ;
-            batchJob.m_UAVs.clear();
-            batchJob.m_UAVs.push_back( outputTextures.m_CookTorranceBRDFDielectric->GetUAV() );
-            batchJob.m_SRVs.push_back( accumulationTexture->GetSRV() );
-            batchJob.Dispatch();
+            // 2. Copy
+            {
+                commandList->SetPipelineState( copyShader.Get() );
+
+                D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( accumulationTexture->GetTexture(), 
+                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE );
+                commandList->ResourceBarrier( 1, &barrier );
+
+                D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable =
+                    s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBRDFDielectric->GetUAV(), 1 );
+                commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
+                
+                commandList->Dispatch( BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2 / groupSizeZ );
+            }
         }
     }
 
@@ -253,67 +337,103 @@ SBxDFTextures BxDFTexturesBuilding::Build()
         compilationParams.m_BxDFType = 1;
         compilationParams.m_HasFresnel = true;
 
-        ComputeShaderPtr integralShader = CompileAndCreateKernel( "INTEGRATE_COOKTORRANCE_BXDF", compilationParams );
-        ComputeShaderPtr copyShader = CompileAndCreateKernel( "COPY", compilationParams );
+        CD3D12ComPtr<ID3D12PipelineState> integralShader = CompileAndCreateKernel( L"INTEGRATE_COOKTORRANCE_BXDF", compilationParams, rootSignature.Get() );
+        CD3D12ComPtr<ID3D12PipelineState> copyShader = CompileAndCreateKernel( L"COPY", compilationParams, rootSignature.Get() );
 
         compilationParams.m_SampleCount = BXDFTEX_BRDF_DIELECTRIC_SIZE_X;
-        ComputeShaderPtr averageShader = CompileAndCreateKernel( "INTEGRATE_AVERAGE", compilationParams );
+        CD3D12ComPtr<ID3D12PipelineState> averageShader = CompileAndCreateKernel( L"INTEGRATE_AVERAGE", compilationParams, rootSignature.Get() );
 
         if ( integralShader && copyShader && averageShader )
         {
-            SCOPED_RENDER_ANNOTATION( L"Integrate CookTorrance BSDF" );
+            SCOPED_RENDER_ANNOTATION( commandList, L"Integrate CookTorrance BSDF" );
 
-            GPUTexturePtr accumulationTexture( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_X, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R32_FLOAT, GPUResourceCreationFlags_HasUAV, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, nullptr, "CookTorranceBSDF Accumulation" ) );
-            outputTextures.m_CookTorranceBSDF.reset( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_X, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_HasUAV, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, nullptr, "CookTorranceBSDF" ) );
-            outputTextures.m_CookTorranceBSDFAverage.reset( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z, DXGI_FORMAT_R16_UNORM, GPUResourceCreationFlags_HasUAV, 2, nullptr, "CookTorranceBSDFAverage" ) );
+            CD3D12ResourcePtr<GPUTexture> accumulationTexture( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_X, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R32_FLOAT,
+                EGPUTextureBindFlag_UnorderedAccess, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBSDF Accumulation" ) );
+            outputTextures.m_CookTorranceBSDF.reset( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_X, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, DXGI_FORMAT_R16_UNORM,
+                EGPUTextureBindFlag_UnorderedAccess, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBSDF" ) );
+            outputTextures.m_CookTorranceBSDFAverage.reset( GPUTexture::Create( BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z, DXGI_FORMAT_R16_UNORM,
+                EGPUTextureBindFlag_UnorderedAccess, 2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, L"CookTorranceBSDFAverage" ) );
 
-            GPUBufferPtr batchConstantBuffers[ batchCount * 2 ];
-            // Leaving
-            for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
-            {
-                uint32_t initData[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 0, 0 };
-                batchConstantBuffers[ batchIndex ].reset( GPUBuffer::Create( sizeof( initData ), 1, DXGI_FORMAT_UNKNOWN, D3D11_USAGE_IMMUTABLE, D3D11_BIND_CONSTANT_BUFFER, GPUResourceCreationFlags_None, initData ) );
-            }
-            // Entering
-            for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
-            {
-                uint32_t initData[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 1, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z };
-                batchConstantBuffers[ batchIndex + batchCount ].reset( GPUBuffer::Create( sizeof( initData ), 1, DXGI_FORMAT_UNKNOWN, D3D11_USAGE_IMMUTABLE, D3D11_BIND_CONSTANT_BUFFER, GPUResourceCreationFlags_None, initData ) );
-            }
-
-            ComputeJob batchJob;
             assert( BXDFTEX_BRDF_DIELECTRIC_SIZE_X % groupSizeX == 0 );
             assert( BXDFTEX_BRDF_DIELECTRIC_SIZE_Y % groupSizeY == 0 );
             assert( BXDFTEX_BRDF_DIELECTRIC_SIZE_Z % groupSizeZ == 0 );
-            batchJob.m_DispatchSizeX = BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX;
-            batchJob.m_DispatchSizeY = BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY;
-            batchJob.m_DispatchSizeZ = BXDFTEX_BRDF_DIELECTRIC_SIZE_Z / groupSizeZ;
 
-            batchJob.m_Shader = integralShader.get();
-            for ( uint32_t jobIndex = 0; jobIndex < batchCount * 2; ++jobIndex )
+            // 1. Integral
             {
-                batchJob.m_UAVs.clear();
-                batchJob.m_UAVs.push_back( accumulationTexture->GetUAV() );
-                batchJob.m_ConstantBuffers.clear();
-                batchJob.m_ConstantBuffers.push_back( batchConstantBuffers[ jobIndex ]->GetBuffer() );
-                batchJob.Dispatch();
+                commandList->SetPipelineState( integralShader.Get() );
+
+                D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( nullptr, 0, &accumulationTexture->GetUAV(), 1 );
+                commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
+
+                // Leaving
+                for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
+                {
+                    if ( batchIndex > 0 )
+                    { 
+                        // No UAV barrier for the first batch
+                        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV( accumulationTexture->GetTexture() );
+                        commandList->ResourceBarrier( 1, &barrier ); 
+                    }
+                    uint32_t constants[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 0, 0 };
+                    commandList->SetComputeRoot32BitConstants( 0, 4, constants, 0 );
+                    commandList->Dispatch( BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z / groupSizeZ );
+                }
+                // Entering
+                for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
+                {
+                    if ( batchIndex > 0 )
+                    {
+                        // No UAV barrier for the first batch
+                        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV( accumulationTexture->GetTexture() );
+                        commandList->ResourceBarrier( 1, &barrier ); 
+                    }
+                    uint32_t constants[ 4 ] = { batchIndex, batchIndex == 0 ? 1u : 0, 1, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z };
+                    commandList->SetComputeRoot32BitConstants( 0, 4, constants, 0 );
+                    commandList->Dispatch( BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z / groupSizeZ );
+                }
             }
 
-            batchJob.m_Shader = copyShader.get();
-            batchJob.m_DispatchSizeZ = BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2 / groupSizeZ;
-            batchJob.m_UAVs.clear();
-            batchJob.m_UAVs.push_back( outputTextures.m_CookTorranceBSDF->GetUAV() );
-            batchJob.m_SRVs.push_back( accumulationTexture->GetSRV() );
-            batchJob.Dispatch();
+            // 2. Copy
+            {
+                commandList->SetPipelineState( copyShader.Get() );
 
-            batchJob.m_DispatchSizeX = 1;
-            batchJob.m_DispatchSizeY = MathHelper::DivideAndRoundUp( (uint32_t)BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, compilationParams.m_GroupSizeY );
-            batchJob.m_DispatchSizeZ = MathHelper::DivideAndRoundUp( (uint32_t)BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, compilationParams.m_GroupSizeZ );
-            batchJob.m_Shader = averageShader.get();
-            batchJob.m_UAVs.clear();
-            batchJob.m_UAVs.push_back( outputTextures.m_CookTorranceBSDFAverage->GetUAV() );
-            batchJob.Dispatch();
+                D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( accumulationTexture->GetTexture(), 
+                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE );
+                commandList->ResourceBarrier( 1, &barrier );
+
+                D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable =
+                    s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBSDF->GetUAV(), 1 );
+                commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
+                
+                commandList->Dispatch( BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2 / groupSizeZ );
+            }
+
+            // 3. Average
+            {
+                commandList->SetPipelineState( averageShader.Get() );
+
+                D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable =
+                    s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBSDFAverage->GetUAV(), 1 );
+                commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
+
+                commandList->Dispatch( 1, 
+                    MathHelper::DivideAndRoundUp( (uint32_t)BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, compilationParams.m_GroupSizeY ),
+                    MathHelper::DivideAndRoundUp( (uint32_t)BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2, compilationParams.m_GroupSizeZ ) );
+            }
         }
+    }
+
+    // Transition all the result textures to read states
+    {
+        D3D12_RESOURCE_BARRIER barriers[ 5 ] = 
+        {
+            CD3DX12_RESOURCE_BARRIER::Transition( outputTextures.m_CookTorranceBRDF->GetTexture(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ),
+            CD3DX12_RESOURCE_BARRIER::Transition( outputTextures.m_CookTorranceBRDFAverage->GetTexture(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ),
+            CD3DX12_RESOURCE_BARRIER::Transition( outputTextures.m_CookTorranceBRDFDielectric->GetTexture(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ),
+            CD3DX12_RESOURCE_BARRIER::Transition( outputTextures.m_CookTorranceBSDF->GetTexture(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ),
+            CD3DX12_RESOURCE_BARRIER::Transition( outputTextures.m_CookTorranceBSDFAverage->GetTexture(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ),
+        };
+        commandList->ResourceBarrier( 5, barriers );
     }
 
     return outputTextures;

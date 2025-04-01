@@ -17,6 +17,7 @@ cbuffer RayTracingConstants : register( b0 )
     float g_ApertureBaseAngle;
     uint2 g_TileOffset;
     uint g_EnvironmentLightIndex;
+    uint g_FrameSeed;
 }
 
 StructuredBuffer<Vertex> g_Vertices                     : register( t0 );
@@ -156,9 +157,10 @@ cbuffer RayTracingConstants : register( b0 )
     float g_ApertureBaseAngle;
     uint2 g_TileOffset;
     uint g_EnvironmentLightIndex;
+    uint g_FrameSeed;
 }
 
-cbuffer DebugConstants : register( b2 )
+cbuffer DebugConstants : register( b1 )
 {
     uint g_IterationThreshold;
 }

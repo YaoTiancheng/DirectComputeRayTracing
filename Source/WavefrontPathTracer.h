@@ -1,16 +1,15 @@
 #pragma once
 
 #include "PathTracer.h"
+#include "D3D12Resource.h"
 
 class CScene;
+struct SBxDFTextures;
 
 class CWavefrontPathTracer : public CPathTracer
 {
 public:
-    explicit CWavefrontPathTracer( CScene* scene )
-        : m_Scene( scene )
-    {
-    }
+    CWavefrontPathTracer();
 
     virtual ~CWavefrontPathTracer()
     {
@@ -20,15 +19,15 @@ public:
 
     virtual void Destroy() override;
 
-    virtual void OnSceneLoaded() override;
+    virtual void OnSceneLoaded( SRenderer* renderer ) override;
 
-    virtual void Render( const SRenderContext& renderContext, const SBxDFTextures& BxDFTextures ) override;
+    virtual void Render( SRenderer* renderer, const SRenderContext& renderContext ) override;
 
     virtual void ResetImage() override;
 
     virtual bool IsImageComplete() override;
 
-    virtual void OnImGUI();
+    virtual void OnImGUI( SRenderer* renderer );
 
     virtual bool AcquireFilmClearTrigger();
 
@@ -46,41 +45,41 @@ private:
         , _Count
     };
 
-    bool CompileAndCreateShader( EShaderKernel kernel );
+    bool CompileAndCreateShader( CScene* scene, EShaderKernel kernel );
 
     void GetBlockDimension( uint32_t* width, uint32_t* height );
 
-    void RenderOneIteration( const SRenderContext& renderContext, const SBxDFTextures& BxDFTextures );
+    void RenderOneIteration( CScene* scene, const SBxDFTextures& BxDFTextures, bool isInitialIteration );
 
-    CScene* m_Scene;
+    CD3D12ComPtr<ID3D12RootSignature> m_RootSignature;
+    CD3D12ComPtr<ID3D12PipelineState> m_PSOs[ (int)EShaderKernel::_Count ];
 
-    ComputeShaderPtr m_Shaders[ (int)EShaderKernel::_Count ];
+    CD3D12ResourcePtr<GPUBuffer> m_RayBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_RayHitBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_ShadowRayBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_PixelPositionBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_PixelSampleBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_RngBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_LightSamplingResultsBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_PathAccumulationBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_FlagsBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_NextBlockIndexBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_IndirectArgumentBuffer[ 4 ];
+    CD3D12ResourcePtr<GPUBuffer> m_QueueBuffers[ 4 ];
+    CD3D12ResourcePtr<GPUBuffer> m_QueueCounterBuffers[ 2 ];
+    CD3D12ResourcePtr<GPUBuffer> m_ControlConstantBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_NewPathConstantBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_MaterialConstantBuffer;
 
-    GPUBufferPtr m_RayBuffer;
-    GPUBufferPtr m_RayHitBuffer;
-    GPUBufferPtr m_ShadowRayBuffer;
-    GPUBufferPtr m_PixelPositionBuffer;
-    GPUBufferPtr m_PixelSampleBuffer;
-    GPUBufferPtr m_RngBuffer;
-    GPUBufferPtr m_LightSamplingResultsBuffer;
-    GPUBufferPtr m_PathAccumulationBuffer;
-    GPUBufferPtr m_FlagsBuffer;
-    GPUBufferPtr m_NextBlockIndexBuffer;
-    GPUBufferPtr m_IndirectArgumentBuffer[ 4 ];
-    GPUBufferPtr m_QueueBuffers[ 4 ];
-    GPUBufferPtr m_QueueCounterBuffers[ 2 ];
-    GPUBufferPtr m_QueueConstantsBuffers[ 2 ];
-    GPUBufferPtr m_ControlConstantBuffer;
-    GPUBufferPtr m_NewPathConstantBuffer;
-    GPUBufferPtr m_MaterialConstantBuffer;
-
-    static const uint32_t s_QueueCounterStagingBufferCount = 2;
-    GPUBufferPtr m_QueueCounterStagingBuffer[ s_QueueCounterStagingBufferCount ];
+    static const uint32_t s_QueueCounterStagingBufferCount = 3;
+    CD3D12ResourcePtr<GPUBuffer> m_QueueCounterStagingBuffer[ s_QueueCounterStagingBufferCount ];
     uint32_t m_QueueCounterStagingBufferIndex = 0;
+    uint32_t m_StagingBufferReadyCountdown = s_QueueCounterStagingBufferCount;
 
     bool m_NewImage = true;
     bool m_FilmClearTrigger = false;
 
     uint32_t m_IterationPerFrame = 2;
     uint32_t m_BlockDimensionIndex = 0;
+    uint32_t m_BarrierMode;
 };

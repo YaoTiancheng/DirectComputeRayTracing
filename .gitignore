@@ -260,4 +260,8 @@ paket-files/
 __pycache__/
 *.pyc
 
+# ImGui config
 /imgui.ini
+
+# DirectXShaderCompiler binaries
+!/DirectXShaderCompiler/*

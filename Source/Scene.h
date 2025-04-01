@@ -1,5 +1,6 @@
 #pragma once
 
+#include "D3D12Resource.h"
 #include "BVHAccel.h"
 #include "Camera.h"
 #include "Mesh.h"
@@ -40,7 +41,7 @@ struct SMeshLight
 struct SEnvironmentLight
 {
     DirectX::XMFLOAT3 m_Color;
-    GPUTexturePtr m_Texture;
+    CD3D12ResourcePtr<GPUTexture> m_Texture;
     std::string m_TextureFileName;
 
     bool CreateTextureFromFile();
@@ -192,19 +193,26 @@ public:
     std::vector<DirectX::XMFLOAT4X3> m_InstanceTransforms;
     uint32_t m_BVHTraversalStackSize;
 
-    GPUBufferPtr m_VerticesBuffer;
-    GPUBufferPtr m_TrianglesBuffer;
-    GPUBufferPtr m_BVHNodesBuffer;
-    GPUBufferPtr m_LightsBuffer;
-    GPUBufferPtr m_MaterialIdsBuffer;
-    GPUBufferPtr m_MaterialsBuffer;
-    GPUBufferPtr m_InstanceTransformsBuffer;
-    GPUBufferPtr m_InstanceLightIndicesBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_VerticesBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_TrianglesBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_BVHNodesBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_LightsBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_MaterialIdsBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_MaterialsBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_InstanceTransformsBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_InstanceLightIndicesBuffer;
 
-    GPUTexturePtr m_FilmTexture;
-    GPUTexturePtr m_SamplePositionTexture;
-    GPUTexturePtr m_SampleValueTexture;
-    GPUTexturePtr m_RenderResultTexture;
+    CD3D12ResourcePtr<GPUTexture> m_FilmTexture;
+    CD3D12ResourcePtr<GPUTexture> m_SamplePositionTexture;
+    CD3D12ResourcePtr<GPUTexture> m_SampleValueTexture;
+    CD3D12ResourcePtr<GPUTexture> m_RenderResultTexture;
+
+    // Resource states
+    D3D12_RESOURCE_STATES m_FilmTextureStates;
+    bool m_IsLightBufferRead = true;
+    bool m_IsMaterialBufferRead = true;
+    bool m_IsSampleTexturesRead = false;
+    bool m_IsRenderResultTextureRead = true;
 
     SSceneObjectSelection m_ObjectSelection;
 };

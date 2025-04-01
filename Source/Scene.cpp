@@ -240,13 +240,13 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
             dest += mesh.GetVertexCount();
         }
 
-        m_VerticesBuffer.reset( GPUBuffer::CreateStructured(
+        m_VerticesBuffer.Reset( GPUBuffer::CreateStructured(
               sizeof( GPU::Vertex ) * totalVertexCount
             , sizeof( GPU::Vertex )
-            , D3D11_USAGE_IMMUTABLE
-            , D3D11_BIND_SHADER_RESOURCE
-            , 0
-            , vertices.data() ) );
+            , EGPUBufferUsage::Default
+            , EGPUBufferBindFlag_ShaderResource
+            , vertices.data()
+            , D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
 
         if ( m_VerticesBuffer )
         {
@@ -275,13 +275,13 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
             vertexOffset += mesh.GetVertexCount();
         }
 
-        m_TrianglesBuffer.reset( GPUBuffer::CreateStructured(
+        m_TrianglesBuffer.Reset( GPUBuffer::CreateStructured(
               sizeof( uint32_t ) * totalIndexCount
             , sizeof( uint32_t )
-            , D3D11_USAGE_IMMUTABLE
-            , D3D11_BIND_SHADER_RESOURCE
-            , 0
-            , indices.data() ) );
+            , EGPUBufferUsage::Default
+            , EGPUBufferBindFlag_ShaderResource
+            , indices.data()
+            , D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
 
         if ( m_TrianglesBuffer )
         {
@@ -330,13 +330,13 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
         dest = BVHNodes.data();
         BVHAccel::PackBVH( TLAS.data(), (uint32_t)TLAS.size(), false, dest );
 
-        m_BVHNodesBuffer.reset( GPUBuffer::CreateStructured(
+        m_BVHNodesBuffer.Reset( GPUBuffer::CreateStructured(
               sizeof( GPU::BVHNode ) * totalBVHNodeCount
             , sizeof( GPU::BVHNode )
-            , D3D11_USAGE_IMMUTABLE
-            , D3D11_BIND_SHADER_RESOURCE
-            , 0
-            , BVHNodes.data() ) );
+            , EGPUBufferUsage::Default
+            , EGPUBufferBindFlag_ShaderResource
+            , BVHNodes.data()
+            , D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
 
         if ( m_BVHNodesBuffer )
         {
@@ -360,13 +360,13 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
             dest += mesh.GetMaterialIds().size();
         }
 
-        m_MaterialIdsBuffer.reset( GPUBuffer::CreateStructured(
+        m_MaterialIdsBuffer.Reset( GPUBuffer::CreateStructured(
               sizeof( uint32_t ) * (uint32_t)materialIds.size()
             , sizeof( uint32_t )
-            , D3D11_USAGE_IMMUTABLE
-            , D3D11_BIND_SHADER_RESOURCE
-            , 0
-            , materialIds.data() ) );
+            , EGPUBufferUsage::Default
+            , EGPUBufferBindFlag_ShaderResource
+            , materialIds.data()
+            , D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
 
         if ( m_MaterialIdsBuffer )
         {
@@ -403,13 +403,13 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
             ++dest;
         }
 
-        m_InstanceTransformsBuffer.reset( GPUBuffer::CreateStructured(
+        m_InstanceTransformsBuffer.Reset( GPUBuffer::CreateStructured(
               sizeof( DirectX::XMFLOAT4X3 ) * (uint32_t)instanceTransforms.size()
             , sizeof( DirectX::XMFLOAT4X3 )
-            , D3D11_USAGE_IMMUTABLE
-            , D3D11_BIND_SHADER_RESOURCE
-            , 0
-            , instanceTransforms.data() ) );
+            , EGPUBufferUsage::Default
+            , EGPUBufferBindFlag_ShaderResource
+            , instanceTransforms.data()
+            , D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
 
         if ( m_InstanceTransformsBuffer )
         {
@@ -439,14 +439,14 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
         }
 
         // Create instance light indices buffer
-        m_InstanceLightIndicesBuffer.reset( GPUBuffer::Create( 
+        m_InstanceLightIndicesBuffer.Reset( GPUBuffer::Create(
               sizeof( uint32_t ) * (uint32_t)m_InstanceTransforms.size()
             , sizeof( uint32_t )
             , DXGI_FORMAT_R32_UINT
-            , D3D11_USAGE_IMMUTABLE
-            , D3D11_BIND_SHADER_RESOURCE
-            , 0
-            , instanceLightIndices.data() ) );
+            , EGPUBufferUsage::Default
+            , EGPUBufferBindFlag_ShaderResource
+            , instanceLightIndices.data()
+            , D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
 
         if ( m_InstanceLightIndicesBuffer )
         {
@@ -459,12 +459,11 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
         }
     }
     
-    m_MaterialsBuffer.reset( GPUBuffer::CreateStructured(
+    m_MaterialsBuffer.Reset( GPUBuffer::CreateStructured(
           uint32_t( sizeof( GPU::Material ) * m_Materials.size() )
         , sizeof( GPU::Material )
-        , D3D11_USAGE_DYNAMIC
-        , D3D11_BIND_SHADER_RESOURCE
-        , GPUResourceCreationFlags_CPUWriteable ) );
+        , EGPUBufferUsage::Default
+        , EGPUBufferBindFlag_ShaderResource ) );
 
     if ( m_MaterialsBuffer )
     {
@@ -476,13 +475,11 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
         return false;
     }
 
-    m_LightsBuffer.reset( GPUBuffer::CreateStructured(
+    m_LightsBuffer.Reset( GPUBuffer::CreateStructured(
           sizeof( GPU::SLight ) * s_MaxLightsCount
         , sizeof( GPU::SLight )
-        , D3D11_USAGE_DYNAMIC
-        , D3D11_BIND_SHADER_RESOURCE
-        , GPUResourceCreationFlags_CPUWriteable
-        , nullptr ) );
+        , EGPUBufferUsage::Default
+        , EGPUBufferBindFlag_ShaderResource ) );
 
     if ( m_LightsBuffer )
     {
@@ -500,6 +497,9 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
     }
 
     m_Camera.SetDirty();
+
+    m_IsLightBufferRead = true;
+    m_IsMaterialBufferRead = true;
 
     m_HasValidScene = true;
     m_ObjectSelection.DeselectAll();
@@ -540,56 +540,64 @@ void CScene::Reset()
 
 void CScene::UpdateLightGPUData()
 {
-    if ( void* address = m_LightsBuffer->Map() )
+    GPUBuffer::SUploadContext context = {};
+    if ( m_LightsBuffer->AllocateUploadContext( &context ) )
     {
-        GPU::SLight* GPULight = (GPU::SLight*)address;
-
-        // todo: cache the offsets somewhere so it does not need to be calculated every time
-        std::vector<uint32_t> meshTriangleOffsets;
-        meshTriangleOffsets.reserve( m_Meshes.size() );
-        uint32_t triangleCount = 0;
-        for ( auto& mesh : m_Meshes )
+        void* address = context.Map();
+        if ( address )
         {
-            meshTriangleOffsets.emplace_back( triangleCount );
-            triangleCount += mesh.GetTriangleCount();
-        }
+            GPU::SLight* GPULight = (GPU::SLight*)address;
+
+            // todo: cache the offsets somewhere so it does not need to be calculated every time
+            std::vector<uint32_t> meshTriangleOffsets;
+            meshTriangleOffsets.reserve( m_Meshes.size() );
+            uint32_t triangleCount = 0;
+            for ( auto& mesh : m_Meshes )
+            {
+                meshTriangleOffsets.emplace_back( triangleCount );
+                triangleCount += mesh.GetTriangleCount();
+            }
         
-        for ( uint32_t i = 0; i < (uint32_t)m_MeshLights.size(); ++i )
-        {
-            SMeshLight* CPULight = m_MeshLights.data() + i;
+            for ( uint32_t i = 0; i < (uint32_t)m_MeshLights.size(); ++i )
+            {
+                SMeshLight* CPULight = m_MeshLights.data() + i;
 
-            GPULight->radiance = CPULight->color;
-            uint32_t originalInstanceIndex = m_ReorderedInstanceIndices[ CPULight->m_InstanceIndex ];
-            GPULight->position_or_triangleRange.x = *(float*)&meshTriangleOffsets[ originalInstanceIndex ];
-            uint32_t triangleCount = m_Meshes[ originalInstanceIndex ].GetTriangleCount();
-            GPULight->position_or_triangleRange.y = *(float*)&triangleCount;
-            GPULight->position_or_triangleRange.z = *(float*)&CPULight->m_InstanceIndex;
-            GPULight->flags = LIGHT_FLAGS_MESH_LIGHT;
+                GPULight->radiance = CPULight->color;
+                uint32_t originalInstanceIndex = m_ReorderedInstanceIndices[ CPULight->m_InstanceIndex ];
+                GPULight->position_or_triangleRange.x = *(float*)&meshTriangleOffsets[ originalInstanceIndex ];
+                uint32_t triangleCount = m_Meshes[ originalInstanceIndex ].GetTriangleCount();
+                GPULight->position_or_triangleRange.y = *(float*)&triangleCount;
+                GPULight->position_or_triangleRange.z = *(float*)&CPULight->m_InstanceIndex;
+                GPULight->flags = LIGHT_FLAGS_MESH_LIGHT;
 
-            ++GPULight;
+                ++GPULight;
+            }
+
+            if ( m_EnvironmentLight )
+            {
+                SEnvironmentLight* CPULight = m_EnvironmentLight.get();
+                GPULight->radiance = CPULight->m_Color;
+                GPULight->flags = LIGHT_FLAGS_ENVIRONMENT_LIGHT;
+
+                ++GPULight;
+            }
+
+            for ( uint32_t i = 0; i < (uint32_t)m_PunctualLights.size(); ++i )
+            {
+                SPunctualLight* CPULight = m_PunctualLights.data() + i;
+
+                GPULight->radiance = CPULight->m_Color;
+                GPULight->position_or_triangleRange = CPULight->m_IsDirectionalLight ? CPULight->CalculateDirection() : CPULight->m_Position;
+                GPULight->flags = CPULight->m_IsDirectionalLight ? LIGHT_FLAGS_DIRECTIONAL_LIGHT : LIGHT_FLAGS_POINT_LIGHT;    
+
+                ++GPULight;
+            }
+
+            context.Unmap();
+            context.Upload();
+
+            m_IsLightBufferRead = false;
         }
-
-        if ( m_EnvironmentLight )
-        {
-            SEnvironmentLight* CPULight = m_EnvironmentLight.get();
-            GPULight->radiance = CPULight->m_Color;
-            GPULight->flags = LIGHT_FLAGS_ENVIRONMENT_LIGHT;
-
-            ++GPULight;
-        }
-
-        for ( uint32_t i = 0; i < (uint32_t)m_PunctualLights.size(); ++i )
-        {
-            SPunctualLight* CPULight = m_PunctualLights.data() + i;
-
-            GPULight->radiance = CPULight->m_Color;
-            GPULight->position_or_triangleRange = CPULight->m_IsDirectionalLight ? CPULight->CalculateDirection() : CPULight->m_Position;
-            GPULight->flags = CPULight->m_IsDirectionalLight ? LIGHT_FLAGS_DIRECTIONAL_LIGHT : LIGHT_FLAGS_POINT_LIGHT;    
-
-            ++GPULight;
-        }
-
-        m_LightsBuffer->Unmap();
     }
 }
 
@@ -600,23 +608,31 @@ static uint32_t TranslateToMaterialType( EMaterialType materialType )
 
 void CScene::UpdateMaterialGPUData()
 {
-    if ( void* address = m_MaterialsBuffer->Map() )
+    GPUBuffer::SUploadContext context = {};
+    if ( m_MaterialsBuffer->AllocateUploadContext( &context ) )
     {
-        for ( uint32_t i = 0; i < (uint32_t)m_Materials.size(); ++i )
-        {
-            SMaterial* materialSetting = m_Materials.data() + i;
-            GPU::Material* material = ( (GPU::Material*)address ) + i;
-            material->albedo = materialSetting->m_MaterialType == EMaterialType::Conductor ? materialSetting->m_K : materialSetting->m_Albedo;
-            material->ior = materialSetting->m_IOR;
-            material->roughness = std::clamp( materialSetting->m_Roughness, 0.0f, 1.0f );
-            material->texTiling = materialSetting->m_Tiling;
-            material->flags = TranslateToMaterialType( materialSetting->m_MaterialType ) & MATERIAL_FLAG_TYPE_MASK;
-            material->flags |= materialSetting->m_Multiscattering ? MATERIAL_FLAG_MULTISCATTERING : 0;
-            material->flags |= materialSetting->m_IsTwoSided ? MATERIAL_FLAG_IS_TWOSIDED : 0;
-            material->flags |= materialSetting->m_HasAlbedoTexture ? MATERIAL_FLAG_ALBEDO_TEXTURE : 0;
-            material->flags |= materialSetting->m_HasRoughnessTexture ? MATERIAL_FLAG_ROUGHNESS_TEXTURE : 0;
+        void* address = context.Map();
+        if ( address )
+        { 
+            for ( uint32_t i = 0; i < (uint32_t)m_Materials.size(); ++i )
+            {
+                SMaterial* materialSetting = m_Materials.data() + i;
+                GPU::Material* material = ( (GPU::Material*)address ) + i;
+                material->albedo = materialSetting->m_MaterialType == EMaterialType::Conductor ? materialSetting->m_K : materialSetting->m_Albedo;
+                material->ior = materialSetting->m_IOR;
+                material->roughness = std::clamp( materialSetting->m_Roughness, 0.0f, 1.0f );
+                material->texTiling = materialSetting->m_Tiling;
+                material->flags = TranslateToMaterialType( materialSetting->m_MaterialType ) & MATERIAL_FLAG_TYPE_MASK;
+                material->flags |= materialSetting->m_Multiscattering ? MATERIAL_FLAG_MULTISCATTERING : 0;
+                material->flags |= materialSetting->m_IsTwoSided ? MATERIAL_FLAG_IS_TWOSIDED : 0;
+                material->flags |= materialSetting->m_HasAlbedoTexture ? MATERIAL_FLAG_ALBEDO_TEXTURE : 0;
+                material->flags |= materialSetting->m_HasRoughnessTexture ? MATERIAL_FLAG_ROUGHNESS_TEXTURE : 0;
+            }
+            context.Unmap();
+            context.Upload();
+
+            m_IsMaterialBufferRead = false;
         }
-        m_MaterialsBuffer->Unmap();
     }
 }
 
@@ -636,45 +652,57 @@ float CScene::CalculateApertureDiameter() const
 
 bool CScene::RecreateFilmTextures()
 {
-    m_FilmTexture.reset( GPUTexture::Create(
+    m_FilmTexture.Reset( GPUTexture::Create(
           m_ResolutionWidth
         , m_ResolutionHeight
         , DXGI_FORMAT_R32G32B32A32_FLOAT
-        , GPUResourceCreationFlags_HasUAV | GPUResourceCreationFlags_IsRenderTarget ) );
+        , EGPUTextureBindFlag_UnorderedAccess | EGPUTextureBindFlag_RenderTarget
+        , 1
+        , D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
     if ( !m_FilmTexture )
     {
         return false;
     }
 
-    m_SamplePositionTexture.reset( GPUTexture::Create(
+    m_SamplePositionTexture.Reset( GPUTexture::Create(
           m_ResolutionWidth
         , m_ResolutionHeight
         , DXGI_FORMAT_R32G32_FLOAT
-        , GPUResourceCreationFlags_HasUAV ) );
+        , EGPUTextureBindFlag_UnorderedAccess
+        , 1
+        , D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
     if ( !m_SamplePositionTexture )
     { 
         return false;
     }
 
-    m_SampleValueTexture.reset( GPUTexture::Create(
+    m_SampleValueTexture.Reset( GPUTexture::Create(
           m_ResolutionWidth
         , m_ResolutionHeight
         , DXGI_FORMAT_R32G32B32A32_FLOAT
-        , GPUResourceCreationFlags_HasUAV ) );
+        , EGPUTextureBindFlag_UnorderedAccess
+        , 1
+        , D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
     if ( !m_SampleValueTexture )
     {
         return false;
     }
 
-    m_RenderResultTexture.reset( GPUTexture::Create( 
+    m_RenderResultTexture.Reset( GPUTexture::Create(
           m_ResolutionWidth
         , m_ResolutionHeight
         , DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
-        , GPUResourceCreationFlags_IsRenderTarget ) );
+        , EGPUTextureBindFlag_RenderTarget
+        , 1
+        , D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
     if ( !m_RenderResultTexture )
     { 
         return false;
     }
+
+    m_FilmTextureStates = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
+    m_IsSampleTexturesRead = true;
+    m_IsRenderResultTextureRead = true;
 
     return true;
 }
@@ -682,8 +710,8 @@ bool CScene::RecreateFilmTextures()
 bool SEnvironmentLight::CreateTextureFromFile()
 {
     std::wstring filename = StringConversion::UTF8StringToUTF16WString( m_TextureFileName );
-    m_Texture.reset( GPUTexture::CreateFromFile( filename.c_str() ) );
-    return m_Texture.get() != nullptr;
+    m_Texture.Reset( GPUTexture::CreateFromFile( filename.c_str() ) );
+    return m_Texture.Get() != nullptr;
 }
 
 void SPunctualLight::SetEulerAnglesFromDirection( const DirectX::XMFLOAT3& scalarDirection )

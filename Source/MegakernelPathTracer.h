@@ -1,16 +1,14 @@
 #pragma once
 
 #include "PathTracer.h"
-
-class CScene;
+#include "D3D12Resource.h"
 
 class CMegakernelPathTracer : public CPathTracer
 {
 public:
-    explicit CMegakernelPathTracer( CScene* scene )
+    CMegakernelPathTracer()
         : m_TileSize( 512 )
         , m_CurrentTileIndex( 0 )
-        , m_Scene( scene )
         , m_IterationThreshold( 20 )
     {
     }
@@ -23,31 +21,30 @@ public:
 
     virtual void Destroy() override;
 
-    virtual void OnSceneLoaded() override;
+    virtual void OnSceneLoaded( SRenderer* renderer ) override;
 
-    virtual void Render( const SRenderContext& renderContext, const SBxDFTextures& BxDFTextures ) override;
+    virtual void Render( SRenderer* renderer, const SRenderContext& renderContext ) override;
 
     virtual void ResetImage() override;
 
     virtual bool IsImageComplete() override;
 
-    virtual void OnImGUI();
+    virtual void OnImGUI( SRenderer* renderer );
 
     virtual bool AcquireFilmClearTrigger();
 
 private:
-    bool CompileAndCreateRayTracingKernel();
+    bool CompileAndCreateRayTracingKernel( SRenderer* renderer );
 
     void ResetTileIndex();
 
     bool AreAllTilesRendered() const;
 
 private:
-    CScene* m_Scene;
+    CD3D12ComPtr<ID3D12RootSignature> m_RootSignature;
+    CD3D12ComPtr<ID3D12PipelineState> m_PSO;
 
-    ComputeShaderPtr m_RayTracingShader;
-    GPUBufferPtr m_RayTracingConstantsBuffer;
-    GPUBufferPtr m_DebugConstantsBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_RayTracingConstantsBuffer;
 
     uint32_t m_TileSize;
     uint32_t m_CurrentTileIndex;

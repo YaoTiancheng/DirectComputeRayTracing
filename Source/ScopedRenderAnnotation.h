@@ -1,19 +1,22 @@
 #pragma once
 
-#include "D3D11RenderSystem.h"
+#include "pix3.h"
 
 class CScopedRenderAnnotation
 {
 public:
-	explicit CScopedRenderAnnotation( const wchar_t* name )
+	explicit CScopedRenderAnnotation( ID3D12GraphicsCommandList* commandList, const wchar_t* name )
+		: m_CommandList( commandList )
 	{
-		GetAnnotation()->BeginEvent( name );
+		PIXBeginEvent( commandList, 0, name );
 	}
 
 	~CScopedRenderAnnotation()
 	{
-		GetAnnotation()->EndEvent();
+		PIXEndEvent( m_CommandList );
 	}
+
+	ID3D12GraphicsCommandList* m_CommandList;
 };
 
-#define SCOPED_RENDER_ANNOTATION( name ) CScopedRenderAnnotation __RenderAnnotation( name );
+#define SCOPED_RENDER_ANNOTATION( commandList, name ) CScopedRenderAnnotation __RenderAnnotation( commandList, name );

@@ -56,28 +56,47 @@ struct SValue
             XMFLOAT3 m_Vector;
         };
         XMFLOAT4X4 m_Matrix;
-        std::unordered_map<std::string_view, SValue*>* m_Object;
+        struct  
+        {
+            std::unordered_map<std::string_view, SValue*>* m_ObjectFields;
+            std::vector<std::pair<std::string_view, SValue*>>* m_NestedObjects;
+        };
     };
 
     SValue() : m_Float( 0.0f )
     {
     }
 
+    ~SValue()
+    {
+        if ( m_Type == eObject )
+        {
+            delete m_ObjectFields;
+            delete m_NestedObjects;
+        }
+    }
+
     void SetAsObject()
     {
-        m_Object = new std::unordered_map<std::string_view, SValue*>();
+        m_ObjectFields = new std::unordered_map<std::string_view, SValue*>();
+        m_NestedObjects = new std::vector<std::pair<std::string_view, SValue*>>();
         m_Type = EValueType::eObject;
     }
 
     void InsertObjectField( std::string_view stringView, SValue* value )
     {
-        m_Object->insert( { stringView, value } );
+        m_ObjectFields->insert( { stringView, value } );
     }
 
-    SValue* FindValue( std::string_view stringView ) const
+    void InsertNestedObject( std::string_view stringView, SValue* value )
     {
-        auto iter = m_Object->find( stringView );
-        if ( iter != m_Object->end() )
+        m_NestedObjects->emplace_back( std::make_pair( stringView, value ) );
+    }
+
+    SValue* FindObjectField( std::string_view stringView ) const
+    {
+        auto iter = m_ObjectFields->find( stringView );
+        if ( iter != m_ObjectFields->end() )
         {
             return iter->second;
         }
@@ -85,6 +104,18 @@ struct SValue
         {
             return nullptr;
         }
+    }
+
+    SValue* FindFirstNestedObject( std::string_view stringView ) const
+    {
+        for ( auto& iter : *m_NestedObjects )
+        {
+            if ( iter.first == stringView ) 
+            {
+                return iter.second;
+            }
+        }
+        return nullptr;
     }
 };
 
@@ -197,56 +228,19 @@ namespace
         return result;
     }
 
-    SValue* BuildValueGraph( CValueList* valueList, xml_document<>* doc, std::vector<std::pair<std::string_view, SValue*>>* rootObjectValues )
+    bool BuildValueGraph( CValueList* valueList, xml_document<>* doc, std::vector<SValue*>* sceneValues )
     {
         std::unordered_set<std::string_view> objectTagNames = { "scene", "integrator", "sensor", "sampler", "film", "bsdf", "sampler", "rfilter", "emitter", "shape" };
         std::unordered_set<std::string_view> valueTagNames = { "float", "integer", "boolean", "string", "point", "vector", "rgb" };
 
-        xml_node<>* sceneNode = doc->first_node( "scene" );
-        if ( !sceneNode )
-        {
-            LOG_STRING( "Cannot find scene node at the root.\n" );
-            return nullptr;
-        }
-
-        std::vector<std::string_view> parameterSplit;
-
-        // Scene version verification
-        {
-            xml_attribute<>* versionAttribute = sceneNode->first_attribute( "version" );
-            if ( !versionAttribute )
-            {
-                LOG_STRING( "Cannot find version attribute at the scene node.\n" );
-                return nullptr;
-            }
-
-            SplitByDelimeter( std::string_view( versionAttribute->value(), versionAttribute->value_size() ), '.', &parameterSplit );
-            if ( parameterSplit.size() == 3 )
-            {
-                int32_t majorVersion = atoi( parameterSplit[ 0 ].data() );
-                if ( majorVersion < 3 )
-                {
-                    LOG_STRING_FORMAT( "Unsupported scene version %.*s.\n", versionAttribute->value_size(), versionAttribute->value() );
-                    return nullptr;
-                }
-            }
-            else
-            {
-                LOG_STRING_FORMAT( "Unsupported scene version format %.*s.\n", versionAttribute->value_size(), versionAttribute->value() );
-                return nullptr;
-            }
-        }
-
-        std::unordered_map<std::string_view, std::string_view> defaultParameters;
-
         std::stack<xml_node<>*> nodesStack;
         std::stack<SValue*> valuesStack;
-        xml_node<>* currentNode = sceneNode;
-        SValue* parentValue = valueList->AllocateValue();
-        SValue* sceneValue = nullptr;
-        parentValue->SetAsObject();
+        xml_node<>* currentNode = doc->first_node( "scene" );
+        SValue* parentValue = nullptr;
         SValue* currentValue = nullptr;
+        std::vector<std::string_view> parameterSplit;
         std::unordered_map<std::string_view, std::pair<std::string_view, SValue*>> objectMap;
+        std::unordered_map<std::string_view, std::string_view> defaultParameterMap;
         while ( currentNode )
         {
             if ( objectTagNames.find( { currentNode->name(), currentNode->name_size() } ) != objectTagNames.end() )
@@ -254,48 +248,79 @@ namespace
                 currentValue = valueList->AllocateValue();
                 currentValue->SetAsObject();
 
-                if ( parentValue == sceneValue )
+                if ( parentValue == nullptr )
                 {
-                    rootObjectValues->push_back( { { currentNode->name(), currentNode->name_size() }, currentValue } );
-                }
-                else
-                {
-                    if ( !sceneValue && strncmp( "scene", currentNode->name(), currentNode->name_size() ) == 0 )
+                    // No parent, must be a scene node, verify scene version
                     {
-                        sceneValue = currentValue;
-                    }
-
-                    parentValue->InsertObjectField( { currentNode->name(), currentNode->name_size() }, currentValue );
-                }
-
-                xml_attribute<>* attribute = currentNode->first_attribute( "type", 0 );
-                if ( attribute != nullptr )
-                {
-                    SValue* typeValue = valueList->AllocateValue();
-                    currentValue->InsertObjectField( "type", typeValue );
-                    typeValue->m_Type = EValueType::eString;
-                    if ( !TryEvaluateValueString( std::string_view( attribute->value(), attribute->value_size() ), defaultParameters, &typeValue->m_String ) )
-                    {
-                        LOG_STRING_FORMAT( "Evaluating type string %.*s failed.\n", attribute->value_size(), attribute->value() );
-                        return nullptr;
-                    }
-
-                    attribute = attribute->next_attribute( "id", 0 );
-                    if ( attribute != nullptr )
-                    {
-                        if ( objectMap.find( { attribute->value(), attribute->value_size() } ) == objectMap.end() )
+                        xml_attribute<>* versionAttribute = currentNode->first_attribute( "version" );
+                        if ( !versionAttribute )
                         {
-                            objectMap[ { attribute->value(), attribute->value_size() } ] = { { currentNode->name(), currentNode->name_size() }, currentValue };
+                            LOG_STRING( "Cannot find version attribute at the scene tag.\n" );
+                            return false;
+                        }
+
+                        SplitByDelimeter( std::string_view( versionAttribute->value(), versionAttribute->value_size() ), '.', &parameterSplit );
+                        if ( parameterSplit.size() == 3 )
+                        {
+                            int32_t majorVersion = atoi( parameterSplit[ 0 ].data() );
+                            if ( majorVersion < 3 )
+                            {
+                                LOG_STRING_FORMAT( "Unsupported scene version %.*s.\n", versionAttribute->value_size(), versionAttribute->value() );
+                                return false;
+                            }
                         }
                         else
                         {
-                            LOG_STRING_FORMAT( "Duplicated id \'%.*s\' found.\n", attribute->value_size(), attribute->value() );
+                            LOG_STRING_FORMAT( "Unsupported scene version format %.*s.\n", versionAttribute->value_size(), versionAttribute->value() );
+                            return false;
+                        }
+                    }
+                    sceneValues->emplace_back( currentValue );
+                }
+                else
+                {
+                    // If the node has a name attribute, then it is an object field, otherwise it is a nested object.
+                    xml_attribute<>* attribute = currentNode->first_attribute( "name" );
+                    if ( attribute != nullptr )
+                    {
+                        parentValue->InsertObjectField( std::string_view( attribute->value(), attribute->value_size() ), currentValue );
+                    }
+                    else 
+                    { 
+                        // Add it as nested object
+                        parentValue->InsertNestedObject( std::string_view( currentNode->name(), currentNode->name_size() ), currentValue );
+                    }
+
+                    attribute = currentNode->first_attribute( "id", 0 );
+                    if ( attribute != nullptr )
+                    {
+                        const std::string_view id( attribute->value(), attribute->value_size() );
+                        if ( objectMap.find( id ) == objectMap.end() )
+                        {
+                            objectMap[ id ] = { std::string_view( currentNode->name(), currentNode->name_size() ), currentValue };
+                        }
+                        else
+                        {
+                            LOG_STRING_FORMAT( "Duplicated id \'%.*s\' found.\n", id.length(), id.data() );
                         }
 
                         SValue* idValue = valueList->AllocateValue();
                         currentValue->InsertObjectField( "id", idValue );
                         idValue->m_Type = EValueType::eString;
-                        idValue->m_String = { attribute->value(), attribute->value_size() };
+                        idValue->m_String = id;
+                    }
+
+                    attribute = currentNode->first_attribute( "type" );
+                    if ( attribute != nullptr )
+                    {
+                        SValue* typeValue = valueList->AllocateValue();
+                        currentValue->InsertObjectField( "type", typeValue );
+                        typeValue->m_Type = EValueType::eString;
+                        if ( !TryEvaluateValueString( std::string_view( attribute->value(), attribute->value_size() ), defaultParameterMap, &typeValue->m_String ) )
+                        {
+                            LOG_STRING_FORMAT( "Evaluating type string %.*s failed.\n", attribute->value_size(), attribute->value() );
+                            return false;
+                        }
                     }
                 }
 
@@ -308,8 +333,38 @@ namespace
             else if ( strncmp( "transform", currentNode->name(), currentNode->name_size() ) == 0 )
             {
                 currentValue = valueList->AllocateValue();
-                parentValue->InsertObjectField( { currentNode->name(), currentNode->name_size() }, currentValue );
                 currentValue->m_Type = EValueType::eMatrix;
+
+                // If the node has a name attribute, then it is an object field, otherwise it is a nested object.
+                xml_attribute<>* attribute = currentNode->first_attribute( "name" );
+                if ( attribute != nullptr )
+                {
+                    parentValue->InsertObjectField( std::string_view( attribute->value(), attribute->value_size() ), currentValue );
+                }
+                else 
+                { 
+                    // Add it as nested object
+                    parentValue->InsertNestedObject( std::string_view( currentNode->name(), currentNode->name_size() ), currentValue );
+                }
+
+                attribute = currentNode->first_attribute( "id", 0 );
+                if ( attribute != nullptr )
+                {
+                    const std::string_view id( attribute->value(), attribute->value_size() );
+                    if ( objectMap.find( id ) == objectMap.end() )
+                    {
+                        objectMap[ id ] = { std::string_view( currentNode->name(), currentNode->name_size() ), currentValue };
+                    }
+                    else
+                    {
+                        LOG_STRING_FORMAT( "Duplicated id \'%.*s\' found.\n", id.length(), id.data() );
+                    }
+
+                    SValue* idValue = valueList->AllocateValue();
+                    currentValue->InsertObjectField( "id", idValue );
+                    idValue->m_Type = EValueType::eString;
+                    idValue->m_String = id;
+                }
 
                 currentValue->m_Matrix = XMFLOAT4X4( 1.0f, 0.0f, 0.0f, 0.0f,
                     0.0f, 1.0f, 0.0f, 0.0f,
@@ -328,19 +383,19 @@ namespace
                         }
                         else
                         {
-                            std::string_view evaluatedValueString( valueAttribute->value(), valueAttribute->value_size() );
-                            if ( !TryEvaluateValueString( evaluatedValueString, defaultParameters, &evaluatedValueString ) )
+                            std::string_view value( valueAttribute->value(), valueAttribute->value_size() );
+                            if ( !TryEvaluateValueString( value, defaultParameterMap, &value ) )
                             {
                                 LOG_STRING_FORMAT( "Evaluating value string %.*s failed.\n", valueAttribute->value_size(), valueAttribute->value() );
-                                return nullptr;
+                                return false;
                             }
 
                             parameterSplit.clear();
-                            SplitBySpace( evaluatedValueString, &parameterSplit );
+                            SplitBySpace( value, &parameterSplit );
                             if ( parameterSplit.size() != 16 )
                             {
                                 LOG_STRING_FORMAT( "Unrecognized matrix value \'%.*s\'.\n", valueAttribute->value_size(), valueAttribute->value() );
-                                return nullptr;
+                                return false;
                             }
                             for ( int32_t r = 0; r < 4; ++r )
                             {
@@ -369,25 +424,35 @@ namespace
             }
             else if ( strncmp( "ref", currentNode->name(), currentNode->name_size() ) == 0 )
             {
-                xml_attribute<>* attribute = currentNode->first_attribute( "id", 0 );
-                if ( attribute != nullptr )
+                xml_attribute<>* idAttribute = currentNode->first_attribute( "id", 0 );
+                if ( idAttribute != nullptr )
                 {
-                    auto iter = objectMap.find( { attribute->value(), attribute->value_size() } );
+                    auto iter = objectMap.find( { idAttribute->value(), idAttribute->value_size() } );
                     if ( iter != objectMap.end() )
                     {
-                        const std::string_view& refName = iter->second.first;
                         SValue* refValue = iter->second.second;
-                        parentValue->InsertObjectField( refName, refValue );
+                        xml_attribute<>* nameAttribute = currentNode->first_attribute( "name" );
+                        // If the node has a name attribute, then it is an object field, otherwise it is a nested object.
+                        if ( nameAttribute )
+                        {
+                            const std::string_view name( nameAttribute->value(), nameAttribute->value_size() );
+                            parentValue->InsertObjectField( name, refValue );
+                        }
+                        else
+                        {
+                            const std::string_view& name = iter->second.first;
+                            parentValue->InsertNestedObject( name, refValue );
+                        }
                     }
                     else
                     {
-                        LOG_STRING_FORMAT( "id \'%.*s\' not found.", attribute->value_size(), attribute->value() );
+                        LOG_STRING_FORMAT( "id \'%.*s\' not found.", idAttribute->value_size(), idAttribute->value() );
                     }
                 }
                 else
                 {
-                    LOG_STRING_FORMAT( "Expect a value attribute in the ref tag.\n" );
-                    return nullptr;
+                    LOG_STRING_FORMAT( "Expect id attribute in the ref tag.\n" );
+                    return false;
                 }
 
                 currentNode = currentNode->next_sibling();
@@ -398,7 +463,7 @@ namespace
                 if ( !nameAttribute )
                 {
                     LOG_STRING_FORMAT( "Expect a name attribute from tag \'%.*s\'.\n", currentNode->name_size(), currentNode->name() );
-                    return nullptr;
+                    return false;
                 }
                 currentValue = valueList->AllocateValue();
                 parentValue->InsertObjectField( { nameAttribute->value(), nameAttribute->value_size() }, currentValue );
@@ -407,15 +472,15 @@ namespace
                 if ( !valueAttribute )
                 {
                     LOG_STRING( "Expect a value attribute.\n" );
-                    return nullptr;
+                    return false;
                 }
 
                 // Value string could references a default parameter, must evaluate the value string to get the actual value string before parsing.
                 std::string_view evaluatedValueString( valueAttribute->value(), valueAttribute->value_size() );
-                if ( !TryEvaluateValueString( evaluatedValueString, defaultParameters, &evaluatedValueString ) )
+                if ( !TryEvaluateValueString( evaluatedValueString, defaultParameterMap, &evaluatedValueString ) )
                 {
                     LOG_STRING_FORMAT( "Evaluating value string %.*s failed.\n", valueAttribute->value_size(), valueAttribute->value() );
-                    return nullptr;
+                    return false;
                 }
 
                 if ( strncmp( currentNode->name(), "integer", currentNode->name_size() ) == 0 )
@@ -442,7 +507,7 @@ namespace
                     else
                     {
                         LOG_STRING( "Unrecognized boolean value.\n " );
-                        return nullptr;
+                        return false;
                     }
                 }
                 else if ( strncmp( currentNode->name(), "string", currentNode->name_size() ) == 0 )
@@ -459,7 +524,7 @@ namespace
                     if ( parameterSplit.size() != 3 )
                     {
                         LOG_STRING( "Unrecognized point/vector value.\n" );
-                        return nullptr;
+                        return false;
                     }
                     currentValue->m_Vector.x = (float)atof( parameterSplit[ 0 ].data() );
                     currentValue->m_Vector.y = (float)atof( parameterSplit[ 1 ].data() );
@@ -473,7 +538,7 @@ namespace
                     if ( parameterSplit.size() != 3 )
                     {
                         LOG_STRING( "Unrecognized RGB value.\n" );
-                        return nullptr;
+                        return false;
                     }
                     currentValue->m_RGB.x = (float)atof( parameterSplit[ 0 ].data() );
                     currentValue->m_RGB.y = (float)atof( parameterSplit[ 1 ].data() );
@@ -489,7 +554,7 @@ namespace
                 {
                     if ( TryGetAttribute( currentNode, "value", &value ) )
                     {
-                        defaultParameters.insert( std::make_pair( name, value ) );
+                        defaultParameterMap.insert( std::make_pair( name, value ) );
                     }
                 }
 
@@ -512,14 +577,14 @@ namespace
             }
         }
 
-        return parentValue;
+        return true;
     }
 
     bool TranslateMaterialFromBSDF( const SValue& BSDF, const std::unordered_map<std::string_view, EXMLMaterialType>& materialNameToEnumMap, SMaterial* material, std::string_view* name, bool isTwoSided = false )
     {
         EXMLMaterialType materialType = EXMLMaterialType::eUnsupported;
 
-        SValue* typeValue = BSDF.FindValue( "type" );
+        SValue* typeValue = BSDF.FindObjectField( "type" );
         if ( !typeValue )
         {
             LOG_STRING( "Cannot obtain bsdf type.\n" );
@@ -534,7 +599,7 @@ namespace
             }
         }
 
-        SValue* idValue = BSDF.FindValue( "id" );
+        SValue* idValue = BSDF.FindObjectField( "id" );
         if ( idValue )
         {
             *name = idValue->m_String;
@@ -542,7 +607,7 @@ namespace
 
         if ( materialType == EXMLMaterialType::eTwosided )
         {
-            SValue* childBSDF = BSDF.FindValue( "bsdf" );
+            SValue* childBSDF = BSDF.FindFirstNestedObject( "bsdf" );
             if ( !childBSDF )
             {
                 LOG_STRING( "Cannot find child BSDF inside a twosided BSDF.\n" );
@@ -639,15 +704,15 @@ namespace
 
         if ( hasRoughness )
         {
-            SValue* alphaValue = BSDF.FindValue( "alpha" );
+            SValue* alphaValue = BSDF.FindObjectField( "alpha" );
             float alpha = alphaValue ? alphaValue->m_Float : 0.0f;
             material->m_Roughness = sqrt( alpha );
         }
 
         if ( hasDielectricIOR )
         {
-            SValue* intIORValue = BSDF.FindValue( "int_ior" );
-            SValue* extIORValue = BSDF.FindValue( "ext_ior" );
+            SValue* intIORValue = BSDF.FindObjectField( "int_ior" );
+            SValue* extIORValue = BSDF.FindObjectField( "ext_ior" );
             float intIOR = 1.49f, extIOR = 1.000277f;
             if ( intIORValue )
             {
@@ -675,8 +740,8 @@ namespace
         }
         else if ( hasConductorIOR )
         {
-            SValue* etaValue = BSDF.FindValue( "eta" );
-            SValue* extEtaValue = BSDF.FindValue( "ext_eta" );
+            SValue* etaValue = BSDF.FindObjectField( "eta" );
+            SValue* extEtaValue = BSDF.FindObjectField( "ext_eta" );
             XMFLOAT3 eta = { 0.0f, 0.0f, 0.0f };
             float extEta = 1.000277f;
             if ( etaValue )
@@ -705,7 +770,7 @@ namespace
             material->m_IOR.y = eta.y / extEta;
             material->m_IOR.z = eta.z / extEta;
 
-            SValue* kValue = BSDF.FindValue( "k" );
+            SValue* kValue = BSDF.FindObjectField( "k" );
             XMFLOAT3 k = { 1.0f, 1.0f, 1.0f };
             if ( kValue )
             {
@@ -724,7 +789,7 @@ namespace
         if ( hasDiffuseReflectance )
         {
             XMFLOAT3 albedo = { 0.5f, 0.5f, 0.5f };
-            SValue* diffuseReflectanceValue = BSDF.FindValue( !hasDielectricIOR ? "reflectance" : "diffuse_reflectance" );
+            SValue* diffuseReflectanceValue = BSDF.FindObjectField( !hasDielectricIOR ? "reflectance" : "diffuse_reflectance" );
             if ( diffuseReflectanceValue )
             {
                 if ( diffuseReflectanceValue->m_Type == EValueType::eRGB )
@@ -772,25 +837,25 @@ namespace
 
 static inline bool FindChildBoolean( const SValue* value, const char* name, bool defaultValue = false )
 {
-    SValue* ChildValue = value->FindValue( name );
+    SValue* ChildValue = value->FindObjectField( name );
     return ChildValue && ChildValue->m_Type == EValueType::eBoolean ? ChildValue->m_Boolean : defaultValue;
 }
 
 static inline int32_t FindChildInteger( const SValue* value, const char* name, int32_t defaultValue = 0 )
 {
-    SValue* ChildValue = value->FindValue( name );
+    SValue* ChildValue = value->FindObjectField( name );
     return ChildValue && ChildValue->m_Type == EValueType::eInteger ? ChildValue->m_Integer : defaultValue;
 }
 
 static inline float FindChildFloat( const SValue* value, const char* name, float defaultValue = 0.f )
 {
-    SValue* ChildValue = value->FindValue( name );
+    SValue* ChildValue = value->FindObjectField( name );
     return ChildValue && ChildValue->m_Type == EValueType::eFloat ? ChildValue->m_Float : defaultValue;
 }
 
 static inline std::string_view FindChildString( const SValue* value, const char* name, std::string_view defaultValue = std::string_view() )
 {
-    SValue* ChildValue = value->FindValue( name );
+    SValue* ChildValue = value->FindObjectField( name );
     return ChildValue && ChildValue->m_Type == EValueType::eString ? ChildValue->m_String : defaultValue;
 }
 
@@ -808,12 +873,16 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
     doc.parse<parse_non_destructive>( xml.data() );
 
     CValueList valueList;
-    std::vector<std::pair<std::string_view, SValue*>> rootObjectValues;
-    SValue* rootValue = BuildValueGraph( &valueList, &doc, &rootObjectValues );
-    if ( !rootValue )
+    std::vector<SValue*> sceneValues;
+    if ( !BuildValueGraph( &valueList, &doc, &sceneValues ) )
     {
         LOG_STRING( "Failed to build value graph.\n" );
         return false;
+    }
+
+    if ( sceneValues.size() > 1 )
+    {
+        LOG_STRING( "The file contains more than 1 scenes, only the first one is supported.\n" );
     }
 
     std::unordered_map<std::string_view, EShapeType> shapeNameToEnumMap = { { "obj", EShapeType::eObj }, { "rectangle", EShapeType::eRectangle } };
@@ -833,14 +902,15 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
     size_t meshIndexBase = m_Meshes.size();
 
     std::unordered_map<const SValue*, uint32_t> BSDFValuePointerToIdMap;
+    std::vector<std::pair<std::string_view, SValue*>>& rootObjectValues = *sceneValues[ 0 ]->m_NestedObjects;
     for ( auto& rootObjectValue : rootObjectValues )
     {
         if ( strncmp( "integrator", rootObjectValue.first.data(), rootObjectValue.first.length() ) == 0 )
         {
-            SValue* typeValue = rootObjectValue.second->FindValue( "type" );
+            SValue* typeValue = rootObjectValue.second->FindObjectField( "type" );
             if ( strncmp( "path", typeValue->m_String.data(), typeValue->m_String.length() ) == 0 )
             {
-                SValue* maxDepthValue = rootObjectValue.second->FindValue( "max_depth" );
+                SValue* maxDepthValue = rootObjectValue.second->FindObjectField( "max_depth" );
                 if ( maxDepthValue )
                 {
                     m_MaxBounceCount = maxDepthValue->m_Integer;
@@ -868,7 +938,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
             }
 
             {
-                SValue* transformValue = rootObjectValue.second->FindValue( "transform" );
+                SValue* transformValue = rootObjectValue.second->FindObjectField( "to_world" );
                 XMFLOAT3 position = { 0.0f, 0.0f, 0.0f };
                 XMFLOAT3 eulerAngles = { 0.0f, 0.0f, 0.0f };
                 if ( transformValue )
@@ -880,20 +950,20 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
             }
 
             {
-                SValue* filmValue = rootObjectValue.second->FindValue( "film" );
+                SValue* filmValue = rootObjectValue.second->FindFirstNestedObject( "film" );
                 if ( filmValue )
                 {
                     {
                         int32_t resolutionWidth = 768;
                         int32_t resolutionHeight = 576;
 
-                        SValue* widthValue = filmValue->FindValue( "width" );
+                        SValue* widthValue = filmValue->FindObjectField( "width" );
                         if ( widthValue && widthValue->m_Type == eInteger )
                         {
                             resolutionWidth = widthValue->m_Integer;
                         }
 
-                        SValue* heightValue = filmValue->FindValue( "height" );
+                        SValue* heightValue = filmValue->FindObjectField( "height" );
                         if ( heightValue && heightValue->m_Type == eInteger )
                         {
                             resolutionHeight = heightValue->m_Integer;
@@ -903,29 +973,29 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                         m_ResolutionHeight = resolutionHeight;
                     }
 
-                    SValue* filterValue = filmValue->FindValue( "rfilter" );
+                    SValue* filterValue = filmValue->FindFirstNestedObject( "rfilter" );
                     if ( filterValue )
                     {
-                        SValue* typeValue = filterValue->FindValue( "type" );
+                        SValue* typeValue = filterValue->FindObjectField( "type" );
                         if ( typeValue )
                         {
                             if ( strncmp( "box", typeValue->m_String.data(), typeValue->m_String.length() ) == 0 )
                             {
-                                SValue* radiusValue = filterValue->FindValue( "radius" );
+                                SValue* radiusValue = filterValue->FindObjectField( "radius" );
                                 m_Filter = EFilter::Box;
                                 m_FilterRadius = radiusValue ? radiusValue->m_Float : 0.5f;
                             }
                             else if ( strncmp( "gaussian", typeValue->m_String.data(), typeValue->m_String.length() ) == 0 )
                             {
-                                SValue* stddevValue = filterValue->FindValue( "stddev" );
+                                SValue* stddevValue = filterValue->FindObjectField( "stddev" );
                                 m_Filter = EFilter::Gaussian;
                                 m_GaussianFilterAlpha = stddevValue ? stddevValue->m_Float : 0.5f;
                                 m_FilterRadius = m_GaussianFilterAlpha * 4;
                             }
                             else if ( strncmp( "mitchell", typeValue->m_String.data(), typeValue->m_String.length() ) == 0 )
                             {
-                                SValue* bValue = filterValue->FindValue( "B" );
-                                SValue* cValue = filterValue->FindValue( "C" );
+                                SValue* bValue = filterValue->FindObjectField( "B" );
+                                SValue* cValue = filterValue->FindObjectField( "C" );
                                 m_Filter = EFilter::Mitchell;
                                 m_MitchellB = bValue ? bValue->m_Float : 1.0f / 3.0f;
                                 m_MitchellB = cValue ? cValue->m_Float : 1.0f / 3.0f;
@@ -933,7 +1003,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                             }
                             else if ( strncmp( "lanczos", typeValue->m_String.data(), typeValue->m_String.length() ) == 0 )
                             {
-                                SValue* tauValue = filterValue->FindValue( "lobes" );
+                                SValue* tauValue = filterValue->FindObjectField( "lobes" );
                                 m_Filter = EFilter::LanczosSinc;
                                 m_LanczosSincTau = tauValue ? tauValue->m_Integer : 3;
                                 m_FilterRadius = (float)m_LanczosSincTau;
@@ -953,7 +1023,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
             m_FilmSize.x = 0.035f;
             m_FilmSize.y = m_FilmSize.x / std::fmax( aspect, 0.0001f );
 
-            SValue* focalLengthValue = rootObjectValue.second->FindValue( "focal_length" );
+            SValue* focalLengthValue = rootObjectValue.second->FindObjectField( "focal_length" );
             if ( focalLengthValue )
             {
                 float focalLengthMilliMeter = (float)atof( focalLengthValue->m_String.data() );
@@ -970,7 +1040,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
             }
 
             float fovDeg = 50.f;
-            SValue* fovValue = rootObjectValue.second->FindValue( "fov" );
+            SValue* fovValue = rootObjectValue.second->FindObjectField( "fov" );
             if ( fovValue && fovValue->m_Type == eFloat )
             {
                 fovDeg = std::clamp( fovValue->m_Float, 0.0001f, 179.99f );
@@ -999,10 +1069,10 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
             }
             else if ( m_CameraType == ECameraType::ThinLens )
             {
-                SValue* apertureRadiusValue = rootObjectValue.second->FindValue( "aperture_radius" );
+                SValue* apertureRadiusValue = rootObjectValue.second->FindObjectField( "aperture_radius" );
                 m_RelativeAperture = apertureRadiusValue ? m_FocalLength / ( apertureRadiusValue->m_Float * 2 ) : 8.0f;
             
-                SValue* focalDistanceValue = rootObjectValue.second->FindValue( "focus_distance" );
+                SValue* focalDistanceValue = rootObjectValue.second->FindObjectField( "focus_distance" );
                 m_FocalDistance = focalDistanceValue ? focalDistanceValue->m_Float : 2.0f;
             }
         }
@@ -1013,7 +1083,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
         }
         else if ( strncmp( "shape", rootObjectValue.first.data(), rootObjectValue.first.length() ) == 0 )
         {
-            SValue* typeValue = rootObjectValue.second->FindValue( "type" );
+            SValue* typeValue = rootObjectValue.second->FindObjectField( "type" );
             if ( !typeValue )
             {
                 LOG_STRING( "Cannot determine the type of shape.\n" );
@@ -1021,14 +1091,14 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
             else
             {
                 
-                SValue* transformValue = rootObjectValue.second->FindValue( "transform" );
+                SValue* transformValue = rootObjectValue.second->FindObjectField( "to_world" );
                 XMFLOAT4X4 transform = transformValue ? transformValue->m_Matrix : MathHelper::s_IdentityMatrix4x4;
 
-                SValue* emitterValue = rootObjectValue.second->FindValue( "emitter" );
+                SValue* emitterValue = rootObjectValue.second->FindFirstNestedObject( "emitter" );
                 bool isALight = emitterValue != nullptr;
 
                 uint32_t materialId = INVALID_MATERIAL_ID;
-                SValue* bsdfValue = rootObjectValue.second->FindValue( "bsdf" );
+                SValue* bsdfValue = rootObjectValue.second->FindFirstNestedObject( "bsdf" );
                 if ( bsdfValue )
                 {
                     auto iter = BSDFValuePointerToIdMap.find( bsdfValue );
@@ -1069,7 +1139,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                 {
                 case EShapeType::eObj:
                 {
-                    SValue* filenameValue = rootObjectValue.second->FindValue( "filename" );
+                    SValue* filenameValue = rootObjectValue.second->FindObjectField( "filename" );
                     if ( !filenameValue )
                     {
                         LOG_STRING( "Cannot find filename of an obj shape.\n" );
@@ -1131,7 +1201,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
 
                     if ( isALight )
                     {
-                        const SValue* typeValue = emitterValue->FindValue( "type" );
+                        const SValue* typeValue = emitterValue->FindObjectField( "type" );
                         if ( typeValue && typeValue->m_Type == EValueType::eString )
                         {
                             if ( strncmp( "area", typeValue->m_String.data(), typeValue->m_String.length() ) == 0 )
@@ -1139,7 +1209,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                                 SMeshLight light;
                                 light.m_InstanceIndex = instanceIndex;
 
-                                const SValue* radianceValue = emitterValue->FindValue( "radiance" );
+                                const SValue* radianceValue = emitterValue->FindObjectField( "radiance" );
                                 light.color = GetRGB( radianceValue, XMFLOAT3( 1.f, 1.f, 1.f ) );
 
                                 m_MeshLights.emplace_back( light );
@@ -1159,7 +1229,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
         }
         else if ( strncmp( "emitter", rootObjectValue.first.data(), rootObjectValue.first.length() ) == 0 )
         {
-            SValue* emitterTypeValue = rootObjectValue.second->FindValue( "type" );
+            SValue* emitterTypeValue = rootObjectValue.second->FindObjectField( "type" );
             if ( emitterTypeValue && emitterTypeValue->m_Type == EValueType::eString )
             {
                 if ( GetLightCount() >= s_MaxLightsCount )
@@ -1180,7 +1250,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                         continue;
                     }
 
-                    SValue* radianceValue = rootObjectValue.second->FindValue( "radiance" );
+                    SValue* radianceValue = rootObjectValue.second->FindObjectField( "radiance" );
                     m_EnvironmentLight->m_Color = GetRGB( radianceValue, XMFLOAT3( 1.f, 1.f, 1.f ) );
                 }
                 else if ( strncmp( "directional", emitterTypeValue->m_String.data(), emitterTypeValue->m_String.length() ) == 0 )
@@ -1189,10 +1259,10 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     newLight.m_IsDirectionalLight = true;
                     newLight.SetEulerAnglesFromDirection( XMFLOAT3( 0.f, -1.f, 0.f ) );
 
-                    SValue* irradianceValue = rootObjectValue.second->FindValue( "irradiance" );
+                    SValue* irradianceValue = rootObjectValue.second->FindObjectField( "irradiance" );
                     newLight.m_Color = GetRGB( irradianceValue, XMFLOAT3( 1.f, 1.f, 1.f ) );
 
-                    SValue* directionValue = rootObjectValue.second->FindValue( "direction" );
+                    SValue* directionValue = rootObjectValue.second->FindObjectField( "direction" );
                     if ( directionValue )
                     {
                         if ( directionValue->m_Type == EValueType::eVector )

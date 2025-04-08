@@ -6,13 +6,13 @@
 
 using namespace DirectX;
 
-GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT format, uint32_t bindFlags, uint32_t arraySize, D3D12_RESOURCE_STATES resourceStates,
-    const wchar_t* debugName, XMFLOAT4 clearColor )
+GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT format, uint32_t bindFlags, const std::vector<D3D12_SUBRESOURCE_DATA>& initialData, 
+    uint32_t arraySize, D3D12_RESOURCE_STATES resourceStates, const wchar_t* debugName, XMFLOAT4 clearColor )
 {
     const bool hasUAV = ( bindFlags & EGPUTextureBindFlag_UnorderedAccess ) != 0;
     const bool isRenderTarget = ( bindFlags & EGPUTextureBindFlag_RenderTarget ) != 0;
 
-    ComPtr<ID3D12Resource> texture;
+    ID3D12Resource* D3DTexture = nullptr;
     D3D12_RESOURCE_DESC desc = {};
     desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
     desc.Width = width;
@@ -34,10 +34,37 @@ GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT for
 
     CD3DX12_HEAP_PROPERTIES heapProperties( D3D12_HEAP_TYPE_DEFAULT );
     CD3DX12_CLEAR_VALUE clearValue( format, (float*)&clearColor );
+    D3D12_RESOURCE_STATES initialStates = !initialData.empty() ? D3D12_RESOURCE_STATE_COPY_DEST : resourceStates;
     if ( FAILED( D3D12Adapter::GetDevice()->CreateCommittedResource( &heapProperties, D3D12_HEAP_FLAG_NONE, &desc,
-        resourceStates, isRenderTarget ? &clearValue : nullptr, IID_PPV_ARGS( texture.GetAddressOf() ) ) ) )
+        initialStates, isRenderTarget ? &clearValue : nullptr, IID_PPV_ARGS( &D3DTexture ) ) ) )
     {
         return nullptr;
+    }
+
+    CD3D12ComPtr<ID3D12Resource> texture( D3DTexture );
+
+    if ( !initialData.empty() )
+    {
+        const UINT64 textureByteSize = GetRequiredIntermediateSize( texture.Get(), 0, (UINT)initialData.size() );
+        const CD3DX12_HEAP_PROPERTIES heapProperties( D3D12_HEAP_TYPE_UPLOAD );
+        const CD3DX12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer( textureByteSize );
+        if ( FAILED( D3D12Adapter::GetDevice()->CreateCommittedResource( &heapProperties, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr, IID_PPV_ARGS( &D3DTexture ) ) ) )
+        {
+            return nullptr;
+        }
+
+        CD3D12ComPtr<ID3D12Resource> intermediate( D3DTexture );
+
+        ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
+
+        UpdateSubresources( commandList, texture.Get(), intermediate.Get(), 0, 0, (UINT)initialData.size(), initialData.data() );
+
+        if ( resourceStates != D3D12_RESOURCE_STATE_COPY_DEST )
+        {
+            const D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( texture.Get(), D3D12_RESOURCE_STATE_COPY_DEST, resourceStates );
+            commandList->ResourceBarrier( 1, &barrier );
+        }
     }
 
     TD3D12DescriptorPoolHeapRef<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV> descriptorHeap = D3D12Adapter::GetDescriptorPoolHeap<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV>();
@@ -82,12 +109,19 @@ GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT for
     }
 
     GPUTexture* gpuTexture = new GPUTexture();
-    gpuTexture->m_Texture = texture;
+    gpuTexture->m_Texture = texture.Get();
     gpuTexture->m_SRV = SRV;
     gpuTexture->m_UAV = UAV;
     gpuTexture->m_RTV = RTV;
 
     return gpuTexture;
+}
+
+GPUTexture* GPUTexture::Create( uint32_t width, uint32_t height, DXGI_FORMAT format, uint32_t bindFlags, uint32_t arraySize, D3D12_RESOURCE_STATES resourceStates,
+    const wchar_t* debugName, DirectX::XMFLOAT4 clearColor )
+{
+    std::vector<D3D12_SUBRESOURCE_DATA> initialData;
+    return Create( width, height, format, bindFlags, initialData, arraySize, resourceStates, debugName, clearColor );
 }
 
 GPUTexture* GPUTexture::CreateFromSwapChain( uint32_t index )

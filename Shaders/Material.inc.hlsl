@@ -20,8 +20,9 @@ GPU_STRUCTURE_NAMESPACE_BEGIN
 struct Material
 {
     float3 albedo;
-    float  roughness;
+    int    albedoTextureIndex;
     float3 ior;
+    float  roughness;
     float2 texTiling;
     uint   flags;
 };

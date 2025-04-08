@@ -137,35 +137,48 @@ static void FillDescriptors( D3D12_CPU_DESCRIPTOR_HANDLE descriptorTable, uint32
     }
 }
 
-D3D12_GPU_DESCRIPTOR_HANDLE SD3D12DescriptorTableLayout::AllocateAndCopyToGPUDescriptorHeap( const SD3D12DescriptorHandle* SRVs, uint32_t SRVCount, const SD3D12DescriptorHandle* UAVs, uint32_t UAVCount )
+static void CopyToDescriptorTableWithLayout( const SD3D12DescriptorTableLayout& layout, SD3D12GPUDescriptorHeapHandle descriptorTable,
+    const SD3D12DescriptorHandle* SRVs, uint32_t SRVCount, const SD3D12DescriptorHandle* UAVs, uint32_t UAVCount )
 {
-    SD3D12GPUDescriptorHeapHandle descriptorTable = D3D12Adapter::GetGPUDescriptorHeap()->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_SRVCount + m_UAVCount );
-
     const SD3D12DescriptorHandle* src[] = { SRVs, UAVs };
-    uint32_t offsets[] = { 0, m_SRVCount };
+    uint32_t offsets[] = { 0, layout.m_SRVCount };
     uint32_t sizes[] = { SRVCount, UAVCount };
-    assert( SRVCount <= m_SRVCount );
-    assert( UAVCount <= m_UAVCount );
-    CopyToDescriptorTable( descriptorTable.m_CPU, src, offsets, sizes, 2, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    assert( SRVCount <= layout.m_SRVCount );
+    assert( UAVCount <= layout.m_UAVCount );
+    D3D12Util::CopyToDescriptorTable( descriptorTable.m_CPU, src, offsets, sizes, 2, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
 
     // Fill remaining entries in the descriptor table with null descriptors even if they are not accessed by shader.
     // Otherwise the debug layer will report uninitialized descriptor error.
-    if ( m_SRVCount > SRVCount )
+    if ( layout.m_SRVCount > SRVCount )
     {
-        FillDescriptors( descriptorTable.m_CPU, SRVCount, m_SRVCount - SRVCount, D3D12Adapter::GetNullBufferSRV() );
+        FillDescriptors( descriptorTable.m_CPU, SRVCount, layout.m_SRVCount - SRVCount, D3D12Adapter::GetNullBufferSRV() );
     }
-    if ( m_UAVCount > UAVCount )
+    if ( layout.m_UAVCount > UAVCount )
     {
-        FillDescriptors( descriptorTable.m_CPU, m_SRVCount + UAVCount, m_UAVCount - UAVCount, D3D12Adapter::GetNullBufferUAV() );
+        FillDescriptors( descriptorTable.m_CPU, layout.m_SRVCount + UAVCount, layout.m_UAVCount - UAVCount, D3D12Adapter::GetNullBufferUAV() );
     }
+}
 
+D3D12_GPU_DESCRIPTOR_HANDLE SD3D12DescriptorTableLayout::AllocateAndCopyToDescriptorTable( const SD3D12DescriptorHandle* SRVs, uint32_t SRVCount, const SD3D12DescriptorHandle* UAVs, uint32_t UAVCount )
+{
+    SD3D12GPUDescriptorHeapHandle descriptorTable = D3D12Adapter::GetGPUDescriptorHeap()->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_SRVCount + m_UAVCount );
+    CopyToDescriptorTableWithLayout( *this, descriptorTable, SRVs, SRVCount, UAVs, UAVCount );
     return descriptorTable.m_GPU;
 }
 
-D3D12_GPU_DESCRIPTOR_HANDLE SD3D12DescriptorTableLayout::AllocateAndCopyToGPUDescriptorHeap( const SD3D12DescriptorHandle* descriptors, uint32_t count )
+D3D12_GPU_DESCRIPTOR_HANDLE SD3D12DescriptorTableLayout::AllocateAndCopyToDescriptorTable( const SD3D12DescriptorHandle* SRVs, uint32_t SRVCount, const SD3D12DescriptorHandle* UAVs, uint32_t UAVCount,
+    const SD3D12DescriptorHandle* textureSRVs, uint32_t textureSRVCount )
 {
-    assert( count <= m_SRVCount + m_UAVCount );
-    SD3D12GPUDescriptorHeapHandle descriptorTable = D3D12Adapter::GetGPUDescriptorHeap()->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_SRVCount + m_UAVCount );
+    SD3D12GPUDescriptorHeapHandle descriptorTable = D3D12Adapter::GetGPUDescriptorHeap()->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_SRVCount + m_UAVCount + textureSRVCount );
+    CopyToDescriptorTableWithLayout( *this, descriptorTable, SRVs, SRVCount, UAVs, UAVCount );
+    const uint32_t descriptorSize = D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    CopyDescriptors( CD3DX12_CPU_DESCRIPTOR_HANDLE( descriptorTable.m_CPU, m_SRVCount + m_UAVCount, descriptorSize ), textureSRVs, textureSRVCount, descriptorSize, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+    return descriptorTable.m_GPU;
+}
+
+D3D12_GPU_DESCRIPTOR_HANDLE D3D12Util::AllocateAndCopyToDescriptorTable( const SD3D12DescriptorHandle* descriptors, uint32_t count )
+{
+    SD3D12GPUDescriptorHeapHandle descriptorTable = D3D12Adapter::GetGPUDescriptorHeap()->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, count );
     CopyDescriptors( descriptorTable.m_CPU, descriptors, count, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
     return descriptorTable.m_GPU;
 }

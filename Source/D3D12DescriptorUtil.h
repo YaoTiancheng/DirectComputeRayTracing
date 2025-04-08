@@ -28,9 +28,11 @@ namespace D3D12Util
         }
     }
 
+    D3D12_GPU_DESCRIPTOR_HANDLE AllocateAndCopyToDescriptorTable( const SD3D12DescriptorHandle* descriptors, uint32_t count );
+
     struct SD3D12DescriptorTableRanges
     {
-        static const uint32_t s_MaxRangesCount = 2;
+        static const uint32_t s_MaxRangesCount = 3;
         CD3DX12_DESCRIPTOR_RANGE1 m_Array[ s_MaxRangesCount ];
     };
 
@@ -55,12 +57,15 @@ namespace D3D12Util
             { 
                 ranges->m_Array[ rangesCount++ ].Init( D3D12_DESCRIPTOR_RANGE_TYPE_UAV, m_UAVCount, 0 );
             }
+            // Variable range for scene texture SRVs
+            ranges->m_Array[ rangesCount++ ].Init( D3D12_DESCRIPTOR_RANGE_TYPE_SRV, UINT_MAX, m_SRVCount, 0U, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE );
             rootParameter->InitAsDescriptorTable( rangesCount, ranges->m_Array );
         }
 
-        D3D12_GPU_DESCRIPTOR_HANDLE AllocateAndCopyToGPUDescriptorHeap( const SD3D12DescriptorHandle* SRVs, uint32_t SRVCount, const SD3D12DescriptorHandle* UAVs, uint32_t UAVCount );
+        D3D12_GPU_DESCRIPTOR_HANDLE AllocateAndCopyToDescriptorTable( const SD3D12DescriptorHandle* SRVs, uint32_t SRVCount, const SD3D12DescriptorHandle* UAVs, uint32_t UAVCount );
 
-        D3D12_GPU_DESCRIPTOR_HANDLE AllocateAndCopyToGPUDescriptorHeap( const SD3D12DescriptorHandle* descriptors, uint32_t count );
+        D3D12_GPU_DESCRIPTOR_HANDLE AllocateAndCopyToDescriptorTable( const SD3D12DescriptorHandle* SRVs, uint32_t SRVCount, const SD3D12DescriptorHandle* UAVs, uint32_t UAVCount,
+            const SD3D12DescriptorHandle* textureSRVs, uint32_t textureSRVCount );
 
         uint32_t m_SRVCount = 0;
         uint32_t m_UAVCount = 0;

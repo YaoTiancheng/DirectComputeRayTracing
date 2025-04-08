@@ -232,7 +232,7 @@ void SRenderer::ExecutePostProcessing( const SRenderContext& renderContext )
 
     SD3D12DescriptorHandle SRVs[] = { m_Scene.m_FilmTexture->GetSRV(),
         m_LuminanceResultBuffer ? m_LuminanceResultBuffer->GetSRV() : D3D12Adapter::GetNullBufferSRV() };
-    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( SRVs, (uint32_t)ARRAY_LENGTH( SRVs ), nullptr, 0 );
+    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( SRVs, (uint32_t)ARRAY_LENGTH( SRVs ), nullptr, 0 );
     commandList->SetGraphicsRootDescriptorTable( 1, descriptorTable );
 
     commandList->SetPipelineState( !m_IsPostFXEnabled || !renderContext.m_EnablePostFX ? m_PostFXDisabledPSO.Get() : ( m_IsAutoExposureEnabled ? m_PostFXAutoExposurePSO.Get() : m_PostFXPSO.Get() ) );
@@ -266,7 +266,7 @@ void SRenderer::ExecuteCopy()
     commandList->SetGraphicsRootSignature( m_PostProcessingRootSignature.Get() );
     commandList->SetGraphicsRoot32BitConstants( 0, 4, &constants, 0 );
 
-    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &m_Scene.m_RenderResultTexture->GetSRV(), 1, nullptr, 0 );
+    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( &m_Scene.m_RenderResultTexture->GetSRV(), 1, nullptr, 0 );
     commandList->SetGraphicsRootDescriptorTable( 1, descriptorTable );
 
     commandList->SetPipelineState( m_CopyPSO.Get() );

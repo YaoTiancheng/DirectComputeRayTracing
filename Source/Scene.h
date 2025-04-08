@@ -4,7 +4,10 @@
 #include "BVHAccel.h"
 #include "Camera.h"
 #include "Mesh.h"
+#include "Texture.h"
 #include "../Shaders/Material.inc.hlsl"
+
+#define INDEX_NONE -1
 
 enum class ECameraType
 {
@@ -63,9 +66,9 @@ struct SMaterial
     DirectX::XMFLOAT3 m_K;
     DirectX::XMFLOAT2 m_Tiling;
     EMaterialType m_MaterialType;
+    int32_t m_AlbedoTextureIndex;
     bool m_Multiscattering;
     bool m_IsTwoSided;
-    bool m_HasAlbedoTexture;
     bool m_HasRoughnessTexture;
 };
 
@@ -144,6 +147,8 @@ public:
 
     void ScreenToCameraRay( const DirectX::XMFLOAT2& screenPos, DirectX::XMVECTOR* origin, DirectX::XMVECTOR* direction );
 
+    void CopyTextureDescriptors( struct SD3D12DescriptorHandle* descriptors );
+
     const uint32_t s_MaxRayBounce = 20;
     const uint32_t s_MaxLightsCount = 5000;
     const float s_MaxFocalDistance = 999999.0f;
@@ -153,7 +158,7 @@ private:
 
     bool LoadFromXMLFile( const std::filesystem::path& filepath );
 
-    bool CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, const char* MTLBaseDir, bool applyTransform, const DirectX::XMFLOAT4X4& transform, bool changeWindingOrder, uint32_t materialIdOverride );
+    bool CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, const char* MTLBaseDir, const SMeshProcessingParams& processingParams );
 
 public:
     uint32_t m_ResolutionWidth;
@@ -191,6 +196,7 @@ public:
     std::vector<BVHAccel::BVHNode> m_TLAS;
     std::vector<uint32_t> m_ReorderedInstanceIndices;
     std::vector<DirectX::XMFLOAT4X3> m_InstanceTransforms;
+    std::vector<CTexture> m_Textures;
     uint32_t m_BVHTraversalStackSize;
 
     CD3D12ResourcePtr<GPUBuffer> m_VerticesBuffer;
@@ -201,6 +207,7 @@ public:
     CD3D12ResourcePtr<GPUBuffer> m_MaterialsBuffer;
     CD3D12ResourcePtr<GPUBuffer> m_InstanceTransformsBuffer;
     CD3D12ResourcePtr<GPUBuffer> m_InstanceLightIndicesBuffer;
+    std::vector<CD3D12ResourcePtr<GPUTexture>> m_GPUTextures;
 
     CD3D12ResourcePtr<GPUTexture> m_FilmTexture;
     CD3D12ResourcePtr<GPUTexture> m_SamplePositionTexture;

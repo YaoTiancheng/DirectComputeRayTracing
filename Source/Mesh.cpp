@@ -72,13 +72,14 @@ namespace std
 
 struct STinyObjMeshMikkTSpaceContext
 {
-    STinyObjMeshMikkTSpaceContext( const tinyobj::attrib_t& attrib, const tinyobj::mesh_t& mesh, std::vector<XMFLOAT3>* tangents )
-        : m_Attrib( attrib ), m_Mesh( mesh ), m_Tangents( tangents )
+    STinyObjMeshMikkTSpaceContext( const tinyobj::attrib_t& attrib, const tinyobj::mesh_t& mesh, std::vector<XMFLOAT3>* tangents, bool flipTexcoordV )
+        : m_Attrib( attrib ), m_Mesh( mesh ), m_Tangents( tangents ), m_FlipTexcoordV( flipTexcoordV )
     {}
     
     const tinyobj::attrib_t& m_Attrib;
     const tinyobj::mesh_t&   m_Mesh;
     std::vector<XMFLOAT3>*   m_Tangents;
+    bool m_FlipTexcoordV;
 };
 
 static int MikkTSpaceGetNumFaces( const SMikkTSpaceContext* pContext )
@@ -122,6 +123,10 @@ static void MikkTSpaceGetTexcoord( const SMikkTSpaceContext* pContext, float fvT
     { 
         fvTexcOut[ 0 ] = meshContext->m_Attrib.texcoords[ idx.texcoord_index * 2 ];
         fvTexcOut[ 1 ] = meshContext->m_Attrib.texcoords[ idx.texcoord_index * 2 + 1 ];
+        if ( meshContext->m_FlipTexcoordV )
+        {
+            fvTexcOut[ 1 ] = 1.f - fvTexcOut[ 1 ];
+        }
     }
     else
     {
@@ -137,15 +142,15 @@ static void MikkTSpaceSetTSpaceBasic( const SMikkTSpaceContext* pContext, const 
 }
 
 
-static bool GenerateTangentVectorsForMesh( const tinyobj::attrib_t& attrib, const tinyobj::mesh_t& mesh, SMikkTSpaceContext* context, std::vector<XMFLOAT3>* outTangents )
+static bool GenerateTangentVectorsForMesh( const tinyobj::attrib_t& attrib, const tinyobj::mesh_t& mesh, SMikkTSpaceContext* context, bool flipTexcoordV, std::vector<XMFLOAT3>* outTangents )
 {
     outTangents->resize( mesh.num_face_vertices.size() * 3 );
-    STinyObjMeshMikkTSpaceContext meshContext( attrib, mesh, outTangents );
+    STinyObjMeshMikkTSpaceContext meshContext( attrib, mesh, outTangents, flipTexcoordV );
     context->m_pUserData = &meshContext;
     return genTangSpaceDefault( context );
 }
 
-bool Mesh::CreateFromWavefrontOBJData( const tinyobj::attrib_t& attrib, const std::vector<tinyobj::shape_t>& shapes, uint32_t materialIdBase, bool applyTransform, const DirectX::XMFLOAT4X4& transform, bool changeWindingOrder, uint32_t materialIdOverride )
+bool Mesh::CreateFromWavefrontOBJData( const tinyobj::attrib_t& attrib, const std::vector<tinyobj::shape_t>& shapes, uint32_t materialIdBase, const SMeshProcessingParams& processingParams )
 {
     std::unordered_map<SVertexKey, uint32_t> vertexKeyToVertexIndexMap;
 
@@ -153,7 +158,7 @@ bool Mesh::CreateFromWavefrontOBJData( const tinyobj::attrib_t& attrib, const st
     if ( normalCount == 0 )
         return false;
 
-    bool hasMaterialOverride = materialIdOverride != -1;
+    bool hasMaterialOverride = processingParams.m_MaterialIdOverride != -1;
     bool needDefaultMaterial = false;
 
     SMikkTSpaceContext mikkTSpaceContext;
@@ -170,9 +175,9 @@ bool Mesh::CreateFromWavefrontOBJData( const tinyobj::attrib_t& attrib, const st
     std::vector<XMFLOAT3> tangents;
 
     XMMATRIX vTransform, vNormalTransform;
-    if ( applyTransform )
+    if ( processingParams.m_ApplyTransform )
     {
-        vTransform = XMLoadFloat4x4( &transform );
+        vTransform = XMLoadFloat4x4( &processingParams.m_Transform );
         XMVECTOR vDet;
         vNormalTransform = XMMatrixTranspose( XMMatrixInverse( &vDet, vTransform ) );
     }
@@ -180,7 +185,7 @@ bool Mesh::CreateFromWavefrontOBJData( const tinyobj::attrib_t& attrib, const st
     // For winding order selection
     const int originalTriangleIndices[ 3 ] = { 0, 1, 2 };
     const int changedTriangleIndices[ 3 ] = { 0, 2, 1 };
-    const int* triangleIndices = changeWindingOrder ? changedTriangleIndices : originalTriangleIndices;
+    const int* triangleIndices = processingParams.m_ChangeWindingOrder ? changedTriangleIndices : originalTriangleIndices;
 
     for ( size_t iShapes = 0; iShapes < shapes.size(); ++iShapes )
     {
@@ -188,7 +193,7 @@ bool Mesh::CreateFromWavefrontOBJData( const tinyobj::attrib_t& attrib, const st
 
         assert( mesh.num_face_vertices.size() == mesh.material_ids.size() );
 
-        if ( !GenerateTangentVectorsForMesh( attrib, mesh, &mikkTSpaceContext, &tangents ) )
+        if ( !GenerateTangentVectorsForMesh( attrib, mesh, &mikkTSpaceContext, processingParams.m_FlipTexcoordV, &tangents ) )
         {
             LOG_STRING_FORMAT( "Generating tangent failed for mesh %s. This mesh was not loaded.\n", shapes[ iShapes ].name.c_str() );
             continue;
@@ -205,7 +210,7 @@ bool Mesh::CreateFromWavefrontOBJData( const tinyobj::attrib_t& attrib, const st
             }
             else
             {
-                m_MaterialIds.push_back( materialIdOverride );
+                m_MaterialIds.push_back( processingParams.m_MaterialIdOverride );
             }
 
             for ( int iVertex = 0; iVertex < 3; ++iVertex )
@@ -235,8 +240,12 @@ bool Mesh::CreateFromWavefrontOBJData( const tinyobj::attrib_t& attrib, const st
                     vertex.normal = XMFLOAT3( attrib.normals[ idx.normal_index * 3 ], attrib.normals[ idx.normal_index * 3 + 1 ], attrib.normals[ idx.normal_index * 3 + 2 ] );
                     vertex.tangent = tangent;
                     vertex.texcoord = idx.texcoord_index != -1 ? XMFLOAT2( attrib.texcoords[ idx.texcoord_index * 2 ], attrib.texcoords[ idx.texcoord_index * 2 + 1 ] ) : XMFLOAT2( 0.0f, 0.0f );
+                    if ( processingParams.m_FlipTexcoordV )
+                    {
+                        vertex.texcoord.y = 1.f - vertex.texcoord.y;
+                    }
 
-                    if ( applyTransform )
+                    if ( processingParams.m_ApplyTransform )
                     {
                         XMVECTOR vPosition = XMLoadFloat3( &vertex.position );
                         XMVECTOR vNormal = XMLoadFloat3( &vertex.normal );

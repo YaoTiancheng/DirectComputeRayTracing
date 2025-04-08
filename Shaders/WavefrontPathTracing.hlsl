@@ -242,6 +242,7 @@ Texture2DArray<float> g_BRDFDielectricTexture           : register( t12 );
 Texture2DArray<float> g_BSDFTexture                     : register( t13 );
 Texture2DArray<float> g_BSDFAvgTexture                  : register( t14 );
 TextureCube<float3> g_EnvTexture                        : register( t15 );
+Texture2D<float4> g_Textures[]                          : register( t16 );
 
 RWStructuredBuffer<SRay> g_Rays                         : register( u0 );
 RWStructuredBuffer<SRay> g_ShadowRays                   : register( u1 );
@@ -278,7 +279,7 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
     float3 origin = ray.origin;
     float3 direction = ray.direction;
     Intersection intersection;
-    HitInfoToIntersection( origin, direction, hitInfo, g_Vertices, g_Triangles, g_MaterialIds, g_Materials, g_InstanceTransforms, g_InstanceLightIndices, intersection );
+    HitInfoToIntersection( origin, direction, hitInfo, g_Vertices, g_Triangles, g_MaterialIds, g_Materials, g_InstanceTransforms, g_InstanceLightIndices, g_Textures, UVWrapSampler, intersection );
 
     Xoshiro128StarStar rng = g_Rngs[ pathIndex ];
     SPathAccumulation pathAccumulation = g_PathAccumulation[ pathIndex ];

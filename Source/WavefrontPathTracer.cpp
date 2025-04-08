@@ -70,23 +70,33 @@ CWavefrontPathTracer::CWavefrontPathTracer()
 
 bool CWavefrontPathTracer::Create()
 {
-    // Static sampler
-    D3D12_STATIC_SAMPLER_DESC sampler = {};
-    sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    sampler.MaxAnisotropy = 1;
-    sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-    sampler.MaxLOD = D3D12_FLOAT32_MAX;
-    sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    // Static samplers
+    D3D12_STATIC_SAMPLER_DESC samplers[ 2 ] = {};
+    for ( D3D12_STATIC_SAMPLER_DESC& sampler : samplers )
+    {
+        sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+        sampler.MaxAnisotropy = 1;
+        sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+        sampler.MaxLOD = D3D12_FLOAT32_MAX;
+        sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    }
+    // UVClamp
+    samplers[ 0 ].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    samplers[ 0 ].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    samplers[ 0 ].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    samplers[ 0 ].ShaderRegister = 0U;
+    // UVWrap
+    samplers[ 1 ].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    samplers[ 1 ].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    samplers[ 1 ].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    samplers[ 1 ].ShaderRegister = 1U;
 
     CD3DX12_ROOT_PARAMETER1 rootParameters[ 2 ];
     rootParameters[ 0 ].InitAsConstantBufferView( 0 );
     SD3D12DescriptorTableRanges descriptorTableRanges;
     s_DescriptorTableLayout.InitRootParameter( &rootParameters[ 1 ], &descriptorTableRanges );
 
-    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 2, rootParameters, 1, &sampler );
+    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 2, rootParameters, (uint32_t)ARRAY_LENGTH( samplers ), samplers );
 
     ComPtr<ID3DBlob> serializedRootSignature;
     ComPtr<ID3DBlob> error;
@@ -428,7 +438,7 @@ void CWavefrontPathTracer::Render( SRenderer* renderer, const SRenderContext& re
         }
 
         {
-            D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( nullptr, 0, &m_FlagsBuffer->GetUAV(), 1 );
+            D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( nullptr, 0, &m_FlagsBuffer->GetUAV(), 1 );
             commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
 
             commandList->SetComputeRootConstantBufferView( 0, m_ControlConstantBuffer->GetGPUVirtualAddress() );
@@ -678,7 +688,7 @@ void CWavefrontPathTracer::RenderOneIteration( CScene* scene, const SBxDFTexture
             , scene->m_SamplePositionTexture->GetUAV()
             , scene->m_SampleValueTexture->GetUAV()
         };
-        D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( SRVs, (uint32_t)ARRAY_LENGTH( SRVs ), UAVs, (uint32_t)ARRAY_LENGTH( UAVs ) );
+        D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( SRVs, (uint32_t)ARRAY_LENGTH( SRVs ), UAVs, (uint32_t)ARRAY_LENGTH( UAVs ) );
 
         commandList->SetComputeRootConstantBufferView( 0, m_ControlConstantBuffer->GetGPUVirtualAddress() );
         commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
@@ -730,7 +740,7 @@ void CWavefrontPathTracer::RenderOneIteration( CScene* scene, const SBxDFTexture
 
         SD3D12DescriptorHandle SRV = m_QueueCounterBuffers[ 1 ]->GetSRV( DXGI_FORMAT_R32_UINT, 0, 1, 1 );
         SD3D12DescriptorHandle UAV = m_IndirectArgumentBuffer[ (int)EShaderKernel::NewPath ]->GetUAV();
-        D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &SRV, 1, &UAV, 1 );
+        D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( &SRV, 1, &UAV, 1 );
 
         commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
         commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::FillIndirectArguments ].Get() );
@@ -752,7 +762,7 @@ void CWavefrontPathTracer::RenderOneIteration( CScene* scene, const SBxDFTexture
 
         SD3D12DescriptorHandle SRV = m_QueueCounterBuffers[ 1 ]->GetSRV( DXGI_FORMAT_R32_UINT, 0, 0, 1 );
         SD3D12DescriptorHandle UAV = m_IndirectArgumentBuffer[ (int)EShaderKernel::Material ]->GetUAV();
-        D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &SRV, 1, &UAV, 1 );
+        D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( &SRV, 1, &UAV, 1 );
 
         commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
         commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::FillIndirectArguments ].Get() );
@@ -806,7 +816,7 @@ void CWavefrontPathTracer::RenderOneIteration( CScene* scene, const SBxDFTexture
             , m_QueueBuffers[ (int)EShaderKernel::ExtensionRayCast ]->GetUAV()
             , m_QueueCounterBuffers[ 0 ]->GetUAV()
         };
-        D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( SRVs, (uint32_t)ARRAY_LENGTH( SRVs ), UAVs, (uint32_t)ARRAY_LENGTH( UAVs ) );
+        D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( SRVs, (uint32_t)ARRAY_LENGTH( SRVs ), UAVs, (uint32_t)ARRAY_LENGTH( UAVs ) );
 
         commandList->SetComputeRootConstantBufferView( 0, m_NewPathConstantBuffer->GetGPUVirtualAddress() );
         commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
@@ -911,7 +921,13 @@ void CWavefrontPathTracer::RenderOneIteration( CScene* scene, const SBxDFTexture
             , m_QueueBuffers[ (int)EShaderKernel::ExtensionRayCast ]->GetUAV()
             , m_QueueBuffers[ (int)EShaderKernel::ShadowRayCast ]->GetUAV()
         };
-        D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( SRVs, (uint32_t)ARRAY_LENGTH( SRVs ), UAVs, (uint32_t)ARRAY_LENGTH( UAVs ) );
+
+        std::vector<SD3D12DescriptorHandle> textureSRVs;
+        textureSRVs.resize( scene->m_GPUTextures.size() );
+        scene->CopyTextureDescriptors( textureSRVs.data() );
+
+        D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( SRVs, (uint32_t)ARRAY_LENGTH( SRVs ), UAVs, (uint32_t)ARRAY_LENGTH( UAVs ),
+            textureSRVs.data(), (uint32_t)textureSRVs.size() );
 
         commandList->SetComputeRootConstantBufferView( 0, m_MaterialConstantBuffer->GetGPUVirtualAddress() );
         commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
@@ -962,7 +978,7 @@ void CWavefrontPathTracer::RenderOneIteration( CScene* scene, const SBxDFTexture
 
         SD3D12DescriptorHandle SRV = m_QueueCounterBuffers[ 0 ]->GetSRV( DXGI_FORMAT_R32_UINT, 0, 0, 1 );
         SD3D12DescriptorHandle UAV = m_IndirectArgumentBuffer[ (int)EShaderKernel::ExtensionRayCast ]->GetUAV();
-        D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &SRV, 1, &UAV, 1 );
+        D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( &SRV, 1, &UAV, 1 );
 
         commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
         commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::FillIndirectArguments ].Get() );
@@ -986,7 +1002,7 @@ void CWavefrontPathTracer::RenderOneIteration( CScene* scene, const SBxDFTexture
 
         SD3D12DescriptorHandle SRV = m_QueueCounterBuffers[ 0 ]->GetSRV( DXGI_FORMAT_R32_UINT, 0, 1, 1 );
         SD3D12DescriptorHandle UAV = m_IndirectArgumentBuffer[ (int)EShaderKernel::ShadowRayCast ]->GetUAV();
-        D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &SRV, 1, &UAV, 1 );
+        D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( &SRV, 1, &UAV, 1 );
 
         commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
         commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::FillIndirectArguments ].Get() );
@@ -1033,7 +1049,7 @@ void CWavefrontPathTracer::RenderOneIteration( CScene* scene, const SBxDFTexture
             , scene->m_InstanceTransformsBuffer->GetSRV( DXGI_FORMAT_UNKNOWN, sizeof( XMFLOAT4X3 ), (uint32_t)scene->m_InstanceTransforms.size(), (uint32_t)scene->m_InstanceTransforms.size() )
         };
         SD3D12DescriptorHandle UAVs[] = { m_RayHitBuffer->GetUAV() };
-        D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( SRVs, (uint32_t)ARRAY_LENGTH( SRVs ), UAVs, (uint32_t)ARRAY_LENGTH( UAVs ) );
+        D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( SRVs, (uint32_t)ARRAY_LENGTH( SRVs ), UAVs, (uint32_t)ARRAY_LENGTH( UAVs ) );
 
         commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
         commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::ExtensionRayCast ].Get() );
@@ -1079,7 +1095,7 @@ void CWavefrontPathTracer::RenderOneIteration( CScene* scene, const SBxDFTexture
             , scene->m_InstanceTransformsBuffer->GetSRV( DXGI_FORMAT_UNKNOWN, sizeof( XMFLOAT4X3 ), (uint32_t)scene->m_InstanceTransforms.size(), (uint32_t)scene->m_InstanceTransforms.size() )
         };
         SD3D12DescriptorHandle UAVs[] = { m_FlagsBuffer->GetUAV() };
-        D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( SRVs, (uint32_t)ARRAY_LENGTH( SRVs ), UAVs, (uint32_t)ARRAY_LENGTH( UAVs ) );
+        D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( SRVs, (uint32_t)ARRAY_LENGTH( SRVs ), UAVs, (uint32_t)ARRAY_LENGTH( UAVs ) );
 
         commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
         commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::ShadowRayCast ].Get() );

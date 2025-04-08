@@ -179,7 +179,7 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             {
                 commandList->SetPipelineState( integralShader.Get() );
 
-                D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( nullptr, 0, &accumulationTexture->GetUAV(), 1 );
+                D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( nullptr, 0, &accumulationTexture->GetUAV(), 1 );
                 commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
 
                 for ( uint32_t batchIndex = 0; batchIndex < batchCount; ++batchIndex )
@@ -205,7 +205,7 @@ SBxDFTextures BxDFTexturesBuilding::Build()
                 commandList->ResourceBarrier( 1, &barrier );
 
                 D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable =
-                    s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBRDF->GetUAV(), 1 );
+                    s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBRDF->GetUAV(), 1 );
                 commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
                 
                 commandList->Dispatch( 1, 1, 1 );
@@ -216,7 +216,7 @@ SBxDFTextures BxDFTexturesBuilding::Build()
                 commandList->SetPipelineState( averageShader.Get() );
 
                 D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable =
-                    s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBRDFAverage->GetUAV(), 1 );
+                    s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBRDFAverage->GetUAV(), 1 );
                 commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
 
                 commandList->Dispatch( 1, 1, 1 );
@@ -266,7 +266,7 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             {
                 commandList->SetPipelineState( integralShader.Get() );
 
-                D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( nullptr, 0, &accumulationTexture->GetUAV(), 1 );
+                D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( nullptr, 0, &accumulationTexture->GetUAV(), 1 );
                 commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
 
                 // Leaving
@@ -306,7 +306,7 @@ SBxDFTextures BxDFTexturesBuilding::Build()
                 commandList->ResourceBarrier( 1, &barrier );
 
                 D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable =
-                    s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBRDFDielectric->GetUAV(), 1 );
+                    s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBRDFDielectric->GetUAV(), 1 );
                 commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
                 
                 commandList->Dispatch( BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2 / groupSizeZ );
@@ -362,7 +362,7 @@ SBxDFTextures BxDFTexturesBuilding::Build()
             {
                 commandList->SetPipelineState( integralShader.Get() );
 
-                D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( nullptr, 0, &accumulationTexture->GetUAV(), 1 );
+                D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( nullptr, 0, &accumulationTexture->GetUAV(), 1 );
                 commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
 
                 // Leaving
@@ -402,7 +402,7 @@ SBxDFTextures BxDFTexturesBuilding::Build()
                 commandList->ResourceBarrier( 1, &barrier );
 
                 D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable =
-                    s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBSDF->GetUAV(), 1 );
+                    s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBSDF->GetUAV(), 1 );
                 commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
                 
                 commandList->Dispatch( BXDFTEX_BRDF_DIELECTRIC_SIZE_X / groupSizeX, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y / groupSizeY, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z * 2 / groupSizeZ );
@@ -413,7 +413,7 @@ SBxDFTextures BxDFTexturesBuilding::Build()
                 commandList->SetPipelineState( averageShader.Get() );
 
                 D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable =
-                    s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBSDFAverage->GetUAV(), 1 );
+                    s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( &accumulationTexture->GetSRV(), 1, &outputTextures.m_CookTorranceBSDFAverage->GetUAV(), 1 );
                 commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
 
                 commandList->Dispatch( 1, 

@@ -485,7 +485,11 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 {
                     ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float );
                     m_IsMaterialGPUBufferDirty |= ImGui::ColorEdit3( "Albedo", (float*)&selection->m_Albedo );
-                    m_IsMaterialGPUBufferDirty |= ImGui::Checkbox( "Albedo Texture", &selection->m_HasAlbedoTexture );
+                    if ( selection->m_AlbedoTextureIndex != INDEX_NONE )
+                    {
+                        const CTexture* texture = &m_Scene.m_Textures[ selection->m_AlbedoTextureIndex ];
+                        m_IsMaterialGPUBufferDirty |= ImGui::InputText( "Albedo Texture", const_cast<char*>( texture->m_Name.c_str() ), texture->m_Name.size() + 1, ImGuiInputTextFlags_ReadOnly );
+                    }
                 }
 
                 if ( selection->m_MaterialType != EMaterialType::Diffuse )

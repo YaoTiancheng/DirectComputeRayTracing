@@ -22,6 +22,8 @@ void HitShader( float3 rayOrigin
     , bool backface
     , StructuredBuffer<uint> materialIds
     , StructuredBuffer<Material> materials
+    , Texture2D<float4> textures[]
+    , SamplerState samplerState
     , inout Intersection intersection )
 {
     intersection.position   = VectorBaryCentric3( v0.position, v1.position, v2.position, u, v );
@@ -55,11 +57,16 @@ void HitShader( float3 rayOrigin
     float2 texcoord = VectorBaryCentric2( v0.texcoord, v1.texcoord, v2.texcoord, u, v );
            texcoord *= materials[ materialId ].texTiling;
 
-    float checkerboard = CheckerboardTexture( texcoord );
-
-    uint materialFlags = materials[ materialId ].flags;
     float3 albedo = materials[ materialId ].albedo;
-           albedo *= ( materialFlags & MATERIAL_FLAG_ALBEDO_TEXTURE ) != 0 ? checkerboard : 1.0f;
+    int albedoTextureIndex = materials[ materialId ].albedoTextureIndex;
+    [branch]
+    if ( albedoTextureIndex != -1 )
+    {
+        albedo *= textures[ NonUniformResourceIndex( albedoTextureIndex ) ].SampleLevel( samplerState, texcoord, 0 ).rgb;
+    }
+
+    float checkerboard = CheckerboardTexture( texcoord );
+    uint materialFlags = materials[ materialId ].flags;
     float  roughness = materials[ materialId ].roughness;
            roughness *= ( materialFlags & MATERIAL_FLAG_ROUGHNESS_TEXTURE ) != 0 ? checkerboard : 1.0f;
 

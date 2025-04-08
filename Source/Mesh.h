@@ -8,11 +8,19 @@
 #include "../Shaders/BVHNode.inc.hlsl"
 #include "tinyobjloader/tiny_obj_loader.h"
 
+struct SMeshProcessingParams
+{
+    DirectX::XMFLOAT4X4 m_Transform;
+    uint32_t m_MaterialIdOverride;
+    bool m_ApplyTransform;
+    bool m_ChangeWindingOrder;
+    bool m_FlipTexcoordV;
+};
+
 class Mesh
 {
 public:
-    bool CreateFromWavefrontOBJData( const tinyobj::attrib_t& attrib, const std::vector<tinyobj::shape_t>& shapes, uint32_t materialIdBase, bool applyTransform = false,
-        const DirectX::XMFLOAT4X4& transform = MathHelper::s_IdentityMatrix4x4, bool changeWindingOrder = false, uint32_t materialIdOverride = INVALID_MATERIAL_ID );
+    bool CreateFromWavefrontOBJData( const tinyobj::attrib_t& attrib, const std::vector<tinyobj::shape_t>& shapes, uint32_t materialIdBase, const SMeshProcessingParams& processingParams );
 
     bool GenerateRectangle( uint32_t materialId, bool applyTransform = false, const DirectX::XMFLOAT4X4& transform = MathHelper::s_IdentityMatrix4x4 );
 

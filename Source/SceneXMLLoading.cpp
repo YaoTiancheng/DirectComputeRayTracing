@@ -245,7 +245,7 @@ static void SplitBySpace( std::string_view string, std::vector<std::string_view>
 
 static bool BuildValueGraph( CValueList* valueList, xml_document<>* doc, std::vector<SValue*>* sceneValues )
 {
-    std::unordered_set<std::string_view> objectTagNames = { "scene", "integrator", "sensor", "sampler", "film", "bsdf", "sampler", "rfilter", "emitter", "shape" };
+    std::unordered_set<std::string_view> objectTagNames = { "scene", "integrator", "sensor", "sampler", "film", "bsdf", "sampler", "rfilter", "emitter", "shape", "texture" };
     std::unordered_set<std::string_view> valueTagNames = { "float", "integer", "boolean", "string", "point", "vector", "rgb" };
 
     std::stack<xml_node<>*> nodesStack;
@@ -606,7 +606,64 @@ static float ClampValueToValidRange( const std::string_view valueName, float val
     return result;
 }
 
-static bool TranslateMaterialFromBSDF( const SValue& BSDF, const std::unordered_map<std::string_view, EXMLMaterialType>& materialNameToEnumMap, SMaterial* material, std::string_view* name, bool isTwoSided = false )
+struct SMaterialGatheringContext
+{
+    struct STexture
+    {
+        std::string m_Filename;
+        std::string m_Id;
+    };
+
+    SMaterialGatheringContext( const std::filesystem::path& sceneFilename,
+        std::unordered_map<std::string_view, EXMLMaterialType>& materialNameToEnumMap,
+        std::vector<SMaterial>* materials, std::vector<std::string>* materialNames )
+        : m_SceneFilename( sceneFilename )
+        , m_MaterialNameToEnumMap( materialNameToEnumMap )
+        , m_Materials( materials )
+        , m_MaterialNames( materialNames )
+        , m_UnnamedTextureCount( 0 )
+    {
+    }
+
+    bool CreateAndAddMaterial( const SValue& BSDF, uint32_t* materialId );
+
+    bool TranslateMaterialFromBSDF( const SValue& BSDF, SMaterial* material, std::string_view* name, bool isTwoSided = false );
+
+    bool LoadTexturesFromFiles( CScene* scene );
+
+    std::unordered_map<const SValue*, uint32_t> m_BSDFToIdMap;
+    std::unordered_map<const SValue*, uint32_t> m_TextureToIdMap;
+    std::vector<STexture> m_Textures;
+    const std::filesystem::path& m_SceneFilename;
+    std::unordered_map<std::string_view, EXMLMaterialType>& m_MaterialNameToEnumMap;
+    std::vector<SMaterial>* m_Materials;
+    std::vector<std::string>* m_MaterialNames;
+    uint32_t m_UnnamedTextureCount;
+};
+
+static bool ToNullTerminatedStringBuffer( std::string_view stringView, char* stringbuffer, uint32_t stringBufferSize )
+{
+    if ( stringView.length() + 1 <= stringBufferSize )
+    {
+        strncpy( stringbuffer, stringView.data(), stringView.length() );
+        stringbuffer[ stringView.length() ] = '\0';
+        return true;
+    }
+    return false;
+}
+
+static std::filesystem::path GetAbsoluteExternalFilename( char buffer[ MAX_PATH ], const std::filesystem::path& sceneFilename, std::string_view filename )
+{
+    bool hasString = ToNullTerminatedStringBuffer( filename, buffer, MAX_PATH );
+    std::filesystem::path absoluteFilename( buffer );
+    if ( absoluteFilename.is_relative() )
+    {
+        absoluteFilename = sceneFilename.parent_path() / absoluteFilename;
+    }
+    return absoluteFilename;
+}
+
+bool SMaterialGatheringContext::TranslateMaterialFromBSDF( const SValue& BSDF, SMaterial* material, std::string_view* name, bool isTwoSided )
 {
     EXMLMaterialType materialType = EXMLMaterialType::eUnsupported;
 
@@ -618,8 +675,8 @@ static bool TranslateMaterialFromBSDF( const SValue& BSDF, const std::unordered_
     }
 
     {
-        auto it = materialNameToEnumMap.find( typeValue->m_String );
-        if ( it != materialNameToEnumMap.end() )
+        auto it = m_MaterialNameToEnumMap.find( typeValue->m_String );
+        if ( it != m_MaterialNameToEnumMap.end() )
         {
             materialType = it->second;
         }
@@ -639,7 +696,7 @@ static bool TranslateMaterialFromBSDF( const SValue& BSDF, const std::unordered_
             LOG_STRING( "Cannot find child BSDF inside a twosided BSDF.\n" );
             return false;
         }
-        return TranslateMaterialFromBSDF( *childBSDF, materialNameToEnumMap, material, name, true );
+        return TranslateMaterialFromBSDF( *childBSDF, material, name, true );
     }
 
     EMaterialType targetMaterialType = EMaterialType::Diffuse;
@@ -723,9 +780,9 @@ static bool TranslateMaterialFromBSDF( const SValue& BSDF, const std::unordered_
     material->m_K = { 1.0f, 1.0f, 1.0f };
     material->m_Tiling = { 1.0f, 1.0f };
     material->m_MaterialType = targetMaterialType;
+    material->m_AlbedoTextureIndex = INDEX_NONE;
     material->m_Multiscattering = false;
     material->m_IsTwoSided = isTwoSided;
-    material->m_HasAlbedoTexture = false;
     material->m_HasRoughnessTexture = false;
 
     if ( hasRoughness )
@@ -815,6 +872,7 @@ static bool TranslateMaterialFromBSDF( const SValue& BSDF, const std::unordered_
     if ( hasDiffuseReflectance )
     {
         XMFLOAT3 albedo = { 0.5f, 0.5f, 0.5f };
+        int32_t albedoTextureIndex = INDEX_NONE;
         SValue* diffuseReflectanceValue = BSDF.FindObjectField( !hasDielectricIOR ? "reflectance" : "diffuse_reflectance" );
         if ( diffuseReflectanceValue )
         {
@@ -822,12 +880,55 @@ static bool TranslateMaterialFromBSDF( const SValue& BSDF, const std::unordered_
             {
                 albedo = diffuseReflectanceValue->m_RGB;
             }
+            else if ( diffuseReflectanceValue->m_Type == EValueType::eObject )
+            {
+                const std::string_view textureType = diffuseReflectanceValue->GetObjectField<std::string_view>( "type", "" );
+                if ( strncmp( "bitmap", textureType.data(), textureType.length() ) != 0 )
+                {
+                    LOG_STRING_FORMAT( "Unsupported texture type \"%.*s\"\n", textureType.length(), textureType.data() );
+                }
+
+                std::string_view textureFilename = diffuseReflectanceValue->GetObjectField<std::string_view>( "filename", "" );
+                char filenameBuffer[ MAX_PATH ];
+                std::filesystem::path textureFilepath = GetAbsoluteExternalFilename( filenameBuffer, m_SceneFilename, textureFilename );
+                
+                auto textureToIdPair = m_TextureToIdMap.find( diffuseReflectanceValue );
+                if ( textureToIdPair == m_TextureToIdMap.end() )
+                {
+                    uint32_t newTextureId = (uint32_t)m_TextureToIdMap.size();
+
+                    m_TextureToIdMap.insert( std::make_pair( diffuseReflectanceValue, newTextureId ) );
+
+                    m_Textures.emplace_back();
+                    STexture& newTexture = m_Textures.back();
+                    newTexture.m_Filename = textureFilepath.u8string();
+
+                    SValue* idValue = diffuseReflectanceValue->FindObjectField( "id" );
+                    if ( idValue )
+                    {
+                        newTexture.m_Id = idValue->m_String;
+                    }
+                    else
+                    {
+                        // Generate an id if the texture does not have any.
+                        sprintf_s( filenameBuffer, "Texture%03d", m_UnnamedTextureCount++ );
+                        newTexture.m_Id = filenameBuffer;
+                    }
+
+                    albedoTextureIndex = (int32_t)newTextureId;
+                }
+                else
+                {
+                    albedoTextureIndex = (int32_t)textureToIdPair->second;
+                }
+            }
             else
             {
-                LOG_STRING( "Non-RGB diffuse reflectance value is not supported.\n" );
+                LOG_STRING( "Unsupported diffuse reflectance type.\n" );
             }
         }
         material->m_Albedo = albedo;
+        material->m_AlbedoTextureIndex = albedoTextureIndex;
     }
 
     bool materialIsConductor = material->m_MaterialType == EMaterialType::Conductor;
@@ -843,21 +944,45 @@ static bool TranslateMaterialFromBSDF( const SValue& BSDF, const std::unordered_
     return true;
 }
 
-static bool CreateAndAddMaterial( const SValue& BSDF, const std::unordered_map<std::string_view, EXMLMaterialType>& materialNameToEnumMap, std::vector<SMaterial>* materials
-    , std::vector<std::string>* names, std::unordered_map<const SValue*, uint32_t>* BSDFValuePointerToIdMap, uint32_t* materialId )
+bool SMaterialGatheringContext::CreateAndAddMaterial( const SValue& BSDF, uint32_t* materialId )
 {
     SMaterial newMaterial;
     std::string_view newMaterialName;
-    if ( TranslateMaterialFromBSDF( BSDF, materialNameToEnumMap, &newMaterial, &newMaterialName ) )
+    if ( TranslateMaterialFromBSDF( BSDF, &newMaterial, &newMaterialName ) )
     {
-        uint32_t newMaterialId = (uint32_t)materials->size();
-        materials->emplace_back( newMaterial );
-        names->emplace_back( newMaterialName.data(), newMaterialName.length() );
-        BSDFValuePointerToIdMap->insert( std::make_pair( &BSDF, newMaterialId ) );
+        uint32_t newMaterialId = (uint32_t)m_Materials->size();
+        m_Materials->emplace_back( newMaterial );
+        m_MaterialNames->emplace_back( newMaterialName.data(), newMaterialName.length() );
+        m_BSDFToIdMap.insert( std::make_pair( &BSDF, newMaterialId ) );
         *materialId = newMaterialId;
         return true;
     }
     return false;
+}
+
+bool SMaterialGatheringContext::LoadTexturesFromFiles( CScene* scene )
+{
+    STextureCodec* codec = CTexture::CreateCodec();
+    if ( !codec )
+    {
+        return false;
+    }
+
+    scene->m_Textures.reserve( scene->m_Textures.size() + m_Textures.size() );
+    for ( const STexture& texture : m_Textures )
+    {
+        scene->m_Textures.emplace_back();
+        CTexture& newTexture = scene->m_Textures.back();
+        newTexture.Clear();
+        newTexture.m_Name = std::move( texture.m_Id );
+        if ( !newTexture.LoadFromFile( texture.m_Filename.c_str(), codec ) )
+        {
+            LOG_STRING_FORMAT( "Loading texture from file \"%s\" failed.\n", texture.m_Filename.c_str() );
+        }
+    }
+
+    CTexture::DestroyCodec( codec );
+    return true;
 }
 
 bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
@@ -902,7 +1027,8 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
 
     size_t meshIndexBase = m_Meshes.size();
 
-    std::unordered_map<const SValue*, uint32_t> BSDFValuePointerToIdMap;
+    SMaterialGatheringContext materialGatheringContext( filepath, materialNameToEnumMap, &m_Materials, &m_MaterialNames );
+
     std::vector<std::pair<std::string_view, SValue*>>& rootObjectValues = *sceneValues[ 0 ]->m_NestedObjects;
     for ( auto& rootObjectValue : rootObjectValues )
     {
@@ -1056,7 +1182,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
         else if ( strncmp( "bsdf", rootObjectValue.first.data(), rootObjectValue.first.length() ) == 0 )
         {
             uint32_t materialId = 0;
-            CreateAndAddMaterial( *rootObjectValue.second, materialNameToEnumMap, &m_Materials, &m_MaterialNames, &BSDFValuePointerToIdMap, &materialId );
+            materialGatheringContext.CreateAndAddMaterial( *rootObjectValue.second, &materialId );
         }
         else if ( strncmp( "shape", rootObjectValue.first.data(), rootObjectValue.first.length() ) == 0 )
         {
@@ -1078,10 +1204,10 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                 SValue* bsdfValue = rootObjectValue.second->FindFirstNestedObject( "bsdf" );
                 if ( bsdfValue )
                 {
-                    auto iter = BSDFValuePointerToIdMap.find( bsdfValue );
-                    if ( iter == BSDFValuePointerToIdMap.end() )
+                    auto iter = materialGatheringContext.m_BSDFToIdMap.find( bsdfValue );
+                    if ( iter == materialGatheringContext.m_BSDFToIdMap.end() )
                     {
-                        CreateAndAddMaterial( *bsdfValue, materialNameToEnumMap, &m_Materials, &m_MaterialNames, &BSDFValuePointerToIdMap, &materialId );
+                        materialGatheringContext.CreateAndAddMaterial( *bsdfValue, &materialId );
                     }
                     else
                     {
@@ -1097,8 +1223,9 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     material.m_Roughness = 0.f;
                     material.m_IOR = XMFLOAT3( 1.f, 1.f, 1.f );
                     material.m_MaterialType = EMaterialType::Diffuse;
-                    material.m_HasAlbedoTexture = false;
-                    material.m_HasRoughnessTexture = false;
+                    material.m_AlbedoTextureIndex = INDEX_NONE;
+                    material.m_Multiscattering = false;
+                    material.m_IsTwoSided = false;
                     material.m_HasRoughnessTexture = false;
                     m_Materials.emplace_back( material );
                     m_MaterialNames.emplace_back();
@@ -1124,13 +1251,15 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     else
                     {
                         char zeroTerminatedFilename[ MAX_PATH ];
-                        sprintf_s( zeroTerminatedFilename, sizeof( zeroTerminatedFilename ), "%.*s\0", (int)filenameValue->m_String.length(), filenameValue->m_String.data() );
-                        std::filesystem::path objFilepath = zeroTerminatedFilename;
-                        if ( objFilepath.is_relative() )
-                        {
-                            objFilepath = filepath.parent_path() / objFilepath;
-                        }
-                        if ( CreateMeshAndMaterialsFromWavefrontOBJFile( objFilepath.u8string().c_str(), "", true, MathHelper::s_IdentityMatrix4x4, true, materialId ) )
+                        std::filesystem::path objFilepath = GetAbsoluteExternalFilename( zeroTerminatedFilename, filepath, filenameValue->m_String );
+
+                        SMeshProcessingParams processingParams;
+                        processingParams.m_ApplyTransform = true;
+                        processingParams.m_Transform = MathHelper::s_IdentityMatrix4x4;
+                        processingParams.m_ChangeWindingOrder = true;
+                        processingParams.m_FlipTexcoordV = true;
+                        processingParams.m_MaterialIdOverride = materialId;
+                        if ( CreateMeshAndMaterialsFromWavefrontOBJFile( objFilepath.u8string().c_str(), "", processingParams ) )
                         {
                             m_Meshes.back().SetName( objFilepath.stem().u8string() );
                             meshCreated = true;
@@ -1264,6 +1393,12 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
     }
 
     valueList.Clear();
+
+    // Start loading texture
+    if ( !materialGatheringContext.LoadTexturesFromFiles( this ) )
+    {
+        LOG_STRING( "Loading textures failed!\n" );
+    }
 
     return true;
 }

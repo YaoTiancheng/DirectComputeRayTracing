@@ -68,7 +68,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d12.lib;dxgi.lib;dxguid.lib;dxcompiler.lib;Shlwapi.lib;MikkTSpace.lib;DDSTextureLoader12.lib;ImGui.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;dxguid.lib;dxcompiler.lib;Shlwapi.lib;MikkTSpace.lib;DDSTextureLoader12.lib;ImGui.lib;windowscodecs.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(SolutionDir)DirectXShaderCompiler\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
@@ -93,7 +93,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d12.lib;dxgi.lib;dxguid.lib;dxcompiler.lib;Shlwapi.lib;MikkTSpace.lib;DDSTextureLoader12.lib;ImGui.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;dxguid.lib;dxcompiler.lib;Shlwapi.lib;MikkTSpace.lib;DDSTextureLoader12.lib;ImGui.lib;windowscodecs.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(SolutionDir)DirectXShaderCompiler\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
@@ -132,6 +132,7 @@
     <ClInclude Include="Source\RenderContext.h" />
     <ClInclude Include="Source\Scene.h" />
     <ClInclude Include="Source\StringConversion.h" />
+    <ClInclude Include="Source\Texture.h" />
     <ClInclude Include="Source\Timers.h" />
     <ClInclude Include="Source\Shader.h" />
     <ClInclude Include="Source\GPUBuffer.h" />
@@ -173,6 +174,7 @@
     </ClCompile>
     <ClCompile Include="Source\Mesh.cpp" />
     <ClCompile Include="Source\SceneWavefrontOBJLoading.cpp" />
+    <ClCompile Include="Source\Texture.cpp" />
     <ClCompile Include="Source\TinyObjLoader.cpp" />
     <ClCompile Include="Source\WavefrontPathTracer.cpp" />
   </ItemGroup>

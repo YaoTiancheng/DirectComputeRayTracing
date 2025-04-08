@@ -145,7 +145,7 @@ void SRenderer::DispatchSceneLuminanceCompute( const SRenderContext& renderConte
         commandList->ResourceBarrier( 1, &barrier );
     }
 
-    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &m_Scene.m_FilmTexture->GetSRV(), 1, &m_SumLuminanceBuffer1->GetUAV(), 1 );
+    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( &m_Scene.m_FilmTexture->GetSRV(), 1, &m_SumLuminanceBuffer1->GetUAV(), 1 );
     commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
 
     commandList->SetPipelineState( m_SumLuminanceTo1DPSO.Get() );
@@ -170,7 +170,7 @@ void SRenderer::DispatchSceneLuminanceCompute( const SRenderContext& renderConte
             commandList->ResourceBarrier( iteration == 0 ? 1 : 2, barriers ); // The 1st iteration relies on state implicit promotion
         }
 
-        descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( &sumLuminanceBuffer1->GetSRV(), 1, &sumLuminanceBuffer0->GetUAV(), 1 );
+        descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( &sumLuminanceBuffer1->GetSRV(), 1, &sumLuminanceBuffer0->GetUAV(), 1 );
         commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
 
         uint32_t threadGroupCount = uint32_t( std::ceilf( blockCount / float( SL_REDUCE_TO_SINGLE_GROUPTHREADS ) ) );

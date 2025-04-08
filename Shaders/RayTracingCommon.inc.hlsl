@@ -16,7 +16,8 @@
 #include "HitShader.inc.hlsl"
 #include "Intrinsics.inc.hlsl"
 
-SamplerState UVClampSampler;
+SamplerState UVClampSampler : register( s0 );
+SamplerState UVWrapSampler : register( s1 );
 
 // Based on "A Fast and Robust Method for Avoiding Self Intersection" by Carsten Wächter and Nikolaus Binder
 float3 OffsetRayOrigin( float3 p, float3 n, float3 d )
@@ -93,6 +94,8 @@ void HitInfoToIntersection( float3 origin
     , StructuredBuffer<Material> materials
     , StructuredBuffer<float4x3> instances
     , Buffer<uint> instanceLightIndices
+    , Texture2D<float4> textures[]
+    , SamplerState samplerState
     , inout Intersection intersection )
 {
     intersection.lightIndex = instanceLightIndices[ hitInfo.instanceIndex ];
@@ -101,7 +104,7 @@ void HitInfoToIntersection( float3 origin
     Vertex v0 = vertices[ triangles[ hitInfo.triangleId * 3 ] ];
     Vertex v1 = vertices[ triangles[ hitInfo.triangleId * 3 + 1 ] ];
     Vertex v2 = vertices[ triangles[ hitInfo.triangleId * 3 + 2 ] ];
-    HitShader( origin, direction, v0, v1, v2, hitInfo.t, hitInfo.u, hitInfo.v, hitInfo.triangleId, hitInfo.backface, materialIds, materials, intersection );
+    HitShader( origin, direction, v0, v1, v2, hitInfo.t, hitInfo.u, hitInfo.v, hitInfo.triangleId, hitInfo.backface, materialIds, materials, textures, samplerState, intersection );
     // Transform the position & vectors from local space to world space. Assuming the transform only contains uniform scaling otherwise the transformed vectors are wrong.
     intersection.position = mul( float4( intersection.position, 1.f ), instances[ hitInfo.instanceIndex ] );
     intersection.normal = normalize( mul( float4( intersection.normal, 0.f ), instances[ hitInfo.instanceIndex ] ) );
@@ -120,6 +123,8 @@ bool IntersectScene( float3 origin
     , Buffer<uint> instanceLightIndices
     , StructuredBuffer<uint> materialIds
     , StructuredBuffer<Material> materials
+    , Texture2D<float4> textures[]
+    , SamplerState samplerState
     , inout Intersection intersection
     , out float t
     , out uint iterationCounter )
@@ -132,7 +137,7 @@ bool IntersectScene( float3 origin
     if ( hasIntersection )
     {
         t = hitInfo.t;
-        HitInfoToIntersection( origin, direction, hitInfo, vertices, triangles, materialIds, materials, instancesTransforms, instanceLightIndices, intersection );
+        HitInfoToIntersection( origin, direction, hitInfo, vertices, triangles, materialIds, materials, instancesTransforms, instanceLightIndices, textures, samplerState, intersection );
     }
     return hasIntersection;
 }

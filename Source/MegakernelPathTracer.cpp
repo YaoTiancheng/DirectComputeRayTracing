@@ -47,16 +47,26 @@ static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTab
 
 bool CMegakernelPathTracer::Create()
 {
-    // Static sampler
-    D3D12_STATIC_SAMPLER_DESC sampler = {};
-    sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    sampler.MaxAnisotropy = 1;
-    sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-    sampler.MaxLOD = D3D12_FLOAT32_MAX;
-    sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    // Static samplers
+    D3D12_STATIC_SAMPLER_DESC samplers[ 2 ] = {};
+    for ( D3D12_STATIC_SAMPLER_DESC& sampler : samplers )
+    {
+        sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+        sampler.MaxAnisotropy = 1;
+        sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+        sampler.MaxLOD = D3D12_FLOAT32_MAX;
+        sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    }
+    // UVClamp
+    samplers[ 0 ].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    samplers[ 0 ].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    samplers[ 0 ].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    samplers[ 0 ].ShaderRegister = 0U;
+    // UVWrap
+    samplers[ 1 ].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    samplers[ 1 ].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    samplers[ 1 ].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    samplers[ 1 ].ShaderRegister = 1U;
 
     CD3DX12_ROOT_PARAMETER1 rootParameters[ 3 ];
     rootParameters[ 0 ].InitAsConstantBufferView( 0 );
@@ -64,7 +74,7 @@ bool CMegakernelPathTracer::Create()
     SD3D12DescriptorTableRanges descriptorTableRanges;
     s_DescriptorTableLayout.InitRootParameter( &rootParameters[ 2 ], &descriptorTableRanges );
 
-    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 3, rootParameters, 1, &sampler );
+    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 3, rootParameters, (uint32_t)ARRAY_LENGTH( samplers ), samplers );
 
     ComPtr<ID3DBlob> serializedRootSignature;
     ComPtr<ID3DBlob> error;
@@ -201,7 +211,10 @@ void CMegakernelPathTracer::Render( SRenderer* renderer, const SRenderContext& r
     {
         environmentTextureSRV = scene->m_EnvironmentLight->m_Texture->GetSRV();
     }
-    SD3D12DescriptorHandle srcDescriptors[ 17 ] =
+    std::vector<SD3D12DescriptorHandle> srcDescriptors;
+    const uint32_t fixedDescriptorCount = s_DescriptorTableLayout.m_SRVCount + s_DescriptorTableLayout.m_UAVCount;
+    srcDescriptors.reserve( fixedDescriptorCount + scene->m_GPUTextures.size() );
+    srcDescriptors = 
     {
           scene->m_VerticesBuffer->GetSRV()
         , scene->m_TrianglesBuffer->GetSRV()
@@ -221,8 +234,11 @@ void CMegakernelPathTracer::Render( SRenderer* renderer, const SRenderContext& r
         , scene->m_SamplePositionTexture->GetUAV()
         , scene->m_SampleValueTexture->GetUAV()
     };
+    // Copy scene texture descriptors
+    srcDescriptors.resize( srcDescriptors.size() + scene->m_GPUTextures.size() );
+    scene->CopyTextureDescriptors( srcDescriptors.data() + fixedDescriptorCount );
 
-    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToGPUDescriptorHeap( srcDescriptors, (uint32_t)ARRAY_LENGTH( srcDescriptors ) );
+    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = D3D12Util::AllocateAndCopyToDescriptorTable( srcDescriptors.data(), (uint32_t)srcDescriptors.size() );
     commandList->SetComputeRootDescriptorTable( 2, descriptorTable );
 
     commandList->SetPipelineState( m_PSO.Get() );

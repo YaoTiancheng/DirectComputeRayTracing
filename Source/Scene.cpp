@@ -7,6 +7,7 @@
 #include "GPUBuffer.h"
 #include "GPUTexture.h"
 #include "Constants.h"
+#include "D3D12Adapter.h"
 #include "StringConversion.h"
 #include "MathHelper.h"
 #include "../Shaders/LightSharedDef.inc.hlsl"
@@ -14,7 +15,23 @@
 
 using namespace DirectX;
 
-bool CScene::CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, const char* MTLBaseDir, bool applyTransform, const DirectX::XMFLOAT4X4& transform, bool changeWindingOrder, uint32_t materialIdOverride )
+static DXGI_FORMAT GetDXGIFormat( ETexturePixelFormat pixelFormat )
+{
+    switch ( pixelFormat )
+    {
+    case ETexturePixelFormat::R8G8B8A8_sRGB:
+    {
+        return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    }
+    default:
+    {
+        return DXGI_FORMAT_UNKNOWN;
+    }
+    }
+    return DXGI_FORMAT_UNKNOWN;
+}
+
+bool CScene::CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, const char* MTLBaseDir, const SMeshProcessingParams& processingParams )
 {
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
@@ -28,7 +45,7 @@ bool CScene::CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, c
     }
 
     Mesh mesh;
-    bool createMeshSuccessful = mesh.CreateFromWavefrontOBJData( attrib, shapes, (uint32_t)m_Materials.size(), applyTransform, transform, changeWindingOrder, materialIdOverride );
+    bool createMeshSuccessful = mesh.CreateFromWavefrontOBJData( attrib, shapes, (uint32_t)m_Materials.size(), processingParams );
     if ( !createMeshSuccessful )
     {
         return false;
@@ -36,7 +53,7 @@ bool CScene::CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, c
 
     m_Meshes.emplace_back( mesh );
 
-    bool hasMaterialOverride = materialIdOverride != INVALID_MATERIAL_ID;
+    bool hasMaterialOverride = processingParams.m_MaterialIdOverride != INVALID_MATERIAL_ID;
     if ( !hasMaterialOverride )
     {
         m_Materials.reserve( m_Materials.size() + materials.size() );
@@ -50,9 +67,9 @@ bool CScene::CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, c
             destMaterial.m_K = XMFLOAT3( 1.0f, 1.0f, 1.0f );
             destMaterial.m_Tiling = XMFLOAT2( 1.0f, 1.0f );
             destMaterial.m_MaterialType = EMaterialType::Plastic;
+            destMaterial.m_AlbedoTextureIndex = INDEX_NONE;
             destMaterial.m_Multiscattering = false;
             destMaterial.m_IsTwoSided = false;
-            destMaterial.m_HasAlbedoTexture = false;
             destMaterial.m_HasRoughnessTexture = false;
             m_Materials.emplace_back( destMaterial );
             m_MaterialNames.emplace_back( iterSrcMat.name );
@@ -70,8 +87,9 @@ static void GetDefaultMaterial(SMaterial* material)
     material->m_K = XMFLOAT3( 1.0f, 1.0f, 1.0f );
     material->m_Tiling = XMFLOAT2( 1.0f, 1.0f );
     material->m_MaterialType = EMaterialType::Diffuse;
+    material->m_AlbedoTextureIndex = INDEX_NONE;
     material->m_Multiscattering = false;
-    material->m_HasAlbedoTexture = false;
+    material->m_IsTwoSided = false;
     material->m_HasRoughnessTexture = false;
 }
 
@@ -491,6 +509,25 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
         return false;
     }
 
+    // Create textures
+    {
+        std::vector<D3D12_SUBRESOURCE_DATA> initialData;
+        initialData.resize( 1 );
+        for ( const CTexture& texture : m_Textures )
+        {
+            assert( texture.IsValid() );
+            
+            D3D12_SUBRESOURCE_DATA& subresource = initialData[ 0 ];
+            subresource.pData = texture.m_PixelData.data();
+            subresource.RowPitch = texture.CalculateRowPitch();
+            subresource.SlicePitch = 0;
+
+            CD3D12ResourcePtr<GPUTexture> newGPUTexture = GPUTexture::Create( texture.m_Width, texture.m_Height, GetDXGIFormat( texture.m_PixelFormat ),
+                EGPUTextureBindFlag_ShaderResource, initialData, 1U, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, L"SceneTexture" );
+            m_GPUTextures.emplace_back( newGPUTexture );
+        }
+    }
+
     if ( !RecreateFilmTextures() )
     {
         return false;
@@ -533,9 +570,23 @@ void CScene::Reset()
     m_TLAS.clear();
     m_ReorderedInstanceIndices.clear();
     m_InstanceTransforms.clear();
+    m_Textures.clear();
+
+    m_GPUTextures.clear();
 
     m_HasValidScene = false;
     m_ObjectSelection.DeselectAll();
+}
+
+void CScene::CopyTextureDescriptors( SD3D12DescriptorHandle* descriptors )
+{
+    SD3D12DescriptorHandle nullSRV = D3D12Adapter::GetNullBufferSRV();
+    for ( size_t index = 0; index < m_GPUTextures.size(); ++index )
+    {
+        GPUTexture* texture = m_GPUTextures[ index ].Get();
+        *descriptors = texture ? texture->GetSRV() : nullSRV;
+        ++descriptors;
+    }
 }
 
 void CScene::UpdateLightGPUData()
@@ -619,13 +670,13 @@ void CScene::UpdateMaterialGPUData()
                 SMaterial* materialSetting = m_Materials.data() + i;
                 GPU::Material* material = ( (GPU::Material*)address ) + i;
                 material->albedo = materialSetting->m_MaterialType == EMaterialType::Conductor ? materialSetting->m_K : materialSetting->m_Albedo;
+                material->albedoTextureIndex = materialSetting->m_AlbedoTextureIndex;
                 material->ior = materialSetting->m_IOR;
                 material->roughness = std::clamp( materialSetting->m_Roughness, 0.0f, 1.0f );
                 material->texTiling = materialSetting->m_Tiling;
                 material->flags = TranslateToMaterialType( materialSetting->m_MaterialType ) & MATERIAL_FLAG_TYPE_MASK;
                 material->flags |= materialSetting->m_Multiscattering ? MATERIAL_FLAG_MULTISCATTERING : 0;
                 material->flags |= materialSetting->m_IsTwoSided ? MATERIAL_FLAG_IS_TWOSIDED : 0;
-                material->flags |= materialSetting->m_HasAlbedoTexture ? MATERIAL_FLAG_ALBEDO_TEXTURE : 0;
                 material->flags |= materialSetting->m_HasRoughnessTexture ? MATERIAL_FLAG_ROUGHNESS_TEXTURE : 0;
             }
             context.Unmap();

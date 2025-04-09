@@ -883,43 +883,45 @@ bool SMaterialGatheringContext::TranslateMaterialFromBSDF( const SValue& BSDF, S
             else if ( diffuseReflectanceValue->m_Type == EValueType::eObject )
             {
                 const std::string_view textureType = diffuseReflectanceValue->GetObjectField<std::string_view>( "type", "" );
-                if ( strncmp( "bitmap", textureType.data(), textureType.length() ) != 0 )
+                if ( strncmp( "bitmap", textureType.data(), textureType.length() ) == 0 )
                 {
-                    LOG_STRING_FORMAT( "Unsupported texture type \"%.*s\"\n", textureType.length(), textureType.data() );
-                }
+                    std::string_view textureFilename = diffuseReflectanceValue->GetObjectField<std::string_view>( "filename", "" );
+                    char filenameBuffer[ MAX_PATH ];
+                    std::filesystem::path textureFilepath = GetAbsoluteExternalFilename( filenameBuffer, m_SceneFilename, textureFilename );
 
-                std::string_view textureFilename = diffuseReflectanceValue->GetObjectField<std::string_view>( "filename", "" );
-                char filenameBuffer[ MAX_PATH ];
-                std::filesystem::path textureFilepath = GetAbsoluteExternalFilename( filenameBuffer, m_SceneFilename, textureFilename );
-                
-                auto textureToIdPair = m_TextureToIdMap.find( diffuseReflectanceValue );
-                if ( textureToIdPair == m_TextureToIdMap.end() )
-                {
-                    uint32_t newTextureId = (uint32_t)m_TextureToIdMap.size();
-
-                    m_TextureToIdMap.insert( std::make_pair( diffuseReflectanceValue, newTextureId ) );
-
-                    m_Textures.emplace_back();
-                    STexture& newTexture = m_Textures.back();
-                    newTexture.m_Filename = textureFilepath.u8string();
-
-                    SValue* idValue = diffuseReflectanceValue->FindObjectField( "id" );
-                    if ( idValue )
+                    auto textureToIdPair = m_TextureToIdMap.find( diffuseReflectanceValue );
+                    if ( textureToIdPair == m_TextureToIdMap.end() )
                     {
-                        newTexture.m_Id = idValue->m_String;
+                        uint32_t newTextureId = (uint32_t)m_TextureToIdMap.size();
+
+                        m_TextureToIdMap.insert( std::make_pair( diffuseReflectanceValue, newTextureId ) );
+
+                        m_Textures.emplace_back();
+                        STexture& newTexture = m_Textures.back();
+                        newTexture.m_Filename = textureFilepath.u8string();
+
+                        SValue* idValue = diffuseReflectanceValue->FindObjectField( "id" );
+                        if ( idValue )
+                        {
+                            newTexture.m_Id = idValue->m_String;
+                        }
+                        else
+                        {
+                            // Generate an id if the texture does not have any.
+                            sprintf_s( filenameBuffer, "Texture%03d", m_UnnamedTextureCount++ );
+                            newTexture.m_Id = filenameBuffer;
+                        }
+
+                        albedoTextureIndex = (int32_t)newTextureId;
                     }
                     else
                     {
-                        // Generate an id if the texture does not have any.
-                        sprintf_s( filenameBuffer, "Texture%03d", m_UnnamedTextureCount++ );
-                        newTexture.m_Id = filenameBuffer;
+                        albedoTextureIndex = (int32_t)textureToIdPair->second;
                     }
-
-                    albedoTextureIndex = (int32_t)newTextureId;
                 }
                 else
                 {
-                    albedoTextureIndex = (int32_t)textureToIdPair->second;
+                    LOG_STRING_FORMAT( "Unsupported texture type \'%.*s\'\n", textureType.length(), textureType.data() );
                 }
             }
             else

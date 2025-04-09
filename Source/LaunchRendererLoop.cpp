@@ -284,6 +284,8 @@ void SRenderer::RenderOneFrame()
     { 
         m_Scene.m_Camera.Update( m_FrameTimer.GetCurrentFrameDeltaTime() );
 
+        m_Scene.AllocateAndUpdateTextureDescriptorTable();
+
         DispatchRayTracing( this, &renderContext );
 
         if ( m_PathTracer[ m_ActivePathTracerIndex ]->IsImageComplete() || renderContext.m_IsSmallResolutionEnabled )

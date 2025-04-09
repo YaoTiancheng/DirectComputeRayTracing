@@ -147,7 +147,9 @@ public:
 
     void ScreenToCameraRay( const DirectX::XMFLOAT2& screenPos, DirectX::XMVECTOR* origin, DirectX::XMVECTOR* direction );
 
-    void CopyTextureDescriptors( struct SD3D12DescriptorHandle* descriptors );
+    D3D12_GPU_DESCRIPTOR_HANDLE GetTextureDescriptorTable() const { return m_TextureDescriptorTable; }
+
+    void AllocateAndUpdateTextureDescriptorTable();
 
     const uint32_t s_MaxRayBounce = 20;
     const uint32_t s_MaxLightsCount = 5000;
@@ -213,6 +215,8 @@ public:
     CD3D12ResourcePtr<GPUTexture> m_SamplePositionTexture;
     CD3D12ResourcePtr<GPUTexture> m_SampleValueTexture;
     CD3D12ResourcePtr<GPUTexture> m_RenderResultTexture;
+
+    D3D12_GPU_DESCRIPTOR_HANDLE m_TextureDescriptorTable;
 
     // Resource states
     D3D12_RESOURCE_STATES m_FilmTextureStates;

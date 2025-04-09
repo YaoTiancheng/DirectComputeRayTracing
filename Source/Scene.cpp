@@ -8,6 +8,7 @@
 #include "GPUTexture.h"
 #include "Constants.h"
 #include "D3D12Adapter.h"
+#include "D3D12GPUDescriptorHeap.h"
 #include "StringConversion.h"
 #include "MathHelper.h"
 #include "../Shaders/LightSharedDef.inc.hlsl"
@@ -573,20 +574,10 @@ void CScene::Reset()
     m_Textures.clear();
 
     m_GPUTextures.clear();
+    m_TextureDescriptorTable.ptr = 0;
 
     m_HasValidScene = false;
     m_ObjectSelection.DeselectAll();
-}
-
-void CScene::CopyTextureDescriptors( SD3D12DescriptorHandle* descriptors )
-{
-    SD3D12DescriptorHandle nullSRV = D3D12Adapter::GetNullBufferSRV();
-    for ( size_t index = 0; index < m_GPUTextures.size(); ++index )
-    {
-        GPUTexture* texture = m_GPUTextures[ index ].Get();
-        *descriptors = texture ? texture->GetSRV() : nullSRV;
-        ++descriptors;
-    }
 }
 
 void CScene::UpdateLightGPUData()
@@ -684,6 +675,32 @@ void CScene::UpdateMaterialGPUData()
 
             m_IsMaterialBufferRead = false;
         }
+    }
+}
+
+void CScene::AllocateAndUpdateTextureDescriptorTable()
+{
+    CD3D12GPUDescriptorHeap* descriptorHeap = D3D12Adapter::GetGPUDescriptorHeap();
+    if ( m_GPUTextures.size() )
+    {
+        SD3D12GPUDescriptorHeapHandle descriptortable = descriptorHeap->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, (uint32_t)m_GPUTextures.size() );
+
+        const SD3D12DescriptorHandle nullSRV = D3D12Adapter::GetNullBufferSRV();
+        CD3DX12_CPU_DESCRIPTOR_HANDLE dstSRV( descriptortable.m_CPU );
+        for ( size_t index = 0; index < m_GPUTextures.size(); ++index )
+        {
+            GPUTexture* texture = m_GPUTextures[ index ].Get();
+            D3D12_CPU_DESCRIPTOR_HANDLE srcSRV = texture ? texture->GetSRV().CPU : nullSRV.CPU;
+            D3D12Adapter::GetDevice()->CopyDescriptorsSimple( 1, dstSRV, srcSRV, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
+            dstSRV.Offset( 1, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
+        }
+
+        m_TextureDescriptorTable = descriptortable.m_GPU;
+    }
+    else
+    {
+        // Although the shader won't access this descriptor table, the D3D runtime requires a valid table to be set
+        m_TextureDescriptorTable = descriptorHeap->GetD3DHeap()->GetGPUDescriptorHandleForHeapStart();
     }
 }
 

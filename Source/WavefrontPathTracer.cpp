@@ -91,12 +91,13 @@ bool CWavefrontPathTracer::Create()
     samplers[ 1 ].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     samplers[ 1 ].ShaderRegister = 1U;
 
-    CD3DX12_ROOT_PARAMETER1 rootParameters[ 2 ];
+    CD3DX12_ROOT_PARAMETER1 rootParameters[ 3 ];
     rootParameters[ 0 ].InitAsConstantBufferView( 0 );
     SD3D12DescriptorTableRanges descriptorTableRanges;
     s_DescriptorTableLayout.InitRootParameter( &rootParameters[ 1 ], &descriptorTableRanges );
+    s_DescriptorTableLayout.InitRootParameter_BindlessSRV( &rootParameters[ 2 ], &descriptorTableRanges );
 
-    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 2, rootParameters, (uint32_t)ARRAY_LENGTH( samplers ), samplers );
+    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( (uint32_t)ARRAY_LENGTH( rootParameters ), rootParameters, (uint32_t)ARRAY_LENGTH( samplers ), samplers );
 
     ComPtr<ID3DBlob> serializedRootSignature;
     ComPtr<ID3DBlob> error;
@@ -922,15 +923,11 @@ void CWavefrontPathTracer::RenderOneIteration( CScene* scene, const SBxDFTexture
             , m_QueueBuffers[ (int)EShaderKernel::ShadowRayCast ]->GetUAV()
         };
 
-        std::vector<SD3D12DescriptorHandle> textureSRVs;
-        textureSRVs.resize( scene->m_GPUTextures.size() );
-        scene->CopyTextureDescriptors( textureSRVs.data() );
-
-        D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( SRVs, (uint32_t)ARRAY_LENGTH( SRVs ), UAVs, (uint32_t)ARRAY_LENGTH( UAVs ),
-            textureSRVs.data(), (uint32_t)textureSRVs.size() );
+        D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( SRVs, (uint32_t)ARRAY_LENGTH( SRVs ), UAVs, (uint32_t)ARRAY_LENGTH( UAVs ) );
 
         commandList->SetComputeRootConstantBufferView( 0, m_MaterialConstantBuffer->GetGPUVirtualAddress() );
         commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
+        commandList->SetComputeRootDescriptorTable( 2, scene->GetTextureDescriptorTable() );
         commandList->SetPipelineState( m_PSOs[ (int)EShaderKernel::Material ].Get() );
         commandList->ExecuteIndirect( D3D12Adapter::GetDispatchIndirectCommandSignature(), 1, m_IndirectArgumentBuffer[ (int)EShaderKernel::Material ]->GetBuffer(), 0, nullptr, 0 );
     }

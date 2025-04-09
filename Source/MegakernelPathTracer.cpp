@@ -68,13 +68,14 @@ bool CMegakernelPathTracer::Create()
     samplers[ 1 ].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     samplers[ 1 ].ShaderRegister = 1U;
 
-    CD3DX12_ROOT_PARAMETER1 rootParameters[ 3 ];
+    CD3DX12_ROOT_PARAMETER1 rootParameters[ 4 ];
     rootParameters[ 0 ].InitAsConstantBufferView( 0 );
     rootParameters[ 1 ].InitAsConstants( 1, 1 );
     SD3D12DescriptorTableRanges descriptorTableRanges;
     s_DescriptorTableLayout.InitRootParameter( &rootParameters[ 2 ], &descriptorTableRanges );
+    s_DescriptorTableLayout.InitRootParameter_BindlessSRV( &rootParameters[ 3 ], &descriptorTableRanges );
 
-    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( 3, rootParameters, (uint32_t)ARRAY_LENGTH( samplers ), samplers );
+    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc( (uint32_t)ARRAY_LENGTH( rootParameters ), rootParameters, (uint32_t)ARRAY_LENGTH( samplers ), samplers );
 
     ComPtr<ID3DBlob> serializedRootSignature;
     ComPtr<ID3DBlob> error;
@@ -211,10 +212,7 @@ void CMegakernelPathTracer::Render( SRenderer* renderer, const SRenderContext& r
     {
         environmentTextureSRV = scene->m_EnvironmentLight->m_Texture->GetSRV();
     }
-    std::vector<SD3D12DescriptorHandle> srcDescriptors;
-    const uint32_t fixedDescriptorCount = s_DescriptorTableLayout.m_SRVCount + s_DescriptorTableLayout.m_UAVCount;
-    srcDescriptors.reserve( fixedDescriptorCount + scene->m_GPUTextures.size() );
-    srcDescriptors = 
+    SD3D12DescriptorHandle srcDescriptors[ 17 ] =
     {
           scene->m_VerticesBuffer->GetSRV()
         , scene->m_TrianglesBuffer->GetSRV()
@@ -234,13 +232,10 @@ void CMegakernelPathTracer::Render( SRenderer* renderer, const SRenderContext& r
         , scene->m_SamplePositionTexture->GetUAV()
         , scene->m_SampleValueTexture->GetUAV()
     };
-    // Copy scene texture descriptors
-    srcDescriptors.resize( srcDescriptors.size() + scene->m_GPUTextures.size() );
-    scene->CopyTextureDescriptors( srcDescriptors.data() + fixedDescriptorCount );
-
-    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = D3D12Util::AllocateAndCopyToDescriptorTable( srcDescriptors.data(), (uint32_t)srcDescriptors.size() );
+    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = D3D12Util::AllocateAndCopyToDescriptorTable( srcDescriptors, (uint32_t)ARRAY_LENGTH( srcDescriptors ) );
     commandList->SetComputeRootDescriptorTable( 2, descriptorTable );
 
+    commandList->SetComputeRootDescriptorTable( 3, scene->GetTextureDescriptorTable() );
     commandList->SetPipelineState( m_PSO.Get() );
     
     uint32_t dispatchThreadWidth = renderContext.m_IsSmallResolutionEnabled ? renderContext.m_CurrentResolutionWidth : m_TileSize;

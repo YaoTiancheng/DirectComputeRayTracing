@@ -166,16 +166,6 @@ D3D12_GPU_DESCRIPTOR_HANDLE SD3D12DescriptorTableLayout::AllocateAndCopyToDescri
     return descriptorTable.m_GPU;
 }
 
-D3D12_GPU_DESCRIPTOR_HANDLE SD3D12DescriptorTableLayout::AllocateAndCopyToDescriptorTable( const SD3D12DescriptorHandle* SRVs, uint32_t SRVCount, const SD3D12DescriptorHandle* UAVs, uint32_t UAVCount,
-    const SD3D12DescriptorHandle* textureSRVs, uint32_t textureSRVCount )
-{
-    SD3D12GPUDescriptorHeapHandle descriptorTable = D3D12Adapter::GetGPUDescriptorHeap()->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_SRVCount + m_UAVCount + textureSRVCount );
-    CopyToDescriptorTableWithLayout( *this, descriptorTable, SRVs, SRVCount, UAVs, UAVCount );
-    const uint32_t descriptorSize = D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
-    CopyDescriptors( CD3DX12_CPU_DESCRIPTOR_HANDLE( descriptorTable.m_CPU, m_SRVCount + m_UAVCount, descriptorSize ), textureSRVs, textureSRVCount, descriptorSize, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
-    return descriptorTable.m_GPU;
-}
-
 D3D12_GPU_DESCRIPTOR_HANDLE D3D12Util::AllocateAndCopyToDescriptorTable( const SD3D12DescriptorHandle* descriptors, uint32_t count )
 {
     SD3D12GPUDescriptorHeapHandle descriptorTable = D3D12Adapter::GetGPUDescriptorHeap()->AllocateRange( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, count );

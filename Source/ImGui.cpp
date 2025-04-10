@@ -70,7 +70,7 @@ bool SRenderer::InitImGui( HWND hWnd )
     initInfo.Device = D3D12Adapter::GetDevice();
     initInfo.CommandQueue = D3D12Adapter::GetCommandQueue();
     initInfo.NumFramesInFlight = D3D12Adapter::GetBackbufferCount();
-    initInfo.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+    initInfo.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     initInfo.SrvDescriptorHeap = D3D12Adapter::GetGPUDescriptorHeap()->GetD3DHeap();
     initInfo.SrvDescriptorAllocFn = AllocImGuiDescriptor;
     initInfo.SrvDescriptorFreeFn = FreeImGuiDescriptor;

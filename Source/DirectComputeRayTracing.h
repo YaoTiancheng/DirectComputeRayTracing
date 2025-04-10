@@ -61,7 +61,6 @@ struct SRenderer
 
     SBxDFTextures m_BxDFTextures;
     std::vector<GPUTexturePtr> m_sRGBBackbuffers;
-    std::vector<GPUTexturePtr> m_LinearBackbuffers;
 
     CScene m_Scene;
     CPathTracer* m_PathTracer[ 2 ] = { nullptr, nullptr };

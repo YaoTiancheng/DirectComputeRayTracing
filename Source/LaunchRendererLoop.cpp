@@ -56,17 +56,10 @@ bool SRenderer::Init()
     }
 
     m_sRGBBackbuffers.resize( D3D12Adapter::GetBackbufferCount() );
-    m_LinearBackbuffers.resize( D3D12Adapter::GetBackbufferCount() );
     for ( uint32_t index = 0; index < D3D12Adapter::GetBackbufferCount(); ++index )
     { 
         m_sRGBBackbuffers[ index ].reset( GPUTexture::CreateFromSwapChain( DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, index ) );
         if ( !m_sRGBBackbuffers[ index ] )
-        { 
-            return false;
-        }
-
-        m_LinearBackbuffers[ index ].reset( GPUTexture::CreateFromSwapChain( index ) );
-        if ( !m_LinearBackbuffers[ index ] )
         { 
             return false;
         }
@@ -129,19 +122,13 @@ static void ResizeBackbuffer( SRenderer* r, uint32_t backbufferWidth, uint32_t b
     {
         backbuffer.reset();
     }
-    for ( GPUTexturePtr& backbuffer : r->m_LinearBackbuffers )
-    {
-        backbuffer.reset();
-    }
 
     D3D12Adapter::ResizeSwapChainBuffers( backbufferWidth, backbufferHeight );
 
     r->m_sRGBBackbuffers.resize( D3D12Adapter::GetBackbufferCount() );
-    r->m_LinearBackbuffers.resize( D3D12Adapter::GetBackbufferCount() );
     for ( uint32_t index = 0; index < D3D12Adapter::GetBackbufferCount(); ++index )
     {
         r->m_sRGBBackbuffers[ index ].reset( GPUTexture::CreateFromSwapChain( DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, index ) );
-        r->m_LinearBackbuffers[ index ].reset( GPUTexture::CreateFromSwapChain( index ) );
     }
 }
 
@@ -340,10 +327,6 @@ void SRenderer::RenderOneFrame()
     }
 
     OnImGUI( &renderContext );
-
-    RTV = m_LinearBackbuffers[ backbufferIndex ]->GetRTV();
-    commandList->OMSetRenderTargets( 1, &RTV.CPU, true, nullptr );
-
     DrawImGui( commandList );
 
     commandList->OMSetRenderTargets( 0, nullptr, true, nullptr );

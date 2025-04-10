@@ -487,8 +487,8 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                     m_IsMaterialGPUBufferDirty |= ImGui::ColorEdit3( "Albedo", (float*)&selection->m_Albedo );
                     if ( selection->m_AlbedoTextureIndex != INDEX_NONE )
                     {
-                        const CTexture* texture = &m_Scene.m_Textures[ selection->m_AlbedoTextureIndex ];
-                        m_IsMaterialGPUBufferDirty |= ImGui::InputText( "Albedo Texture", const_cast<char*>( texture->m_Name.c_str() ), texture->m_Name.size() + 1, ImGuiInputTextFlags_ReadOnly );
+                        const CD3DX12_GPU_DESCRIPTOR_HANDLE textureSRV( m_Scene.m_TextureDescriptorTable, selection->m_AlbedoTextureIndex, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
+                        ImGui::ImageButton( "Albedo Texture", (ImTextureID)textureSRV.ptr, ImVec2( 180, 180 ) );
                     }
                 }
 

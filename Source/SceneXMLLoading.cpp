@@ -616,18 +616,17 @@ struct SMaterialGatheringContext
 
     SMaterialGatheringContext( const std::filesystem::path& sceneFilename,
         std::unordered_map<std::string_view, EXMLMaterialType>& materialNameToEnumMap,
-        std::vector<SMaterial>* materials, std::vector<std::string>* materialNames )
+        std::vector<SMaterial>* materials )
         : m_SceneFilename( sceneFilename )
         , m_MaterialNameToEnumMap( materialNameToEnumMap )
         , m_Materials( materials )
-        , m_MaterialNames( materialNames )
         , m_UnnamedTextureCount( 0 )
     {
     }
 
     bool CreateAndAddMaterial( const SValue& BSDF, uint32_t* materialId );
 
-    bool TranslateMaterialFromBSDF( const SValue& BSDF, SMaterial* material, std::string_view* name, bool isTwoSided = false );
+    bool TranslateMaterialFromBSDF( const SValue& BSDF, SMaterial* material, bool isTwoSided = false );
 
     bool LoadTexturesFromFiles( CScene* scene );
 
@@ -637,7 +636,6 @@ struct SMaterialGatheringContext
     const std::filesystem::path& m_SceneFilename;
     std::unordered_map<std::string_view, EXMLMaterialType>& m_MaterialNameToEnumMap;
     std::vector<SMaterial>* m_Materials;
-    std::vector<std::string>* m_MaterialNames;
     uint32_t m_UnnamedTextureCount;
 };
 
@@ -663,7 +661,7 @@ static std::filesystem::path GetAbsoluteExternalFilename( char buffer[ MAX_PATH 
     return absoluteFilename;
 }
 
-bool SMaterialGatheringContext::TranslateMaterialFromBSDF( const SValue& BSDF, SMaterial* material, std::string_view* name, bool isTwoSided )
+bool SMaterialGatheringContext::TranslateMaterialFromBSDF( const SValue& BSDF, SMaterial* material, bool isTwoSided )
 {
     EXMLMaterialType materialType = EXMLMaterialType::eUnsupported;
 
@@ -685,7 +683,7 @@ bool SMaterialGatheringContext::TranslateMaterialFromBSDF( const SValue& BSDF, S
     SValue* idValue = BSDF.FindObjectField( "id" );
     if ( idValue )
     {
-        *name = idValue->m_String;
+        material->m_Name = idValue->m_String;
     }
 
     if ( materialType == EXMLMaterialType::eTwosided )
@@ -696,7 +694,7 @@ bool SMaterialGatheringContext::TranslateMaterialFromBSDF( const SValue& BSDF, S
             LOG_STRING( "Cannot find child BSDF inside a twosided BSDF.\n" );
             return false;
         }
-        return TranslateMaterialFromBSDF( *childBSDF, material, name, true );
+        return TranslateMaterialFromBSDF( *childBSDF, material, true );
     }
 
     EMaterialType targetMaterialType = EMaterialType::Diffuse;
@@ -954,7 +952,6 @@ bool SMaterialGatheringContext::CreateAndAddMaterial( const SValue& BSDF, uint32
     {
         uint32_t newMaterialId = (uint32_t)m_Materials->size();
         m_Materials->emplace_back( newMaterial );
-        m_MaterialNames->emplace_back( newMaterialName.data(), newMaterialName.length() );
         m_BSDFToIdMap.insert( std::make_pair( &BSDF, newMaterialId ) );
         *materialId = newMaterialId;
         return true;
@@ -1029,7 +1026,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
 
     size_t meshIndexBase = m_Meshes.size();
 
-    SMaterialGatheringContext materialGatheringContext( filepath, materialNameToEnumMap, &m_Materials, &m_MaterialNames );
+    SMaterialGatheringContext materialGatheringContext( filepath, materialNameToEnumMap, &m_Materials );
 
     std::vector<std::pair<std::string_view, SValue*>>& rootObjectValues = *sceneValues[ 0 ]->m_NestedObjects;
     for ( auto& rootObjectValue : rootObjectValues )
@@ -1229,8 +1226,8 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     material.m_Multiscattering = false;
                     material.m_IsTwoSided = false;
                     material.m_HasRoughnessTexture = false;
+                    material.m_Name = "LightMaterial";
                     m_Materials.emplace_back( material );
-                    m_MaterialNames.emplace_back();
                 }
 
                 EShapeType shapeType = EShapeType::Unsupported;
@@ -1253,22 +1250,24 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     else
                     {
                         char zeroTerminatedFilename[ MAX_PATH ];
-                        std::filesystem::path objFilepath = GetAbsoluteExternalFilename( zeroTerminatedFilename, filepath, filenameValue->m_String );
+                        const std::filesystem::path filenamePath = GetAbsoluteExternalFilename( zeroTerminatedFilename, filepath, filenameValue->m_String );
 
                         SMeshProcessingParams processingParams;
-                        processingParams.m_ApplyTransform = true;
-                        processingParams.m_Transform = MathHelper::s_IdentityMatrix4x4;
+                        processingParams.m_ApplyTransform = false;
                         processingParams.m_ChangeWindingOrder = true;
                         processingParams.m_FlipTexcoordV = true;
-                        processingParams.m_MaterialIdOverride = materialId;
-                        if ( CreateMeshAndMaterialsFromWavefrontOBJFile( objFilepath.u8string().c_str(), "", processingParams ) )
+                        processingParams.m_MaterialIndexOverride = materialId;
+
+                        m_Meshes.emplace_back();
+                        Mesh& newMesh = m_Meshes.back();
+                        if ( newMesh.LoadFromWavefrontOBJFile( filenamePath, processingParams, nullptr ) )
                         {
-                            m_Meshes.back().SetName( objFilepath.stem().u8string() );
+                            newMesh.SetName( zeroTerminatedFilename );
                             meshCreated = true;
                         }
                         else
                         {
-                            LOG_STRING_FORMAT( "Failed to load wavefront obj file \'%s\'.\n", objFilepath.u8string().c_str() );
+                            LOG_STRING_FORMAT( "Failed to load wavefront obj file \'%s\'.\n", filenamePath.u8string().c_str() );
                         }
                     }
                     break;

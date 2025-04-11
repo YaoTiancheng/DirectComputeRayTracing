@@ -32,55 +32,7 @@ static DXGI_FORMAT GetDXGIFormat( ETexturePixelFormat pixelFormat )
     return DXGI_FORMAT_UNKNOWN;
 }
 
-bool CScene::CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, const char* MTLBaseDir, const SMeshProcessingParams& processingParams )
-{
-    tinyobj::attrib_t attrib;
-    std::vector<tinyobj::shape_t> shapes;
-    std::vector<tinyobj::material_t> materials;
-    std::string warn;
-    std::string err;
-    bool loadSuccessful = tinyobj::LoadObj( &attrib, &shapes, &materials, &warn, &err, filename, MTLBaseDir );
-    if ( !loadSuccessful )
-    {
-        return false;
-    }
-
-    Mesh mesh;
-    bool createMeshSuccessful = mesh.CreateFromWavefrontOBJData( attrib, shapes, (uint32_t)m_Materials.size(), processingParams );
-    if ( !createMeshSuccessful )
-    {
-        return false;
-    }
-
-    m_Meshes.emplace_back( mesh );
-
-    bool hasMaterialOverride = processingParams.m_MaterialIdOverride != INVALID_MATERIAL_ID;
-    if ( !hasMaterialOverride )
-    {
-        m_Materials.reserve( m_Materials.size() + materials.size() );
-        m_MaterialNames.reserve( m_MaterialNames.size() + materials.size() );
-        for ( auto& iterSrcMat : materials )
-        {
-            SMaterial destMaterial;
-            destMaterial.m_Albedo = DirectX::XMFLOAT3( iterSrcMat.diffuse[ 0 ], iterSrcMat.diffuse[ 1 ], iterSrcMat.diffuse[ 2 ] );
-            destMaterial.m_Roughness = iterSrcMat.roughness;
-            destMaterial.m_IOR = XMFLOAT3( std::clamp( iterSrcMat.ior, 1.0f, MAX_MATERIAL_IOR ), 1.f, 1.f );
-            destMaterial.m_K = XMFLOAT3( 1.0f, 1.0f, 1.0f );
-            destMaterial.m_Tiling = XMFLOAT2( 1.0f, 1.0f );
-            destMaterial.m_MaterialType = EMaterialType::Plastic;
-            destMaterial.m_AlbedoTextureIndex = INDEX_NONE;
-            destMaterial.m_Multiscattering = false;
-            destMaterial.m_IsTwoSided = false;
-            destMaterial.m_HasRoughnessTexture = false;
-            m_Materials.emplace_back( destMaterial );
-            m_MaterialNames.emplace_back( iterSrcMat.name );
-        }
-    }
-
-    return true;
-}
-
-static void GetDefaultMaterial(SMaterial* material)
+static void GetDefaultMaterial( SMaterial* material )
 {
     material->m_Albedo = XMFLOAT3( 1.f, 0.f, 1.f );
     material->m_Roughness = 1.f;
@@ -92,6 +44,7 @@ static void GetDefaultMaterial(SMaterial* material)
     material->m_Multiscattering = false;
     material->m_IsTwoSided = false;
     material->m_HasRoughnessTexture = false;
+    material->m_Name = "DefaultMaterial";
 }
 
 bool CScene::LoadFromFile( const std::filesystem::path& filepath )
@@ -148,7 +101,6 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
                 SMaterial material;
                 GetDefaultMaterial( &material );
                 m_Materials.emplace_back( material );
-                m_MaterialNames.emplace_back( m_Meshes[ iMesh ].GetName() );
             }
         }
     }
@@ -567,7 +519,6 @@ void CScene::Reset()
     m_PunctualLights.clear();
     m_MeshLights.clear();
     m_Materials.clear();
-    m_MaterialNames.clear();
     m_TLAS.clear();
     m_ReorderedInstanceIndices.clear();
     m_InstanceTransforms.clear();

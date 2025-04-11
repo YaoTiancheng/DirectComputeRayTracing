@@ -374,7 +374,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
             {
                 bool isSelected = ( iMaterial == m_Scene.m_ObjectSelection.m_MaterialSelectionIndex );
                 ImGui::PushID( (int)iMaterial );
-                if ( ImGui::Selectable( m_Scene.m_MaterialNames[ iMaterial ].c_str(), isSelected ) )
+                if ( ImGui::Selectable( m_Scene.m_Materials[ iMaterial ].m_Name.c_str(), isSelected ) )
                 {
                     m_Scene.m_ObjectSelection.SelectMaterial( (int)iMaterial );
                 }

@@ -6,12 +6,12 @@
 #include "../Shaders/Vertex.inc.hlsl"
 #include "../Shaders/Material.inc.hlsl"
 #include "../Shaders/BVHNode.inc.hlsl"
-#include "tinyobjloader/tiny_obj_loader.h"
 
 struct SMeshProcessingParams
 {
     DirectX::XMFLOAT4X4 m_Transform;
-    uint32_t m_MaterialIdOverride;
+    uint32_t m_MaterialIndexBase;
+    uint32_t m_MaterialIndexOverride;
     bool m_ApplyTransform;
     bool m_ChangeWindingOrder;
     bool m_FlipTexcoordV;
@@ -20,7 +20,7 @@ struct SMeshProcessingParams
 class Mesh
 {
 public:
-    bool CreateFromWavefrontOBJData( const tinyobj::attrib_t& attrib, const std::vector<tinyobj::shape_t>& shapes, uint32_t materialIdBase, const SMeshProcessingParams& processingParams );
+    bool LoadFromWavefrontOBJFile( const std::filesystem::path& filename, const SMeshProcessingParams& params, std::vector<struct SMaterial>* outMaterials );
 
     bool GenerateRectangle( uint32_t materialId, bool applyTransform = false, const DirectX::XMFLOAT4X4& transform = MathHelper::s_IdentityMatrix4x4 );
 
@@ -58,7 +58,6 @@ public:
 
     const std::string& GetName() const { return m_Name; }
 
-private:
     std::string m_Name;
     std::vector<GPU::Vertex> m_Vertices;
     std::vector<uint32_t> m_Indices;

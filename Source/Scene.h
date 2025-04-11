@@ -5,6 +5,7 @@
 #include "Camera.h"
 #include "Mesh.h"
 #include "Texture.h"
+#include "Material.h"
 #include "../Shaders/Material.inc.hlsl"
 
 #define INDEX_NONE -1
@@ -48,28 +49,6 @@ struct SEnvironmentLight
     std::string m_TextureFileName;
 
     bool CreateTextureFromFile();
-};
-
-enum class EMaterialType
-{
-    Diffuse = 0,
-    Plastic = 1,
-    Conductor = 2,
-    Dielectric = 3
-};
-
-struct SMaterial
-{
-    DirectX::XMFLOAT3 m_Albedo;
-    float m_Roughness;
-    DirectX::XMFLOAT3 m_IOR;
-    DirectX::XMFLOAT3 m_K;
-    DirectX::XMFLOAT2 m_Tiling;
-    EMaterialType m_MaterialType;
-    int32_t m_AlbedoTextureIndex;
-    bool m_Multiscattering;
-    bool m_IsTwoSided;
-    bool m_HasRoughnessTexture;
 };
 
 struct SRayHit
@@ -156,11 +135,9 @@ public:
     const float s_MaxFocalDistance = 999999.0f;
 
 private:
-    bool LoadFromWavefrontOBJFile( const std::filesystem::path& filepath );
+    bool LoadFromWavefrontOBJFile( const std::filesystem::path& filename );
 
     bool LoadFromXMLFile( const std::filesystem::path& filepath );
-
-    bool CreateMeshAndMaterialsFromWavefrontOBJFile( const char* filename, const char* MTLBaseDir, const SMeshProcessingParams& processingParams );
 
 public:
     uint32_t m_ResolutionWidth;
@@ -193,7 +170,6 @@ public:
     std::vector<SPunctualLight> m_PunctualLights;
     std::vector<SMeshLight> m_MeshLights;
     std::vector<SMaterial> m_Materials;
-    std::vector<std::string> m_MaterialNames;
     std::vector<Mesh> m_Meshes;
     std::vector<BVHAccel::BVHNode> m_TLAS;
     std::vector<uint32_t> m_ReorderedInstanceIndices;

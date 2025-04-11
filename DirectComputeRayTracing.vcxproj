@@ -118,6 +118,7 @@
     <ClInclude Include="Source\D3D12DescriptorHandle.h" />
     <ClInclude Include="Source\D3D12DescriptorPoolHeap.h" />
     <ClInclude Include="Source\D3D12DescriptorUtil.h" />
+    <ClInclude Include="Source\Material.h" />
     <ClInclude Include="Source\MathHelper.h" />
     <ClInclude Include="Source\D3D12Adapter.h" />
     <ClInclude Include="Source\Application.h" />
@@ -173,9 +174,8 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Source\Mesh.cpp" />
-    <ClCompile Include="Source\SceneWavefrontOBJLoading.cpp" />
     <ClCompile Include="Source\Texture.cpp" />
-    <ClCompile Include="Source\TinyObjLoader.cpp" />
+    <ClCompile Include="Source\WavefrontOBJLoading.cpp" />
     <ClCompile Include="Source\WavefrontPathTracer.cpp" />
   </ItemGroup>
   <ItemGroup>

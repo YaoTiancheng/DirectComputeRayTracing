@@ -115,7 +115,7 @@ bool CScene::TraceRay( FXMVECTOR origin, FXMVECTOR direction, float tMin, SRayHi
             if ( hasBLAS )
             {
                 instanceIndex = node->m_PrimIndex;
-                meshIndex = m_ReorderedInstanceIndices[ node->m_PrimIndex ];
+                meshIndex = m_OriginalInstanceIndices[ node->m_PrimIndex ];
                 XMMATRIX instanceInvTransform = XMLoadFloat4x3( &instanceInvTransforms[ meshIndex ] );
                 localRayOrigin = XMVector3Transform( origin, instanceInvTransform );
                 localRayDirection = XMVector3TransformNormal( direction, instanceInvTransform );

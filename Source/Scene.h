@@ -172,7 +172,8 @@ public:
     std::vector<SMaterial> m_Materials;
     std::vector<Mesh> m_Meshes;
     std::vector<BVHAccel::BVHNode> m_TLAS;
-    std::vector<uint32_t> m_ReorderedInstanceIndices;
+    std::vector<uint32_t> m_OriginalInstanceIndices; // Original indices indexed by reordered index
+    std::vector<uint32_t> m_ReorderedInstanceIndices; // Reordered indices indexed by original index
     std::vector<DirectX::XMFLOAT4X3> m_InstanceTransforms;
     std::vector<CTexture> m_Textures;
     uint32_t m_BVHTraversalStackSize;

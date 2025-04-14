@@ -134,20 +134,27 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
 
         std::vector<uint32_t> instanceDepths; // Which depth of the TLAS each instance is at
         instanceDepths.resize( m_InstanceTransforms.size() );
-        m_ReorderedInstanceIndices.resize( m_InstanceTransforms.size() );
+        m_OriginalInstanceIndices.resize( m_InstanceTransforms.size() );
         uint32_t BVHMaxDepth = 0;
         uint32_t BVHMaxStackSize = 0;
-        BVHAccel::BuildTLAS( BLASInstances.data(), m_ReorderedInstanceIndices.data(), (uint32_t)m_Meshes.size(), &m_TLAS, &BVHMaxDepth, &BVHMaxStackSize, instanceDepths.data() );
+        BVHAccel::BuildTLAS( BLASInstances.data(), m_OriginalInstanceIndices.data(), (uint32_t)m_Meshes.size(), &m_TLAS, &BVHMaxDepth, &BVHMaxStackSize, instanceDepths.data() );
         LOG_STRING_FORMAT( "TLAS created. Node count:%d, depth:%d\n", m_TLAS.size(), BVHMaxDepth );
 
         uint32_t maxStackSize = 0;
         for ( uint32_t iInstance = 0; iInstance < (uint32_t)instanceDepths.size(); ++iInstance )
         {
-            uint32_t originalInstance = m_ReorderedInstanceIndices[ iInstance ];
+            uint32_t originalInstance = m_OriginalInstanceIndices[ iInstance ];
             maxStackSize = std::max( maxStackSize, instanceDepths[ iInstance ] + m_Meshes[ originalInstance ].GetBVHMaxDepth() );
         }
         m_BVHTraversalStackSize = maxStackSize;
         LOG_STRING_FORMAT( "BVH traversal stack size requirement is %d\n", maxStackSize );
+
+        m_ReorderedInstanceIndices.resize( m_OriginalInstanceIndices.size() );
+        for ( uint32_t originalInstanceIndex : m_OriginalInstanceIndices )
+        {
+            const uint32_t reorderedInstanceIndex = (uint32_t)std::distance( m_OriginalInstanceIndices.begin(), std::find( m_OriginalInstanceIndices.begin(), m_OriginalInstanceIndices.end(), originalInstanceIndex ) );
+            m_ReorderedInstanceIndices[ originalInstanceIndex ] = reorderedInstanceIndex;
+        }
     }
 
     uint32_t totalVertexCount = 0;
@@ -170,7 +177,7 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
 
         char formattedFilenameBuffer[ MAX_PATH ];
         uint32_t instanceIndex = 0;
-        for ( auto& index : m_ReorderedInstanceIndices )
+        for ( auto& index : m_OriginalInstanceIndices )
         {
             const Mesh& mesh = m_Meshes[ index ];
             sprintf_s( formattedFilenameBuffer, ARRAY_LENGTH( formattedFilenameBuffer ), "%s/BLAS_Instance_%d_%s.xml", baseDirectoryU8String.c_str(), instanceIndex, mesh.GetName().c_str() );
@@ -292,7 +299,7 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
             {
                 uint32_t primIndex = node.m_PrimIndex;
                 assert( node.m_PrimCount == 1 );
-                uint32_t originalPrimIndex = m_ReorderedInstanceIndices[ primIndex ];
+                uint32_t originalPrimIndex = m_OriginalInstanceIndices[ primIndex ];
                 node.m_ChildIndex = BLASNodeIndexOffsets[ originalPrimIndex ];
                 node.m_InstanceIndex = primIndex;
             }
@@ -357,7 +364,7 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
         DirectX::XMFLOAT4X3* dest = instanceTransforms.data();
         for ( uint32_t i = 0; i < (uint32_t)m_InstanceTransforms.size(); ++i )
         {
-            const DirectX::XMFLOAT4X3& transform = m_InstanceTransforms[ m_ReorderedInstanceIndices[ i ] ];
+            const DirectX::XMFLOAT4X3& transform = m_InstanceTransforms[ m_OriginalInstanceIndices[ i ] ];
             *dest = DirectX::XMFLOAT4X3( transform._11, transform._21, transform._31, transform._41, transform._12, transform._22, transform._32, transform._42, transform._13, transform._23, transform._33, transform._43 );
             ++dest;
         }
@@ -365,7 +372,7 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
         DirectX::XMFLOAT4X3 rowMajorMatrix;
         for ( uint32_t i = 0; i < (uint32_t)m_InstanceTransforms.size(); ++i )
         {
-            const DirectX::XMFLOAT4X3& transform = m_InstanceTransforms[ m_ReorderedInstanceIndices[ i ] ];
+            const DirectX::XMFLOAT4X3& transform = m_InstanceTransforms[ m_OriginalInstanceIndices[ i ] ];
             DirectX::XMMATRIX vMatrix = DirectX::XMLoadFloat4x3( &transform );
             DirectX::XMVECTOR vDet;
             vMatrix = DirectX::XMMatrixInverse( &vDet, vMatrix );
@@ -401,11 +408,9 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
         uint32_t lightIndex = 0;
         for ( auto& light : m_MeshLights )
         {
-            uint32_t originalInstanceIndex = light.m_InstanceIndex;
-            uint32_t newInstanceIndex = (uint32_t)std::distance( m_ReorderedInstanceIndices.begin(), std::find( m_ReorderedInstanceIndices.begin(), m_ReorderedInstanceIndices.end(), originalInstanceIndex ) );
-            light.m_InstanceIndex = newInstanceIndex;
-
-            instanceLightIndices[ newInstanceIndex ] = lightIndex;
+            const uint32_t originalInstanceIndex = light.m_InstanceIndex;
+            const uint32_t reorderedInstanceIndex = m_ReorderedInstanceIndices[ originalInstanceIndex ];
+            instanceLightIndices[ reorderedInstanceIndex ] = lightIndex;
             ++lightIndex;
         }
 
@@ -520,6 +525,7 @@ void CScene::Reset()
     m_MeshLights.clear();
     m_Materials.clear();
     m_TLAS.clear();
+    m_OriginalInstanceIndices.clear();
     m_ReorderedInstanceIndices.clear();
     m_InstanceTransforms.clear();
     m_Textures.clear();
@@ -556,11 +562,12 @@ void CScene::UpdateLightGPUData()
                 SMeshLight* CPULight = m_MeshLights.data() + i;
 
                 GPULight->radiance = CPULight->color;
-                uint32_t originalInstanceIndex = m_ReorderedInstanceIndices[ CPULight->m_InstanceIndex ];
+                const uint32_t originalInstanceIndex = CPULight->m_InstanceIndex;
                 GPULight->position_or_triangleRange.x = *(float*)&meshTriangleOffsets[ originalInstanceIndex ];
                 uint32_t triangleCount = m_Meshes[ originalInstanceIndex ].GetTriangleCount();
                 GPULight->position_or_triangleRange.y = *(float*)&triangleCount;
-                GPULight->position_or_triangleRange.z = *(float*)&CPULight->m_InstanceIndex;
+                const uint32_t reorderedInstanceIndex = m_ReorderedInstanceIndices[ originalInstanceIndex ];
+                GPULight->position_or_triangleRange.z = *(float*)&reorderedInstanceIndex;
                 GPULight->flags = LIGHT_FLAGS_MESH_LIGHT;
 
                 ++GPULight;

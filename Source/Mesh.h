@@ -12,6 +12,7 @@ struct SMeshProcessingParams
     DirectX::XMFLOAT4X4 m_Transform;
     uint32_t m_MaterialIndexBase;
     uint32_t m_MaterialIndexOverride;
+    uint32_t m_TextureIndexBase;
     bool m_ApplyTransform;
     bool m_ChangeWindingOrder;
     bool m_FlipTexcoordV;
@@ -20,7 +21,7 @@ struct SMeshProcessingParams
 class Mesh
 {
 public:
-    bool LoadFromWavefrontOBJFile( const std::filesystem::path& filename, const SMeshProcessingParams& params, std::vector<struct SMaterial>* outMaterials );
+    bool LoadFromWavefrontOBJFile( const std::filesystem::path& filename, const SMeshProcessingParams& params, std::vector<struct SMaterial>* outMaterials, std::vector<class CTexture>* outTextures );
 
     bool GenerateRectangle( uint32_t materialId, bool applyTransform = false, const DirectX::XMFLOAT4X4& transform = MathHelper::s_IdentityMatrix4x4 );
 

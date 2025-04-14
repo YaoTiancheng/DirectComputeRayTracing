@@ -2,8 +2,6 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tinyobjloader/tiny_obj_loader.h"
 #include "MikkTSpace/mikktspace.h"
-#include "Material.h"
-#include "Mesh.h"
 #include "Scene.h"
 #include "Logging.h"
 #include "Constants.h"
@@ -273,7 +271,25 @@ static bool CreateMeshFromWavefrontOBJData( const tinyobj::attrib_t& attrib, con
     return true;
 }
 
-static void TranslateMaterials( const tinyobj::material_t* srcMaterials, SMaterial* dstMaterials, uint32_t count )
+struct STexture
+{
+    std::string m_Filename;
+};
+
+struct SMaterialTranslationContext
+{
+    explicit SMaterialTranslationContext( int32_t textureIndexBase ) : m_TextureIndexBase( textureIndexBase ) {}
+
+    void TranslateMaterials( const tinyobj::material_t* srcMaterials, SMaterial* dstMaterials, uint32_t count );
+
+    bool LoadTexturesFromFiles( const std::filesystem::path& parentFilenamePath, std::vector<CTexture>* textures );
+
+    std::vector<STexture> m_Textures;
+    std::unordered_map<std::string, int32_t> m_TextureFilenameToIndexMap;
+    int32_t m_TextureIndexBase;
+};
+
+void SMaterialTranslationContext::TranslateMaterials( const tinyobj::material_t* srcMaterials, SMaterial* dstMaterials, uint32_t count )
 {
     for ( uint32_t index = 0; index < count; ++index )
     {
@@ -285,15 +301,68 @@ static void TranslateMaterials( const tinyobj::material_t* srcMaterials, SMateri
         dstMaterial->m_K = XMFLOAT3( 1.0f, 1.0f, 1.0f );
         dstMaterial->m_Tiling = XMFLOAT2( 1.0f, 1.0f );
         dstMaterial->m_MaterialType = EMaterialType::Plastic;
-        dstMaterial->m_AlbedoTextureIndex = INDEX_NONE;
         dstMaterial->m_Multiscattering = false;
         dstMaterial->m_IsTwoSided = false;
         dstMaterial->m_HasRoughnessTexture = false;
         dstMaterial->m_Name = srcMaterial->name;
+
+        int32_t albedoTextureIndex = INDEX_NONE;
+        if ( srcMaterial->diffuse_texname.length() > 0 )
+        {
+            auto textureFilenameToIndexPairIt = m_TextureFilenameToIndexMap.find( srcMaterial->diffuse_texname );
+            if ( textureFilenameToIndexPairIt != m_TextureFilenameToIndexMap.end() )
+            {
+                albedoTextureIndex = textureFilenameToIndexPairIt->second;
+            }
+            else
+            {
+                albedoTextureIndex = m_TextureIndexBase + (int32_t)m_Textures.size();
+                m_TextureFilenameToIndexMap.insert( std::make_pair( srcMaterial->diffuse_texname, albedoTextureIndex ) );
+
+                m_Textures.emplace_back();
+                STexture& newTexture = m_Textures.back();
+                newTexture.m_Filename = srcMaterial->diffuse_texname;
+            }
+        }
+        dstMaterial->m_AlbedoTextureIndex = albedoTextureIndex;
     }
 }
 
-bool Mesh::LoadFromWavefrontOBJFile( const std::filesystem::path& filenamePath, const SMeshProcessingParams& params, std::vector<struct SMaterial>* outMaterials )
+bool SMaterialTranslationContext::LoadTexturesFromFiles( const std::filesystem::path& parentFilenamePath, std::vector<CTexture>* textures )
+{
+    STextureCodec* codec = CTexture::CreateCodec();
+    if ( codec == nullptr )
+    {
+        return false;
+    }
+
+    textures->reserve( textures->size() + m_Textures.size() );
+    std::filesystem::path filenamePath;
+    for ( const STexture& texture : m_Textures )
+    {
+        const std::string& filename = texture.m_Filename;
+        filenamePath = filename;
+        if ( filenamePath.is_relative() )
+        {
+            filenamePath = parentFilenamePath.parent_path() / filenamePath;
+        }
+
+        textures->emplace_back();
+        CTexture& newTexture = textures->back();
+        newTexture.Clear();
+        newTexture.m_Name = std::move( texture.m_Filename );
+        const std::string absoluteFilename = filenamePath.u8string();
+        if ( !newTexture.LoadFromFile( absoluteFilename.c_str(), codec ) )
+        {
+            LOG_STRING_FORMAT( "Loading texture from file \"%s\" failed.\n", absoluteFilename.c_str() );
+        }
+    }
+
+    CTexture::DestroyCodec( codec );
+    return true;
+}
+
+bool Mesh::LoadFromWavefrontOBJFile( const std::filesystem::path& filenamePath, const SMeshProcessingParams& params, std::vector<SMaterial>* outMaterials, std::vector<CTexture>* outTextures )
 {
     const std::string filename = filenamePath.u8string();
     const std::string MTLSearchPath = filenamePath.parent_path().u8string();
@@ -318,9 +387,11 @@ bool Mesh::LoadFromWavefrontOBJFile( const std::filesystem::path& filenamePath, 
     bool hasMaterialOverride = params.m_MaterialIndexOverride != INVALID_MATERIAL_ID;
     if ( !hasMaterialOverride )
     {
+        SMaterialTranslationContext translationContext( params.m_TextureIndexBase );
         const size_t originalSize = outMaterials->size();
         outMaterials->resize( originalSize + materials.size() );
-        TranslateMaterials( materials.data(), outMaterials->data() + originalSize, (uint32_t)materials.size() );
+        translationContext.TranslateMaterials( materials.data(), outMaterials->data() + originalSize, (uint32_t)materials.size() );
+        translationContext.LoadTexturesFromFiles( filenamePath, outTextures );
     }
 
     return true;
@@ -353,7 +424,7 @@ bool CScene::LoadFromWavefrontOBJFile( const std::filesystem::path& filenamePath
     RHS2LHSMatrix._11 = -1.0f;
     params.m_Transform = RHS2LHSMatrix;
     params.m_ChangeWindingOrder = true;
-    params.m_FlipTexcoordV = false;
+    params.m_FlipTexcoordV = true;
     params.m_MaterialIndexOverride = INVALID_MATERIAL_ID;
 
     for ( size_t shapeIndex = 0; shapeIndex < shapes.size(); ++shapeIndex )
@@ -373,9 +444,11 @@ bool CScene::LoadFromWavefrontOBJFile( const std::filesystem::path& filenamePath
     const bool hasMaterialOverride = params.m_MaterialIndexOverride != INVALID_MATERIAL_ID;
     if ( !hasMaterialOverride )
     {
+        SMaterialTranslationContext translationContext( (int32_t)m_Textures.size() );
         const size_t originalSize = m_Materials.size();
         m_Materials.resize( originalSize + materials.size() );
-        TranslateMaterials( materials.data(), m_Materials.data() + originalSize, (uint32_t)materials.size() );
+        translationContext.TranslateMaterials( materials.data(), m_Materials.data() + originalSize, (uint32_t)materials.size() );
+        translationContext.LoadTexturesFromFiles( filenamePath, &m_Textures );
     }
 
     return true;

@@ -1260,7 +1260,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
 
                         m_Meshes.emplace_back();
                         Mesh& newMesh = m_Meshes.back();
-                        if ( newMesh.LoadFromWavefrontOBJFile( filenamePath, processingParams, nullptr ) )
+                        if ( newMesh.LoadFromWavefrontOBJFile( filenamePath, processingParams, nullptr, nullptr ) )
                         {
                             newMesh.SetName( zeroTerminatedFilename );
                             meshCreated = true;

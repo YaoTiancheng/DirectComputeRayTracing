@@ -52,7 +52,8 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
     if ( !filepath.has_filename() )
         return false;
 
-    size_t meshIndexBase = m_Meshes.size();
+    const size_t meshIndexBase = m_Meshes.size();
+    const size_t textureIndexBase = m_Textures.size();
 
     {
         const std::filesystem::path extension = filepath.extension();
@@ -467,21 +468,26 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
         return false;
     }
 
-    // Create textures
+    // Create new textures
     {
+        m_GPUTextures.reserve( m_Textures.size() );
+
         std::vector<D3D12_SUBRESOURCE_DATA> initialData;
         initialData.resize( 1 );
-        for ( const CTexture& texture : m_Textures )
+        for ( size_t textureIndex = textureIndexBase; textureIndex < m_Textures.size(); ++textureIndex )
         {
-            assert( texture.IsValid() );
-            
-            D3D12_SUBRESOURCE_DATA& subresource = initialData[ 0 ];
-            subresource.pData = texture.m_PixelData.data();
-            subresource.RowPitch = texture.CalculateRowPitch();
-            subresource.SlicePitch = 0;
+            CTexture& texture = m_Textures[ textureIndex ];
+            CD3D12ResourcePtr<GPUTexture> newGPUTexture;
+            if ( texture.IsValid() )
+            {
+                D3D12_SUBRESOURCE_DATA& subresource = initialData[ 0 ];
+                subresource.pData = texture.m_PixelData.data();
+                subresource.RowPitch = texture.CalculateRowPitch();
+                subresource.SlicePitch = 0;
 
-            CD3D12ResourcePtr<GPUTexture> newGPUTexture = GPUTexture::Create( texture.m_Width, texture.m_Height, GetDXGIFormat( texture.m_PixelFormat ),
-                EGPUTextureBindFlag_ShaderResource, initialData, 1U, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, L"SceneTexture" );
+                newGPUTexture = GPUTexture::Create( texture.m_Width, texture.m_Height, GetDXGIFormat( texture.m_PixelFormat ),
+                    EGPUTextureBindFlag_ShaderResource, initialData, 1U, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, L"SceneTexture" );
+            }
             m_GPUTextures.emplace_back( newGPUTexture );
         }
     }

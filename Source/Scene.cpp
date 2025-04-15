@@ -625,7 +625,8 @@ void CScene::UpdateMaterialGPUData()
                 SMaterial* materialSetting = m_Materials.data() + i;
                 GPU::Material* material = ( (GPU::Material*)address ) + i;
                 material->albedo = materialSetting->m_MaterialType == EMaterialType::Conductor ? materialSetting->m_K : materialSetting->m_Albedo;
-                material->albedoTextureIndex = materialSetting->m_AlbedoTextureIndex;
+                material->albedoTextureIndex = materialSetting->m_MaterialType == EMaterialType::Conductor || materialSetting->m_MaterialType == EMaterialType::Dielectric ?
+                    INDEX_NONE : materialSetting->m_AlbedoTextureIndex;
                 material->ior = materialSetting->m_IOR;
                 material->roughness = std::clamp( materialSetting->m_Roughness, 0.0f, 1.0f );
                 material->texTiling = materialSetting->m_Tiling;

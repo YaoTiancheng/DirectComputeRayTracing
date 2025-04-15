@@ -930,7 +930,7 @@ bool SMaterialGatheringContext::TranslateMaterialFromBSDF( const SValue& BSDF, S
                 LOG_STRING( "Unsupported diffuse reflectance type.\n" );
             }
         }
-        material->m_Albedo = albedo;
+        material->m_Albedo = albedoTextureIndex == INDEX_NONE ? albedo : XMFLOAT3( 1.f, 1.f, 1.f ); // Bypass albedo color if texture is enabled.
         material->m_AlbedoTextureIndex = albedoTextureIndex;
     }
 

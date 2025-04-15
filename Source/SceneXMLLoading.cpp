@@ -789,7 +789,7 @@ bool SMaterialGatheringContext::TranslateMaterialFromBSDF( const SValue& BSDF, S
     if ( hasRoughness )
     {
         SValue* alphaValue = BSDF.FindObjectField( "alpha" );
-        float alpha = alphaValue ? alphaValue->m_Float : 0.0f;
+        float alpha = alphaValue ? alphaValue->m_Float : 0.1f;
         material->m_Roughness = sqrt( alpha );
     }
 

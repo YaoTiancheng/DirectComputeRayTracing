@@ -616,11 +616,13 @@ struct SMaterialGatheringContext
 
     SMaterialGatheringContext( const std::filesystem::path& sceneFilename,
         std::unordered_map<std::string_view, EXMLMaterialType>& materialNameToEnumMap,
-        std::vector<SMaterial>* materials )
+        std::vector<SMaterial>* materials,
+        uint32_t textureIndexBase )
         : m_SceneFilename( sceneFilename )
         , m_MaterialNameToEnumMap( materialNameToEnumMap )
         , m_Materials( materials )
         , m_UnnamedTextureCount( 0 )
+        , m_TextureIndexBase( textureIndexBase )
     {
     }
 
@@ -631,11 +633,12 @@ struct SMaterialGatheringContext
     bool LoadTexturesFromFiles( CScene* scene );
 
     std::unordered_map<const SValue*, uint32_t> m_BSDFToIdMap;
-    std::unordered_map<const SValue*, uint32_t> m_TextureToIdMap;
+    std::unordered_map<const SValue*, uint32_t> m_TextureToIndexMap;
     std::vector<STexture> m_Textures;
     const std::filesystem::path& m_SceneFilename;
     std::unordered_map<std::string_view, EXMLMaterialType>& m_MaterialNameToEnumMap;
     std::vector<SMaterial>* m_Materials;
+    uint32_t m_TextureIndexBase;
     uint32_t m_UnnamedTextureCount;
 };
 
@@ -887,12 +890,12 @@ bool SMaterialGatheringContext::TranslateMaterialFromBSDF( const SValue& BSDF, S
                     char filenameBuffer[ MAX_PATH ];
                     std::filesystem::path textureFilepath = GetAbsoluteExternalFilename( filenameBuffer, m_SceneFilename, textureFilename );
 
-                    auto textureToIdPair = m_TextureToIdMap.find( diffuseReflectanceValue );
-                    if ( textureToIdPair == m_TextureToIdMap.end() )
+                    auto textureToIndexPair = m_TextureToIndexMap.find( diffuseReflectanceValue );
+                    if ( textureToIndexPair == m_TextureToIndexMap.end() )
                     {
-                        uint32_t newTextureId = (uint32_t)m_TextureToIdMap.size();
+                        uint32_t newTextureIndex = m_TextureIndexBase + (uint32_t)m_TextureToIndexMap.size();
 
-                        m_TextureToIdMap.insert( std::make_pair( diffuseReflectanceValue, newTextureId ) );
+                        m_TextureToIndexMap.insert( std::make_pair( diffuseReflectanceValue, newTextureIndex ) );
 
                         m_Textures.emplace_back();
                         STexture& newTexture = m_Textures.back();
@@ -910,11 +913,11 @@ bool SMaterialGatheringContext::TranslateMaterialFromBSDF( const SValue& BSDF, S
                             newTexture.m_Id = filenameBuffer;
                         }
 
-                        albedoTextureIndex = (int32_t)newTextureId;
+                        albedoTextureIndex = (int32_t)newTextureIndex;
                     }
                     else
                     {
-                        albedoTextureIndex = (int32_t)textureToIdPair->second;
+                        albedoTextureIndex = (int32_t)textureToIndexPair->second;
                     }
                 }
                 else
@@ -1024,9 +1027,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
         , { "twosided", EXMLMaterialType::eTwosided }
     };
 
-    size_t meshIndexBase = m_Meshes.size();
-
-    SMaterialGatheringContext materialGatheringContext( filepath, materialNameToEnumMap, &m_Materials );
+    SMaterialGatheringContext materialGatheringContext( filepath, materialNameToEnumMap, &m_Materials, (uint32_t)m_Textures.size() );
 
     std::vector<std::pair<std::string_view, SValue*>>& rootObjectValues = *sceneValues[ 0 ]->m_NestedObjects;
     for ( auto& rootObjectValue : rootObjectValues )

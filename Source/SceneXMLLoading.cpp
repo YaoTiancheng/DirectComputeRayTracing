@@ -1092,6 +1092,11 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                                 m_Filter = EFilter::Box;
                                 m_FilterRadius = filterValue->GetObjectField<float>( "radius", 0.5f );
                             }
+                            else if ( strncmp( "tent", typeValue->m_String.data(), typeValue->m_String.length() ) == 0 )
+                            {
+                                m_Filter = EFilter::Triangle;
+                                m_FilterRadius = filterValue->GetObjectField<float>( "radius", 1.f );
+                            }
                             else if ( strncmp( "gaussian", typeValue->m_String.data(), typeValue->m_String.length() ) == 0 )
                             {
                                 m_Filter = EFilter::Gaussian;

@@ -470,7 +470,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
             {
                 SMaterial* selection = m_Scene.m_Materials.data() + m_Scene.m_ObjectSelection.m_MaterialSelectionIndex;
 
-                static const char* s_MaterialTypeNames[] = { "Diffuse", "Plastic", "Conductor", "Dielectric" };
+                static const char* s_MaterialTypeNames[] = { "Diffuse", "Plastic", "Conductor", "Dielectric", "Thin Dielectric" };
                 if ( ImGui::Combo( "Type", (int*)&selection->m_MaterialType, s_MaterialTypeNames, IM_ARRAYSIZE( s_MaterialTypeNames ) ) )
                 {
                     if ( selection->m_MaterialType != EMaterialType::Conductor )
@@ -492,9 +492,8 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                     }
                 }
 
-                if ( selection->m_MaterialType != EMaterialType::Diffuse )
+                if ( selection->m_MaterialType != EMaterialType::Diffuse && selection->m_MaterialType != EMaterialType::ThinDielectric )
                 {
-                    ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
                     m_IsMaterialGPUBufferDirty |= ImGui::DragFloat( "Roughness", &selection->m_Roughness, 0.01f, 0.0f, 1.0f );
                     m_IsMaterialGPUBufferDirty |= ImGui::Checkbox( "Roughness Texture", &selection->m_HasRoughnessTexture );
                     m_IsMaterialGPUBufferDirty |= ImGui::Checkbox( "Multiscattering", &selection->m_Multiscattering );
@@ -510,12 +509,15 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                     m_IsMaterialGPUBufferDirty |= ImGui::DragFloat( "IOR", (float*)&selection->m_IOR, 0.01f, 1.0f, MAX_MATERIAL_IOR, "%.3f", ImGuiSliderFlags_AlwaysClamp );
                 }
 
-                if ( selection->m_MaterialType != EMaterialType::Dielectric )
+                if ( selection->m_MaterialType != EMaterialType::Dielectric && selection->m_MaterialType != EMaterialType::ThinDielectric )
                 {
                     m_IsMaterialGPUBufferDirty |= ImGui::Checkbox( "Two Sided", &selection->m_IsTwoSided );
                 }
 
-                m_IsMaterialGPUBufferDirty |= ImGui::DragFloat2( "Texture Tiling", (float*)&selection->m_Tiling, 0.01f, 0.0f, 100000.0f );
+                if ( selection->m_MaterialType != EMaterialType::ThinDielectric )
+                {
+                    m_IsMaterialGPUBufferDirty |= ImGui::DragFloat2( "Texture Tiling", (float*)&selection->m_Tiling, 0.01f, 0.0f, 100000.0f );
+                }
             }
         }
         else if ( m_Scene.m_ObjectSelection.m_IsCameraSelected )

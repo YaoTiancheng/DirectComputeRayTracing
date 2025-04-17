@@ -5,7 +5,8 @@ enum class EMaterialType
     Diffuse = 0,
     Plastic = 1,
     Conductor = 2,
-    Dielectric = 3
+    Dielectric = 3,
+    ThinDielectric = 4,
 };
 
 struct SMaterial

@@ -38,7 +38,7 @@ float EvaluateSpecularBSDFPdf( float3 wi, float3 wo )
     return 0.0f;
 }
 
-void SampleSpecularBSDF( float3 wo, float sample, float etaO, float etaI, out float3 wi, inout float value, inout float pdf, inout LightingContext lightingContext )
+void SampleSpecularBSDF( float3 wo, float sample, float etaO, float etaI, bool isThin, out float3 wi, inout float value, inout float pdf, inout LightingContext lightingContext )
 {
     wi = 0.0f;
 
@@ -57,6 +57,13 @@ void SampleSpecularBSDF( float3 wo, float sample, float etaO, float etaI, out fl
         return;
 
     float F = FresnelDielectric( wo.z, etaO, etaI );
+    float T = 1.f - F;
+    if ( isThin && F < 1.f )
+    {
+        F += T * T * F / ( 1.f - F * F );
+        T = 1.f - F;
+    }
+
     bool sampleReflection = sample < F;
     if ( sampleReflection )
     {
@@ -68,18 +75,25 @@ void SampleSpecularBSDF( float3 wo, float sample, float etaO, float etaI, out fl
     }
     else
     {
-        wi = refract( -wo, float3( 0.0f, 0.0f, 1.0f ), etaO / etaI );
+        if ( !isThin )
+        {
+            wi = refract( -wo, float3( 0.0f, 0.0f, 1.0f ), etaO / etaI );
+        }
+        else
+        {
+            wi = -wo;
+        }
 
         if ( wi.z == 0.0f )
             return;
-
-        value = ( 1.0f - F )
+        
+        value = T
 #if !defined( REFRACTION_NO_SCALE_FACTOR )
-              * ( etaO * etaO ) / ( etaI * etaI ) 
+              * ( !isThin ? ( etaO * etaO ) / ( etaI * etaI ) : 1.f )
 #endif
               / ( -wi.z );
 
-        pdf = 1.0f - F;
+        pdf = T;
     }
 }
 

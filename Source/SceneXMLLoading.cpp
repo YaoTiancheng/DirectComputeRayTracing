@@ -33,6 +33,7 @@ enum class EXMLMaterialType
     eDiffuse,
     eRoughDiffuse,
     eDielectric,
+    eThinDielectric,
     eRoughDielectric,
     eConductor,
     eRoughConductor,
@@ -726,6 +727,12 @@ bool SMaterialGatheringContext::TranslateMaterialFromBSDF( const SValue& BSDF, S
         targetMaterialType = EMaterialType::Dielectric;
         break;
     }
+    case EXMLMaterialType::eThinDielectric:
+    {
+        hasDielectricIOR = true;
+        targetMaterialType = EMaterialType::ThinDielectric;
+        break;
+    }
     case EXMLMaterialType::eRoughDielectric:
     {
         hasDielectricIOR = true;
@@ -1019,6 +1026,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
           { "diffuse", EXMLMaterialType::eDiffuse }
         , { "roughdiffuse", EXMLMaterialType::eRoughDiffuse }
         , { "dielectric", EXMLMaterialType::eDielectric }
+        , { "thindielectric", EXMLMaterialType::eThinDielectric }
         , { "roughdielectric", EXMLMaterialType::eRoughDielectric }
         , { "conductor", EXMLMaterialType::eConductor }
         , { "roughconductor", EXMLMaterialType::eRoughConductor }

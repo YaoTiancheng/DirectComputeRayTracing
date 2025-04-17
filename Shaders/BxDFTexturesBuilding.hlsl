@@ -91,7 +91,7 @@ void main(
 
 		if ( perfectSmooth )
 		{
-			SampleSpecularBSDF( wo, selectionSample, etaO, etaI, wi, sampleValue, samplePdf, lightingContext );
+			SampleSpecularBSDF( wo, selectionSample, etaO, etaI, false, wi, sampleValue, samplePdf, lightingContext );
 		}
 		else
 		{

@@ -181,10 +181,9 @@ static void BuildNodes(
             uint32_t primMiddle = ( currentNodeInfo.primBegin + currentNodeInfo.primEnd ) / 2;
 
             const float BVHNodeBoundingBoxSurfaceArea = BoundingBoxSurfaceArea( BVHNode->m_BoundingBox );
-            const float centroidBoundingBoxSurfaceArea = BoundingBoxSurfaceArea( centroidBox );
 
             // Handle special occasion 1) all prims are degenerated or 2) Centers of prim bounding boxes are the same
-            if ( BVHNodeBoundingBoxSurfaceArea == 0.f || centroidBoundingBoxSurfaceArea == 0.f )
+            if ( BVHNodeBoundingBoxSurfaceArea == 0.f || ( (float*)&centroidBox.Extents )[ axis ] == 0.f )
             {
                 if ( m_PrimCount < maxPrimitiveCountInNode )
                 {

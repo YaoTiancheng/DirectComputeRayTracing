@@ -30,8 +30,10 @@ float BoundingBoxSurfaceArea( const DirectX::BoundingBox& m_BoundingBox )
 
 struct SPrimitiveInfo
 {
-    uint32_t m_PrimIndex;
     DirectX::BoundingBox m_BoundingBox;
+    uint32_t m_PrimIndex;
+
+    uint32_t m_BucketIndex; // Temporally used by the bucket based splitting algorithm
 
     struct BBoxCenterPerAxisLessPred
     {
@@ -46,20 +48,15 @@ struct SPrimitiveInfo
 
 struct BucketLessEqualPred
 {
-    BucketLessEqualPred( uint32_t split, uint32_t nBuckets, uint32_t axis, const DirectX::BoundingBox& b )
-        : centroidBox( b ), splitBucket( split ), nBuckets( nBuckets ), axis( axis ) { }
+    explicit BucketLessEqualPred( uint32_t split )
+        : m_SplitIndex( split ) { }
 
     bool operator()( const SPrimitiveInfo& p ) const
     {
-        float min = ( (float*) &centroidBox.Center )[ axis ] - ( (float*) &centroidBox.Extents )[ axis ];
-        float size = ( (float*) &centroidBox.Extents )[ axis ] * 2.0f;
-        uint32_t b = uint32_t( nBuckets * ( ( ( (float*) &p.m_BoundingBox.Center )[ axis ] ) - min ) / size );
-        if ( b >= nBuckets ) b = nBuckets - 1;
-        return b <= splitBucket;
+        return p.m_BucketIndex <= m_SplitIndex;
     }
 
-    uint32_t splitBucket, nBuckets, axis;
-    const DirectX::BoundingBox& centroidBox;
+    uint32_t m_SplitIndex;
 };
 
 struct TriangleIndices
@@ -240,6 +237,7 @@ static void BuildNodes(
             else
             {
                 const size_t k_BucketsCount = 12;
+                static_assert( k_BucketsCount - 1 <= std::numeric_limits<decltype( SPrimitiveInfo::m_BucketIndex )>::max() );
                 struct Bucket
                 {
                     uint32_t                m_PrimCount;
@@ -253,7 +251,11 @@ static void BuildNodes(
                     float min = ( (float*)&centroidBox.Center )[ axis ] - ( (float*)&centroidBox.Extents )[ axis ];
                     float size = ( (float*)&centroidBox.Extents )[ axis ] * 2.0f;
                     uint32_t n = uint32_t( k_BucketsCount * ( ( ( (float*)&primitiveInfos[ i ].m_BoundingBox.Center )[ axis ] ) - min ) / size );
-                    if ( n >= k_BucketsCount ) n = k_BucketsCount - 1;
+                    if ( n >= k_BucketsCount )
+                    {
+                        n = k_BucketsCount - 1;
+                    }
+                    primitiveInfos[ i ].m_BucketIndex = n; // Cache the bucket index so it does not need to be recalculated later.
                     if ( buckets[ n ].m_PrimCount == 0 )
                     {
                         buckets[ n ].m_BoundingBox = primitiveInfos[ i ].m_BoundingBox;
@@ -320,10 +322,9 @@ static void BuildNodes(
 
                 if ( m_PrimCount > maxPrimitiveCountInNode || minCost < m_PrimCount )
                 {
-                    SPrimitiveInfo* prim = std::partition( &primitiveInfos[ currentNodeInfo.primBegin ], &primitiveInfos[ currentNodeInfo.primEnd - 1 ] + 1,
-                        BucketLessEqualPred( minCostIndex, k_BucketsCount, axis, centroidBox ) );
+                    SPrimitiveInfo* prim = std::partition( &primitiveInfos[ currentNodeInfo.primBegin ], &primitiveInfos[ currentNodeInfo.primEnd - 1 ] + 1, BucketLessEqualPred( minCostIndex ) );
                     primMiddle = (uint32_t)std::distance( primitiveInfos.data(), prim );
-                    assert( primMiddle != currentNodeInfo.primBegin && primMiddle != currentNodeInfo.primEnd );
+                    assert( primMiddle != currentNodeInfo.primBegin && primMiddle != currentNodeInfo.primEnd ); // Make sure neither two leaves are empty.
                 }
                 else
                 {

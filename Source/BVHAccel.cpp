@@ -54,7 +54,7 @@ struct BucketLessEqualPred
         float min = ( (float*) &centroidBox.Center )[ axis ] - ( (float*) &centroidBox.Extents )[ axis ];
         float size = ( (float*) &centroidBox.Extents )[ axis ] * 2.0f;
         uint32_t b = uint32_t( nBuckets * ( ( ( (float*) &p.m_BoundingBox.Center )[ axis ] ) - min ) / size );
-        if ( b == nBuckets ) b = nBuckets - 1;
+        if ( b >= nBuckets ) b = nBuckets - 1;
         return b <= splitBucket;
     }
 
@@ -183,8 +183,11 @@ static void BuildNodes(
             // Partition
             uint32_t primMiddle = ( currentNodeInfo.primBegin + currentNodeInfo.primEnd ) / 2;
 
-            // Handle special occasion
-            if ( ( (float*)( &centroidBox.Extents ) )[ axis ] == 0.f )
+            const float BVHNodeBoundingBoxSurfaceArea = BoundingBoxSurfaceArea( BVHNode->m_BoundingBox );
+            const float centroidBoundingBoxSurfaceArea = BoundingBoxSurfaceArea( centroidBox );
+
+            // Handle special occasion 1) all prims are degenerated or 2) Centers of prim bounding boxes are the same
+            if ( BVHNodeBoundingBoxSurfaceArea == 0.f || centroidBoundingBoxSurfaceArea == 0.f )
             {
                 if ( m_PrimCount < maxPrimitiveCountInNode )
                 {
@@ -241,7 +244,8 @@ static void BuildNodes(
                 {
                     uint32_t                m_PrimCount;
                     DirectX::BoundingBox    m_BoundingBox;
-                    Bucket() : m_PrimCount( 0 ) { }
+                    Bucket() : m_PrimCount( 0 ), m_BoundingBox( DirectX::XMFLOAT3( 0.f, 0.f, 0.f ), DirectX::XMFLOAT3( 0.f, 0.f, 0.f ) )
+                    {}
                 };
                 Bucket buckets[ k_BucketsCount ];
                 for ( size_t i = currentNodeInfo.primBegin; i < currentNodeInfo.primEnd; ++i )
@@ -249,7 +253,7 @@ static void BuildNodes(
                     float min = ( (float*)&centroidBox.Center )[ axis ] - ( (float*)&centroidBox.Extents )[ axis ];
                     float size = ( (float*)&centroidBox.Extents )[ axis ] * 2.0f;
                     uint32_t n = uint32_t( k_BucketsCount * ( ( ( (float*)&primitiveInfos[ i ].m_BoundingBox.Center )[ axis ] ) - min ) / size );
-                    if ( n == k_BucketsCount ) --n;
+                    if ( n >= k_BucketsCount ) n = k_BucketsCount - 1;
                     if ( buckets[ n ].m_PrimCount == 0 )
                     {
                         buckets[ n ].m_BoundingBox = primitiveInfos[ i ].m_BoundingBox;
@@ -267,22 +271,47 @@ static void BuildNodes(
                 for ( size_t i = 0; i < k_BucketsCount - 1; ++i )
                 {
                     uint32_t count0 = 0, count1 = 0;
-                    DirectX::BoundingBox b0 = buckets[ 0 ].m_BoundingBox;
-                    for ( size_t j = 1; j <= i; ++j )
+
+                    DirectX::BoundingBox b0;
+                    bool boxInit0 = false;
+                    for ( size_t j = 0; j <= i; ++j )
                     {
-                        DirectX::BoundingBox::CreateMerged( b0, b0, buckets[ j ].m_BoundingBox );
-                        count0 += buckets[ j ].m_PrimCount;
+                        if ( buckets[ j ].m_PrimCount )
+                        {
+                            if ( !boxInit0 )
+                            {
+                                b0 = buckets[ j ].m_BoundingBox;
+                                boxInit0 = true;
+                            }
+                            else
+                            {
+                                DirectX::BoundingBox::CreateMerged( b0, b0, buckets[ j ].m_BoundingBox );
+                            }
+                            count0 += buckets[ j ].m_PrimCount;
+                        }
                     }
 
-                    DirectX::BoundingBox b1 = buckets[ i + 1 ].m_BoundingBox;
-                    for ( size_t j = i + 2; j < k_BucketsCount; ++j )
+                    DirectX::BoundingBox b1;
+                    bool boxInit1 = false;
+                    for ( size_t j = i + 1; j < k_BucketsCount; ++j )
                     {
-                        DirectX::BoundingBox::CreateMerged( b1, b1, buckets[ j ].m_BoundingBox );
-                        count1 += buckets[ j ].m_PrimCount;
+                        if ( buckets[ j ].m_PrimCount )
+                        {
+                            if ( !boxInit1 )
+                            {
+                                b1 = buckets[ j ].m_BoundingBox;
+                                boxInit1 = true;
+                            }
+                            else
+                            {
+                                DirectX::BoundingBox::CreateMerged( b1, b1, buckets[ j ].m_BoundingBox );
+                            }
+                            count1 += buckets[ j ].m_PrimCount;
+                        }
                     }
 
                     cost[ i ] = .125f + ( count0 * BoundingBoxSurfaceArea( b0 ) + count1 * BoundingBoxSurfaceArea( b1 ) )
-                        / BoundingBoxSurfaceArea( BVHNode->m_BoundingBox );
+                        / BVHNodeBoundingBoxSurfaceArea;
                 }
 
                 // Find smallest cost
@@ -294,6 +323,7 @@ static void BuildNodes(
                     SPrimitiveInfo* prim = std::partition( &primitiveInfos[ currentNodeInfo.primBegin ], &primitiveInfos[ currentNodeInfo.primEnd - 1 ] + 1,
                         BucketLessEqualPred( minCostIndex, k_BucketsCount, axis, centroidBox ) );
                     primMiddle = (uint32_t)std::distance( primitiveInfos.data(), prim );
+                    assert( primMiddle != currentNodeInfo.primBegin && primMiddle != currentNodeInfo.primEnd );
                 }
                 else
                 {

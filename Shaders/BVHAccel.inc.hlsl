@@ -1,6 +1,7 @@
 #ifndef _BVHACCEL_H_
 #define _BVHACCEL_H_
 
+#include "Intrinsics.inc.hlsl"
 #include "RayPrimitiveIntersect.inc.hlsl"
 
 uint BVHNodeGetPrimitiveCount( BVHNode node )
@@ -123,6 +124,19 @@ bool BVHIntersectNoInterp( float3 origin
                 }
                 else
                 {
+#if defined( WATERTIGHT_RAY_TRIANGLE_INTERSECTION )
+                    uint3 rayPermute;
+                    float3 rayShearing;
+                    rayPermute.z = MaxComponentIndexFloat3( abs( localRayDirection ) );
+                    rayPermute.x = rayPermute.z + 1;
+                    rayPermute.x = rayPermute.x == 3 ? 0 : rayPermute.x;
+                    rayPermute.y = rayPermute.x + 1;
+                    rayPermute.y = rayPermute.y == 3 ? 0 : rayPermute.y;
+                    float3 d = PermuteFloat3( localRayDirection, rayPermute );
+                    float invZ = 1.f / d.z;
+                    rayShearing.xy = -d.xy * invZ;
+                    rayShearing.z = invZ;
+#endif
                     uint primBegin = BVHNodes[ nodeIndex ].rightChildOrPrimIndex;
                     uint primEnd = primBegin + primCountOrInstanceIndex;
                     for ( uint iPrim = primBegin; iPrim < primEnd; ++iPrim )
@@ -130,7 +144,11 @@ bool BVHIntersectNoInterp( float3 origin
                         float3 v0 = vertices[ triangles[ iPrim * 3 ] ].position;
                         float3 v1 = vertices[ triangles[ iPrim * 3 + 1 ] ].position;
                         float3 v2 = vertices[ triangles[ iPrim * 3 + 2 ] ].position;
+#if defined( WATERTIGHT_RAY_TRIANGLE_INTERSECTION )
+                        if ( RayTriangleIntersect( localRayOrigin, rayShearing, rayPermute, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
+#else
                         if ( RayTriangleIntersect( localRayOrigin, localRayDirection, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
+#endif
                         {
                             tMax = t;
                             hitInfo.t = t;
@@ -220,6 +238,19 @@ bool BVHIntersect( float3 origin
                 }
                 else
                 {
+#if defined( WATERTIGHT_RAY_TRIANGLE_INTERSECTION )
+                    uint3 rayPermute;
+                    float3 rayShearing;
+                    rayPermute.z = MaxComponentIndexFloat3( abs( localRayDirection ) );
+                    rayPermute.x = rayPermute.z + 1;
+                    rayPermute.x = rayPermute.x == 3 ? 0 : rayPermute.x;
+                    rayPermute.y = rayPermute.x + 1;
+                    rayPermute.y = rayPermute.y == 3 ? 0 : rayPermute.y;
+                    float3 d = PermuteFloat3( localRayDirection, rayPermute );
+                    float invZ = 1.f / d.z;
+                    rayShearing.xy = -d.xy * invZ;
+                    rayShearing.z = invZ;
+#endif
                     uint primBegin = BVHNodes[ nodeIndex ].rightChildOrPrimIndex;
                     uint primEnd = primBegin + primCountOrInstanceIndex;
                     for ( uint iPrim = primBegin; iPrim < primEnd; ++iPrim )
@@ -229,7 +260,11 @@ bool BVHIntersect( float3 origin
                         float3 v2 = vertices[ triangles[ iPrim * 3 + 2 ] ].position;
                         float t, u, v;
                         bool backface;
+#if defined( WATERTIGHT_RAY_TRIANGLE_INTERSECTION )
+                        if ( RayTriangleIntersect( localRayOrigin, rayShearing, rayPermute, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
+#else
                         if ( RayTriangleIntersect( localRayOrigin, localRayDirection, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
+#endif
                         {
                             return true;
                         }

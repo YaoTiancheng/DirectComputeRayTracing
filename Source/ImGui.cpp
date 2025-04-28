@@ -231,6 +231,12 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
                 m_IsFilmDirty = true;
             }
+
+            if ( ImGui::Checkbox( "Watertight Ray-triangle Intersection", &m_Scene.m_WatertightRayTriangleIntersection ) )
+            {
+                m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
+                m_IsFilmDirty = true;
+            }
         }
 
         m_PathTracer[ m_ActivePathTracerIndex ]->OnImGUI( this );

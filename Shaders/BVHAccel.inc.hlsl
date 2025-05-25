@@ -67,6 +67,19 @@ struct SHitInfo
     bool backface;
 };
 
+void CalculateRayPermuteAndShearing( float3 rayDirection, out uint3 rayPermute, out float3 rayShearing )
+{
+    rayPermute.z = MaxComponentIndexFloat3( abs( rayDirection ) );
+    rayPermute.x = rayPermute.z + 1;
+    rayPermute.x = rayPermute.x == 3 ? 0 : rayPermute.x;
+    rayPermute.y = rayPermute.x + 1;
+    rayPermute.y = rayPermute.y == 3 ? 0 : rayPermute.y;
+    float3 d = PermuteFloat3( rayDirection, rayPermute );
+    float invZ = 1.f / d.z;
+    rayShearing.xy = -d.xy * invZ;
+    rayShearing.z = invZ;
+}
+
 bool BVHIntersectNoInterp( float3 origin
     , float3 direction
     , float tMin
@@ -125,17 +138,12 @@ bool BVHIntersectNoInterp( float3 origin
                 else
                 {
 #if defined( WATERTIGHT_RAY_TRIANGLE_INTERSECTION )
+                    // Instead of calculating ray shearing and permute at BLAS entrance, it is deferred to the triangle test to avoid wasted computation 
+                    // because of bounding box false positives. But doing it here also means we are repeatedly calculating the same thing for all triangles nodes, 
+                    // so a better approach might be calculating them at the first triangle test and cache for later tests in the same BLAS.
                     uint3 rayPermute;
                     float3 rayShearing;
-                    rayPermute.z = MaxComponentIndexFloat3( abs( localRayDirection ) );
-                    rayPermute.x = rayPermute.z + 1;
-                    rayPermute.x = rayPermute.x == 3 ? 0 : rayPermute.x;
-                    rayPermute.y = rayPermute.x + 1;
-                    rayPermute.y = rayPermute.y == 3 ? 0 : rayPermute.y;
-                    float3 d = PermuteFloat3( localRayDirection, rayPermute );
-                    float invZ = 1.f / d.z;
-                    rayShearing.xy = -d.xy * invZ;
-                    rayShearing.z = invZ;
+                    CalculateRayPermuteAndShearing( localRayDirection, rayPermute, rayShearing );
 #endif
                     uint primBegin = BVHNodes[ nodeIndex ].rightChildOrPrimIndex;
                     uint primEnd = primBegin + primCountOrInstanceIndex;
@@ -239,17 +247,12 @@ bool BVHIntersect( float3 origin
                 else
                 {
 #if defined( WATERTIGHT_RAY_TRIANGLE_INTERSECTION )
+                    // Instead of calculating ray shearing and permute at BLAS entrance, it is deferred to the triangle test to avoid wasted computation 
+                    // because of bounding box false positives. But doing it here also means we are repeatedly calculating the same thing for all triangles nodes, 
+                    // so a better approach might be calculating them at the first triangle test and cache for later tests in the same BLAS.
                     uint3 rayPermute;
                     float3 rayShearing;
-                    rayPermute.z = MaxComponentIndexFloat3( abs( localRayDirection ) );
-                    rayPermute.x = rayPermute.z + 1;
-                    rayPermute.x = rayPermute.x == 3 ? 0 : rayPermute.x;
-                    rayPermute.y = rayPermute.x + 1;
-                    rayPermute.y = rayPermute.y == 3 ? 0 : rayPermute.y;
-                    float3 d = PermuteFloat3( localRayDirection, rayPermute );
-                    float invZ = 1.f / d.z;
-                    rayShearing.xy = -d.xy * invZ;
-                    rayShearing.z = invZ;
+                    CalculateRayPermuteAndShearing( localRayDirection, rayPermute, rayShearing );
 #endif
                     uint primBegin = BVHNodes[ nodeIndex ].rightChildOrPrimIndex;
                     uint primEnd = primBegin + primCountOrInstanceIndex;

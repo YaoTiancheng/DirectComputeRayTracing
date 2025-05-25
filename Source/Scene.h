@@ -164,6 +164,7 @@ public:
     bool m_TraverseBVHFrontToBack = true;
     bool m_IsGGXVNDFSamplingEnabled = true;
     bool m_IsLightVisible = true;
+    bool m_WatertightRayTriangleIntersection = true;
 
     Camera m_Camera;
     std::shared_ptr<SEnvironmentLight> m_EnvironmentLight;

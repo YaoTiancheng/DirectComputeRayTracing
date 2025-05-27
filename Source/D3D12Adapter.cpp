@@ -27,7 +27,6 @@ HANDLE g_FenceEvent = NULL;
 uint64_t g_FenceValues[ BACKBUFFER_COUNT ] = {};
 bool g_SupportTearing = false;
 uint32_t g_BackbufferIndex = 0;
-uint32_t g_LastBackbufferIndex = 0;
 
 uint32_t g_DescriptorSizes[ D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES ];
 CD3D12DescriptorPoolHeap g_DescriptorPoolHeaps[ D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES ];
@@ -217,7 +216,6 @@ bool D3D12Adapter::Init( HWND hWnd )
     }
 
     g_BackbufferIndex = g_SwapChain->GetCurrentBackBufferIndex();
-    g_LastBackbufferIndex = g_BackbufferIndex;
 
     hr = g_Device->CreateCommandList( 0, D3D12_COMMAND_LIST_TYPE_DIRECT, g_CommandAllocators[ g_BackbufferIndex ].Get(), nullptr, IID_PPV_ARGS( &g_CommandList ) );
     if ( FAILED( hr ) )
@@ -374,40 +372,24 @@ void D3D12Adapter::Destroy()
     }
 }
 
-bool D3D12Adapter::WaitForGPU( bool currentFrame )
+bool D3D12Adapter::WaitForGPU()
 {
-    if ( !currentFrame && g_BackbufferIndex == g_LastBackbufferIndex )
-    {
-        // Current frame is the first frame, nothing to wait
-        return true;
-    }
-
     // Schedule a Signal command in the queue.
-    if ( currentFrame )
-    { 
-        if ( FAILED( g_CommandQueue->Signal( g_Fence.Get(), g_FenceValues[ g_BackbufferIndex ] ) ) )
-        {
-            return false;
-        }
-    }
-
+    if ( FAILED( g_CommandQueue->Signal( g_Fence.Get(), g_FenceValues[ g_BackbufferIndex ] ) ) )
     {
-        const uint32_t backBufferIndex = currentFrame ? g_BackbufferIndex : g_LastBackbufferIndex;
-
-        // Wait until the fence has been processed.
-        if ( FAILED( g_Fence->SetEventOnCompletion( g_FenceValues[ backBufferIndex ], g_FenceEvent ) ) )
-        {
-            return false;
-        }
-
-        WaitForSingleObjectEx( g_FenceEvent, INFINITE, FALSE );
+        return false;
+    }
+    
+    // Wait until the fence has been processed.
+    if ( FAILED( g_Fence->SetEventOnCompletion( g_FenceValues[ g_BackbufferIndex ], g_FenceEvent ) ) )
+    {
+        return false;
     }
 
-    if ( currentFrame )
-    { 
-        // Increment the fence value for the current frame.
-        g_FenceValues[ g_BackbufferIndex ]++;
-    }
+    WaitForSingleObjectEx( g_FenceEvent, INFINITE, FALSE );
+    
+    // Increment the fence value for the current frame.
+    g_FenceValues[ g_BackbufferIndex ]++;
 
     return true;
 }
@@ -439,7 +421,6 @@ bool D3D12Adapter::MoveToNextFrame()
     }
 
     // Update the backbuffer index.
-    g_LastBackbufferIndex = g_BackbufferIndex;
     g_BackbufferIndex = g_SwapChain->GetCurrentBackBufferIndex();
 
     // If the next frame is not ready to be rendered yet, wait until it is ready.
@@ -487,7 +468,6 @@ void D3D12Adapter::ResizeSwapChainBuffers( uint32_t width, uint32_t height )
         g_FenceValues[ g_BackbufferIndex ] = g_Fence->GetCompletedValue();
 
         g_BackbufferIndex = backbufferIndex;
-        g_LastBackbufferIndex = g_BackbufferIndex;
     }
 }
 

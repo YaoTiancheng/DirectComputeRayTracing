@@ -30,7 +30,7 @@ namespace D3D12Adapter
 
     void Destroy();
 
-    bool WaitForGPU( bool currentFrame = true );
+    bool WaitForGPU();
 
     void BeginCurrentFrame();
 

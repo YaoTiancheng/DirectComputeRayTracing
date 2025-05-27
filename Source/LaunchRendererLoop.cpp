@@ -139,10 +139,13 @@ bool SRenderer::OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam )
 
     if ( message == WM_SIZE )
     {
-        UINT width = LOWORD( lParam );
-        UINT height = HIWORD( lParam );
-        ResizeBackbuffer( this, width, height );
-        UpdateRenderViewport( this );
+        if ( wParam != SIZE_MINIMIZED )
+        {
+            UINT width = LOWORD( lParam );
+            UINT height = HIWORD( lParam );
+            ResizeBackbuffer( this, width, height );
+            UpdateRenderViewport( this );
+        }
     }
 
     return m_Scene.m_Camera.OnWndMessage( message, wParam, lParam );

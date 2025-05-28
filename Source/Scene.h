@@ -61,6 +61,14 @@ struct SRayHit
     uint32_t m_TriangleIndex;
 };
 
+struct SRayTraversalCounters
+{
+    uint32_t m_TriangleTestsCount;
+    uint32_t m_BoundingBoxTestsCount;
+    uint32_t m_BLASEnteringsCount;
+    uint32_t m_BLASLeafTestsCount;
+};
+
 struct SSceneObjectSelection
 {
     void SelectPunctualLight( int index )
@@ -122,7 +130,7 @@ public:
 
     float CalculateApertureDiameter() const;
 
-    bool XM_CALLCONV TraceRay( DirectX::FXMVECTOR origin, DirectX::FXMVECTOR direction, float tMin, SRayHit* outRayHit ) const;
+    bool XM_CALLCONV TraceRay( DirectX::FXMVECTOR origin, DirectX::FXMVECTOR direction, float tMin, SRayHit* outRayHit, SRayTraversalCounters* outCounters = nullptr ) const;
 
     void ScreenToCameraRay( const DirectX::XMFLOAT2& screenPos, DirectX::XMVECTOR* origin, DirectX::XMVECTOR* direction );
 

@@ -54,7 +54,7 @@ static bool XM_CALLCONV RayAABBIntersect( FXMVECTOR origin, FXMVECTOR invDirecti
     return scalarT1 >= scalarT0 && ( scalarT0 < tMax&& scalarT1 >= tMin );
 }
 
-bool CScene::TraceRay( FXMVECTOR origin, FXMVECTOR direction, float tMin, SRayHit* outRayHit ) const
+bool CScene::TraceRay( FXMVECTOR origin, FXMVECTOR direction, float tMin, SRayHit* outRayHit, SRayTraversalCounters* outCounters ) const
 {
     std::vector<XMFLOAT4X3> instanceInvTransforms;
     instanceInvTransforms.reserve( m_InstanceTransforms.size() );
@@ -79,6 +79,7 @@ bool CScene::TraceRay( FXMVECTOR origin, FXMVECTOR direction, float tMin, SRayHi
     float t, u, v;
     bool backface;
 
+    SRayTraversalCounters counters = {};
     uint32_t nodeIndex = 0;
     uint32_t instanceIndex = 0;
     uint32_t meshIndex = 0;
@@ -121,6 +122,8 @@ bool CScene::TraceRay( FXMVECTOR origin, FXMVECTOR direction, float tMin, SRayHi
                 localRayDirection = XMVector3TransformNormal( direction, instanceInvTransform );
                 isBLAS = true;
                 nodeIndex = 0;
+
+                ++counters.m_BLASEnteringsCount;
             }
             else
             {
@@ -157,6 +160,9 @@ bool CScene::TraceRay( FXMVECTOR origin, FXMVECTOR direction, float tMin, SRayHi
                         }
                     }
                     popNode = true;
+
+                    counters.m_TriangleTestsCount += primEnd - primBegin;
+                    ++counters.m_BLASLeafTestsCount;
                 }
             }
         }
@@ -164,6 +170,8 @@ bool CScene::TraceRay( FXMVECTOR origin, FXMVECTOR direction, float tMin, SRayHi
         {
             popNode = true;
         }
+
+        ++counters.m_BoundingBoxTestsCount;
 
         if ( popNode )
         {
@@ -187,6 +195,11 @@ bool CScene::TraceRay( FXMVECTOR origin, FXMVECTOR direction, float tMin, SRayHi
                 break;
             }
         }
+    }
+
+    if ( outCounters )
+    {
+        *outCounters = counters;
     }
 
     return !std::isinf( tMax );

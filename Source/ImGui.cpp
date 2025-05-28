@@ -626,15 +626,18 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
             XMVECTOR rayOrigin, rayDirection;
             m_Scene.ScreenToCameraRay( screenPos, &rayOrigin, &rayDirection );
-            m_RayTracingHasHit = m_Scene.TraceRay( rayOrigin, rayDirection, 0.f, &m_RayTracingHit );
+            m_RayTracingHasHit = m_Scene.TraceRay( rayOrigin, rayDirection, 0.f, &m_RayTracingHit, &m_RayTraversalCounters );
         }
 
         if ( m_RayTracingHasHit )
         {
             SRayHit* hit = &m_RayTracingHit;
             char stringBuffer[ 512 ];
-            sprintf_s( stringBuffer, ARRAY_LENGTH( stringBuffer ), "Found hit\nDistance: %f\nCoord: %f %f\nInstance: %d\nMesh index: %d\nMesh: %s\nTriangle: %d"
-                , hit->m_T, hit->m_U, hit->m_V, hit->m_InstanceIndex, hit->m_MeshIndex, m_Scene.m_Meshes[ hit->m_MeshIndex ].GetName().c_str(), hit->m_TriangleIndex );
+            sprintf_s( stringBuffer, ARRAY_LENGTH( stringBuffer ), 
+                "Found hit\nDistance: %f\nCoord: %f %f\nInstance: %d\nMesh index: %d\nMesh: %s\nTriangle: %d\n"
+                "Triangle tests: %d\nBox tests: %d\nBLAS entering: %d\nBLAS leaf tests: %d",
+                hit->m_T, hit->m_U, hit->m_V, hit->m_InstanceIndex, hit->m_MeshIndex, m_Scene.m_Meshes[ hit->m_MeshIndex ].GetName().c_str(), hit->m_TriangleIndex,
+                m_RayTraversalCounters.m_TriangleTestsCount, m_RayTraversalCounters.m_BoundingBoxTestsCount, m_RayTraversalCounters.m_BLASEnteringsCount, m_RayTraversalCounters.m_BLASLeafTestsCount );
             ImGui::InputTextMultiline( "Result", stringBuffer, ARRAY_LENGTH( stringBuffer ), ImVec2( 0, 0 ), ImGuiInputTextFlags_ReadOnly );
         }
         else

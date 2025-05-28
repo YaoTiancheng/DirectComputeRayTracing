@@ -106,6 +106,7 @@ struct SRenderer
 
     bool m_RayTracingHasHit = false;
     SRayHit m_RayTracingHit;
+    SRayTraversalCounters m_RayTraversalCounters;
     uint32_t m_RayTracingPixelPos[ 2 ] = { 0, 0 };
     float m_RayTracingSubPixelPos[ 2 ] = { 0.f, 0.f };
 

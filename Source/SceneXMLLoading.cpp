@@ -957,8 +957,7 @@ bool SMaterialGatheringContext::TranslateMaterialFromBSDF( const SValue& BSDF, S
 bool SMaterialGatheringContext::CreateAndAddMaterial( const SValue& BSDF, uint32_t* materialId )
 {
     SMaterial newMaterial;
-    std::string_view newMaterialName;
-    if ( TranslateMaterialFromBSDF( BSDF, &newMaterial, &newMaterialName ) )
+    if ( TranslateMaterialFromBSDF( BSDF, &newMaterial, false ) )
     {
         uint32_t newMaterialId = (uint32_t)m_Materials->size();
         m_Materials->emplace_back( newMaterial );

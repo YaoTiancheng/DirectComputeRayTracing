@@ -785,6 +785,7 @@ bool SMaterialGatheringContext::TranslateMaterialFromBSDF( const SValue& BSDF, S
     material->m_Albedo = { 0.0f, 0.0f, 0.0f };
     material->m_Roughness = 0.0f;
     material->m_IOR = { 1.0f, 1.0f, 1.0f };
+    material->m_Opacity = 1.0f;
     material->m_K = { 1.0f, 1.0f, 1.0f };
     material->m_Tiling = { 1.0f, 1.0f };
     material->m_MaterialType = targetMaterialType;
@@ -1234,6 +1235,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     material.m_Albedo = XMFLOAT3( 0.f, 0.f, 0.f );
                     material.m_Roughness = 0.f;
                     material.m_IOR = XMFLOAT3( 1.f, 1.f, 1.f );
+                    material.m_Opacity = 1.f;
                     material.m_MaterialType = EMaterialType::Diffuse;
                     material.m_AlbedoTextureIndex = INDEX_NONE;
                     material.m_Multiscattering = false;

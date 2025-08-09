@@ -80,4 +80,20 @@ void HitShader( float3 rayOrigin
     intersection.backface = backface;
 }
 
+bool AnyHitShader( float3 rayOrigin
+    , float3 rayDirection
+    , float t
+    , float u
+    , float v
+    , uint triangleId
+    , StructuredBuffer<uint> materialIds
+    , StructuredBuffer<Material> materials
+    , inout Xoshiro128StarStar rng )
+{
+    uint materialId = materialIds[ triangleId ];
+    float opacity = materials[ materialId ].opacity;
+    float sample = GetNextSample1D( rng );
+    return sample < opacity;
+}
+
 #endif

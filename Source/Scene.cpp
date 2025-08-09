@@ -37,6 +37,7 @@ static void GetDefaultMaterial( SMaterial* material )
     material->m_Albedo = XMFLOAT3( 1.f, 0.f, 1.f );
     material->m_Roughness = 1.f;
     material->m_IOR = XMFLOAT3( 1.f, 1.f, 1.f );
+    material->m_Opacity = 1.f;
     material->m_K = XMFLOAT3( 1.0f, 1.0f, 1.0f );
     material->m_Tiling = XMFLOAT2( 1.0f, 1.0f );
     material->m_MaterialType = EMaterialType::Diffuse;
@@ -630,6 +631,7 @@ void CScene::UpdateMaterialGPUData()
                 material->ior = materialSetting->m_IOR;
                 material->roughness = std::clamp( materialSetting->m_Roughness, 0.0f, 1.0f );
                 material->texTiling = materialSetting->m_Tiling;
+                material->opacity = materialSetting->m_Opacity;
                 material->flags = TranslateToMaterialType( materialSetting->m_MaterialType ) & MATERIAL_FLAG_TYPE_MASK;
                 material->flags |= materialSetting->m_Multiscattering ? MATERIAL_FLAG_MULTISCATTERING : 0;
                 material->flags |= materialSetting->m_IsTwoSided ? MATERIAL_FLAG_IS_TWOSIDED : 0;

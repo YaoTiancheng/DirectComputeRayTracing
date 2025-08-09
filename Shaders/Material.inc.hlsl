@@ -25,6 +25,7 @@ struct Material
     float3 ior;
     float  roughness;
     float2 texTiling;
+    float  opacity;
     uint   flags;
 };
 

@@ -173,6 +173,7 @@ public:
     bool m_IsGGXVNDFSamplingEnabled = true;
     bool m_IsLightVisible = true;
     bool m_WatertightRayTriangleIntersection = true;
+    bool m_AllowAnyHitShader = false;
 
     Camera m_Camera;
     std::shared_ptr<SEnvironmentLight> m_EnvironmentLight;

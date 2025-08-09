@@ -88,6 +88,11 @@ bool BVHIntersectNoInterp( float3 origin
     , StructuredBuffer<uint> triangles
     , StructuredBuffer<BVHNode> BVHNodes
     , StructuredBuffer<float4x3> Instances
+#if defined( ALLOW_ANYHIT_SHADER )
+    , StructuredBuffer<uint> materialIds
+    , StructuredBuffer<Material> materials
+    , inout Xoshiro128StarStar rng
+#endif
     , inout SHitInfo hitInfo
     , out uint iterationCounter )
 {
@@ -158,13 +163,18 @@ bool BVHIntersectNoInterp( float3 origin
                         if ( RayTriangleIntersect( localRayOrigin, localRayDirection, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
 #endif
                         {
-                            tMax = t;
-                            hitInfo.t = t;
-                            hitInfo.u = u;
-                            hitInfo.v = v;
-                            hitInfo.backface = backface;
-                            hitInfo.triangleId = iPrim;
-                            hitInfo.instanceIndex = instanceIndex;
+#if defined( ALLOW_ANYHIT_SHADER )
+                            if ( AnyHitShader( origin, direction, t, u, v, iPrim, materialIds, materials, rng ) )
+#endif
+                            {
+                                tMax = t;
+                                hitInfo.t = t;
+                                hitInfo.u = u;
+                                hitInfo.v = v;
+                                hitInfo.backface = backface;
+                                hitInfo.triangleId = iPrim;
+                                hitInfo.instanceIndex = instanceIndex;
+                            }
                         }
                     }
                     popNode = true;
@@ -206,7 +216,13 @@ bool BVHIntersect( float3 origin
     , StructuredBuffer<Vertex> vertices
     , StructuredBuffer<uint> triangles
     , StructuredBuffer<BVHNode> BVHNodes
-    , StructuredBuffer<float4x3> Instances )
+    , StructuredBuffer<float4x3> Instances
+#if defined( ALLOW_ANYHIT_SHADER )
+    , StructuredBuffer<uint> materialIds
+    , StructuredBuffer<Material> materials
+    , inout Xoshiro128StarStar rng
+#endif
+    )
 {
     BVHTraversalStackReset( dispatchThreadIndex );
 
@@ -269,7 +285,12 @@ bool BVHIntersect( float3 origin
                         if ( RayTriangleIntersect( localRayOrigin, localRayDirection, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
 #endif
                         {
-                            return true;
+#if defined( ALLOW_ANYHIT_SHADER )
+                            if ( AnyHitShader( origin, direction, t, u, v, iPrim, materialIds, materials, rng ) )
+#endif
+                            {
+                                return true;
+                            }
                         }
                     }
                     popNode = true;

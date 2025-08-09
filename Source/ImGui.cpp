@@ -237,6 +237,12 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
                 m_IsFilmDirty = true;
             }
+
+            if ( ImGui::Checkbox( "Allow Anyhit Shader", &m_Scene.m_AllowAnyHitShader ) )
+            {
+                m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
+                m_IsFilmDirty = true;
+            }
         }
 
         m_PathTracer[ m_ActivePathTracerIndex ]->OnImGUI( this );
@@ -514,6 +520,8 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 {
                     m_IsMaterialGPUBufferDirty |= ImGui::DragFloat( "IOR", (float*)&selection->m_IOR, 0.01f, 1.0f, MAX_MATERIAL_IOR, "%.3f", ImGuiSliderFlags_AlwaysClamp );
                 }
+
+                m_IsMaterialGPUBufferDirty |= ImGui::DragFloat( "Opacity", &selection->m_Opacity, 0.01f, 0.f, 1.f, "%.2f", ImGuiSliderFlags_AlwaysClamp );
 
                 if ( selection->m_MaterialType != EMaterialType::Dielectric && selection->m_MaterialType != EMaterialType::ThinDielectric )
                 {

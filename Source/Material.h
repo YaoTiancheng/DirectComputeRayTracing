@@ -14,6 +14,7 @@ struct SMaterial
     DirectX::XMFLOAT3 m_Albedo;
     float m_Roughness;
     DirectX::XMFLOAT3 m_IOR;
+    float m_Opacity;
     DirectX::XMFLOAT3 m_K;
     DirectX::XMFLOAT2 m_Tiling;
     std::string m_Name;

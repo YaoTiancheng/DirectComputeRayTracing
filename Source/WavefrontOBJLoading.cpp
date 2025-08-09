@@ -298,6 +298,7 @@ void SMaterialTranslationContext::TranslateMaterials( const tinyobj::material_t*
         dstMaterial->m_Albedo = DirectX::XMFLOAT3( srcMaterial->diffuse[ 0 ], srcMaterial->diffuse[ 1 ], srcMaterial->diffuse[ 2 ] );
         dstMaterial->m_Roughness = srcMaterial->roughness;
         dstMaterial->m_IOR = XMFLOAT3( std::clamp( srcMaterial->ior, 1.0f, MAX_MATERIAL_IOR ), 1.f, 1.f );
+        dstMaterial->m_Opacity = srcMaterial->dissolve;
         dstMaterial->m_K = XMFLOAT3( 1.0f, 1.0f, 1.0f );
         dstMaterial->m_Tiling = XMFLOAT2( 1.0f, 1.0f );
         dstMaterial->m_MaterialType = EMaterialType::Plastic;

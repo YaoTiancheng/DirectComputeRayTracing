@@ -12,8 +12,8 @@
 #include "Xoshiro.inc.hlsl"
 
 #include "Samples.inc.hlsl"
-#include "BVHAccel.inc.hlsl"
 #include "HitShader.inc.hlsl"
+#include "BVHAccel.inc.hlsl"
 #include "Intrinsics.inc.hlsl"
 
 SamplerState UVClampSampler : register( s0 );
@@ -110,48 +110,6 @@ void HitInfoToIntersection( float3 origin
     intersection.normal = normalize( mul( float4( intersection.normal, 0.f ), instances[ hitInfo.instanceIndex ] ) );
     intersection.geometryNormal = normalize( mul( float4( intersection.geometryNormal, 0.f ), instances[ hitInfo.instanceIndex ] ) );
     intersection.tangent = normalize( mul( float4( intersection.tangent, 0.f ), instances[ hitInfo.instanceIndex ] ) );
-}
-
-bool IntersectScene( float3 origin
-    , float3 direction
-    , uint dispatchThreadIndex
-    , StructuredBuffer<Vertex> vertices
-    , StructuredBuffer<uint> triangles
-    , StructuredBuffer<BVHNode> BVHNodes
-    , StructuredBuffer<float4x3> instancesTransforms
-    , StructuredBuffer<float4x3> instancesInvTransforms
-    , Buffer<uint> instanceLightIndices
-    , StructuredBuffer<uint> materialIds
-    , StructuredBuffer<Material> materials
-    , Texture2D<float4> textures[]
-    , SamplerState samplerState
-    , inout Intersection intersection
-    , out float t
-    , out uint iterationCounter )
-{
-    intersection.lightIndex = LIGHT_INDEX_INVALID;
-    intersection.triangleIndex = 0;
-    SHitInfo hitInfo = (SHitInfo)0;
-    t = FLT_INF;
-    bool hasIntersection = BVHIntersectNoInterp( origin, direction, 0, dispatchThreadIndex, vertices, triangles, BVHNodes, instancesInvTransforms, hitInfo, iterationCounter );
-    if ( hasIntersection )
-    {
-        t = hitInfo.t;
-        HitInfoToIntersection( origin, direction, hitInfo, vertices, triangles, materialIds, materials, instancesTransforms, instanceLightIndices, textures, samplerState, intersection );
-    }
-    return hasIntersection;
-}
-
-bool IsOcculuded( float3 origin
-    , float3 direction
-    , float distance
-    , uint dispatchThreadIndex
-    , StructuredBuffer<Vertex> vertices
-    , StructuredBuffer<uint> triangles
-    , StructuredBuffer<BVHNode> BVHNodes
-    , StructuredBuffer<float4x3> Instances )
-{
-    return BVHIntersect( origin, direction, 0, distance, dispatchThreadIndex, vertices, triangles, BVHNodes, Instances );
 }
 
 void WriteSample( float3 l, float2 sample, uint2 pixelPos, RWTexture2D<float2> samplePositionTexture, RWTexture2D<float3> sampleValueTexture )

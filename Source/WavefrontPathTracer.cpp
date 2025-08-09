@@ -559,6 +559,10 @@ bool CWavefrontPathTracer::CompileAndCreateShader( CScene* scene, EShaderKernel 
     {
         rayTracingShaderDefines.push_back( { L"WATERTIGHT_RAY_TRIANGLE_INTERSECTION", L"0" } );
     }
+    if ( scene->m_AllowAnyHitShader )
+    {
+        rayTracingShaderDefines.push_back( { L"ALLOW_ANYHIT_SHADER", L"0" } );
+    }
     if ( scene->m_EnvironmentLight && scene->m_EnvironmentLight->m_Texture )
     {
         rayTracingShaderDefines.push_back( { L"HAS_ENV_TEXTURE", L"0" } );

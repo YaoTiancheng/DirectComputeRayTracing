@@ -24,6 +24,10 @@ static DXGI_FORMAT GetDXGIFormat( ETexturePixelFormat pixelFormat )
     {
         return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     }
+    case ETexturePixelFormat::R8_Unorm:
+    {
+        return DXGI_FORMAT_R8_UNORM;
+    }
     default:
     {
         return DXGI_FORMAT_UNKNOWN;
@@ -42,6 +46,7 @@ static void GetDefaultMaterial( SMaterial* material )
     material->m_Tiling = XMFLOAT2( 1.0f, 1.0f );
     material->m_MaterialType = EMaterialType::Diffuse;
     material->m_AlbedoTextureIndex = INDEX_NONE;
+    material->m_OpacityTextureIndex = INDEX_NONE;
     material->m_Multiscattering = false;
     material->m_IsTwoSided = false;
     material->m_HasRoughnessTexture = false;
@@ -632,6 +637,7 @@ void CScene::UpdateMaterialGPUData()
                 material->roughness = std::clamp( materialSetting->m_Roughness, 0.0f, 1.0f );
                 material->texTiling = materialSetting->m_Tiling;
                 material->opacity = materialSetting->m_Opacity;
+                material->opacityTextureIndex = materialSetting->m_OpacityTextureIndex;
                 material->flags = TranslateToMaterialType( materialSetting->m_MaterialType ) & MATERIAL_FLAG_TYPE_MASK;
                 material->flags |= materialSetting->m_Multiscattering ? MATERIAL_FLAG_MULTISCATTERING : 0;
                 material->flags |= materialSetting->m_IsTwoSided ? MATERIAL_FLAG_IS_TWOSIDED : 0;

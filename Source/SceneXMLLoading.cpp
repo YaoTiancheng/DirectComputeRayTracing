@@ -40,6 +40,7 @@ enum class EXMLMaterialType
     ePlastic,
     eRoughPlastic,
     eTwosided,
+    eMask,
 };
 
 template <typename T> struct SGetValueType {};
@@ -629,9 +630,11 @@ struct SMaterialGatheringContext
 
     bool CreateAndAddMaterial( const SValue& BSDF, uint32_t* materialId );
 
-    bool TranslateMaterialFromBSDF( const SValue& BSDF, SMaterial* material, bool isTwoSided = false );
+    bool TranslateMaterialFromBSDF( const SValue& BSDF, SMaterial* material, bool isTwoSided, bool isMask );
 
     bool LoadTexturesFromFiles( CScene* scene );
+
+    int32_t GetOrAddTexture( const SValue* value );
 
     std::unordered_map<const SValue*, uint32_t> m_BSDFToIdMap;
     std::unordered_map<const SValue*, uint32_t> m_TextureToIndexMap;
@@ -665,7 +668,56 @@ static std::filesystem::path GetAbsoluteExternalFilename( char buffer[ MAX_PATH 
     return absoluteFilename;
 }
 
-bool SMaterialGatheringContext::TranslateMaterialFromBSDF( const SValue& BSDF, SMaterial* material, bool isTwoSided )
+int32_t SMaterialGatheringContext::GetOrAddTexture( const SValue* value )
+{
+    int32_t textureIndex = INDEX_NONE;
+
+    const std::string_view textureType = value->GetObjectField<std::string_view>( "type", "" );
+    if ( strncmp( "bitmap", textureType.data(), textureType.length() ) == 0 )
+    {
+        std::string_view textureFilename = value->GetObjectField<std::string_view>( "filename", "" );
+        char filenameBuffer[ MAX_PATH ];
+        std::filesystem::path textureFilepath = GetAbsoluteExternalFilename( filenameBuffer, m_SceneFilename, textureFilename );
+
+        auto textureToIndexPair = m_TextureToIndexMap.find( value );
+        if ( textureToIndexPair == m_TextureToIndexMap.end() )
+        {
+            uint32_t newTextureIndex = m_TextureIndexBase + (uint32_t)m_TextureToIndexMap.size();
+
+            m_TextureToIndexMap.insert( std::make_pair( value, newTextureIndex ) );
+
+            m_Textures.emplace_back();
+            STexture& newTexture = m_Textures.back();
+            newTexture.m_Filename = textureFilepath.u8string();
+
+            SValue* idValue = value->FindObjectField( "id" );
+            if ( idValue )
+            {
+                newTexture.m_Id = idValue->m_String;
+            }
+            else
+            {
+                // Generate an id if the texture does not have any.
+                sprintf_s( filenameBuffer, "Texture%03d", m_UnnamedTextureCount++ );
+                newTexture.m_Id = filenameBuffer;
+            }
+
+            textureIndex = (int32_t)newTextureIndex;
+        }
+        else
+        {
+            textureIndex = (int32_t)textureToIndexPair->second;
+        }
+    }
+    else
+    {
+        LOG_STRING_FORMAT( "Unsupported texture type \'%.*s\'\n", textureType.length(), textureType.data() );
+    }
+
+    return textureIndex;
+}
+
+bool SMaterialGatheringContext::TranslateMaterialFromBSDF( const SValue& BSDF, SMaterial* material, bool isTwoSided, bool isMask )
 {
     EXMLMaterialType materialType = EXMLMaterialType::eUnsupported;
 
@@ -690,15 +742,40 @@ bool SMaterialGatheringContext::TranslateMaterialFromBSDF( const SValue& BSDF, S
         material->m_Name = idValue->m_String;
     }
 
-    if ( materialType == EXMLMaterialType::eTwosided )
+    if ( materialType == EXMLMaterialType::eTwosided || materialType == EXMLMaterialType::eMask )
     {
+        if ( materialType == EXMLMaterialType::eMask )
+        {
+            float opacity = 0.5f;
+            int32_t opacityTextureIndex = INDEX_NONE;
+            SValue* opacityValue = BSDF.FindObjectField( "opacity" );
+            if ( opacityValue )
+            {
+                if ( opacityValue->m_Type == EValueType::eFloat )
+                {
+                    opacity = opacityValue->m_Float;
+                }
+                else if ( opacityValue->m_Type == EValueType::eObject )
+                {
+                    opacityTextureIndex = GetOrAddTexture( opacityValue );
+                }
+                else
+                {
+                    LOG_STRING( "Unsupported opacity type.\n" );
+                }
+            }
+            material->m_Opacity = opacityTextureIndex == INDEX_NONE ? opacity : 1.f; // Bypass opacity if texture is enabled.
+            material->m_OpacityTextureIndex = opacityTextureIndex;
+        }
+
         SValue* childBSDF = BSDF.FindFirstNestedObject( "bsdf" );
         if ( !childBSDF )
         {
-            LOG_STRING( "Cannot find child BSDF inside a twosided BSDF.\n" );
+            LOG_STRING( "Cannot find child BSDF inside a nested BSDF.\n" );
             return false;
         }
-        return TranslateMaterialFromBSDF( *childBSDF, material, true );
+
+        return TranslateMaterialFromBSDF( *childBSDF, material, materialType == EXMLMaterialType::eTwosided || isTwoSided, materialType == EXMLMaterialType::eMask || isMask );
     }
 
     EMaterialType targetMaterialType = EMaterialType::Diffuse;
@@ -769,6 +846,7 @@ bool SMaterialGatheringContext::TranslateMaterialFromBSDF( const SValue& BSDF, S
         break;
     }
     case EXMLMaterialType::eTwosided:
+    case EXMLMaterialType::eMask:
     {
         assert( false && "Should recursively translate child BSDF and never gets here." );
         return false;
@@ -785,7 +863,6 @@ bool SMaterialGatheringContext::TranslateMaterialFromBSDF( const SValue& BSDF, S
     material->m_Albedo = { 0.0f, 0.0f, 0.0f };
     material->m_Roughness = 0.0f;
     material->m_IOR = { 1.0f, 1.0f, 1.0f };
-    material->m_Opacity = 1.0f;
     material->m_K = { 1.0f, 1.0f, 1.0f };
     material->m_Tiling = { 1.0f, 1.0f };
     material->m_MaterialType = targetMaterialType;
@@ -793,6 +870,11 @@ bool SMaterialGatheringContext::TranslateMaterialFromBSDF( const SValue& BSDF, S
     material->m_Multiscattering = false;
     material->m_IsTwoSided = isTwoSided;
     material->m_HasRoughnessTexture = false;
+    if ( !isMask )
+    {
+        material->m_Opacity = 1.0f;
+        material->m_OpacityTextureIndex = INDEX_NONE;
+    }
 
     if ( hasRoughness )
     {
@@ -891,47 +973,7 @@ bool SMaterialGatheringContext::TranslateMaterialFromBSDF( const SValue& BSDF, S
             }
             else if ( diffuseReflectanceValue->m_Type == EValueType::eObject )
             {
-                const std::string_view textureType = diffuseReflectanceValue->GetObjectField<std::string_view>( "type", "" );
-                if ( strncmp( "bitmap", textureType.data(), textureType.length() ) == 0 )
-                {
-                    std::string_view textureFilename = diffuseReflectanceValue->GetObjectField<std::string_view>( "filename", "" );
-                    char filenameBuffer[ MAX_PATH ];
-                    std::filesystem::path textureFilepath = GetAbsoluteExternalFilename( filenameBuffer, m_SceneFilename, textureFilename );
-
-                    auto textureToIndexPair = m_TextureToIndexMap.find( diffuseReflectanceValue );
-                    if ( textureToIndexPair == m_TextureToIndexMap.end() )
-                    {
-                        uint32_t newTextureIndex = m_TextureIndexBase + (uint32_t)m_TextureToIndexMap.size();
-
-                        m_TextureToIndexMap.insert( std::make_pair( diffuseReflectanceValue, newTextureIndex ) );
-
-                        m_Textures.emplace_back();
-                        STexture& newTexture = m_Textures.back();
-                        newTexture.m_Filename = textureFilepath.u8string();
-
-                        SValue* idValue = diffuseReflectanceValue->FindObjectField( "id" );
-                        if ( idValue )
-                        {
-                            newTexture.m_Id = idValue->m_String;
-                        }
-                        else
-                        {
-                            // Generate an id if the texture does not have any.
-                            sprintf_s( filenameBuffer, "Texture%03d", m_UnnamedTextureCount++ );
-                            newTexture.m_Id = filenameBuffer;
-                        }
-
-                        albedoTextureIndex = (int32_t)newTextureIndex;
-                    }
-                    else
-                    {
-                        albedoTextureIndex = (int32_t)textureToIndexPair->second;
-                    }
-                }
-                else
-                {
-                    LOG_STRING_FORMAT( "Unsupported texture type \'%.*s\'\n", textureType.length(), textureType.data() );
-                }
+                albedoTextureIndex = GetOrAddTexture( diffuseReflectanceValue );
             }
             else
             {
@@ -958,7 +1000,7 @@ bool SMaterialGatheringContext::TranslateMaterialFromBSDF( const SValue& BSDF, S
 bool SMaterialGatheringContext::CreateAndAddMaterial( const SValue& BSDF, uint32_t* materialId )
 {
     SMaterial newMaterial;
-    if ( TranslateMaterialFromBSDF( BSDF, &newMaterial, false ) )
+    if ( TranslateMaterialFromBSDF( BSDF, &newMaterial, false, false ) )
     {
         uint32_t newMaterialId = (uint32_t)m_Materials->size();
         m_Materials->emplace_back( newMaterial );
@@ -1033,6 +1075,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
         , { "plastic", EXMLMaterialType::ePlastic }
         , { "roughplastic", EXMLMaterialType::eRoughPlastic }
         , { "twosided", EXMLMaterialType::eTwosided }
+        , { "mask", EXMLMaterialType::eMask }
     };
 
     SMaterialGatheringContext materialGatheringContext( filepath, materialNameToEnumMap, &m_Materials, (uint32_t)m_Textures.size() );
@@ -1238,6 +1281,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     material.m_Opacity = 1.f;
                     material.m_MaterialType = EMaterialType::Diffuse;
                     material.m_AlbedoTextureIndex = INDEX_NONE;
+                    material.m_OpacityTextureIndex = INDEX_NONE;
                     material.m_Multiscattering = false;
                     material.m_IsTwoSided = false;
                     material.m_HasRoughnessTexture = false;

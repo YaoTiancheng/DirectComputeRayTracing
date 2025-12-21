@@ -20,6 +20,7 @@ struct SMaterial
     std::string m_Name;
     EMaterialType m_MaterialType;
     int32_t m_AlbedoTextureIndex;
+    int32_t m_OpacityTextureIndex;
     bool m_Multiscattering;
     bool m_IsTwoSided;
     bool m_HasRoughnessTexture;

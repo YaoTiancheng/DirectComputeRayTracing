@@ -23,7 +23,7 @@ bool IntersectScene( float3 origin
     SHitInfo hitInfo = (SHitInfo)0;
     t = FLT_INF;
 #if defined( ALLOW_ANYHIT_SHADER )
-    bool hasIntersection = BVHIntersectNoInterp( origin, direction, 0, dispatchThreadIndex, vertices, triangles, BVHNodes, instancesInvTransforms, materialIds, materials, rng, hitInfo, iterationCounter );
+    bool hasIntersection = BVHIntersectNoInterp( origin, direction, 0, dispatchThreadIndex, vertices, triangles, BVHNodes, instancesInvTransforms, materialIds, materials, textures, samplerState, rng, hitInfo, iterationCounter );
 #else
     bool hasIntersection = BVHIntersectNoInterp( origin, direction, 0, dispatchThreadIndex, vertices, triangles, BVHNodes, instancesInvTransforms, hitInfo, iterationCounter );
 #endif
@@ -45,10 +45,12 @@ bool IsOcculuded( float3 origin
     , StructuredBuffer<float4x3> Instances
     , StructuredBuffer<uint> materialIds
     , StructuredBuffer<Material> materials
+    , Texture2D<float4> textures[]
+    , SamplerState samplerState
     , inout Xoshiro128StarStar rng )
 {
 #if defined( ALLOW_ANYHIT_SHADER )
-    return BVHIntersect( origin, direction, 0, distance, dispatchThreadIndex, vertices, triangles, BVHNodes, Instances, materialIds, materials, rng );
+    return BVHIntersect( origin, direction, 0, distance, dispatchThreadIndex, vertices, triangles, BVHNodes, Instances, materialIds, materials, textures, samplerState, rng );
 #else
     return BVHIntersect( origin, direction, 0, distance, dispatchThreadIndex, vertices, triangles, BVHNodes, Instances );
 #endif
@@ -139,7 +141,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
                 SLightSampleResult sampleResult = SampleLightDirect( intersection.position, g_Lights, g_LightCount, g_Vertices, g_Triangles, g_InstanceTransforms, g_EnvTexture, UVClampSampler, rng );
                 bool isDeltaLight = sampleResult.isDeltaLight;
                 if ( any( sampleResult.radiance > 0.f ) && sampleResult.pdf > 0.f
-                    && !IsOcculuded( OffsetRayOrigin( intersection.position, intersection.geometryNormal, sampleResult.wi ), sampleResult.wi, sampleResult.distance, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceInvTransforms, g_MaterialIds, g_Materials, rng ) )
+                    && !IsOcculuded( OffsetRayOrigin( intersection.position, intersection.geometryNormal, sampleResult.wi ), sampleResult.wi, sampleResult.distance, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceInvTransforms, g_MaterialIds, g_Materials, g_Textures, UVWrapSampler, rng ) )
                 {
                     float3 bsdf = EvaluateBSDF( sampleResult.wi, wo, intersection );
                     float NdotWI = abs( dot( intersection.normal, sampleResult.wi ) );

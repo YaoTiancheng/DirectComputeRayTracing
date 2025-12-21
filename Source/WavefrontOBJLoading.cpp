@@ -284,10 +284,32 @@ struct SMaterialTranslationContext
 
     bool LoadTexturesFromFiles( const std::filesystem::path& parentFilenamePath, std::vector<CTexture>* textures );
 
+    int32_t GetOrAddTexture( const std::string& name );
+
     std::vector<STexture> m_Textures;
     std::unordered_map<std::string, int32_t> m_TextureFilenameToIndexMap;
     int32_t m_TextureIndexBase;
 };
+
+int32_t SMaterialTranslationContext::GetOrAddTexture( const std::string& name )
+{
+    int32_t textureIndex = INDEX_NONE;
+    auto textureFilenameToIndexPairIt = m_TextureFilenameToIndexMap.find( name );
+    if ( textureFilenameToIndexPairIt != m_TextureFilenameToIndexMap.end() )
+    {
+        textureIndex = textureFilenameToIndexPairIt->second;
+    }
+    else
+    {
+        textureIndex = m_TextureIndexBase + (int32_t)m_Textures.size();
+        m_TextureFilenameToIndexMap.insert( std::make_pair( name, textureIndex ) );
+
+        m_Textures.emplace_back();
+        STexture& newTexture = m_Textures.back();
+        newTexture.m_Filename = name;
+    }
+    return textureIndex;
+}
 
 void SMaterialTranslationContext::TranslateMaterials( const tinyobj::material_t* srcMaterials, SMaterial* dstMaterials, uint32_t count )
 {
@@ -310,22 +332,16 @@ void SMaterialTranslationContext::TranslateMaterials( const tinyobj::material_t*
         int32_t albedoTextureIndex = INDEX_NONE;
         if ( srcMaterial->diffuse_texname.length() > 0 )
         {
-            auto textureFilenameToIndexPairIt = m_TextureFilenameToIndexMap.find( srcMaterial->diffuse_texname );
-            if ( textureFilenameToIndexPairIt != m_TextureFilenameToIndexMap.end() )
-            {
-                albedoTextureIndex = textureFilenameToIndexPairIt->second;
-            }
-            else
-            {
-                albedoTextureIndex = m_TextureIndexBase + (int32_t)m_Textures.size();
-                m_TextureFilenameToIndexMap.insert( std::make_pair( srcMaterial->diffuse_texname, albedoTextureIndex ) );
-
-                m_Textures.emplace_back();
-                STexture& newTexture = m_Textures.back();
-                newTexture.m_Filename = srcMaterial->diffuse_texname;
-            }
+            albedoTextureIndex = GetOrAddTexture( srcMaterial->diffuse_texname );
         }
         dstMaterial->m_AlbedoTextureIndex = albedoTextureIndex;
+
+        int32_t opacityTextureIndex = INDEX_NONE;
+        if ( srcMaterial->alpha_texname.length() > 0 )
+        {
+            opacityTextureIndex = GetOrAddTexture( srcMaterial->alpha_texname );
+        }
+        dstMaterial->m_OpacityTextureIndex = opacityTextureIndex;
     }
 }
 

@@ -91,6 +91,8 @@ bool BVHIntersectNoInterp( float3 origin
 #if defined( ALLOW_ANYHIT_SHADER )
     , StructuredBuffer<uint> materialIds
     , StructuredBuffer<Material> materials
+    , Texture2D<float4> textures[]
+    , SamplerState samplerState
     , inout Xoshiro128StarStar rng
 #endif
     , inout SHitInfo hitInfo
@@ -154,9 +156,12 @@ bool BVHIntersectNoInterp( float3 origin
                     uint primEnd = primBegin + primCountOrInstanceIndex;
                     for ( uint iPrim = primBegin; iPrim < primEnd; ++iPrim )
                     {
-                        float3 v0 = vertices[ triangles[ iPrim * 3 ] ].position;
-                        float3 v1 = vertices[ triangles[ iPrim * 3 + 1 ] ].position;
-                        float3 v2 = vertices[ triangles[ iPrim * 3 + 2 ] ].position;
+                        const uint index0 = triangles[ iPrim * 3 ];
+                        const uint index1 = triangles[ iPrim * 3 + 1 ];
+                        const uint index2 = triangles[ iPrim * 3 + 2 ];
+                        float3 v0 = vertices[ index0 ].position;
+                        float3 v1 = vertices[ index1 ].position;
+                        float3 v2 = vertices[ index2 ].position;
 #if defined( WATERTIGHT_RAY_TRIANGLE_INTERSECTION )
                         if ( RayTriangleIntersect( localRayOrigin, rayShearing, rayPermute, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
 #else
@@ -164,7 +169,10 @@ bool BVHIntersectNoInterp( float3 origin
 #endif
                         {
 #if defined( ALLOW_ANYHIT_SHADER )
-                            if ( AnyHitShader( origin, direction, t, u, v, iPrim, materialIds, materials, rng ) )
+                            float2 texcoord0 = vertices[ index0 ].texcoord;
+                            float2 texcoord1 = vertices[ index1 ].texcoord;
+                            float2 texcoord2 = vertices[ index2 ].texcoord;
+                            if ( AnyHitShader( origin, direction, texcoord0, texcoord1, texcoord2, t, u, v, iPrim, materialIds, materials, textures, samplerState, rng ) )
 #endif
                             {
                                 tMax = t;
@@ -220,6 +228,8 @@ bool BVHIntersect( float3 origin
 #if defined( ALLOW_ANYHIT_SHADER )
     , StructuredBuffer<uint> materialIds
     , StructuredBuffer<Material> materials
+    , Texture2D<float4> textures[]
+    , SamplerState samplerState
     , inout Xoshiro128StarStar rng
 #endif
     )
@@ -274,9 +284,12 @@ bool BVHIntersect( float3 origin
                     uint primEnd = primBegin + primCountOrInstanceIndex;
                     for ( uint iPrim = primBegin; iPrim < primEnd; ++iPrim )
                     {
-                        float3 v0 = vertices[ triangles[ iPrim * 3 ] ].position;
-                        float3 v1 = vertices[ triangles[ iPrim * 3 + 1 ] ].position;
-                        float3 v2 = vertices[ triangles[ iPrim * 3 + 2 ] ].position;
+                        const uint index0 = triangles[ iPrim * 3 ];
+                        const uint index1 = triangles[ iPrim * 3 + 1 ];
+                        const uint index2 = triangles[ iPrim * 3 + 2 ];
+                        float3 v0 = vertices[ index0 ].position;
+                        float3 v1 = vertices[ index1 ].position;
+                        float3 v2 = vertices[ index2 ].position;
                         float t, u, v;
                         bool backface;
 #if defined( WATERTIGHT_RAY_TRIANGLE_INTERSECTION )
@@ -286,7 +299,10 @@ bool BVHIntersect( float3 origin
 #endif
                         {
 #if defined( ALLOW_ANYHIT_SHADER )
-                            if ( AnyHitShader( origin, direction, t, u, v, iPrim, materialIds, materials, rng ) )
+                            float2 texcoord0 = vertices[ index0 ].texcoord;
+                            float2 texcoord1 = vertices[ index1 ].texcoord;
+                            float2 texcoord2 = vertices[ index2 ].texcoord;
+                            if ( AnyHitShader( origin, direction, texcoord0, texcoord1, texcoord2, t, u, v, iPrim, materialIds, materials, textures, samplerState, rng ) )
 #endif
                             {
                                 return true;

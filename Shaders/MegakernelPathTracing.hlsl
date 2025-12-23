@@ -23,7 +23,8 @@ bool IntersectScene( float3 origin
     SHitInfo hitInfo = (SHitInfo)0;
     t = FLT_INF;
 #if defined( ALLOW_ANYHIT_SHADER )
-    bool hasIntersection = BVHIntersectNoInterp( origin, direction, 0, dispatchThreadIndex, vertices, triangles, BVHNodes, instancesInvTransforms, materialIds, materials, textures, samplerState, rng, hitInfo, iterationCounter );
+    float opacitySample = GetNextSample1D( rng );
+    bool hasIntersection = BVHIntersectNoInterp( origin, direction, 0, dispatchThreadIndex, vertices, triangles, BVHNodes, instancesInvTransforms, materialIds, materials, textures, samplerState, opacitySample, hitInfo, iterationCounter );
 #else
     bool hasIntersection = BVHIntersectNoInterp( origin, direction, 0, dispatchThreadIndex, vertices, triangles, BVHNodes, instancesInvTransforms, hitInfo, iterationCounter );
 #endif
@@ -50,7 +51,8 @@ bool IsOcculuded( float3 origin
     , inout Xoshiro128StarStar rng )
 {
 #if defined( ALLOW_ANYHIT_SHADER )
-    return BVHIntersect( origin, direction, 0, distance, dispatchThreadIndex, vertices, triangles, BVHNodes, Instances, materialIds, materials, textures, samplerState, rng );
+    float opacitySample = GetNextSample1D( rng );
+    return BVHIntersect( origin, direction, 0, distance, dispatchThreadIndex, vertices, triangles, BVHNodes, Instances, materialIds, materials, textures, samplerState, opacitySample );
 #else
     return BVHIntersect( origin, direction, 0, distance, dispatchThreadIndex, vertices, triangles, BVHNodes, Instances );
 #endif

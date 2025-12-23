@@ -93,7 +93,7 @@ bool AnyHitShader( float3 rayOrigin
     , StructuredBuffer<Material> materials
     , Texture2D<float4> textures[]
     , SamplerState samplerState
-    , inout Xoshiro128StarStar rng )
+    , float opacitySample )
 {
     uint materialId = materialIds[ triangleId ];
     float opacity = materials[ materialId ].opacity;
@@ -105,8 +105,7 @@ bool AnyHitShader( float3 rayOrigin
         texcoord *= materials[ materialId ].texTiling;
         opacity *= textures[ NonUniformResourceIndex( opacityTextureIndex ) ].SampleLevel( samplerState, texcoord, 0 ).r;
     }
-    float sample = GetNextSample1D( rng );
-    return sample < opacity;
+    return opacitySample < opacity;
 }
 
 #endif

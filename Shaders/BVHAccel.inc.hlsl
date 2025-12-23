@@ -93,7 +93,7 @@ bool BVHIntersectNoInterp( float3 origin
     , StructuredBuffer<Material> materials
     , Texture2D<float4> textures[]
     , SamplerState samplerState
-    , inout Xoshiro128StarStar rng
+    , float opacitySample
 #endif
     , inout SHitInfo hitInfo
     , out uint iterationCounter )
@@ -172,7 +172,7 @@ bool BVHIntersectNoInterp( float3 origin
                             float2 texcoord0 = vertices[ index0 ].texcoord;
                             float2 texcoord1 = vertices[ index1 ].texcoord;
                             float2 texcoord2 = vertices[ index2 ].texcoord;
-                            if ( AnyHitShader( origin, direction, texcoord0, texcoord1, texcoord2, t, u, v, iPrim, materialIds, materials, textures, samplerState, rng ) )
+                            if ( AnyHitShader( origin, direction, texcoord0, texcoord1, texcoord2, t, u, v, iPrim, materialIds, materials, textures, samplerState, opacitySample ) )
 #endif
                             {
                                 tMax = t;
@@ -230,7 +230,7 @@ bool BVHIntersect( float3 origin
     , StructuredBuffer<Material> materials
     , Texture2D<float4> textures[]
     , SamplerState samplerState
-    , inout Xoshiro128StarStar rng
+    , float opacitySample
 #endif
     )
 {
@@ -302,7 +302,7 @@ bool BVHIntersect( float3 origin
                             float2 texcoord0 = vertices[ index0 ].texcoord;
                             float2 texcoord1 = vertices[ index1 ].texcoord;
                             float2 texcoord2 = vertices[ index2 ].texcoord;
-                            if ( AnyHitShader( origin, direction, texcoord0, texcoord1, texcoord2, t, u, v, iPrim, materialIds, materials, textures, samplerState, rng ) )
+                            if ( AnyHitShader( origin, direction, texcoord0, texcoord1, texcoord2, t, u, v, iPrim, materialIds, materials, textures, samplerState, opacitySample ) )
 #endif
                             {
                                 return true;

@@ -72,6 +72,10 @@ StructuredBuffer<SRay> g_Rays                       : register( t3 );
 Buffer<uint> g_PathIndices                          : register( t4 );
 Buffer<uint> g_QueueCounters                        : register( t5 );
 StructuredBuffer<float4x3> g_InstanceInvTransforms  : register( t6 );
+StructuredBuffer<uint> g_MaterialIds                : register( t7 );
+StructuredBuffer<Material> g_Materials              : register( t8 );
+Buffer<float> g_OpacitySamples                      : register( t9 );
+Texture2D<float4> g_Textures[]                      : register( t16 );
 RWStructuredBuffer<SRayHit> g_RayHits               : register( u0 );
 
 [numthreads( 32, 1, 1 )]
@@ -93,6 +97,13 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
         , g_Triangles
         , g_BVHNodes
         , g_InstanceInvTransforms
+#if defined( ALLOW_ANYHIT_SHADER )
+        , g_MaterialIds
+        , g_Materials
+        , g_Textures
+        , UVWrapSampler
+        , g_OpacitySamples[ pathIndex ]
+#endif
         , hitInfo
         , iterationCounter );
     SRayHit rayHit;
@@ -115,6 +126,10 @@ StructuredBuffer<SRay> g_Rays                       : register( t3 );
 Buffer<uint> g_PathIndices                          : register( t4 );
 Buffer<uint> g_QueueCounters                        : register( t5 );
 StructuredBuffer<float4x3> g_InstanceInvTransforms  : register( t6 );
+StructuredBuffer<uint> g_MaterialIds                : register( t7 );
+StructuredBuffer<Material> g_Materials              : register( t8 );
+Buffer<float> g_OpacitySamples                      : register( t9 );
+Texture2D<float4> g_Textures[]                      : register( t16 );
 RWBuffer<uint> g_Flags                              : register( u0 );
 
 [numthreads( 32, 1, 1 )]
@@ -134,7 +149,15 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
         , g_Vertices
         , g_Triangles
         , g_BVHNodes
-        , g_InstanceInvTransforms );
+        , g_InstanceInvTransforms
+#if defined( ALLOW_ANYHIT_SHADER )
+        , g_MaterialIds
+        , g_Materials
+        , g_Textures
+        , UVWrapSampler
+        , g_OpacitySamples[ pathIndex ]
+#endif
+        );
 
     uint flags = PathFlags_SetHasShadowRayHit( g_Flags[ pathIndex ], hasHit );
     g_Flags[ pathIndex ] = flags;
@@ -167,6 +190,7 @@ RWBuffer<float4> g_LightSamplingResults         : register( u2 );
 RWStructuredBuffer<Xoshiro128StarStar> g_Rngs   : register( u3 );
 RWBuffer<uint> g_ExtensionRayQueue              : register( u4 );
 RWBuffer<uint> g_RayCounter                     : register( u5 );
+RWBuffer<float> g_OpacitySamples                : register( u6 );
 
 [numthreads( 32, 1, 1 )]
 [WaveSize( 32 )]
@@ -188,6 +212,11 @@ void main( uint threadId : SV_DispatchThreadID, uint3 groupId : SV_GroupID, uint
     float3 direction = 0.0f;
     GenerateRay( filmSample, apertureSample, g_FilmSize, g_ApertureRadius, g_FocalDistance, g_FilmDistance, g_BladeCount, g_BladeVertexPos, g_ApertureBaseAngle, g_CameraTransform, origin, direction );
 
+#if defined( ALLOW_ANYHIT_SHADER )
+    float opacitySample = GetNextSample1D( rng );
+    g_OpacitySamples[ pathIndex ] = opacitySample;
+#endif
+    
     g_PixelSamples[ pathIndex ] = pixelSample;
     g_LightSamplingResults[ pathIndex ] = 0.f;
     g_Rngs[ pathIndex ] = rng;
@@ -253,6 +282,8 @@ RWStructuredBuffer<SPathAccumulation> g_PathAccumulation : register( u5 );
 RWBuffer<uint> g_RayCounters                            : register( u6 );
 RWBuffer<uint> g_ExtensionRayQueue                      : register( u7 );
 RWBuffer<uint> g_ShadowRayQueue                         : register( u8 );
+RWBuffer<float> g_ExtensionRayOpacitySamples            : register( u9 );
+RWBuffer<float> g_ShadowRayOpacitySamples               : register( u10 );
 
 #include "BSDFs.inc.hlsl"
 
@@ -377,6 +408,17 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
         pathAccumulation.bsdfPdf = bsdfPdf;
         pathAccumulation.isDeltaBxdf = isDeltaBxdf;
     }
+
+#if defined( ALLOW_ANYHIT_SHADER )
+    if ( !shouldTerminate )
+    {
+        g_ExtensionRayOpacitySamples[ pathIndex ] = GetNextSample1D( rng );
+    }
+    if ( hasShadowRay )
+    {
+        g_ShadowRayOpacitySamples[ pathIndex ] = GetNextSample1D( rng );
+    }
+#endif
 
     // If no shadow ray is spawned then set HasShadowRayHit to false so the control kernel will not load the light sampling result.
     if ( !hasShadowRay )

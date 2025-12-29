@@ -43,7 +43,7 @@ struct alignas( 256 ) SRayTracingConstants
     uint32_t            frameSeed;
 };
 
-static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 15, 2 );
+static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 17, 2 );
 
 bool CMegakernelPathTracer::Create()
 {
@@ -170,7 +170,7 @@ void CMegakernelPathTracer::Render( SRenderer* renderer, const SRenderContext& r
     // Barriers
     {
         std::vector<D3D12_RESOURCE_BARRIER> barriers;
-        barriers.reserve( 5 );
+        barriers.reserve( 6 );
 
         barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_RayTracingConstantsBuffer->GetBuffer(),
             D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER ) );
@@ -194,6 +194,12 @@ void CMegakernelPathTracer::Render( SRenderer* renderer, const SRenderContext& r
                 D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
             scene->m_IsMaterialBufferRead = true;
         }
+        if ( !scene->m_IsBLASFlagsBufferRead )
+        {
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( scene->m_BLASFlagsBuffer->GetBuffer(),
+                D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
+            scene->m_IsBLASFlagsBufferRead = true;
+        }
 
         commandList->ResourceBarrier( (uint32_t)barriers.size(), barriers.data() );
     }
@@ -212,7 +218,7 @@ void CMegakernelPathTracer::Render( SRenderer* renderer, const SRenderContext& r
     {
         environmentTextureSRV = scene->m_EnvironmentLight->m_Texture->GetSRV();
     }
-    SD3D12DescriptorHandle srcDescriptors[ 17 ] =
+    SD3D12DescriptorHandle srcDescriptors[ 19 ] =
     {
           scene->m_VerticesBuffer->GetSRV()
         , scene->m_TrianglesBuffer->GetSRV()
@@ -225,6 +231,8 @@ void CMegakernelPathTracer::Render( SRenderer* renderer, const SRenderContext& r
         , scene->m_BVHNodesBuffer ? scene->m_BVHNodesBuffer->GetSRV() : D3D12Adapter::GetNullBufferSRV()
         , scene->m_InstanceTransformsBuffer->GetSRV( DXGI_FORMAT_UNKNOWN, sizeof( XMFLOAT4X3 ), 0, (uint32_t)scene->m_InstanceTransforms.size() )
         , scene->m_InstanceTransformsBuffer->GetSRV( DXGI_FORMAT_UNKNOWN, sizeof( XMFLOAT4X3 ), (uint32_t)scene->m_InstanceTransforms.size(), (uint32_t)scene->m_InstanceTransforms.size() )
+        , scene->m_InstanceBLASIndicesBuffer->GetSRV()
+        , scene->m_BLASFlagsBuffer->GetSRV()
         , scene->m_MaterialIdsBuffer->GetSRV()
         , scene->m_MaterialsBuffer->GetSRV()
         , scene->m_InstanceLightIndicesBuffer->GetSRV()

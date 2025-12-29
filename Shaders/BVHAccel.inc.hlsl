@@ -3,6 +3,7 @@
 
 #include "Intrinsics.inc.hlsl"
 #include "RayPrimitiveIntersect.inc.hlsl"
+#include "BLASFlags.inc.hlsl"
 
 uint BVHNodeGetPrimitiveCount( BVHNode node )
 {
@@ -87,7 +88,9 @@ bool BVHIntersectNoInterp( float3 origin
     , StructuredBuffer<Vertex> vertices
     , StructuredBuffer<uint> triangles
     , StructuredBuffer<BVHNode> BVHNodes
-    , StructuredBuffer<float4x3> Instances
+    , StructuredBuffer<float4x3> instanceInvTransforms
+    , Buffer<uint> instanceBLASIndices
+    , Buffer<uint> BLASFlags
 #if defined( ALLOW_ANYHIT_SHADER )
     , StructuredBuffer<uint> materialIds
     , StructuredBuffer<Material> materials
@@ -108,6 +111,7 @@ bool BVHIntersectNoInterp( float3 origin
     uint nodeIndex = 0;
     uint instanceIndex = 0;
     bool isBLAS = false;
+    bool isOpaque = false;
     float3 localRayOrigin = origin;
     float3 localRayDirection = direction;
     while ( true )
@@ -121,12 +125,16 @@ bool BVHIntersectNoInterp( float3 origin
             if ( hasBLAS )
             {
                 // Going in from TLAS to BLAS
-                float4x3 instanceInvTransform = Instances[ primCountOrInstanceIndex ];
+                float4x3 instanceInvTransform = instanceInvTransforms[ primCountOrInstanceIndex ];
                 localRayOrigin = mul( float4( origin, 1.f ), instanceInvTransform );
                 localRayDirection = mul( float4( direction, 0.f ), instanceInvTransform );
                 isBLAS = true;
                 instanceIndex = primCountOrInstanceIndex;
                 nodeIndex = BVHNodes[ nodeIndex ].rightChildOrPrimIndex;
+                
+                uint BLASIndex = instanceBLASIndices[ primCountOrInstanceIndex ];
+                uint BLASFlag = BLASFlags[ BLASIndex ];
+                isOpaque = ( BLASFlag & BLAS_FLAG_OPAQUE ) != 0;
             }
             else
             {
@@ -168,12 +176,17 @@ bool BVHIntersectNoInterp( float3 origin
                         if ( RayTriangleIntersect( localRayOrigin, localRayDirection, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
 #endif
                         {
+                            bool hitAccepted = true;
 #if defined( ALLOW_ANYHIT_SHADER )
-                            float2 texcoord0 = vertices[ index0 ].texcoord;
-                            float2 texcoord1 = vertices[ index1 ].texcoord;
-                            float2 texcoord2 = vertices[ index2 ].texcoord;
-                            if ( AnyHitShader( origin, direction, texcoord0, texcoord1, texcoord2, t, u, v, iPrim, materialIds, materials, textures, samplerState, opacitySample ) )
+                            if ( !isOpaque )
+                            {
+                                float2 texcoord0 = vertices[ index0 ].texcoord;
+                                float2 texcoord1 = vertices[ index1 ].texcoord;
+                                float2 texcoord2 = vertices[ index2 ].texcoord;
+                                hitAccepted = AnyHitShader( origin, direction, texcoord0, texcoord1, texcoord2, t, u, v, iPrim, materialIds, materials, textures, samplerState, opacitySample );
+                            }
 #endif
+                            if ( hitAccepted )
                             {
                                 tMax = t;
                                 hitInfo.t = t;
@@ -224,7 +237,9 @@ bool BVHIntersect( float3 origin
     , StructuredBuffer<Vertex> vertices
     , StructuredBuffer<uint> triangles
     , StructuredBuffer<BVHNode> BVHNodes
-    , StructuredBuffer<float4x3> Instances
+    , StructuredBuffer<float4x3> instanceInvTransforms
+    , Buffer<uint> instanceBLASIndices
+    , Buffer<uint> BLASFlags
 #if defined( ALLOW_ANYHIT_SHADER )
     , StructuredBuffer<uint> materialIds
     , StructuredBuffer<Material> materials
@@ -238,6 +253,7 @@ bool BVHIntersect( float3 origin
 
     uint nodeIndex = 0;
     bool isBLAS = false;
+    bool isOpaque = false;
     float3 localRayOrigin = origin;
     float3 localRayDirection = direction;
     while ( true )
@@ -250,11 +266,15 @@ bool BVHIntersect( float3 origin
             if ( hasBLAS )
             {
                 // Going in from TLAS to BLAS
-                float4x3 instanceInvTransform = Instances[ primCountOrInstanceIndex ];
+                float4x3 instanceInvTransform = instanceInvTransforms[ primCountOrInstanceIndex ];
                 localRayOrigin = mul( float4( origin, 1.f ), instanceInvTransform );
                 localRayDirection = mul( float4( direction, 0.f ), instanceInvTransform );
                 isBLAS = true;
                 nodeIndex = BVHNodes[ nodeIndex ].rightChildOrPrimIndex;
+                
+                uint BLASIndex = instanceBLASIndices[ primCountOrInstanceIndex ];
+                uint BLASFlag = BLASFlags[ BLASIndex ];
+                isOpaque = ( BLASFlag & BLAS_FLAG_OPAQUE ) != 0;
             }
             else
             {
@@ -298,12 +318,17 @@ bool BVHIntersect( float3 origin
                         if ( RayTriangleIntersect( localRayOrigin, localRayDirection, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
 #endif
                         {
+                            bool hitAccepted = true;
 #if defined( ALLOW_ANYHIT_SHADER )
-                            float2 texcoord0 = vertices[ index0 ].texcoord;
-                            float2 texcoord1 = vertices[ index1 ].texcoord;
-                            float2 texcoord2 = vertices[ index2 ].texcoord;
-                            if ( AnyHitShader( origin, direction, texcoord0, texcoord1, texcoord2, t, u, v, iPrim, materialIds, materials, textures, samplerState, opacitySample ) )
+                            if ( !isOpaque )
+                            {
+                                float2 texcoord0 = vertices[ index0 ].texcoord;
+                                float2 texcoord1 = vertices[ index1 ].texcoord;
+                                float2 texcoord2 = vertices[ index2 ].texcoord;
+                                hitAccepted = AnyHitShader( origin, direction, texcoord0, texcoord1, texcoord2, t, u, v, iPrim, materialIds, materials, textures, samplerState, opacitySample );
+                            }
 #endif
+                            if ( hitAccepted )
                             {
                                 return true;
                             }

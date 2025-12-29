@@ -56,6 +56,7 @@ struct SRenderer
 
     bool m_IsLightGPUBufferDirty;
     bool m_IsMaterialGPUBufferDirty;
+    bool m_IsBLASFlagsBufferDirty;
     bool m_IsFilmDirty = true;
     bool m_IsLastFrameFilmDirty = true;
 

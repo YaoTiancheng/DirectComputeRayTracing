@@ -12,6 +12,7 @@
 #include "StringConversion.h"
 #include "MathHelper.h"
 #include "../Shaders/LightSharedDef.inc.hlsl"
+#include "../Shaders/BLASFlags.inc.hlsl"
 #include "imgui/imgui.h"
 
 using namespace DirectX;
@@ -51,6 +52,19 @@ static void GetDefaultMaterial( SMaterial* material )
     material->m_IsTwoSided = false;
     material->m_HasRoughnessTexture = false;
     material->m_Name = "DefaultMaterial";
+}
+
+static bool IsMeshOpaque( const std::vector<SMaterial>& materials, const Mesh& mesh )
+{
+    for ( uint32_t materialId : mesh.m_MaterialIds )
+    {
+        const SMaterial& material = materials[ materialId ];
+        if ( material.m_Opacity < 1.0f || material.m_OpacityTextureIndex != INDEX_NONE )
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool CScene::LoadFromFile( const std::filesystem::path& filepath )
@@ -162,6 +176,15 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
             const uint32_t reorderedInstanceIndex = (uint32_t)std::distance( m_OriginalInstanceIndices.begin(), std::find( m_OriginalInstanceIndices.begin(), m_OriginalInstanceIndices.end(), originalInstanceIndex ) );
             m_ReorderedInstanceIndices[ originalInstanceIndex ] = reorderedInstanceIndex;
         }
+    }
+
+    // Update mesh flags
+    m_MeshFlags.reserve( m_Meshes.size() );
+    for ( size_t meshIndex = meshIndexBase; meshIndex < m_Meshes.size(); ++meshIndex )
+    {
+        m_MeshFlags.emplace_back();
+        SMeshFlags& newMeshFlags = m_MeshFlags.back();
+        newMeshFlags.m_Opaque = IsMeshOpaque( m_Materials, m_Meshes[ meshIndex ] );
     }
 
     uint32_t totalVertexCount = 0;
@@ -441,6 +464,28 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
             return false;
         }
     }
+
+    // Instance BLAS indices buffer
+    {
+        m_InstanceBLASIndicesBuffer.Reset( GPUBuffer::Create(
+              sizeof( uint32_t )* (uint32_t)m_OriginalInstanceIndices.size()
+            , sizeof( uint32_t )
+            , DXGI_FORMAT_R32_UINT
+            , EGPUBufferUsage::Default
+            , EGPUBufferBindFlag_ShaderResource
+            , m_OriginalInstanceIndices.data()
+            , D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
+
+        if ( m_InstanceBLASIndicesBuffer )
+        {
+            LOG_STRING_FORMAT( "Instance BLAS indices buffer created, size %d\n", sizeof( uint32_t ) * m_OriginalInstanceIndices.size() );
+        }
+        else 
+        {
+            LOG_STRING( "Failed to create instance BLAS indices buffer.\n" );
+            return false;
+        }
+    }
     
     m_MaterialsBuffer.Reset( GPUBuffer::CreateStructured(
           uint32_t( sizeof( GPU::Material ) * m_Materials.size() )
@@ -471,6 +516,23 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
     else 
     {
         LOG_STRING( "Failed to create lights buffer.\n" );
+        return false;
+    }
+
+    m_BLASFlagsBuffer.Reset( GPUBuffer::Create(
+          sizeof( uint32_t ) * (uint32_t)m_MeshFlags.size()
+        , sizeof( uint32_t )
+        , DXGI_FORMAT_R32_UINT
+        , EGPUBufferUsage::Default
+        , EGPUBufferBindFlag_ShaderResource ) );
+
+    if ( m_BLASFlagsBuffer )
+    {
+        LOG_STRING_FORMAT( "BLAS flags buffer created, size %d\n", sizeof( uint32_t )* (uint32_t)m_MeshFlags.size() );
+    }
+    else 
+    {
+        LOG_STRING( "Failed to create BLAS flags buffer.\n" );
         return false;
     }
 
@@ -507,6 +569,7 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
 
     m_IsLightBufferRead = true;
     m_IsMaterialBufferRead = true;
+    m_IsBLASFlagsBufferRead = true;
 
     m_HasValidScene = true;
     m_ObjectSelection.DeselectAll();
@@ -532,6 +595,7 @@ void CScene::Reset()
     m_FilterRadius = 1.0f;
 
     m_Meshes.clear();
+    m_MeshFlags.clear();
     m_EnvironmentLight.reset();
     m_PunctualLights.clear();
     m_MeshLights.clear();
@@ -647,6 +711,28 @@ void CScene::UpdateMaterialGPUData()
             context.Upload();
 
             m_IsMaterialBufferRead = false;
+        }
+    }
+}
+
+void CScene::UpdateBLASFlagsGPUData()
+{
+    GPUBuffer::SUploadContext context = {};
+    if ( m_BLASFlagsBuffer->AllocateUploadContext( &context ) )
+    {
+        void* address = context.Map();
+        if ( address )
+        { 
+            for ( uint32_t i = 0; i < (uint32_t)m_MeshFlags.size(); ++i )
+            {
+                SMeshFlags* meshFlags = m_MeshFlags.data() + i;
+                uint32_t* BLASFlags = ( (uint32_t*)address ) + i;
+                *BLASFlags = meshFlags->m_Opaque ? BLAS_FLAG_OPAQUE : 0;
+            }
+            context.Unmap();
+            context.Upload();
+
+            m_IsBLASFlagsBufferRead = false;
         }
     }
 }

@@ -274,7 +274,7 @@
     <None Include="Shaders\BxDFTexturesBuilding.hlsl" />
     <None Include="Shaders\KullaConty.inc.hlsl" />
     <None Include="packages.config" />
-    <None Include="Shaders\BLASFlags.inc.hlsl">
+    <None Include="Shaders\InstanceSharedDef.inc.hlsl">
       <Filter>Shaders</Filter>
     </None>
   </ItemGroup>

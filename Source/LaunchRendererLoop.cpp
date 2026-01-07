@@ -178,7 +178,7 @@ bool SRenderer::LoadScene( const char* filepath, bool reset )
 
     m_IsMaterialGPUBufferDirty = true;
     m_IsLightGPUBufferDirty = true;
-    m_IsBLASFlagsBufferDirty = true;
+    m_IsInstanceFlagsBufferDirty = true;
 
     m_RayTracingHasHit = false;
 
@@ -194,7 +194,7 @@ static void ClearFilmTexture( SRenderer* r )
 
 static void DispatchRayTracing( SRenderer* r, SRenderContext* renderContext )
 {
-    r->m_IsFilmDirty = r->m_IsFilmDirty || r->m_IsLightGPUBufferDirty || r->m_IsMaterialGPUBufferDirty || r->m_IsBLASFlagsBufferDirty
+    r->m_IsFilmDirty = r->m_IsFilmDirty || r->m_IsLightGPUBufferDirty || r->m_IsMaterialGPUBufferDirty || r->m_IsInstanceFlagsBufferDirty
         || r->m_Scene.m_Camera.IsDirty() || r->m_PathTracer[ r->m_ActivePathTracerIndex ]->AcquireFilmClearTrigger();
 
     renderContext->m_IsResolutionChanged = ( r->m_IsFilmDirty != r->m_IsLastFrameFilmDirty );
@@ -240,9 +240,9 @@ static void DispatchRayTracing( SRenderer* r, SRenderContext* renderContext )
         r->m_Scene.UpdateMaterialGPUData();
     }
 
-    if ( r->m_IsBLASFlagsBufferDirty )
+    if ( r->m_IsInstanceFlagsBufferDirty )
     {
-        r->m_Scene.UpdateBLASFlagsGPUData();
+        r->m_Scene.UpdateInstanceFlagsGPUData();
     }
 
     r->m_PathTracer[ r->m_ActivePathTracerIndex ]->Render( r, *renderContext );
@@ -260,7 +260,7 @@ static void DispatchRayTracing( SRenderer* r, SRenderContext* renderContext )
     r->m_Scene.m_Camera.ClearDirty();
     r->m_IsLightGPUBufferDirty = false;
     r->m_IsMaterialGPUBufferDirty = false;
-    r->m_IsBLASFlagsBufferDirty = false;
+    r->m_IsInstanceFlagsBufferDirty = false;
     r->m_IsFilmDirty = false;
 }
 
@@ -365,7 +365,7 @@ void SRenderer::RenderOneFrame()
     // State decay to common state
     m_Scene.m_IsLightBufferRead = true;
     m_Scene.m_IsMaterialBufferRead = true;
-    m_Scene.m_IsBLASFlagsBufferRead = true;
+    m_Scene.m_IsInstanceFlagsBufferRead = true;
 }
 
 bool SRenderer::HandleFilmResolutionChange()

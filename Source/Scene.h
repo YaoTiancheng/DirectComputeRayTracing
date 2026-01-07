@@ -127,7 +127,7 @@ public:
 
     void UpdateMaterialGPUData();
 
-    void UpdateBLASFlagsGPUData();
+    void UpdateInstanceFlagsGPUData();
 
     float GetFilmDistance() const;
 
@@ -203,8 +203,7 @@ public:
     CD3D12ResourcePtr<GPUBuffer> m_MaterialIdsBuffer;
     CD3D12ResourcePtr<GPUBuffer> m_MaterialsBuffer;
     CD3D12ResourcePtr<GPUBuffer> m_InstanceTransformsBuffer;
-    CD3D12ResourcePtr<GPUBuffer> m_InstanceBLASIndicesBuffer;
-    CD3D12ResourcePtr<GPUBuffer> m_BLASFlagsBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_InstanceFlagsBuffer;
     CD3D12ResourcePtr<GPUBuffer> m_InstanceLightIndicesBuffer;
     std::vector<CD3D12ResourcePtr<GPUTexture>> m_GPUTextures;
 
@@ -219,7 +218,7 @@ public:
     D3D12_RESOURCE_STATES m_FilmTextureStates;
     bool m_IsLightBufferRead = true;
     bool m_IsMaterialBufferRead = true;
-    bool m_IsBLASFlagsBufferRead = true;
+    bool m_IsInstanceFlagsBufferRead = true;
     bool m_IsSampleTexturesRead = false;
     bool m_IsRenderResultTextureRead = true;
 

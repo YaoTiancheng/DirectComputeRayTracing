@@ -12,7 +12,7 @@
 #include "StringConversion.h"
 #include "MathHelper.h"
 #include "../Shaders/LightSharedDef.inc.hlsl"
-#include "../Shaders/BLASFlags.inc.hlsl"
+#include "../Shaders/InstanceSharedDef.inc.hlsl"
 #include "imgui/imgui.h"
 
 using namespace DirectX;
@@ -465,24 +465,22 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
         }
     }
 
-    // Instance BLAS indices buffer
+    // Instance flags buffer
     {
-        m_InstanceBLASIndicesBuffer.Reset( GPUBuffer::Create(
+        m_InstanceFlagsBuffer.Reset( GPUBuffer::Create(
               sizeof( uint32_t )* (uint32_t)m_OriginalInstanceIndices.size()
             , sizeof( uint32_t )
             , DXGI_FORMAT_R32_UINT
             , EGPUBufferUsage::Default
-            , EGPUBufferBindFlag_ShaderResource
-            , m_OriginalInstanceIndices.data()
-            , D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
+            , EGPUBufferBindFlag_ShaderResource ) );
 
-        if ( m_InstanceBLASIndicesBuffer )
+        if ( m_InstanceFlagsBuffer )
         {
-            LOG_STRING_FORMAT( "Instance BLAS indices buffer created, size %d\n", sizeof( uint32_t ) * m_OriginalInstanceIndices.size() );
+            LOG_STRING_FORMAT( "Instance flags buffer created, size %d\n", sizeof( uint32_t ) * m_OriginalInstanceIndices.size() );
         }
         else 
         {
-            LOG_STRING( "Failed to create instance BLAS indices buffer.\n" );
+            LOG_STRING( "Failed to create instance flags buffer.\n" );
             return false;
         }
     }
@@ -519,23 +517,6 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
         return false;
     }
 
-    m_BLASFlagsBuffer.Reset( GPUBuffer::Create(
-          sizeof( uint32_t ) * (uint32_t)m_MeshFlags.size()
-        , sizeof( uint32_t )
-        , DXGI_FORMAT_R32_UINT
-        , EGPUBufferUsage::Default
-        , EGPUBufferBindFlag_ShaderResource ) );
-
-    if ( m_BLASFlagsBuffer )
-    {
-        LOG_STRING_FORMAT( "BLAS flags buffer created, size %d\n", sizeof( uint32_t )* (uint32_t)m_MeshFlags.size() );
-    }
-    else 
-    {
-        LOG_STRING( "Failed to create BLAS flags buffer.\n" );
-        return false;
-    }
-
     // Create new textures
     {
         m_GPUTextures.reserve( m_Textures.size() );
@@ -569,7 +550,7 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
 
     m_IsLightBufferRead = true;
     m_IsMaterialBufferRead = true;
-    m_IsBLASFlagsBufferRead = true;
+    m_IsInstanceFlagsBufferRead = true;
 
     m_HasValidScene = true;
     m_ObjectSelection.DeselectAll();
@@ -715,24 +696,25 @@ void CScene::UpdateMaterialGPUData()
     }
 }
 
-void CScene::UpdateBLASFlagsGPUData()
+void CScene::UpdateInstanceFlagsGPUData()
 {
     GPUBuffer::SUploadContext context = {};
-    if ( m_BLASFlagsBuffer->AllocateUploadContext( &context ) )
+    if ( m_InstanceFlagsBuffer->AllocateUploadContext( &context ) )
     {
         void* address = context.Map();
         if ( address )
         { 
-            for ( uint32_t i = 0; i < (uint32_t)m_MeshFlags.size(); ++i )
-            {
-                SMeshFlags* meshFlags = m_MeshFlags.data() + i;
-                uint32_t* BLASFlags = ( (uint32_t*)address ) + i;
-                *BLASFlags = meshFlags->m_Opaque ? BLAS_FLAG_OPAQUE : 0;
+            for ( uint32_t instanceIndex = 0; instanceIndex < (uint32_t)m_OriginalInstanceIndices.size() ; ++instanceIndex )
+            { 
+                const uint32_t originalIndex = m_OriginalInstanceIndices[ instanceIndex ];
+                const SMeshFlags& meshFlags = m_MeshFlags[ originalIndex ];
+                uint32_t* instanceFlag = ( (uint32_t*)address ) + instanceIndex;
+                *instanceFlag = meshFlags.m_Opaque ? INSTANCE_FLAG_OPAQUE : 0;
             }
             context.Unmap();
             context.Upload();
 
-            m_IsBLASFlagsBufferRead = false;
+            m_IsInstanceFlagsBufferRead = false;
         }
     }
 }

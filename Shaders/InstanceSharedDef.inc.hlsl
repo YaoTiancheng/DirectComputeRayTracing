@@ -1,0 +1,7 @@
+#ifndef _INSTANCE_SHARED_DEF_H_
+#define _INSTANCE_SHARED_DEF_H_
+
+#define INSTANCE_FLAG_OPAQUE 0x1
+
+#endif
+

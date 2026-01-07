@@ -3,7 +3,7 @@
 
 #include "Intrinsics.inc.hlsl"
 #include "RayPrimitiveIntersect.inc.hlsl"
-#include "BLASFlags.inc.hlsl"
+#include "InstanceSharedDef.inc.hlsl"
 
 uint BVHNodeGetPrimitiveCount( BVHNode node )
 {
@@ -89,8 +89,7 @@ bool BVHIntersectNoInterp( float3 origin
     , StructuredBuffer<uint> triangles
     , StructuredBuffer<BVHNode> BVHNodes
     , StructuredBuffer<float4x3> instanceInvTransforms
-    , Buffer<uint> instanceBLASIndices
-    , Buffer<uint> BLASFlags
+    , Buffer<uint> instanceFlags
 #if defined( ALLOW_ANYHIT_SHADER )
     , StructuredBuffer<uint> materialIds
     , StructuredBuffer<Material> materials
@@ -132,9 +131,8 @@ bool BVHIntersectNoInterp( float3 origin
                 instanceIndex = primCountOrInstanceIndex;
                 nodeIndex = BVHNodes[ nodeIndex ].rightChildOrPrimIndex;
                 
-                uint BLASIndex = instanceBLASIndices[ primCountOrInstanceIndex ];
-                uint BLASFlag = BLASFlags[ BLASIndex ];
-                isOpaque = ( BLASFlag & BLAS_FLAG_OPAQUE ) != 0;
+                const uint instanceFlag = instanceFlags[ primCountOrInstanceIndex ];
+                isOpaque = ( instanceFlag & INSTANCE_FLAG_OPAQUE ) != 0;
             }
             else
             {
@@ -238,8 +236,7 @@ bool BVHIntersect( float3 origin
     , StructuredBuffer<uint> triangles
     , StructuredBuffer<BVHNode> BVHNodes
     , StructuredBuffer<float4x3> instanceInvTransforms
-    , Buffer<uint> instanceBLASIndices
-    , Buffer<uint> BLASFlags
+    , Buffer<uint> instanceFlags
 #if defined( ALLOW_ANYHIT_SHADER )
     , StructuredBuffer<uint> materialIds
     , StructuredBuffer<Material> materials
@@ -272,9 +269,8 @@ bool BVHIntersect( float3 origin
                 isBLAS = true;
                 nodeIndex = BVHNodes[ nodeIndex ].rightChildOrPrimIndex;
                 
-                uint BLASIndex = instanceBLASIndices[ primCountOrInstanceIndex ];
-                uint BLASFlag = BLASFlags[ BLASIndex ];
-                isOpaque = ( BLASFlag & BLAS_FLAG_OPAQUE ) != 0;
+                const uint instanceFlag = instanceFlags[ primCountOrInstanceIndex ];
+                isOpaque = ( instanceFlag & INSTANCE_FLAG_OPAQUE ) != 0;
             }
             else
             {

@@ -72,9 +72,10 @@ StructuredBuffer<SRay> g_Rays                       : register( t3 );
 Buffer<uint> g_PathIndices                          : register( t4 );
 Buffer<uint> g_QueueCounters                        : register( t5 );
 StructuredBuffer<float4x3> g_InstanceInvTransforms  : register( t6 );
-StructuredBuffer<uint> g_MaterialIds                : register( t7 );
-StructuredBuffer<Material> g_Materials              : register( t8 );
-Buffer<float> g_OpacitySamples                      : register( t9 );
+Buffer<uint> g_InstanceFlags                        : register( t7 );
+StructuredBuffer<uint> g_MaterialIds                : register( t8 );
+StructuredBuffer<Material> g_Materials              : register( t9 );
+Buffer<float> g_OpacitySamples                      : register( t10 );
 Texture2D<float4> g_Textures[]                      : register( t16 );
 RWStructuredBuffer<SRayHit> g_RayHits               : register( u0 );
 
@@ -97,6 +98,7 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
         , g_Triangles
         , g_BVHNodes
         , g_InstanceInvTransforms
+        , g_InstanceFlags
 #if defined( ALLOW_ANYHIT_SHADER )
         , g_MaterialIds
         , g_Materials
@@ -126,9 +128,10 @@ StructuredBuffer<SRay> g_Rays                       : register( t3 );
 Buffer<uint> g_PathIndices                          : register( t4 );
 Buffer<uint> g_QueueCounters                        : register( t5 );
 StructuredBuffer<float4x3> g_InstanceInvTransforms  : register( t6 );
-StructuredBuffer<uint> g_MaterialIds                : register( t7 );
-StructuredBuffer<Material> g_Materials              : register( t8 );
-Buffer<float> g_OpacitySamples                      : register( t9 );
+Buffer<uint> g_InstanceFlags                        : register( t7 );
+StructuredBuffer<uint> g_MaterialIds                : register( t8 );
+StructuredBuffer<Material> g_Materials              : register( t9 );
+Buffer<float> g_OpacitySamples                      : register( t10 );
 Texture2D<float4> g_Textures[]                      : register( t16 );
 RWBuffer<uint> g_Flags                              : register( u0 );
 
@@ -150,6 +153,7 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
         , g_Triangles
         , g_BVHNodes
         , g_InstanceInvTransforms
+        , g_InstanceFlags
 #if defined( ALLOW_ANYHIT_SHADER )
         , g_MaterialIds
         , g_Materials

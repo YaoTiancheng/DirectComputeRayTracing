@@ -1048,7 +1048,7 @@ void CWavefrontPathTracer::RenderOneIteration( CScene* scene, const SBxDFTexture
     // Barriers
     {
         std::vector<D3D12_RESOURCE_BARRIER> barriers;
-        barriers.reserve( 6 );
+        barriers.reserve( 7 );
 
         if ( m_BarrierMode == BarrierMode_BeforeUse || m_BarrierMode == BarrierMode_Split )
         { 
@@ -1069,6 +1069,12 @@ void CWavefrontPathTracer::RenderOneIteration( CScene* scene, const SBxDFTexture
         barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( m_IndirectArgumentBuffer[ (int)EShaderKernel::ExtensionRayCast ]->GetBuffer(), 
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT ) );
 
+        if ( isInitialIteration && !scene->m_IsInstanceFlagsBufferRead )
+        {
+            barriers.emplace_back( CD3DX12_RESOURCE_BARRIER::Transition( scene->m_InstanceFlagsBuffer->GetBuffer(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
+            scene->m_IsInstanceFlagsBufferRead = true;
+        }
+
         commandList->ResourceBarrier( (uint32_t)barriers.size(), barriers.data() );
     }
 
@@ -1085,6 +1091,7 @@ void CWavefrontPathTracer::RenderOneIteration( CScene* scene, const SBxDFTexture
             , m_QueueBuffers[ (int)EShaderKernel::ExtensionRayCast ]->GetSRV()
             , m_QueueCounterBuffers[ 0 ]->GetSRV()
             , scene->m_InstanceTransformsBuffer->GetSRV( DXGI_FORMAT_UNKNOWN, sizeof( XMFLOAT4X3 ), (uint32_t)scene->m_InstanceTransforms.size(), (uint32_t)scene->m_InstanceTransforms.size() )
+            , scene->m_InstanceFlagsBuffer->GetSRV()
             , scene->m_MaterialIdsBuffer->GetSRV()
             , scene->m_MaterialsBuffer->GetSRV()
             , m_ExtensionRayOpacitySamplesBuffer->GetSRV()
@@ -1137,6 +1144,7 @@ void CWavefrontPathTracer::RenderOneIteration( CScene* scene, const SBxDFTexture
             , m_QueueBuffers[ (int)EShaderKernel::ShadowRayCast ]->GetSRV()
             , m_QueueCounterBuffers[ 0 ]->GetSRV()
             , scene->m_InstanceTransformsBuffer->GetSRV( DXGI_FORMAT_UNKNOWN, sizeof( XMFLOAT4X3 ), (uint32_t)scene->m_InstanceTransforms.size(), (uint32_t)scene->m_InstanceTransforms.size() )
+            , scene->m_InstanceFlagsBuffer->GetSRV()
             , scene->m_MaterialIdsBuffer->GetSRV()
             , scene->m_MaterialsBuffer->GetSRV()
             , m_ShadowRayOpacitySamplesBuffer->GetSRV()

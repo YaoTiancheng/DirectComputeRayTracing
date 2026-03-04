@@ -127,14 +127,14 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
             static const char* s_FrameSeedTypeNames[] = { "Frame Index", "Sample Count", "Fixed" };
             if ( ImGui::Combo( "Frame Seed Type", (int*)&m_FrameSeedType, s_FrameSeedTypeNames, IM_ARRAYSIZE( s_FrameSeedTypeNames ) ) )
             {
-                m_IsFilmDirty = true;
+                m_Scene.m_IsFilmDirty = true;
             }
 
             if ( m_FrameSeedType == EFrameSeedType::Fixed )
             {
                 if ( ImGui::InputInt( "Frame Seed", (int*)&m_FrameSeed, 1 ) )
                 {
-                    m_IsFilmDirty = true;
+                    m_Scene.m_IsFilmDirty = true;
                 }
             }
 
@@ -148,7 +148,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                     m_Scene.m_ResolutionHeight = m_NewResolutionHeight;
                     m_Scene.RecreateFilmTextures();
                     HandleFilmResolutionChange();
-                    m_IsFilmDirty = true;
+                    m_Scene.m_IsFilmDirty = true;
                 }
             }
 
@@ -166,7 +166,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 {
                     m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
                 }
-                m_IsFilmDirty = true;
+                m_Scene.m_IsFilmDirty = true;
             }
         }
 
@@ -174,74 +174,74 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
         {
             if ( ImGui::DragInt( "Max Bounce Count", (int*)&m_Scene.m_MaxBounceCount, 0.5f, 0, m_Scene.s_MaxRayBounce ) )
             {
-                m_IsFilmDirty = true;
+                m_Scene.m_IsFilmDirty = true;
             }
 
             static const char* s_FilterNames[] = { "Box", "Triangle", "Gaussian", "Mitchell", "Lanczos Sinc" };
             if ( ImGui::Combo( "Filter", (int*)&m_Scene.m_Filter, s_FilterNames, IM_ARRAYSIZE( s_FilterNames ) ) )
             {
-                m_IsFilmDirty = true;
+                m_Scene.m_IsFilmDirty = true;
             }
 
             if ( ImGui::DragFloat( "Filter Radius", &m_Scene.m_FilterRadius, 0.1f, 0.001f, 16.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp ) )
             {
-                m_IsFilmDirty = true;
+                m_Scene.m_IsFilmDirty = true;
             }
 
             if ( m_Scene.m_Filter == EFilter::Gaussian )
             {
                 if ( ImGui::DragFloat( "Alpha", &m_Scene.m_GaussianFilterAlpha, 0.005f, 0.0f, 100.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp ) )
                 {
-                    m_IsFilmDirty = true;
+                    m_Scene.m_IsFilmDirty = true;
                 }
             }
             else if ( m_Scene.m_Filter == EFilter::Mitchell )
             {
                 if ( ImGui::DragFloat( "B", &m_Scene.m_MitchellB, 0.01f, 0.0f, 100.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp ) )
                 {
-                    m_IsFilmDirty = true;
+                    m_Scene.m_IsFilmDirty = true;
                 }
                 if ( ImGui::DragFloat( "C", &m_Scene.m_MitchellC, 0.01f, 0.0f, 100.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp ) )
                 {
-                    m_IsFilmDirty = true;
+                    m_Scene.m_IsFilmDirty = true;
                 }
             }
             else if ( m_Scene.m_Filter == EFilter::LanczosSinc )
             {
                 if ( ImGui::DragInt( "Tau", (int*)&m_Scene.m_LanczosSincTau, 1, 1, 100, "%d", ImGuiSliderFlags_AlwaysClamp ) )
                 {
-                    m_IsFilmDirty = true;
+                    m_Scene.m_IsFilmDirty = true;
                 }
             }
 
             if ( ImGui::Checkbox( "GGX VNDF Sampling", &m_Scene.m_IsGGXVNDFSamplingEnabled ) )
             {
                 m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
-                m_IsFilmDirty = true;
+                m_Scene.m_IsFilmDirty = true;
             }
 
             if ( ImGui::Checkbox( "Traverse BVH Front-to-back", &m_Scene.m_TraverseBVHFrontToBack ) )
             {
                 m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
-                m_IsFilmDirty = true;
+                m_Scene.m_IsFilmDirty = true;
             }
 
             if ( ImGui::Checkbox( "Lights Visble to Camera", &m_Scene.m_IsLightVisible ) )
             {
                 m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
-                m_IsFilmDirty = true;
+                m_Scene.m_IsFilmDirty = true;
             }
 
             if ( ImGui::Checkbox( "Watertight Ray-triangle Intersection", &m_Scene.m_WatertightRayTriangleIntersection ) )
             {
                 m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
-                m_IsFilmDirty = true;
+                m_Scene.m_IsFilmDirty = true;
             }
 
             if ( ImGui::Checkbox( "Allow Anyhit Shader", &m_Scene.m_AllowAnyHitShader ) )
             {
                 m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
-                m_IsFilmDirty = true;
+                m_Scene.m_IsFilmDirty = true;
             }
         }
 
@@ -297,8 +297,8 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                         newLight.m_Color = XMFLOAT3( 1.0f, 1.0f, 1.0f );
                         newLight.m_Position = XMFLOAT3( 0.0f, 0.0f, 0.0f );
                         newLight.m_IsDirectionalLight = false;
-                        m_IsLightGPUBufferDirty = true;
-                        m_IsFilmDirty = true;
+                        m_Scene.m_IsLightGPUBufferDirty = true;
+                        m_Scene.m_IsFilmDirty = true;
                     }
                     if ( ImGui::MenuItem( "Directional Light", "", false, m_Scene.GetLightCount() < m_Scene.s_MaxLightsCount ) )
                     {
@@ -307,15 +307,15 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                         newLight.m_Color = XMFLOAT3( 1.0f, 1.0f, 1.0f );
                         newLight.SetEulerAnglesFromDirection( XMFLOAT3( 0.f, -1.f, 0.f ) );
                         newLight.m_IsDirectionalLight = true;
-                        m_IsLightGPUBufferDirty = true;
-                        m_IsFilmDirty = true;
+                        m_Scene.m_IsLightGPUBufferDirty = true;
+                        m_Scene.m_IsFilmDirty = true;
                     }
                     if ( ImGui::MenuItem( "Environment Light", "", false, m_Scene.m_EnvironmentLight == nullptr && m_Scene.GetLightCount() < m_Scene.s_MaxLightsCount ) )
                     {
                         m_Scene.m_EnvironmentLight = std::make_shared<SEnvironmentLight>();
                         m_Scene.m_EnvironmentLight->m_Color = XMFLOAT3( 1.0f, 1.0f, 1.0f );
-                        m_IsLightGPUBufferDirty = true;
-                        m_IsFilmDirty = true;
+                        m_Scene.m_IsLightGPUBufferDirty = true;
+                        m_Scene.m_IsFilmDirty = true;
                     }
                     ImGui::EndMenu();
                 }
@@ -338,8 +338,8 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
                         m_Scene.m_ObjectSelection.m_IsEnvironmentLightSelected = false;
                     }
-                    m_IsLightGPUBufferDirty = true;
-                    m_IsFilmDirty = true;;
+                    m_Scene.m_IsLightGPUBufferDirty = true;
+                    m_Scene.m_IsFilmDirty = true;;
                 }
                 ImGui::EndMenu();
             }
@@ -412,7 +412,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 if ( selection->m_IsDirectionalLight )
                 {
                     if ( DragFloat3RadianInDegree( "Euler Angles", (float*)&selection->m_EulerAngles, 1.f ) )
-                        m_IsLightGPUBufferDirty = true;
+                        m_Scene.m_IsLightGPUBufferDirty = true;
 
                     XMFLOAT3 direction = selection->CalculateDirection();
                     ImGui::LabelText( "Direction", "%.3f, %.3f, %.3f", direction.x, direction.y, direction.z );
@@ -420,18 +420,18 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 else
                 {
                     if ( ImGui::DragFloat3( "Position", (float*)&selection->m_Position, 1.0f ) )
-                        m_IsLightGPUBufferDirty = true;
+                        m_Scene.m_IsLightGPUBufferDirty = true;
                 }
 
                 if ( ImGui::ColorEdit3( "Color", (float*)&selection->m_Color ) )
-                    m_IsLightGPUBufferDirty = true;
+                    m_Scene.m_IsLightGPUBufferDirty = true;
             }
         }
         else if ( m_Scene.m_ObjectSelection.m_IsEnvironmentLightSelected )
         {
             ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
             if ( ImGui::ColorEdit3( "Radiance", (float*)&m_Scene.m_EnvironmentLight->m_Color ) )
-                m_IsLightGPUBufferDirty = true;
+                m_Scene.m_IsLightGPUBufferDirty = true;
 
             ImGui::InputText( "Image File", const_cast<char*>( m_Scene.m_EnvironmentLight->m_TextureFileName.c_str() ), m_Scene.m_EnvironmentLight->m_TextureFileName.size(), ImGuiInputTextFlags_ReadOnly );
             if ( ImGui::Button( "Browse##BrowseEnvImage" ) )
@@ -461,7 +461,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                     {
                         m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
                     }
-                    m_IsFilmDirty = true;
+                    m_Scene.m_IsFilmDirty = true;
                 }
             }
             if ( m_Scene.m_EnvironmentLight->m_Texture )
@@ -472,7 +472,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                     m_Scene.m_EnvironmentLight->m_TextureFileName = "";
                     m_Scene.m_EnvironmentLight->m_Texture.Reset();
                     m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
-                    m_IsFilmDirty = true;
+                    m_Scene.m_IsFilmDirty = true;
                 }
             }
         }
@@ -490,13 +490,13 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                         // Reclamp IOR to above 1.0 when material is not conductor
                         selection->m_IOR.x = std::max( 1.0f, selection->m_IOR.x );
                     }
-                    m_IsMaterialGPUBufferDirty = true;
+                    m_Scene.m_IsMaterialGPUBufferDirty = true;
                 }
 
                 if ( selection->m_MaterialType == EMaterialType::Diffuse || selection->m_MaterialType == EMaterialType::Plastic )
                 {
                     ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float );
-                    m_IsMaterialGPUBufferDirty |= ImGui::ColorEdit3( "Albedo", (float*)&selection->m_Albedo );
+                    m_Scene.m_IsMaterialGPUBufferDirty |= ImGui::ColorEdit3( "Albedo", (float*)&selection->m_Albedo );
                     if ( selection->m_AlbedoTextureIndex != INDEX_NONE )
                     {
                         const CD3DX12_GPU_DESCRIPTOR_HANDLE textureSRV( m_Scene.m_TextureDescriptorTable, selection->m_AlbedoTextureIndex, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
@@ -506,22 +506,22 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
                 if ( selection->m_MaterialType != EMaterialType::Diffuse && selection->m_MaterialType != EMaterialType::ThinDielectric )
                 {
-                    m_IsMaterialGPUBufferDirty |= ImGui::DragFloat( "Roughness", &selection->m_Roughness, 0.01f, 0.0f, 1.0f );
-                    m_IsMaterialGPUBufferDirty |= ImGui::Checkbox( "Roughness Texture", &selection->m_HasRoughnessTexture );
-                    m_IsMaterialGPUBufferDirty |= ImGui::Checkbox( "Multiscattering", &selection->m_Multiscattering );
+                    m_Scene.m_IsMaterialGPUBufferDirty |= ImGui::DragFloat( "Roughness", &selection->m_Roughness, 0.01f, 0.0f, 1.0f );
+                    m_Scene.m_IsMaterialGPUBufferDirty |= ImGui::Checkbox( "Roughness Texture", &selection->m_HasRoughnessTexture );
+                    m_Scene.m_IsMaterialGPUBufferDirty |= ImGui::Checkbox( "Multiscattering", &selection->m_Multiscattering );
                 }
 
                 if ( selection->m_MaterialType == EMaterialType::Conductor )
                 {
-                    m_IsMaterialGPUBufferDirty |= ImGui::DragFloat3( "eta", (float*)&selection->m_IOR, 0.01f, 0.0f, MAX_MATERIAL_ETA, "%.3f", ImGuiSliderFlags_AlwaysClamp );              
-                    m_IsMaterialGPUBufferDirty |= ImGui::DragFloat3( "k", (float*)&selection->m_K, 0.01f, 0.0f, MAX_MATERIAL_K, "%.3f", ImGuiSliderFlags_AlwaysClamp );
+                    m_Scene.m_IsMaterialGPUBufferDirty |= ImGui::DragFloat3( "eta", (float*)&selection->m_IOR, 0.01f, 0.0f, MAX_MATERIAL_ETA, "%.3f", ImGuiSliderFlags_AlwaysClamp );              
+                    m_Scene.m_IsMaterialGPUBufferDirty |= ImGui::DragFloat3( "k", (float*)&selection->m_K, 0.01f, 0.0f, MAX_MATERIAL_K, "%.3f", ImGuiSliderFlags_AlwaysClamp );
                 }
                 else if ( selection->m_MaterialType != EMaterialType::Diffuse )
                 {
-                    m_IsMaterialGPUBufferDirty |= ImGui::DragFloat( "IOR", (float*)&selection->m_IOR, 0.01f, 1.0f, MAX_MATERIAL_IOR, "%.3f", ImGuiSliderFlags_AlwaysClamp );
+                    m_Scene.m_IsMaterialGPUBufferDirty |= ImGui::DragFloat( "IOR", (float*)&selection->m_IOR, 0.01f, 1.0f, MAX_MATERIAL_IOR, "%.3f", ImGuiSliderFlags_AlwaysClamp );
                 }
 
-                m_IsMaterialGPUBufferDirty |= ImGui::DragFloat( "Opacity", &selection->m_Opacity, 0.01f, 0.f, 1.f, "%.2f", ImGuiSliderFlags_AlwaysClamp );
+                m_Scene.m_IsMaterialGPUBufferDirty |= ImGui::DragFloat( "Opacity", &selection->m_Opacity, 0.01f, 0.f, 1.f, "%.2f", ImGuiSliderFlags_AlwaysClamp );
                 if ( selection->m_OpacityTextureIndex != INDEX_NONE )
                 {
                     const CD3DX12_GPU_DESCRIPTOR_HANDLE textureSRV( m_Scene.m_TextureDescriptorTable, selection->m_OpacityTextureIndex, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
@@ -530,12 +530,12 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
                 if ( selection->m_MaterialType != EMaterialType::Dielectric && selection->m_MaterialType != EMaterialType::ThinDielectric )
                 {
-                    m_IsMaterialGPUBufferDirty |= ImGui::Checkbox( "Two Sided", &selection->m_IsTwoSided );
+                    m_Scene.m_IsMaterialGPUBufferDirty |= ImGui::Checkbox( "Two Sided", &selection->m_IsTwoSided );
                 }
 
                 if ( selection->m_MaterialType != EMaterialType::ThinDielectric )
                 {
-                    m_IsMaterialGPUBufferDirty |= ImGui::DragFloat2( "Texture Tiling", (float*)&selection->m_Tiling, 0.01f, 0.0f, 100000.0f );
+                    m_Scene.m_IsMaterialGPUBufferDirty |= ImGui::DragFloat2( "Texture Tiling", (float*)&selection->m_Tiling, 0.01f, 0.0f, 100000.0f );
                 }
             }
         }
@@ -546,17 +546,17 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
             if ( ImGui::DragFloat( "Film Width", &m_Scene.m_FilmSize.x, 0.005f, 0.001f, 999.f, "%.3f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
             {
                 m_Scene.m_FilmSize.y = m_Scene.m_FilmSize.x / m_Scene.m_ResolutionWidth * m_Scene.m_ResolutionHeight;
-                m_IsFilmDirty = true;
+                m_Scene.m_IsFilmDirty = true;
             }
             if ( ImGui::DragFloat( "Film Height", &m_Scene.m_FilmSize.y, 0.005f, 0.001f, 999.f, "%.3f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
             {
                 m_Scene.m_FilmSize.x = m_Scene.m_FilmSize.y / m_Scene.m_ResolutionHeight * m_Scene.m_ResolutionWidth;
-                m_IsFilmDirty = true;
+                m_Scene.m_IsFilmDirty = true;
             }
 
             static const char* s_CameraTypeNames[] = { "PinHole", "ThinLens" };
             if ( ImGui::Combo( "Type", (int*)&m_Scene.m_CameraType, s_CameraTypeNames, IM_ARRAYSIZE( s_CameraTypeNames ) ) )
-                m_IsFilmDirty = true;
+                m_Scene.m_IsFilmDirty = true;
             
             if ( m_Scene.m_CameraType == ECameraType::PinHole )
             {
@@ -564,28 +564,28 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 if ( ImGui::DragFloat( "FoV", (float*)&fovDeg, 1.f, 0.00001f, 179.9f, "%.2f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
                 { 
                     m_Scene.m_FoVX = DirectX::XMConvertToRadians( fovDeg );
-                    m_IsFilmDirty = true;
+                    m_Scene.m_IsFilmDirty = true;
                 }
             }
             else
             { 
                 if ( ImGui::DragFloat( "Focal Length", (float*)&m_Scene.m_FocalLength, 0.000001f, 0.000001f, 1000.0f, "%.5f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
-                    m_IsFilmDirty = true;
+                    m_Scene.m_IsFilmDirty = true;
             
                 if ( ImGui::DragFloat( "Focal Distance", (float*)&m_Scene.m_FocalDistance, 0.005f, 0.000001f, m_Scene.s_MaxFocalDistance, "%.5f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoRoundToFormat ) )
-                    m_IsFilmDirty = true;
+                    m_Scene.m_IsFilmDirty = true;
 
                 if ( ImGui::DragFloat( "Aperture(f-number)", &m_Scene.m_RelativeAperture, 0.1f, 0.01f, 1000.0f, "%.1f", ImGuiSliderFlags_AlwaysClamp ) )
-                    m_IsFilmDirty = true;
+                    m_Scene.m_IsFilmDirty = true;
 
                 if ( ImGui::DragInt( "Aperture Blade Count", (int*)&m_Scene.m_ApertureBladeCount, 1.0f, 2, 16, "%d", ImGuiSliderFlags_AlwaysClamp ) )
-                    m_IsFilmDirty = true;
+                    m_Scene.m_IsFilmDirty = true;
 
                 float apertureRotationDeg = DirectX::XMConvertToDegrees( m_Scene.m_ApertureRotation );
                 if ( ImGui::DragFloat( "Aperture Rotation", &apertureRotationDeg, 1.0f, 0.0f, 360.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp ) )
                 {
                     m_Scene.m_ApertureRotation = DirectX::XMConvertToRadians( apertureRotationDeg );
-                    m_IsFilmDirty = true;
+                    m_Scene.m_IsFilmDirty = true;
                 }
             }
 

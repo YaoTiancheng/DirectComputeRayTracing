@@ -129,8 +129,6 @@ public:
 
     void UpdateInstanceFlagsGPUData();
 
-    float GetFilmDistance() const;
-
     uint32_t GetLightCount() const { return (uint32_t)m_MeshLights.size() + (uint32_t)m_PunctualLights.size() + ( m_EnvironmentLight ? 1 : 0 ); }
 
     float CalculateFilmDistance() const;
@@ -213,6 +211,12 @@ public:
     CD3D12ResourcePtr<GPUTexture> m_RenderResultTexture;
 
     D3D12_GPU_DESCRIPTOR_HANDLE m_TextureDescriptorTable;
+
+    bool m_IsLightGPUBufferDirty = false;
+    bool m_IsMaterialGPUBufferDirty = false;
+    bool m_IsInstanceFlagsBufferDirty = false;
+    bool m_IsFilmDirty = true;
+    bool m_IsLastFrameFilmDirty = true;
 
     // Resource states
     D3D12_RESOURCE_STATES m_FilmTextureStates;

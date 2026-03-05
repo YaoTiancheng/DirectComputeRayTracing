@@ -11,6 +11,8 @@ enum class EMaterialType
 
 struct SMaterial
 {
+    bool IsOpaque() const;
+
     DirectX::XMFLOAT3 m_Albedo;
     float m_Roughness;
     DirectX::XMFLOAT3 m_IOR;

@@ -521,11 +521,16 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                     m_Scene.m_IsMaterialGPUBufferDirty |= ImGui::DragFloat( "IOR", (float*)&selection->m_IOR, 0.01f, 1.0f, MAX_MATERIAL_IOR, "%.3f", ImGuiSliderFlags_AlwaysClamp );
                 }
 
+                const bool isMaterialOpaqueBefore = selection->IsOpaque();
                 m_Scene.m_IsMaterialGPUBufferDirty |= ImGui::DragFloat( "Opacity", &selection->m_Opacity, 0.01f, 0.f, 1.f, "%.2f", ImGuiSliderFlags_AlwaysClamp );
                 if ( selection->m_OpacityTextureIndex != INDEX_NONE )
                 {
                     const CD3DX12_GPU_DESCRIPTOR_HANDLE textureSRV( m_Scene.m_TextureDescriptorTable, selection->m_OpacityTextureIndex, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
                     ImGui::ImageButton( "Opacity Texture", (ImTextureID)textureSRV.ptr, ImVec2( 180, 180 ) );
+                }
+                if ( isMaterialOpaqueBefore != selection->IsOpaque() )
+                {
+                    m_Scene.SetMeshFlagsDirty();
                 }
 
                 if ( selection->m_MaterialType != EMaterialType::Dielectric && selection->m_MaterialType != EMaterialType::ThinDielectric )

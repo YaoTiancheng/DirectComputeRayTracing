@@ -129,6 +129,10 @@ public:
 
     void UpdateInstanceFlagsGPUData();
 
+    void SetMeshFlagsDirty() { m_IsMeshFlagsDirty = true; }
+
+    void RebuildMeshFlagsIfDirty();
+
     uint32_t GetLightCount() const { return (uint32_t)m_MeshLights.size() + (uint32_t)m_PunctualLights.size() + ( m_EnvironmentLight ? 1 : 0 ); }
 
     float CalculateFilmDistance() const;
@@ -212,6 +216,7 @@ public:
 
     D3D12_GPU_DESCRIPTOR_HANDLE m_TextureDescriptorTable;
 
+    bool m_IsMeshFlagsDirty = false;
     bool m_IsLightGPUBufferDirty = false;
     bool m_IsMaterialGPUBufferDirty = false;
     bool m_IsInstanceFlagsBufferDirty = false;

@@ -281,6 +281,7 @@ void SRenderer::RenderOneFrame()
     if ( m_Scene.m_HasValidScene )
     { 
         m_Scene.m_Camera.Update( m_FrameTimer.GetCurrentFrameDeltaTime() );
+        m_Scene.RebuildMeshFlagsIfDirty();
 
         m_Scene.AllocateAndUpdateTextureDescriptorTable();
 

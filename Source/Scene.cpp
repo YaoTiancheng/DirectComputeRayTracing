@@ -54,17 +54,50 @@ static void GetDefaultMaterial( SMaterial* material )
     material->m_Name = "DefaultMaterial";
 }
 
+bool SMaterial::IsOpaque() const
+{
+    return m_Opacity == 1.0f && m_OpacityTextureIndex == INDEX_NONE;
+}
+
 static bool IsMeshOpaque( const std::vector<SMaterial>& materials, const Mesh& mesh )
 {
     for ( uint32_t materialId : mesh.m_MaterialIds )
     {
         const SMaterial& material = materials[ materialId ];
-        if ( material.m_Opacity < 1.0f || material.m_OpacityTextureIndex != INDEX_NONE )
+        if ( !material.IsOpaque() )
         {
             return false;
         }
     }
     return true;
+}
+
+static void CalculateMeshFlags( const CScene& scene, size_t meshIndex, SMeshFlags* outMeshFlags  )
+{
+    outMeshFlags->m_Opaque = IsMeshOpaque( scene.m_Materials, scene.m_Meshes[ meshIndex ] );
+}
+
+static void AppendMeshFlags( CScene* scene, size_t meshIndexBase )
+{
+    scene->m_MeshFlags.reserve( scene->m_Meshes.size() );
+
+    for ( size_t meshIndex = meshIndexBase; meshIndex < scene->m_Meshes.size(); ++meshIndex )
+    {
+        scene->m_MeshFlags.emplace_back();
+        SMeshFlags& meshFlags = scene->m_MeshFlags.back();
+        CalculateMeshFlags( *scene, meshIndex, &meshFlags );
+    }
+}
+
+static void RebuildMeshFlags( CScene* scene )
+{
+    scene->m_MeshFlags.resize( scene->m_Meshes.size() );
+
+    for ( size_t meshIndex = 0; meshIndex < scene->m_Meshes.size(); ++meshIndex )
+    {
+        SMeshFlags& meshFlags = scene->m_MeshFlags[ meshIndex ];
+        CalculateMeshFlags( *scene, meshIndex, &meshFlags );
+    }
 }
 
 bool CScene::LoadFromFile( const std::filesystem::path& filepath )
@@ -179,13 +212,8 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
     }
 
     // Update mesh flags
-    m_MeshFlags.reserve( m_Meshes.size() );
-    for ( size_t meshIndex = meshIndexBase; meshIndex < m_Meshes.size(); ++meshIndex )
-    {
-        m_MeshFlags.emplace_back();
-        SMeshFlags& newMeshFlags = m_MeshFlags.back();
-        newMeshFlags.m_Opaque = IsMeshOpaque( m_Materials, m_Meshes[ meshIndex ] );
-    }
+    AppendMeshFlags( this, meshIndexBase );
+    m_IsMeshFlagsDirty = false;
 
     uint32_t totalVertexCount = 0;
     uint32_t totalIndexCount = 0;
@@ -592,6 +620,16 @@ void CScene::Reset()
 
     m_HasValidScene = false;
     m_ObjectSelection.DeselectAll();
+}
+
+void CScene::RebuildMeshFlagsIfDirty()
+{
+    if ( m_IsMeshFlagsDirty )
+    {
+        RebuildMeshFlags( this );
+        m_IsMeshFlagsDirty = false;
+        m_IsInstanceFlagsBufferDirty = true;
+    }
 }
 
 void CScene::UpdateLightGPUData()

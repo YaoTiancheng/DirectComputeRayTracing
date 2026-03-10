@@ -12,6 +12,7 @@
 #include "StringConversion.h"
 #include "MathHelper.h"
 #include "../Shaders/LightSharedDef.inc.hlsl"
+#include "../Shaders/InstanceSharedDef.inc.hlsl"
 #include "imgui/imgui.h"
 
 using namespace DirectX;
@@ -23,6 +24,10 @@ static DXGI_FORMAT GetDXGIFormat( ETexturePixelFormat pixelFormat )
     case ETexturePixelFormat::R8G8B8A8_sRGB:
     {
         return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    }
+    case ETexturePixelFormat::R8_Unorm:
+    {
+        return DXGI_FORMAT_R8_UNORM;
     }
     default:
     {
@@ -37,14 +42,62 @@ static void GetDefaultMaterial( SMaterial* material )
     material->m_Albedo = XMFLOAT3( 1.f, 0.f, 1.f );
     material->m_Roughness = 1.f;
     material->m_IOR = XMFLOAT3( 1.f, 1.f, 1.f );
+    material->m_Opacity = 1.f;
     material->m_K = XMFLOAT3( 1.0f, 1.0f, 1.0f );
     material->m_Tiling = XMFLOAT2( 1.0f, 1.0f );
     material->m_MaterialType = EMaterialType::Diffuse;
     material->m_AlbedoTextureIndex = INDEX_NONE;
+    material->m_OpacityTextureIndex = INDEX_NONE;
     material->m_Multiscattering = false;
     material->m_IsTwoSided = false;
     material->m_HasRoughnessTexture = false;
     material->m_Name = "DefaultMaterial";
+}
+
+bool SMaterial::IsOpaque() const
+{
+    return m_Opacity == 1.0f && m_OpacityTextureIndex == INDEX_NONE;
+}
+
+static bool IsMeshOpaque( const std::vector<SMaterial>& materials, const Mesh& mesh )
+{
+    for ( uint32_t materialId : mesh.m_MaterialIds )
+    {
+        const SMaterial& material = materials[ materialId ];
+        if ( !material.IsOpaque() )
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static void CalculateMeshFlags( const CScene& scene, size_t meshIndex, SMeshFlags* outMeshFlags  )
+{
+    outMeshFlags->m_Opaque = IsMeshOpaque( scene.m_Materials, scene.m_Meshes[ meshIndex ] );
+}
+
+static void AppendMeshFlags( CScene* scene, size_t meshIndexBase )
+{
+    scene->m_MeshFlags.reserve( scene->m_Meshes.size() );
+
+    for ( size_t meshIndex = meshIndexBase; meshIndex < scene->m_Meshes.size(); ++meshIndex )
+    {
+        scene->m_MeshFlags.emplace_back();
+        SMeshFlags& meshFlags = scene->m_MeshFlags.back();
+        CalculateMeshFlags( *scene, meshIndex, &meshFlags );
+    }
+}
+
+static void RebuildMeshFlags( CScene* scene )
+{
+    scene->m_MeshFlags.resize( scene->m_Meshes.size() );
+
+    for ( size_t meshIndex = 0; meshIndex < scene->m_Meshes.size(); ++meshIndex )
+    {
+        SMeshFlags& meshFlags = scene->m_MeshFlags[ meshIndex ];
+        CalculateMeshFlags( *scene, meshIndex, &meshFlags );
+    }
 }
 
 bool CScene::LoadFromFile( const std::filesystem::path& filepath )
@@ -157,6 +210,10 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
             m_ReorderedInstanceIndices[ originalInstanceIndex ] = reorderedInstanceIndex;
         }
     }
+
+    // Update mesh flags
+    AppendMeshFlags( this, meshIndexBase );
+    m_IsMeshFlagsDirty = false;
 
     uint32_t totalVertexCount = 0;
     uint32_t totalIndexCount = 0;
@@ -435,6 +492,26 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
             return false;
         }
     }
+
+    // Instance flags buffer
+    {
+        m_InstanceFlagsBuffer.Reset( GPUBuffer::Create(
+              sizeof( uint32_t )* (uint32_t)m_OriginalInstanceIndices.size()
+            , sizeof( uint32_t )
+            , DXGI_FORMAT_R32_UINT
+            , EGPUBufferUsage::Default
+            , EGPUBufferBindFlag_ShaderResource ) );
+
+        if ( m_InstanceFlagsBuffer )
+        {
+            LOG_STRING_FORMAT( "Instance flags buffer created, size %d\n", sizeof( uint32_t ) * m_OriginalInstanceIndices.size() );
+        }
+        else 
+        {
+            LOG_STRING( "Failed to create instance flags buffer.\n" );
+            return false;
+        }
+    }
     
     m_MaterialsBuffer.Reset( GPUBuffer::CreateStructured(
           uint32_t( sizeof( GPU::Material ) * m_Materials.size() )
@@ -501,6 +578,7 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
 
     m_IsLightBufferRead = true;
     m_IsMaterialBufferRead = true;
+    m_IsInstanceFlagsBufferRead = true;
 
     m_HasValidScene = true;
     m_ObjectSelection.DeselectAll();
@@ -526,6 +604,7 @@ void CScene::Reset()
     m_FilterRadius = 1.0f;
 
     m_Meshes.clear();
+    m_MeshFlags.clear();
     m_EnvironmentLight.reset();
     m_PunctualLights.clear();
     m_MeshLights.clear();
@@ -541,6 +620,16 @@ void CScene::Reset()
 
     m_HasValidScene = false;
     m_ObjectSelection.DeselectAll();
+}
+
+void CScene::RebuildMeshFlagsIfDirty()
+{
+    if ( m_IsMeshFlagsDirty )
+    {
+        RebuildMeshFlags( this );
+        m_IsMeshFlagsDirty = false;
+        m_IsInstanceFlagsBufferDirty = true;
+    }
 }
 
 void CScene::UpdateLightGPUData()
@@ -630,6 +719,8 @@ void CScene::UpdateMaterialGPUData()
                 material->ior = materialSetting->m_IOR;
                 material->roughness = std::clamp( materialSetting->m_Roughness, 0.0f, 1.0f );
                 material->texTiling = materialSetting->m_Tiling;
+                material->opacity = materialSetting->m_Opacity;
+                material->opacityTextureIndex = materialSetting->m_OpacityTextureIndex;
                 material->flags = TranslateToMaterialType( materialSetting->m_MaterialType ) & MATERIAL_FLAG_TYPE_MASK;
                 material->flags |= materialSetting->m_Multiscattering ? MATERIAL_FLAG_MULTISCATTERING : 0;
                 material->flags |= materialSetting->m_IsTwoSided ? MATERIAL_FLAG_IS_TWOSIDED : 0;
@@ -639,6 +730,29 @@ void CScene::UpdateMaterialGPUData()
             context.Upload();
 
             m_IsMaterialBufferRead = false;
+        }
+    }
+}
+
+void CScene::UpdateInstanceFlagsGPUData()
+{
+    GPUBuffer::SUploadContext context = {};
+    if ( m_InstanceFlagsBuffer->AllocateUploadContext( &context ) )
+    {
+        void* address = context.Map();
+        if ( address )
+        { 
+            for ( uint32_t instanceIndex = 0; instanceIndex < (uint32_t)m_OriginalInstanceIndices.size() ; ++instanceIndex )
+            { 
+                const uint32_t originalIndex = m_OriginalInstanceIndices[ instanceIndex ];
+                const SMeshFlags& meshFlags = m_MeshFlags[ originalIndex ];
+                uint32_t* instanceFlag = ( (uint32_t*)address ) + instanceIndex;
+                *instanceFlag = meshFlags.m_Opaque ? INSTANCE_FLAG_OPAQUE : 0;
+            }
+            context.Unmap();
+            context.Upload();
+
+            m_IsInstanceFlagsBufferRead = false;
         }
     }
 }

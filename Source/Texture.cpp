@@ -20,6 +20,11 @@ static ETexturePixelFormat GetTexturePixelFormat( WICPixelFormatGUID WICPixelFor
     {
         return ETexturePixelFormat::R8G8B8A8_sRGB;
     }
+    else if ( WICPixelFormat == GUID_WICPixelFormat8bppAlpha ||
+        WICPixelFormat == GUID_WICPixelFormat8bppIndexed )
+    {
+        return ETexturePixelFormat::R8_Unorm;
+    }
     return ETexturePixelFormat::Unknown;
 }
 
@@ -30,6 +35,10 @@ static WICPixelFormatGUID GetWICPixelFormat( ETexturePixelFormat texturePixelFor
     case ETexturePixelFormat::R8G8B8A8_sRGB:
     {
         return GUID_WICPixelFormat32bppRGBA;
+    }
+    case ETexturePixelFormat::R8_Unorm:
+    {
+        return GUID_WICPixelFormat8bppAlpha;
     }
     default:
         return GUID_WICPixelFormatDontCare;
@@ -44,6 +53,10 @@ uint32_t GetTexturePixelFormatBPP( ETexturePixelFormat format )
     case ETexturePixelFormat::R8G8B8A8_sRGB:
     {
         return 4;
+    }
+    case ETexturePixelFormat::R8_Unorm:
+    {
+        return 1;
     }
     default:
     {

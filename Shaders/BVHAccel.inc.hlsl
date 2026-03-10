@@ -3,6 +3,7 @@
 
 #include "Intrinsics.inc.hlsl"
 #include "RayPrimitiveIntersect.inc.hlsl"
+#include "InstanceSharedDef.inc.hlsl"
 
 uint BVHNodeGetPrimitiveCount( BVHNode node )
 {
@@ -87,7 +88,15 @@ bool BVHIntersectNoInterp( float3 origin
     , StructuredBuffer<Vertex> vertices
     , StructuredBuffer<uint> triangles
     , StructuredBuffer<BVHNode> BVHNodes
-    , StructuredBuffer<float4x3> Instances
+    , StructuredBuffer<float4x3> instanceInvTransforms
+    , Buffer<uint> instanceFlags
+#if defined( ALLOW_ANYHIT_SHADER )
+    , StructuredBuffer<uint> materialIds
+    , StructuredBuffer<Material> materials
+    , Texture2D<float4> textures[]
+    , SamplerState samplerState
+    , float opacitySample
+#endif
     , inout SHitInfo hitInfo
     , out uint iterationCounter )
 {
@@ -101,6 +110,7 @@ bool BVHIntersectNoInterp( float3 origin
     uint nodeIndex = 0;
     uint instanceIndex = 0;
     bool isBLAS = false;
+    bool isOpaque = false;
     float3 localRayOrigin = origin;
     float3 localRayDirection = direction;
     while ( true )
@@ -114,12 +124,15 @@ bool BVHIntersectNoInterp( float3 origin
             if ( hasBLAS )
             {
                 // Going in from TLAS to BLAS
-                float4x3 instanceInvTransform = Instances[ primCountOrInstanceIndex ];
+                float4x3 instanceInvTransform = instanceInvTransforms[ primCountOrInstanceIndex ];
                 localRayOrigin = mul( float4( origin, 1.f ), instanceInvTransform );
                 localRayDirection = mul( float4( direction, 0.f ), instanceInvTransform );
                 isBLAS = true;
                 instanceIndex = primCountOrInstanceIndex;
                 nodeIndex = BVHNodes[ nodeIndex ].rightChildOrPrimIndex;
+                
+                const uint instanceFlag = instanceFlags[ primCountOrInstanceIndex ];
+                isOpaque = ( instanceFlag & INSTANCE_FLAG_OPAQUE ) != 0;
             }
             else
             {
@@ -149,22 +162,38 @@ bool BVHIntersectNoInterp( float3 origin
                     uint primEnd = primBegin + primCountOrInstanceIndex;
                     for ( uint iPrim = primBegin; iPrim < primEnd; ++iPrim )
                     {
-                        float3 v0 = vertices[ triangles[ iPrim * 3 ] ].position;
-                        float3 v1 = vertices[ triangles[ iPrim * 3 + 1 ] ].position;
-                        float3 v2 = vertices[ triangles[ iPrim * 3 + 2 ] ].position;
+                        const uint index0 = triangles[ iPrim * 3 ];
+                        const uint index1 = triangles[ iPrim * 3 + 1 ];
+                        const uint index2 = triangles[ iPrim * 3 + 2 ];
+                        float3 v0 = vertices[ index0 ].position;
+                        float3 v1 = vertices[ index1 ].position;
+                        float3 v2 = vertices[ index2 ].position;
 #if defined( WATERTIGHT_RAY_TRIANGLE_INTERSECTION )
                         if ( RayTriangleIntersect( localRayOrigin, rayShearing, rayPermute, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
 #else
                         if ( RayTriangleIntersect( localRayOrigin, localRayDirection, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
 #endif
                         {
-                            tMax = t;
-                            hitInfo.t = t;
-                            hitInfo.u = u;
-                            hitInfo.v = v;
-                            hitInfo.backface = backface;
-                            hitInfo.triangleId = iPrim;
-                            hitInfo.instanceIndex = instanceIndex;
+                            bool hitAccepted = true;
+#if defined( ALLOW_ANYHIT_SHADER )
+                            if ( !isOpaque )
+                            {
+                                float2 texcoord0 = vertices[ index0 ].texcoord;
+                                float2 texcoord1 = vertices[ index1 ].texcoord;
+                                float2 texcoord2 = vertices[ index2 ].texcoord;
+                                hitAccepted = AnyHitShader( origin, direction, texcoord0, texcoord1, texcoord2, t, u, v, iPrim, materialIds, materials, textures, samplerState, opacitySample );
+                            }
+#endif
+                            if ( hitAccepted )
+                            {
+                                tMax = t;
+                                hitInfo.t = t;
+                                hitInfo.u = u;
+                                hitInfo.v = v;
+                                hitInfo.backface = backface;
+                                hitInfo.triangleId = iPrim;
+                                hitInfo.instanceIndex = instanceIndex;
+                            }
                         }
                     }
                     popNode = true;
@@ -206,12 +235,22 @@ bool BVHIntersect( float3 origin
     , StructuredBuffer<Vertex> vertices
     , StructuredBuffer<uint> triangles
     , StructuredBuffer<BVHNode> BVHNodes
-    , StructuredBuffer<float4x3> Instances )
+    , StructuredBuffer<float4x3> instanceInvTransforms
+    , Buffer<uint> instanceFlags
+#if defined( ALLOW_ANYHIT_SHADER )
+    , StructuredBuffer<uint> materialIds
+    , StructuredBuffer<Material> materials
+    , Texture2D<float4> textures[]
+    , SamplerState samplerState
+    , float opacitySample
+#endif
+    )
 {
     BVHTraversalStackReset( dispatchThreadIndex );
 
     uint nodeIndex = 0;
     bool isBLAS = false;
+    bool isOpaque = false;
     float3 localRayOrigin = origin;
     float3 localRayDirection = direction;
     while ( true )
@@ -224,11 +263,14 @@ bool BVHIntersect( float3 origin
             if ( hasBLAS )
             {
                 // Going in from TLAS to BLAS
-                float4x3 instanceInvTransform = Instances[ primCountOrInstanceIndex ];
+                float4x3 instanceInvTransform = instanceInvTransforms[ primCountOrInstanceIndex ];
                 localRayOrigin = mul( float4( origin, 1.f ), instanceInvTransform );
                 localRayDirection = mul( float4( direction, 0.f ), instanceInvTransform );
                 isBLAS = true;
                 nodeIndex = BVHNodes[ nodeIndex ].rightChildOrPrimIndex;
+                
+                const uint instanceFlag = instanceFlags[ primCountOrInstanceIndex ];
+                isOpaque = ( instanceFlag & INSTANCE_FLAG_OPAQUE ) != 0;
             }
             else
             {
@@ -258,9 +300,12 @@ bool BVHIntersect( float3 origin
                     uint primEnd = primBegin + primCountOrInstanceIndex;
                     for ( uint iPrim = primBegin; iPrim < primEnd; ++iPrim )
                     {
-                        float3 v0 = vertices[ triangles[ iPrim * 3 ] ].position;
-                        float3 v1 = vertices[ triangles[ iPrim * 3 + 1 ] ].position;
-                        float3 v2 = vertices[ triangles[ iPrim * 3 + 2 ] ].position;
+                        const uint index0 = triangles[ iPrim * 3 ];
+                        const uint index1 = triangles[ iPrim * 3 + 1 ];
+                        const uint index2 = triangles[ iPrim * 3 + 2 ];
+                        float3 v0 = vertices[ index0 ].position;
+                        float3 v1 = vertices[ index1 ].position;
+                        float3 v2 = vertices[ index2 ].position;
                         float t, u, v;
                         bool backface;
 #if defined( WATERTIGHT_RAY_TRIANGLE_INTERSECTION )
@@ -269,7 +314,20 @@ bool BVHIntersect( float3 origin
                         if ( RayTriangleIntersect( localRayOrigin, localRayDirection, tMin, tMax, v0, v1, v2, t, u, v, backface ) )
 #endif
                         {
-                            return true;
+                            bool hitAccepted = true;
+#if defined( ALLOW_ANYHIT_SHADER )
+                            if ( !isOpaque )
+                            {
+                                float2 texcoord0 = vertices[ index0 ].texcoord;
+                                float2 texcoord1 = vertices[ index1 ].texcoord;
+                                float2 texcoord2 = vertices[ index2 ].texcoord;
+                                hitAccepted = AnyHitShader( origin, direction, texcoord0, texcoord1, texcoord2, t, u, v, iPrim, materialIds, materials, textures, samplerState, opacitySample );
+                            }
+#endif
+                            if ( hitAccepted )
+                            {
+                                return true;
+                            }
                         }
                     }
                     popNode = true;

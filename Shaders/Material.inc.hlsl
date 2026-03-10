@@ -25,7 +25,9 @@ struct Material
     float3 ior;
     float  roughness;
     float2 texTiling;
+    float  opacity;
     uint   flags;
+    int    opacityTextureIndex;
 };
 
 GPU_STRUCTURE_NAMESPACE_END

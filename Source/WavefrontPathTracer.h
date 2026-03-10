@@ -63,6 +63,8 @@ private:
     CD3D12ResourcePtr<GPUBuffer> m_LightSamplingResultsBuffer;
     CD3D12ResourcePtr<GPUBuffer> m_PathAccumulationBuffer;
     CD3D12ResourcePtr<GPUBuffer> m_FlagsBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_ExtensionRayOpacitySamplesBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_ShadowRayOpacitySamplesBuffer;
     CD3D12ResourcePtr<GPUBuffer> m_NextBlockIndexBuffer;
     CD3D12ResourcePtr<GPUBuffer> m_IndirectArgumentBuffer[ 4 ];
     CD3D12ResourcePtr<GPUBuffer> m_QueueBuffers[ 4 ];

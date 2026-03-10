@@ -54,11 +54,6 @@ struct SRenderer
 
     uint32_t m_FrameSeed = 0;
 
-    bool m_IsLightGPUBufferDirty;
-    bool m_IsMaterialGPUBufferDirty;
-    bool m_IsFilmDirty = true;
-    bool m_IsLastFrameFilmDirty = true;
-
     SBxDFTextures m_BxDFTextures;
     std::vector<GPUTexturePtr> m_sRGBBackbuffers;
 

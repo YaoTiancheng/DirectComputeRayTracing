@@ -6,6 +6,7 @@ enum class ETexturePixelFormat
 {
     Unknown,
     R8G8B8A8_sRGB,
+    R8_Unorm,
 };
 
 uint32_t GetTexturePixelFormatBPP( ETexturePixelFormat format );

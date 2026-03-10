@@ -80,4 +80,32 @@ void HitShader( float3 rayOrigin
     intersection.backface = backface;
 }
 
+bool AnyHitShader( float3 rayOrigin
+    , float3 rayDirection
+    , float2 texcoord0
+    , float2 texcoord1
+    , float2 texcoord2
+    , float t
+    , float u
+    , float v
+    , uint triangleId
+    , StructuredBuffer<uint> materialIds
+    , StructuredBuffer<Material> materials
+    , Texture2D<float4> textures[]
+    , SamplerState samplerState
+    , float opacitySample )
+{
+    uint materialId = materialIds[ triangleId ];
+    float opacity = materials[ materialId ].opacity;
+    int opacityTextureIndex = materials[ materialId ].opacityTextureIndex;
+    [branch]
+    if ( opacityTextureIndex != -1 )
+    {
+        float2 texcoord = VectorBaryCentric2( texcoord0, texcoord1, texcoord2, u, v );
+        texcoord *= materials[ materialId ].texTiling;
+        opacity *= textures[ NonUniformResourceIndex( opacityTextureIndex ) ].SampleLevel( samplerState, texcoord, 0 ).r;
+    }
+    return opacitySample < opacity;
+}
+
 #endif

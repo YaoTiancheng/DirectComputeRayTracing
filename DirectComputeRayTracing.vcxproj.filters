@@ -274,6 +274,9 @@
     <None Include="Shaders\BxDFTexturesBuilding.hlsl" />
     <None Include="Shaders\KullaConty.inc.hlsl" />
     <None Include="packages.config" />
+    <None Include="Shaders\InstanceSharedDef.inc.hlsl">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resources\DirectComputeRayTracing.rc">

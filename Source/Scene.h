@@ -51,6 +51,11 @@ struct SEnvironmentLight
     bool CreateTextureFromFile();
 };
 
+struct SMeshFlags
+{
+    uint8_t m_Opaque : 1;
+};
+
 struct SRayHit
 {
     float m_T;
@@ -122,7 +127,11 @@ public:
 
     void UpdateMaterialGPUData();
 
-    float GetFilmDistance() const;
+    void UpdateInstanceFlagsGPUData();
+
+    void SetMeshFlagsDirty() { m_IsMeshFlagsDirty = true; }
+
+    void RebuildMeshFlagsIfDirty();
 
     uint32_t GetLightCount() const { return (uint32_t)m_MeshLights.size() + (uint32_t)m_PunctualLights.size() + ( m_EnvironmentLight ? 1 : 0 ); }
 
@@ -173,6 +182,7 @@ public:
     bool m_IsGGXVNDFSamplingEnabled = true;
     bool m_IsLightVisible = true;
     bool m_WatertightRayTriangleIntersection = true;
+    bool m_AllowAnyHitShader = false;
 
     Camera m_Camera;
     std::shared_ptr<SEnvironmentLight> m_EnvironmentLight;
@@ -180,6 +190,7 @@ public:
     std::vector<SMeshLight> m_MeshLights;
     std::vector<SMaterial> m_Materials;
     std::vector<Mesh> m_Meshes;
+    std::vector<SMeshFlags> m_MeshFlags;
     std::vector<BVHAccel::BVHNode> m_TLAS;
     std::vector<uint32_t> m_OriginalInstanceIndices; // Original indices indexed by reordered index
     std::vector<uint32_t> m_ReorderedInstanceIndices; // Reordered indices indexed by original index
@@ -194,6 +205,7 @@ public:
     CD3D12ResourcePtr<GPUBuffer> m_MaterialIdsBuffer;
     CD3D12ResourcePtr<GPUBuffer> m_MaterialsBuffer;
     CD3D12ResourcePtr<GPUBuffer> m_InstanceTransformsBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_InstanceFlagsBuffer;
     CD3D12ResourcePtr<GPUBuffer> m_InstanceLightIndicesBuffer;
     std::vector<CD3D12ResourcePtr<GPUTexture>> m_GPUTextures;
 
@@ -204,10 +216,18 @@ public:
 
     D3D12_GPU_DESCRIPTOR_HANDLE m_TextureDescriptorTable;
 
+    bool m_IsMeshFlagsDirty = false;
+    bool m_IsLightGPUBufferDirty = false;
+    bool m_IsMaterialGPUBufferDirty = false;
+    bool m_IsInstanceFlagsBufferDirty = false;
+    bool m_IsFilmDirty = true;
+    bool m_IsLastFrameFilmDirty = true;
+
     // Resource states
     D3D12_RESOURCE_STATES m_FilmTextureStates;
     bool m_IsLightBufferRead = true;
     bool m_IsMaterialBufferRead = true;
+    bool m_IsInstanceFlagsBufferRead = true;
     bool m_IsSampleTexturesRead = false;
     bool m_IsRenderResultTextureRead = true;
 

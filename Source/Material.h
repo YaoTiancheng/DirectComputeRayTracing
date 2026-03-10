@@ -11,14 +11,18 @@ enum class EMaterialType
 
 struct SMaterial
 {
+    bool IsOpaque() const;
+
     DirectX::XMFLOAT3 m_Albedo;
     float m_Roughness;
     DirectX::XMFLOAT3 m_IOR;
+    float m_Opacity;
     DirectX::XMFLOAT3 m_K;
     DirectX::XMFLOAT2 m_Tiling;
     std::string m_Name;
     EMaterialType m_MaterialType;
     int32_t m_AlbedoTextureIndex;
+    int32_t m_OpacityTextureIndex;
     bool m_Multiscattering;
     bool m_IsTwoSided;
     bool m_HasRoughnessTexture;

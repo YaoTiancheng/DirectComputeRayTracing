@@ -153,7 +153,7 @@ bool SRenderer::OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam )
 
 bool SRenderer::LoadScene( const char* filepath, bool reset )
 {
-    m_IsFilmDirty = true; // Clear film in case scene reset failed and ray tracing being disabled.
+    m_Scene.m_IsFilmDirty = true; // Clear film in case scene reset failed and ray tracing being disabled.
 
     if ( reset )
     {
@@ -176,8 +176,9 @@ bool SRenderer::LoadScene( const char* filepath, bool reset )
     m_NewResolutionWidth = m_Scene.m_ResolutionWidth;
     m_NewResolutionHeight = m_Scene.m_ResolutionHeight;
 
-    m_IsMaterialGPUBufferDirty = true;
-    m_IsLightGPUBufferDirty = true;
+    m_Scene.m_IsMaterialGPUBufferDirty = true;
+    m_Scene.m_IsLightGPUBufferDirty = true;
+    m_Scene.m_IsInstanceFlagsBufferDirty = true;
 
     m_RayTracingHasHit = false;
 
@@ -193,18 +194,19 @@ static void ClearFilmTexture( SRenderer* r )
 
 static void DispatchRayTracing( SRenderer* r, SRenderContext* renderContext )
 {
-    r->m_IsFilmDirty = r->m_IsFilmDirty || r->m_IsLightGPUBufferDirty || r->m_IsMaterialGPUBufferDirty || r->m_Scene.m_Camera.IsDirty() || r->m_PathTracer[ r->m_ActivePathTracerIndex ]->AcquireFilmClearTrigger();
+    r->m_Scene.m_IsFilmDirty = r->m_Scene.m_IsFilmDirty || r->m_Scene.m_IsLightGPUBufferDirty || r->m_Scene.m_IsMaterialGPUBufferDirty || r->m_Scene.m_IsInstanceFlagsBufferDirty
+        || r->m_Scene.m_Camera.IsDirty() || r->m_PathTracer[ r->m_ActivePathTracerIndex ]->AcquireFilmClearTrigger();
 
-    renderContext->m_IsResolutionChanged = ( r->m_IsFilmDirty != r->m_IsLastFrameFilmDirty );
-    renderContext->m_IsSmallResolutionEnabled = r->m_IsFilmDirty;
+    renderContext->m_IsResolutionChanged = ( r->m_Scene.m_IsFilmDirty != r->m_Scene.m_IsLastFrameFilmDirty );
+    renderContext->m_IsSmallResolutionEnabled = r->m_Scene.m_IsFilmDirty;
 
-    r->m_IsLastFrameFilmDirty = r->m_IsFilmDirty;
+    r->m_Scene.m_IsLastFrameFilmDirty = r->m_Scene.m_IsFilmDirty;
 
     renderContext->m_CurrentResolutionWidth = renderContext->m_IsSmallResolutionEnabled ? r->m_SmallResolutionWidth : r->m_Scene.m_ResolutionWidth;
     renderContext->m_CurrentResolutionRatio = (float)renderContext->m_CurrentResolutionWidth / r->m_Scene.m_ResolutionWidth;
     renderContext->m_CurrentResolutionHeight = renderContext->m_IsSmallResolutionEnabled ? r->m_SmallResolutionHeight : r->m_Scene.m_ResolutionHeight;
 
-    if ( r->m_IsFilmDirty || renderContext->m_IsResolutionChanged )
+    if ( r->m_Scene.m_IsFilmDirty || renderContext->m_IsResolutionChanged )
     {
         // Transition the film texture to RTV
         if ( r->m_Scene.m_FilmTextureStates != D3D12_RESOURCE_STATE_RENDER_TARGET )
@@ -228,14 +230,19 @@ static void DispatchRayTracing( SRenderer* r, SRenderContext* renderContext )
         r->m_PathTracer[ r->m_ActivePathTracerIndex ]->ResetImage();
     }
 
-    if ( r->m_IsLightGPUBufferDirty )
+    if ( r->m_Scene.m_IsLightGPUBufferDirty )
     {
         r->m_Scene.UpdateLightGPUData();
     }
 
-    if ( r->m_IsMaterialGPUBufferDirty )
+    if ( r->m_Scene.m_IsMaterialGPUBufferDirty )
     {
         r->m_Scene.UpdateMaterialGPUData();
+    }
+
+    if ( r->m_Scene.m_IsInstanceFlagsBufferDirty )
+    {
+        r->m_Scene.UpdateInstanceFlagsGPUData();
     }
 
     r->m_PathTracer[ r->m_ActivePathTracerIndex ]->Render( r, *renderContext );
@@ -251,9 +258,10 @@ static void DispatchRayTracing( SRenderer* r, SRenderContext* renderContext )
     }
     
     r->m_Scene.m_Camera.ClearDirty();
-    r->m_IsLightGPUBufferDirty = false;
-    r->m_IsMaterialGPUBufferDirty = false;
-    r->m_IsFilmDirty = false;
+    r->m_Scene.m_IsLightGPUBufferDirty = false;
+    r->m_Scene.m_IsMaterialGPUBufferDirty = false;
+    r->m_Scene.m_IsInstanceFlagsBufferDirty = false;
+    r->m_Scene.m_IsFilmDirty = false;
 }
 
 void SRenderer::RenderOneFrame()
@@ -273,6 +281,7 @@ void SRenderer::RenderOneFrame()
     if ( m_Scene.m_HasValidScene )
     { 
         m_Scene.m_Camera.Update( m_FrameTimer.GetCurrentFrameDeltaTime() );
+        m_Scene.RebuildMeshFlagsIfDirty();
 
         m_Scene.AllocateAndUpdateTextureDescriptorTable();
 
@@ -357,6 +366,7 @@ void SRenderer::RenderOneFrame()
     // State decay to common state
     m_Scene.m_IsLightBufferRead = true;
     m_Scene.m_IsMaterialBufferRead = true;
+    m_Scene.m_IsInstanceFlagsBufferRead = true;
 }
 
 bool SRenderer::HandleFilmResolutionChange()

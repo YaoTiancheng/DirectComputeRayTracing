@@ -1080,6 +1080,8 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
 
     SMaterialGatheringContext materialGatheringContext( filepath, materialNameToEnumMap, &m_Materials, (uint32_t)m_Textures.size() );
 
+    std::unordered_map<std::string, uint32_t> objFileToMeshIndexMap;
+
     std::vector<std::pair<std::string_view, SValue*>>& rootObjectValues = *sceneValues[ 0 ]->m_NestedObjects;
     for ( auto& rootObjectValue : rootObjectValues )
     {
@@ -1296,7 +1298,8 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     shapeType = itShapeType->second;
                 }
 
-                bool meshCreated = false;
+                bool instanceCreated = false;
+                uint32_t meshIndex = 0;
                 switch ( shapeType )
                 {
                 case EShapeType::eObj:
@@ -1310,25 +1313,39 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     {
                         char zeroTerminatedFilename[ MAX_PATH ];
                         const std::filesystem::path filenamePath = GetAbsoluteExternalFilename( zeroTerminatedFilename, filepath, filenameValue->m_String );
+                        const std::string filenameKey = filenamePath.u8string();
 
-                        SMeshProcessingParams processingParams;
-                        processingParams.m_ApplyTransform = false;
-                        processingParams.m_ChangeWindingOrder = true;
-                        processingParams.m_FlipTexcoordV = true;
-                        processingParams.m_MaterialIndexOverride = materialId;
-
-                        m_Meshes.emplace_back();
-                        Mesh& newMesh = m_Meshes.back();
-                        if ( newMesh.LoadFromWavefrontOBJFile( filenamePath, processingParams, nullptr, nullptr ) )
+                        auto existingMeshIt = objFileToMeshIndexMap.find( filenameKey );
+                        if ( existingMeshIt != objFileToMeshIndexMap.end() )
                         {
-                            newMesh.SetName( zeroTerminatedFilename );
-                            meshCreated = true;
+                            meshIndex = existingMeshIt->second;
+                            instanceCreated = true;
                         }
                         else
                         {
-                            LOG_STRING_FORMAT( "Failed to load wavefront obj file \'%s\'.\n", filenamePath.u8string().c_str() );
+                            SMeshProcessingParams processingParams;
+                            processingParams.m_ApplyTransform = false;
+                            processingParams.m_ChangeWindingOrder = true;
+                            processingParams.m_FlipTexcoordV = true;
+                            processingParams.m_MaterialIndexOverride = materialId;
+
+                            m_Meshes.emplace_back();
+                            Mesh& newMesh = m_Meshes.back();
+                            if ( newMesh.LoadFromWavefrontOBJFile( filenamePath, processingParams, nullptr, nullptr ) )
+                            {
+                                newMesh.SetName( zeroTerminatedFilename );
+                                meshIndex = (uint32_t)m_Meshes.size() - 1;
+                                objFileToMeshIndexMap.insert( { filenameKey, meshIndex } );
+                                instanceCreated = true;
+                            }
+                            else
+                            {
+                                m_Meshes.pop_back();
+                                LOG_STRING_FORMAT( "Failed to load wavefront obj file \'%s\'.\n", filenamePath.u8string().c_str() );
+                            }
                         }
                     }
+
                     break;
                 }
                 case EShapeType::eRectangle:
@@ -1338,7 +1355,8 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     {
                         mesh.SetName( "rectangle" );
                         m_Meshes.emplace_back( mesh );
-                        meshCreated = true;
+                        meshIndex = (uint32_t)m_Meshes.size() - 1;
+                        instanceCreated = true;
                     }
                     else
                     {
@@ -1354,9 +1372,14 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                 }
                 }
 
-                if ( meshCreated )
+                if ( instanceCreated )
                 {
-                    uint32_t instanceIndex = (uint32_t)m_InstanceTransforms.size();
+                    uint32_t instanceIndex = (uint32_t)m_MeshInstances.size();
+
+                    SMeshInstance instance;
+                    instance.m_MeshIndex = meshIndex;
+                    instance.m_MaterialIdOverride = materialId;
+                    m_MeshInstances.emplace_back( instance );
                     m_InstanceTransforms.push_back( XMFLOAT4X3( transform._11, transform._12, transform._13, transform._21, transform._22, transform._23, transform._31, transform._32, transform._33, transform._41, transform._42, transform._43 ) );
 
                     if ( GetLightCount() >= s_MaxLightsCount )

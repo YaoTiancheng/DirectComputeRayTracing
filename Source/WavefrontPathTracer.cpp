@@ -30,7 +30,7 @@ static const uint32_t s_KernelGroupSize = 32;
 
 static const uint32_t s_BlockDimensionCount = 2;
 
-static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 16, 11 );
+static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 17, 11 );
 
 struct alignas( 256 ) SControlConstants
 {
@@ -932,6 +932,7 @@ void CWavefrontPathTracer::RenderOneIteration( CScene* scene, const SBxDFTexture
             , scene->m_TrianglesBuffer->GetSRV()
             , scene->m_LightsBuffer->GetSRV()
             , scene->m_InstanceTransformsBuffer->GetSRV( DXGI_FORMAT_UNKNOWN, sizeof( XMFLOAT4X3 ), 0, (uint32_t)scene->m_InstanceTransforms.size() )
+            , scene->m_InstanceMaterialOverrideBuffer->GetSRV()
             , scene->m_MaterialIdsBuffer->GetSRV()
             , scene->m_MaterialsBuffer->GetSRV()
             , scene->m_InstanceLightIndicesBuffer->GetSRV()
@@ -1092,6 +1093,7 @@ void CWavefrontPathTracer::RenderOneIteration( CScene* scene, const SBxDFTexture
             , m_QueueCounterBuffers[ 0 ]->GetSRV()
             , scene->m_InstanceTransformsBuffer->GetSRV( DXGI_FORMAT_UNKNOWN, sizeof( XMFLOAT4X3 ), (uint32_t)scene->m_InstanceTransforms.size(), (uint32_t)scene->m_InstanceTransforms.size() )
             , scene->m_InstanceFlagsBuffer->GetSRV()
+            , scene->m_InstanceMaterialOverrideBuffer->GetSRV()
             , scene->m_MaterialIdsBuffer->GetSRV()
             , scene->m_MaterialsBuffer->GetSRV()
             , m_ExtensionRayOpacitySamplesBuffer->GetSRV()
@@ -1145,6 +1147,7 @@ void CWavefrontPathTracer::RenderOneIteration( CScene* scene, const SBxDFTexture
             , m_QueueCounterBuffers[ 0 ]->GetSRV()
             , scene->m_InstanceTransformsBuffer->GetSRV( DXGI_FORMAT_UNKNOWN, sizeof( XMFLOAT4X3 ), (uint32_t)scene->m_InstanceTransforms.size(), (uint32_t)scene->m_InstanceTransforms.size() )
             , scene->m_InstanceFlagsBuffer->GetSRV()
+            , scene->m_InstanceMaterialOverrideBuffer->GetSRV()
             , scene->m_MaterialIdsBuffer->GetSRV()
             , scene->m_MaterialsBuffer->GetSRV()
             , m_ShadowRayOpacitySamplesBuffer->GetSRV()

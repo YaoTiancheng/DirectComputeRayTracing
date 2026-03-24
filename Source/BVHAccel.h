@@ -19,8 +19,8 @@ struct BVHNode
     };
     union
     {
-        uint8_t m_PrimCount;
-        uint8_t m_InstanceIndex;
+        uint32_t m_PrimCount;
+        uint32_t m_InstanceIndex;
     };
     bool m_IsLeaf;
     uint8_t m_SplitAxis;

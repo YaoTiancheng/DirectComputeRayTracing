@@ -173,32 +173,35 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
 
     m_TLAS.clear();
     {
-        assert( m_Meshes.size() == m_InstanceTransforms.size() ); // For now, mesh count must equal to instance count
+        assert( m_MeshInstances.size() == m_InstanceTransforms.size() );
+        const uint32_t instanceCount = (uint32_t)m_MeshInstances.size();
         std::vector<BVHAccel::SInstance> BLASInstances;
-        BLASInstances.reserve( m_Meshes.size() );
-        for ( size_t iMesh = 0; iMesh < m_Meshes.size(); ++iMesh )
+        BLASInstances.reserve( instanceCount );
+        for ( size_t iInstance = 0; iInstance < instanceCount; ++iInstance )
         {
-            const Mesh& mesh = m_Meshes[ iMesh ];
+            const uint32_t meshIndex = m_MeshInstances[ iInstance ].m_MeshIndex;
+            const Mesh& mesh = m_Meshes[ meshIndex ];
             assert( mesh.GetBVHNodeCount() > 0 );
             const BVHAccel::BVHNode& BLASRoot = mesh.GetBVHNodes()[ 0 ];
             BLASInstances.emplace_back();
             BLASInstances.back().m_BoundingBox = BLASRoot.m_BoundingBox;
-            BLASInstances.back().m_Transform = m_InstanceTransforms[ iMesh ];
+            BLASInstances.back().m_Transform = m_InstanceTransforms[ iInstance ];
         }
 
-        std::vector<uint32_t> instanceDepths; // Which depth of the TLAS each instance is at
-        instanceDepths.resize( m_InstanceTransforms.size() );
-        m_OriginalInstanceIndices.resize( m_InstanceTransforms.size() );
+        std::vector<uint32_t> instanceDepths;
+        instanceDepths.resize( instanceCount );
+        m_OriginalInstanceIndices.resize( instanceCount );
         uint32_t BVHMaxDepth = 0;
         uint32_t BVHMaxStackSize = 0;
-        BVHAccel::BuildTLAS( BLASInstances.data(), m_OriginalInstanceIndices.data(), (uint32_t)m_Meshes.size(), &m_TLAS, &BVHMaxDepth, &BVHMaxStackSize, instanceDepths.data() );
+        BVHAccel::BuildTLAS( BLASInstances.data(), m_OriginalInstanceIndices.data(), instanceCount, &m_TLAS, &BVHMaxDepth, &BVHMaxStackSize, instanceDepths.data() );
         LOG_STRING_FORMAT( "TLAS created. Node count:%d, depth:%d\n", m_TLAS.size(), BVHMaxDepth );
 
         uint32_t maxStackSize = 0;
-        for ( uint32_t iInstance = 0; iInstance < (uint32_t)instanceDepths.size(); ++iInstance )
+        for ( uint32_t iInstance = 0; iInstance < instanceCount; ++iInstance )
         {
             uint32_t originalInstance = m_OriginalInstanceIndices[ iInstance ];
-            maxStackSize = std::max( maxStackSize, instanceDepths[ iInstance ] + m_Meshes[ originalInstance ].GetBVHMaxDepth() );
+            uint32_t meshIndex = m_MeshInstances[ originalInstance ].m_MeshIndex;
+            maxStackSize = std::max( maxStackSize, instanceDepths[ iInstance ] + m_Meshes[ meshIndex ].GetBVHMaxDepth() );
         }
         m_BVHTraversalStackSize = maxStackSize;
         LOG_STRING_FORMAT( "BVH traversal stack size requirement is %d\n", maxStackSize );
@@ -237,7 +240,8 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
         uint32_t instanceIndex = 0;
         for ( auto& index : m_OriginalInstanceIndices )
         {
-            const Mesh& mesh = m_Meshes[ index ];
+            const uint32_t meshIndex = m_MeshInstances[ index ].m_MeshIndex;
+            const Mesh& mesh = m_Meshes[ meshIndex ];
             sprintf_s( formattedFilenameBuffer, ARRAY_LENGTH( formattedFilenameBuffer ), "%s/BLAS_Instance_%d_%s.xml", baseDirectoryU8String.c_str(), instanceIndex, mesh.GetName().c_str() );
             FILE* file = fopen( formattedFilenameBuffer, "w" );
             if ( file )
@@ -357,8 +361,9 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
             {
                 uint32_t primIndex = node.m_PrimIndex;
                 assert( node.m_PrimCount == 1 );
-                uint32_t originalPrimIndex = m_OriginalInstanceIndices[ primIndex ];
-                node.m_ChildIndex = BLASNodeIndexOffsets[ originalPrimIndex ];
+                uint32_t originalInstanceIndex = m_OriginalInstanceIndices[ primIndex ];
+                uint32_t meshIndex = m_MeshInstances[ originalInstanceIndex ].m_MeshIndex;
+                node.m_ChildIndex = BLASNodeIndexOffsets[ meshIndex ];
                 node.m_InstanceIndex = primIndex;
             }
         }
@@ -416,11 +421,12 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
     }
 
     {
+        const uint32_t instanceCount = (uint32_t)m_MeshInstances.size();
         std::vector<DirectX::XMFLOAT4X3> instanceTransforms;
-        instanceTransforms.resize( m_InstanceTransforms.size() * 2 );
+        instanceTransforms.resize( instanceCount * 2 );
 
         DirectX::XMFLOAT4X3* dest = instanceTransforms.data();
-        for ( uint32_t i = 0; i < (uint32_t)m_InstanceTransforms.size(); ++i )
+        for ( uint32_t i = 0; i < instanceCount; ++i )
         {
             const DirectX::XMFLOAT4X3& transform = m_InstanceTransforms[ m_OriginalInstanceIndices[ i ] ];
             *dest = DirectX::XMFLOAT4X3( transform._11, transform._21, transform._31, transform._41, transform._12, transform._22, transform._32, transform._42, transform._13, transform._23, transform._33, transform._43 );
@@ -428,7 +434,7 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
         }
 
         DirectX::XMFLOAT4X3 rowMajorMatrix;
-        for ( uint32_t i = 0; i < (uint32_t)m_InstanceTransforms.size(); ++i )
+        for ( uint32_t i = 0; i < instanceCount; ++i )
         {
             const DirectX::XMFLOAT4X3& transform = m_InstanceTransforms[ m_OriginalInstanceIndices[ i ] ];
             DirectX::XMMATRIX vMatrix = DirectX::XMLoadFloat4x3( &transform );
@@ -459,10 +465,10 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
     }
 
     {
-        std::vector<uint32_t> instanceLightIndices; // Instance to light index mapping
-        instanceLightIndices.resize( m_InstanceTransforms.size(), LIGHT_INDEX_INVALID );
+        const uint32_t instanceCount = (uint32_t)m_MeshInstances.size();
+        std::vector<uint32_t> instanceLightIndices;
+        instanceLightIndices.resize( instanceCount, LIGHT_INDEX_INVALID );
 
-        // Update mesh light instance indices since they are reordered by TLAS
         uint32_t lightIndex = 0;
         for ( auto& light : m_MeshLights )
         {
@@ -472,9 +478,8 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
             ++lightIndex;
         }
 
-        // Create instance light indices buffer
         m_InstanceLightIndicesBuffer.Reset( GPUBuffer::Create(
-              sizeof( uint32_t ) * (uint32_t)m_InstanceTransforms.size()
+              sizeof( uint32_t ) * instanceCount
             , sizeof( uint32_t )
             , DXGI_FORMAT_R32_UINT
             , EGPUBufferUsage::Default
@@ -484,7 +489,7 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
 
         if ( m_InstanceLightIndicesBuffer )
         {
-            LOG_STRING_FORMAT( "Instance light indices buffer created, size %d\n", sizeof( uint32_t ) * m_InstanceTransforms.size() );
+            LOG_STRING_FORMAT( "Instance light indices buffer created, size %d\n", sizeof( uint32_t ) * instanceCount );
         }
         else 
         {
@@ -495,8 +500,9 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
 
     // Instance flags buffer
     {
+        const uint32_t instanceCount = (uint32_t)m_MeshInstances.size();
         m_InstanceFlagsBuffer.Reset( GPUBuffer::Create(
-              sizeof( uint32_t )* (uint32_t)m_OriginalInstanceIndices.size()
+              sizeof( uint32_t ) * instanceCount
             , sizeof( uint32_t )
             , DXGI_FORMAT_R32_UINT
             , EGPUBufferUsage::Default
@@ -504,11 +510,43 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
 
         if ( m_InstanceFlagsBuffer )
         {
-            LOG_STRING_FORMAT( "Instance flags buffer created, size %d\n", sizeof( uint32_t ) * m_OriginalInstanceIndices.size() );
+            LOG_STRING_FORMAT( "Instance flags buffer created, size %d\n", sizeof( uint32_t ) * instanceCount );
         }
         else 
         {
             LOG_STRING( "Failed to create instance flags buffer.\n" );
+            return false;
+        }
+    }
+
+    // Instance material override buffer
+    {
+        const uint32_t instanceCount = (uint32_t)m_MeshInstances.size();
+        std::vector<uint32_t> instanceMaterialOverrides;
+        instanceMaterialOverrides.resize( instanceCount );
+
+        for ( uint32_t i = 0; i < instanceCount; ++i )
+        {
+            const uint32_t originalInstanceIndex = m_OriginalInstanceIndices[ i ];
+            instanceMaterialOverrides[ i ] = m_MeshInstances[ originalInstanceIndex ].m_MaterialIdOverride;
+        }
+
+        m_InstanceMaterialOverrideBuffer.Reset( GPUBuffer::Create(
+              sizeof( uint32_t ) * instanceCount
+            , sizeof( uint32_t )
+            , DXGI_FORMAT_R32_UINT
+            , EGPUBufferUsage::Default
+            , EGPUBufferBindFlag_ShaderResource
+            , instanceMaterialOverrides.data()
+            , D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
+
+        if ( m_InstanceMaterialOverrideBuffer )
+        {
+            LOG_STRING_FORMAT( "Instance material override buffer created, size %d\n", sizeof( uint32_t ) * instanceCount );
+        }
+        else
+        {
+            LOG_STRING( "Failed to create instance material override buffer.\n" );
             return false;
         }
     }
@@ -604,6 +642,7 @@ void CScene::Reset()
     m_FilterRadius = 1.0f;
 
     m_Meshes.clear();
+    m_MeshInstances.clear();
     m_MeshFlags.clear();
     m_EnvironmentLight.reset();
     m_PunctualLights.clear();
@@ -658,8 +697,9 @@ void CScene::UpdateLightGPUData()
 
                 GPULight->radiance = CPULight->color;
                 const uint32_t originalInstanceIndex = CPULight->m_InstanceIndex;
-                GPULight->position_or_triangleRange.x = *(float*)&meshTriangleOffsets[ originalInstanceIndex ];
-                uint32_t triangleCount = m_Meshes[ originalInstanceIndex ].GetTriangleCount();
+                const uint32_t meshIndex = m_MeshInstances[ originalInstanceIndex ].m_MeshIndex;
+                GPULight->position_or_triangleRange.x = *(float*)&meshTriangleOffsets[ meshIndex ];
+                uint32_t triangleCount = m_Meshes[ meshIndex ].GetTriangleCount();
                 GPULight->position_or_triangleRange.y = *(float*)&triangleCount;
                 const uint32_t reorderedInstanceIndex = m_ReorderedInstanceIndices[ originalInstanceIndex ];
                 GPULight->position_or_triangleRange.z = *(float*)&reorderedInstanceIndex;
@@ -745,9 +785,19 @@ void CScene::UpdateInstanceFlagsGPUData()
             for ( uint32_t instanceIndex = 0; instanceIndex < (uint32_t)m_OriginalInstanceIndices.size() ; ++instanceIndex )
             { 
                 const uint32_t originalIndex = m_OriginalInstanceIndices[ instanceIndex ];
-                const SMeshFlags& meshFlags = m_MeshFlags[ originalIndex ];
+                const uint32_t meshIndex = m_MeshInstances[ originalIndex ].m_MeshIndex;
+                const uint32_t materialIdOverride = m_MeshInstances[ originalIndex ].m_MaterialIdOverride;
+                bool isOpaque;
+                if ( materialIdOverride != INVALID_MATERIAL_ID )
+                {
+                    isOpaque = m_Materials[ materialIdOverride ].IsOpaque();
+                }
+                else
+                {
+                    isOpaque = m_MeshFlags[ meshIndex ].m_Opaque;
+                }
                 uint32_t* instanceFlag = ( (uint32_t*)address ) + instanceIndex;
-                *instanceFlag = meshFlags.m_Opaque ? INSTANCE_FLAG_OPAQUE : 0;
+                *instanceFlag = isOpaque ? INSTANCE_FLAG_OPAQUE : 0;
             }
             context.Unmap();
             context.Upload();

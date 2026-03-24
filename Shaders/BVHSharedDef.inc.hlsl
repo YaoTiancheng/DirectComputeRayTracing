@@ -1,0 +1,6 @@
+#ifndef _BVH_SHARED_DEF_H_
+#define _BVH_SHARED_DEF_H_
+
+#define BVHNODE_MISC_MASK_PRIMITIVE_COUNT 0x1FFFFFFF
+
+#endif

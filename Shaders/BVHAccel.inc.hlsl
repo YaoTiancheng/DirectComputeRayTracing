@@ -3,21 +3,22 @@
 
 #include "Intrinsics.inc.hlsl"
 #include "RayPrimitiveIntersect.inc.hlsl"
+#include "BVHSharedDef.inc.hlsl"
 #include "InstanceSharedDef.inc.hlsl"
 
 uint BVHNodeGetPrimitiveCount( BVHNode node )
 {
-    return ( node.misc & 0xFF );
+    return ( node.misc >> 3 ) & BVHNODE_MISC_MASK_PRIMITIVE_COUNT;
 }
 
 uint BVHNodeHasBLAS( BVHNode node )
 {
-    return ( node.misc & 0x100 ) != 0;
+    return ( node.misc & 0x4 ) != 0;
 }
 
 uint BVHNodeGetSplitAxis( BVHNode node )
 {
-    return ( node.misc >> 9 ) & 0x3;
+    return node.misc & 0x3;
 }
 
 struct BVHTraversalStack
@@ -90,6 +91,7 @@ bool BVHIntersectNoInterp( float3 origin
     , StructuredBuffer<BVHNode> BVHNodes
     , StructuredBuffer<float4x3> instanceInvTransforms
     , Buffer<uint> instanceFlags
+    , Buffer<uint> instanceMaterialOverrides
 #if defined( ALLOW_ANYHIT_SHADER )
     , StructuredBuffer<uint> materialIds
     , StructuredBuffer<Material> materials
@@ -111,6 +113,7 @@ bool BVHIntersectNoInterp( float3 origin
     uint instanceIndex = 0;
     bool isBLAS = false;
     bool isOpaque = false;
+    uint materialOverride = INSTANCE_MATERIAL_OVERRIDE_NONE;
     float3 localRayOrigin = origin;
     float3 localRayDirection = direction;
     while ( true )
@@ -133,6 +136,7 @@ bool BVHIntersectNoInterp( float3 origin
                 
                 const uint instanceFlag = instanceFlags[ primCountOrInstanceIndex ];
                 isOpaque = ( instanceFlag & INSTANCE_FLAG_OPAQUE ) != 0;
+                materialOverride = instanceMaterialOverrides[ primCountOrInstanceIndex ];
             }
             else
             {
@@ -181,7 +185,7 @@ bool BVHIntersectNoInterp( float3 origin
                                 float2 texcoord0 = vertices[ index0 ].texcoord;
                                 float2 texcoord1 = vertices[ index1 ].texcoord;
                                 float2 texcoord2 = vertices[ index2 ].texcoord;
-                                hitAccepted = AnyHitShader( origin, direction, texcoord0, texcoord1, texcoord2, t, u, v, iPrim, materialIds, materials, textures, samplerState, opacitySample );
+                                hitAccepted = AnyHitShader( origin, direction, texcoord0, texcoord1, texcoord2, t, u, v, iPrim, materialOverride, materialIds, materials, textures, samplerState, opacitySample );
                             }
 #endif
                             if ( hitAccepted )
@@ -237,6 +241,7 @@ bool BVHIntersect( float3 origin
     , StructuredBuffer<BVHNode> BVHNodes
     , StructuredBuffer<float4x3> instanceInvTransforms
     , Buffer<uint> instanceFlags
+    , Buffer<uint> instanceMaterialOverrides
 #if defined( ALLOW_ANYHIT_SHADER )
     , StructuredBuffer<uint> materialIds
     , StructuredBuffer<Material> materials
@@ -251,6 +256,7 @@ bool BVHIntersect( float3 origin
     uint nodeIndex = 0;
     bool isBLAS = false;
     bool isOpaque = false;
+    uint materialOverride = INSTANCE_MATERIAL_OVERRIDE_NONE;
     float3 localRayOrigin = origin;
     float3 localRayDirection = direction;
     while ( true )
@@ -271,6 +277,7 @@ bool BVHIntersect( float3 origin
                 
                 const uint instanceFlag = instanceFlags[ primCountOrInstanceIndex ];
                 isOpaque = ( instanceFlag & INSTANCE_FLAG_OPAQUE ) != 0;
+                materialOverride = instanceMaterialOverrides[ primCountOrInstanceIndex ];
             }
             else
             {
@@ -321,7 +328,7 @@ bool BVHIntersect( float3 origin
                                 float2 texcoord0 = vertices[ index0 ].texcoord;
                                 float2 texcoord1 = vertices[ index1 ].texcoord;
                                 float2 texcoord2 = vertices[ index2 ].texcoord;
-                                hitAccepted = AnyHitShader( origin, direction, texcoord0, texcoord1, texcoord2, t, u, v, iPrim, materialIds, materials, textures, samplerState, opacitySample );
+                                hitAccepted = AnyHitShader( origin, direction, texcoord0, texcoord1, texcoord2, t, u, v, iPrim, materialOverride, materialIds, materials, textures, samplerState, opacitySample );
                             }
 #endif
                             if ( hitAccepted )

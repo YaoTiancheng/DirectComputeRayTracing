@@ -51,6 +51,12 @@ struct SEnvironmentLight
     bool CreateTextureFromFile();
 };
 
+struct SMeshInstance
+{
+    uint32_t m_MeshIndex;
+    uint32_t m_MaterialIdOverride;
+};
+
 struct SMeshFlags
 {
     uint8_t m_Opaque : 1;
@@ -191,6 +197,7 @@ public:
     std::vector<SMaterial> m_Materials;
     std::vector<Mesh> m_Meshes;
     std::vector<SMeshFlags> m_MeshFlags;
+    std::vector<SMeshInstance> m_MeshInstances;
     std::vector<BVHAccel::BVHNode> m_TLAS;
     std::vector<uint32_t> m_OriginalInstanceIndices; // Original indices indexed by reordered index
     std::vector<uint32_t> m_ReorderedInstanceIndices; // Reordered indices indexed by original index
@@ -206,6 +213,7 @@ public:
     CD3D12ResourcePtr<GPUBuffer> m_MaterialsBuffer;
     CD3D12ResourcePtr<GPUBuffer> m_InstanceTransformsBuffer;
     CD3D12ResourcePtr<GPUBuffer> m_InstanceFlagsBuffer;
+    CD3D12ResourcePtr<GPUBuffer> m_InstanceMaterialOverrideBuffer;
     CD3D12ResourcePtr<GPUBuffer> m_InstanceLightIndicesBuffer;
     std::vector<CD3D12ResourcePtr<GPUTexture>> m_GPUTextures;
 

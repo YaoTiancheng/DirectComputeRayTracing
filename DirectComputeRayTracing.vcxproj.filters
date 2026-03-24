@@ -277,6 +277,9 @@
     <None Include="Shaders\InstanceSharedDef.inc.hlsl">
       <Filter>Shaders</Filter>
     </None>
+    <None Include="Shaders\BVHSharedDef.inc.hlsl">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resources\DirectComputeRayTracing.rc">

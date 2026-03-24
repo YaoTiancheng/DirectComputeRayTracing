@@ -432,6 +432,7 @@ bool CScene::LoadFromWavefrontOBJFile( const std::filesystem::path& filenamePath
     }
 
     m_Meshes.reserve( m_Meshes.size() + shapes.size() );
+    m_MeshInstances.reserve( m_MeshInstances.size() + shapes.size() );
     m_InstanceTransforms.reserve( m_InstanceTransforms.size() + shapes.size() );
     m_Materials.reserve( m_Materials.size() + materials.size() );
 
@@ -455,6 +456,10 @@ bool CScene::LoadFromWavefrontOBJFile( const std::filesystem::path& filenamePath
         }
         newMesh.m_Name = shapes[ shapeIndex ].name;
 
+        SMeshInstance instance;
+        instance.m_MeshIndex = (uint32_t)m_Meshes.size() - 1;
+        instance.m_MaterialIdOverride = INVALID_MATERIAL_ID;
+        m_MeshInstances.emplace_back( instance );
         m_InstanceTransforms.emplace_back( MathHelper::s_IdentityMatrix4x3 );
     }
 

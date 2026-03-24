@@ -2,6 +2,7 @@
 #define _HITSHADER_H_
 
 #include "Intersection.inc.hlsl"
+#include "InstanceSharedDef.inc.hlsl"
 
 #define DEGEN_TANGENT_LENGTH_THRESHOLD 0.000001f
 
@@ -20,6 +21,7 @@ void HitShader( float3 rayOrigin
     , float v
     , uint triangleId
     , bool backface
+    , uint materialOverride
     , StructuredBuffer<uint> materialIds
     , StructuredBuffer<Material> materials
     , Texture2D<float4> textures[]
@@ -52,7 +54,7 @@ void HitShader( float3 rayOrigin
     float3 v0v2 = v2.position - v0.position;
     intersection.geometryNormal = normalize( cross( v0v2, v0v1 ) );
 
-    uint materialId = materialIds[ triangleId ];
+    uint materialId = materialOverride != INSTANCE_MATERIAL_OVERRIDE_NONE ? materialOverride : materialIds[ triangleId ];
 
     float2 texcoord = VectorBaryCentric2( v0.texcoord, v1.texcoord, v2.texcoord, u, v );
            texcoord *= materials[ materialId ].texTiling;
@@ -89,13 +91,14 @@ bool AnyHitShader( float3 rayOrigin
     , float u
     , float v
     , uint triangleId
+    , uint materialOverride
     , StructuredBuffer<uint> materialIds
     , StructuredBuffer<Material> materials
     , Texture2D<float4> textures[]
     , SamplerState samplerState
     , float opacitySample )
 {
-    uint materialId = materialIds[ triangleId ];
+    uint materialId = materialOverride != INSTANCE_MATERIAL_OVERRIDE_NONE ? materialOverride : materialIds[ triangleId ];
     float opacity = materials[ materialId ].opacity;
     int opacityTextureIndex = materials[ materialId ].opacityTextureIndex;
     [branch]

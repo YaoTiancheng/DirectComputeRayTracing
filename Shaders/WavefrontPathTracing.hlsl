@@ -73,10 +73,11 @@ Buffer<uint> g_PathIndices                          : register( t4 );
 Buffer<uint> g_QueueCounters                        : register( t5 );
 StructuredBuffer<float4x3> g_InstanceInvTransforms  : register( t6 );
 Buffer<uint> g_InstanceFlags                        : register( t7 );
-StructuredBuffer<uint> g_MaterialIds                : register( t8 );
-StructuredBuffer<Material> g_Materials              : register( t9 );
-Buffer<float> g_OpacitySamples                      : register( t10 );
-Texture2D<float4> g_Textures[]                      : register( t16 );
+Buffer<uint> g_InstanceMaterialOverrides            : register( t8 );
+StructuredBuffer<uint> g_MaterialIds                : register( t9 );
+StructuredBuffer<Material> g_Materials              : register( t10 );
+Buffer<float> g_OpacitySamples                      : register( t11 );
+Texture2D<float4> g_Textures[]                      : register( t17 );
 RWStructuredBuffer<SRayHit> g_RayHits               : register( u0 );
 
 [numthreads( 32, 1, 1 )]
@@ -99,6 +100,7 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
         , g_BVHNodes
         , g_InstanceInvTransforms
         , g_InstanceFlags
+        , g_InstanceMaterialOverrides
 #if defined( ALLOW_ANYHIT_SHADER )
         , g_MaterialIds
         , g_Materials
@@ -129,10 +131,11 @@ Buffer<uint> g_PathIndices                          : register( t4 );
 Buffer<uint> g_QueueCounters                        : register( t5 );
 StructuredBuffer<float4x3> g_InstanceInvTransforms  : register( t6 );
 Buffer<uint> g_InstanceFlags                        : register( t7 );
-StructuredBuffer<uint> g_MaterialIds                : register( t8 );
-StructuredBuffer<Material> g_Materials              : register( t9 );
-Buffer<float> g_OpacitySamples                      : register( t10 );
-Texture2D<float4> g_Textures[]                      : register( t16 );
+Buffer<uint> g_InstanceMaterialOverrides            : register( t8 );
+StructuredBuffer<uint> g_MaterialIds                : register( t9 );
+StructuredBuffer<Material> g_Materials              : register( t10 );
+Buffer<float> g_OpacitySamples                      : register( t11 );
+Texture2D<float4> g_Textures[]                      : register( t17 );
 RWBuffer<uint> g_Flags                              : register( u0 );
 
 [numthreads( 32, 1, 1 )]
@@ -154,6 +157,7 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
         , g_BVHNodes
         , g_InstanceInvTransforms
         , g_InstanceFlags
+        , g_InstanceMaterialOverrides
 #if defined( ALLOW_ANYHIT_SHADER )
         , g_MaterialIds
         , g_Materials
@@ -266,16 +270,17 @@ StructuredBuffer<Vertex> g_Vertices                     : register( t3 );
 StructuredBuffer<uint> g_Triangles                      : register( t4 );
 StructuredBuffer<SLight> g_Lights                       : register( t5 );
 StructuredBuffer<float4x3> g_InstanceTransforms         : register( t6 );
-StructuredBuffer<uint> g_MaterialIds                    : register( t7 );
-StructuredBuffer<Material> g_Materials                  : register( t8 );
-Buffer<uint> g_InstanceLightIndices                     : register( t9 );
-Texture2D<float> g_BRDFTexture                          : register( t10 );
-Texture2D<float> g_BRDFAvgTexture                       : register( t11 );
-Texture2DArray<float> g_BRDFDielectricTexture           : register( t12 );
-Texture2DArray<float> g_BSDFTexture                     : register( t13 );
-Texture2DArray<float> g_BSDFAvgTexture                  : register( t14 );
-TextureCube<float3> g_EnvTexture                        : register( t15 );
-Texture2D<float4> g_Textures[]                          : register( t16 );
+Buffer<uint> g_InstanceMaterialOverrides                : register( t7 );
+StructuredBuffer<uint> g_MaterialIds                    : register( t8 );
+StructuredBuffer<Material> g_Materials                  : register( t9 );
+Buffer<uint> g_InstanceLightIndices                     : register( t10 );
+Texture2D<float> g_BRDFTexture                          : register( t11 );
+Texture2D<float> g_BRDFAvgTexture                       : register( t12 );
+Texture2DArray<float> g_BRDFDielectricTexture           : register( t13 );
+Texture2DArray<float> g_BSDFTexture                     : register( t14 );
+Texture2DArray<float> g_BSDFAvgTexture                  : register( t15 );
+TextureCube<float3> g_EnvTexture                        : register( t16 );
+Texture2D<float4> g_Textures[]                          : register( t17 );
 
 RWStructuredBuffer<SRay> g_Rays                         : register( u0 );
 RWStructuredBuffer<SRay> g_ShadowRays                   : register( u1 );
@@ -314,7 +319,7 @@ void main( uint threadId : SV_DispatchThreadID, uint gtid : SV_GroupThreadID )
     float3 origin = ray.origin;
     float3 direction = ray.direction;
     Intersection intersection;
-    HitInfoToIntersection( origin, direction, hitInfo, g_Vertices, g_Triangles, g_MaterialIds, g_Materials, g_InstanceTransforms, g_InstanceLightIndices, g_Textures, UVWrapSampler, intersection );
+    HitInfoToIntersection( origin, direction, hitInfo, g_Vertices, g_Triangles, g_MaterialIds, g_Materials, g_InstanceTransforms, g_InstanceLightIndices, g_InstanceMaterialOverrides, g_Textures, UVWrapSampler, intersection );
 
     Xoshiro128StarStar rng = g_Rngs[ pathIndex ];
     SPathAccumulation pathAccumulation = g_PathAccumulation[ pathIndex ];

@@ -43,7 +43,7 @@ struct alignas( 256 ) SRayTracingConstants
     uint32_t            frameSeed;
 };
 
-static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 16, 2 );
+static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 17, 2 );
 
 bool CMegakernelPathTracer::Create()
 {
@@ -218,7 +218,7 @@ void CMegakernelPathTracer::Render( SRenderer* renderer, const SRenderContext& r
     {
         environmentTextureSRV = scene->m_EnvironmentLight->m_Texture->GetSRV();
     }
-    SD3D12DescriptorHandle srcDescriptors[ 18 ] =
+    SD3D12DescriptorHandle srcDescriptors[ 19 ] =
     {
           scene->m_VerticesBuffer->GetSRV()
         , scene->m_TrianglesBuffer->GetSRV()
@@ -232,6 +232,7 @@ void CMegakernelPathTracer::Render( SRenderer* renderer, const SRenderContext& r
         , scene->m_InstanceTransformsBuffer->GetSRV( DXGI_FORMAT_UNKNOWN, sizeof( XMFLOAT4X3 ), 0, (uint32_t)scene->m_InstanceTransforms.size() )
         , scene->m_InstanceTransformsBuffer->GetSRV( DXGI_FORMAT_UNKNOWN, sizeof( XMFLOAT4X3 ), (uint32_t)scene->m_InstanceTransforms.size(), (uint32_t)scene->m_InstanceTransforms.size() )
         , scene->m_InstanceFlagsBuffer->GetSRV()
+        , scene->m_InstanceMaterialOverrideBuffer->GetSRV()
         , scene->m_MaterialIdsBuffer->GetSRV()
         , scene->m_MaterialsBuffer->GetSRV()
         , scene->m_InstanceLightIndicesBuffer->GetSRV()

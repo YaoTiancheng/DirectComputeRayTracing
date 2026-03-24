@@ -2,6 +2,7 @@
 #include "BVHAccel.h"
 #include "../Shaders/Vertex.inc.hlsl"
 #include "../Shaders/BVHNode.inc.hlsl"
+#include "../Shaders/BVHSharedDef.inc.hlsl"
 
 static void CalculateTriangleBoundingBox( const GPU::Vertex& vert0, const GPU::Vertex& vert1, const GPU::Vertex& vert2, DirectX::BoundingBox* m_BoundingBox )
 {
@@ -197,7 +198,7 @@ static void BuildNodes(
                         reorderedPrimitiveIndices[ reorderedPrimitiveCount + iPrim ] = m_PrimIndex;
                     }
                     BVHNode->m_PrimIndex = reorderedPrimitiveCount;
-                    BVHNode->m_PrimCount = uint8_t( m_PrimCount );
+                    BVHNode->m_PrimCount = m_PrimCount;
                     BVHNode->m_IsLeaf = true;
                     reorderedPrimitiveCount += m_PrimCount;
                     if ( HasLeafNodeDepths )
@@ -338,7 +339,7 @@ static void BuildNodes(
                         reorderedPrimitiveIndices[ reorderedPrimitiveCount + i ] = m_PrimIndex;
                     }
                     BVHNode->m_PrimIndex = reorderedPrimitiveCount;
-                    BVHNode->m_PrimCount = uint8_t( m_PrimCount );
+                    BVHNode->m_PrimCount = m_PrimCount;
                     BVHNode->m_IsLeaf = true;
                     reorderedPrimitiveCount += m_PrimCount;
                     if ( HasLeafNodeDepths )
@@ -426,8 +427,9 @@ void PackBVH( const BVHNode* BVHNodes, uint32_t nodeCount, bool isBLAS, GPU::BVH
             DirectX::XMStoreFloat3( &packed.bboxMax, vBBoxMax );
 
             packed.rightChildOrPrimIndex = unpacked.m_ChildIndex;
-            packed.misc = unpacked.m_PrimCount;
-            packed.misc |= ( unpacked.m_SplitAxis & 0x3 ) << 9;
+            assert( unpacked.m_PrimCount <= BVHNODE_MISC_MASK_PRIMITIVE_COUNT );
+            packed.misc = ( unpacked.m_PrimCount & BVHNODE_MISC_MASK_PRIMITIVE_COUNT ) << 3;
+            packed.misc |= unpacked.m_SplitAxis & 0x3;
             if ( !unpacked.m_IsLeaf )
             {
                 packed.rightChildOrPrimIndex += nodeIndexOffset;
@@ -438,7 +440,7 @@ void PackBVH( const BVHNode* BVHNodes, uint32_t nodeCount, bool isBLAS, GPU::BVH
             }
             if ( !isBLAS && unpacked.m_IsLeaf )
             {
-                packed.misc |= 0x100;
+                packed.misc |= 0x4;
             }
         }
     }

@@ -94,6 +94,7 @@ void HitInfoToIntersection( float3 origin
     , StructuredBuffer<Material> materials
     , StructuredBuffer<float4x3> instances
     , Buffer<uint> instanceLightIndices
+    , Buffer<uint> instanceMaterialOverrides
     , Texture2D<float4> textures[]
     , SamplerState samplerState
     , inout Intersection intersection )
@@ -101,10 +102,12 @@ void HitInfoToIntersection( float3 origin
     intersection.lightIndex = instanceLightIndices[ hitInfo.instanceIndex ];
     intersection.triangleIndex = hitInfo.triangleId;
 
+    uint materialOverride = instanceMaterialOverrides[ hitInfo.instanceIndex ];
+
     Vertex v0 = vertices[ triangles[ hitInfo.triangleId * 3 ] ];
     Vertex v1 = vertices[ triangles[ hitInfo.triangleId * 3 + 1 ] ];
     Vertex v2 = vertices[ triangles[ hitInfo.triangleId * 3 + 2 ] ];
-    HitShader( origin, direction, v0, v1, v2, hitInfo.t, hitInfo.u, hitInfo.v, hitInfo.triangleId, hitInfo.backface, materialIds, materials, textures, samplerState, intersection );
+    HitShader( origin, direction, v0, v1, v2, hitInfo.t, hitInfo.u, hitInfo.v, hitInfo.triangleId, hitInfo.backface, materialOverride, materialIds, materials, textures, samplerState, intersection );
     // Transform the position & vectors from local space to world space. Assuming the transform only contains uniform scaling otherwise the transformed vectors are wrong.
     intersection.position = mul( float4( intersection.position, 1.f ), instances[ hitInfo.instanceIndex ] );
     intersection.normal = normalize( mul( float4( intersection.normal, 0.f ), instances[ hitInfo.instanceIndex ] ) );

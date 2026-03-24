@@ -10,6 +10,7 @@ bool IntersectScene( float3 origin
     , StructuredBuffer<float4x3> instancesInvTransforms
     , Buffer<uint> instanceFlags
     , Buffer<uint> instanceLightIndices
+    , Buffer<uint> instanceMaterialOverrides
     , StructuredBuffer<uint> materialIds
     , StructuredBuffer<Material> materials
     , Texture2D<float4> textures[]
@@ -25,14 +26,14 @@ bool IntersectScene( float3 origin
     t = FLT_INF;
 #if defined( ALLOW_ANYHIT_SHADER )
     float opacitySample = GetNextSample1D( rng );
-    bool hasIntersection = BVHIntersectNoInterp( origin, direction, 0, dispatchThreadIndex, vertices, triangles, BVHNodes, instancesInvTransforms, instanceFlags, materialIds, materials, textures, samplerState, opacitySample, hitInfo, iterationCounter );
+    bool hasIntersection = BVHIntersectNoInterp( origin, direction, 0, dispatchThreadIndex, vertices, triangles, BVHNodes, instancesInvTransforms, instanceFlags, instanceMaterialOverrides, materialIds, materials, textures, samplerState, opacitySample, hitInfo, iterationCounter );
 #else
-    bool hasIntersection = BVHIntersectNoInterp( origin, direction, 0, dispatchThreadIndex, vertices, triangles, BVHNodes, instancesInvTransforms, instanceFlags, hitInfo, iterationCounter );
+    bool hasIntersection = BVHIntersectNoInterp( origin, direction, 0, dispatchThreadIndex, vertices, triangles, BVHNodes, instancesInvTransforms, instanceFlags, instanceMaterialOverrides, hitInfo, iterationCounter );
 #endif
     if ( hasIntersection )
     {
         t = hitInfo.t;
-        HitInfoToIntersection( origin, direction, hitInfo, vertices, triangles, materialIds, materials, instancesTransforms, instanceLightIndices, textures, samplerState, intersection );
+        HitInfoToIntersection( origin, direction, hitInfo, vertices, triangles, materialIds, materials, instancesTransforms, instanceLightIndices, instanceMaterialOverrides, textures, samplerState, intersection );
     }
     return hasIntersection;
 }
@@ -46,6 +47,7 @@ bool IsOcculuded( float3 origin
     , StructuredBuffer<BVHNode> BVHNodes
     , StructuredBuffer<float4x3> instanceInvTransforms
     , Buffer<uint> instanceFlags
+    , Buffer<uint> instanceMaterialOverrides
     , StructuredBuffer<uint> materialIds
     , StructuredBuffer<Material> materials
     , Texture2D<float4> textures[]
@@ -54,9 +56,9 @@ bool IsOcculuded( float3 origin
 {
 #if defined( ALLOW_ANYHIT_SHADER )
     float opacitySample = GetNextSample1D( rng );
-    return BVHIntersect( origin, direction, 0, distance, dispatchThreadIndex, vertices, triangles, BVHNodes, instanceInvTransforms, instanceFlags, materialIds, materials, textures, samplerState, opacitySample );
+    return BVHIntersect( origin, direction, 0, distance, dispatchThreadIndex, vertices, triangles, BVHNodes, instanceInvTransforms, instanceFlags, instanceMaterialOverrides, materialIds, materials, textures, samplerState, opacitySample );
 #else
-    return BVHIntersect( origin, direction, 0, distance, dispatchThreadIndex, vertices, triangles, BVHNodes, instanceInvTransforms, instanceFlags );
+    return BVHIntersect( origin, direction, 0, distance, dispatchThreadIndex, vertices, triangles, BVHNodes, instanceInvTransforms, instanceFlags, instanceMaterialOverrides );
 #endif
 }
 
@@ -92,11 +94,12 @@ StructuredBuffer<BVHNode> g_BVHNodes                    : register( t8 );
 StructuredBuffer<float4x3> g_InstanceTransforms         : register( t9 );
 StructuredBuffer<float4x3> g_InstanceInvTransforms      : register( t10 );
 Buffer<uint> g_InstanceFlags                            : register( t11 );
-StructuredBuffer<uint> g_MaterialIds                    : register( t12 );
-StructuredBuffer<Material> g_Materials                  : register( t13 );
-Buffer<uint> g_InstanceLightIndices                     : register( t14 );
-TextureCube<float3> g_EnvTexture                        : register( t15 );
-Texture2D<float4> g_Textures[]                          : register( t16 );
+Buffer<uint> g_InstanceMaterialOverrides                : register( t12 );
+StructuredBuffer<uint> g_MaterialIds                    : register( t13 );
+StructuredBuffer<Material> g_Materials                  : register( t14 );
+Buffer<uint> g_InstanceLightIndices                     : register( t15 );
+TextureCube<float3> g_EnvTexture                        : register( t16 );
+Texture2D<float4> g_Textures[]                          : register( t17 );
 RWTexture2D<float2> g_SamplePositionTexture             : register( u0 );
 RWTexture2D<float3> g_SampleValueTexture                : register( u1 );
 
@@ -124,7 +127,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     float hitDistance;
     uint iterationCounter;
     bool hasHit = IntersectScene( intersection.position, wi, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceTransforms, g_InstanceInvTransforms, g_InstanceFlags,
-        g_InstanceLightIndices, g_MaterialIds, g_Materials, g_Textures, UVWrapSampler, rng, intersection, hitDistance, iterationCounter );
+        g_InstanceLightIndices, g_InstanceMaterialOverrides, g_MaterialIds, g_Materials, g_Textures, UVWrapSampler, rng, intersection, hitDistance, iterationCounter );
 
     if ( hasHit )
     { 
@@ -147,7 +150,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
                 bool isDeltaLight = sampleResult.isDeltaLight;
                 if ( any( sampleResult.radiance > 0.f ) && sampleResult.pdf > 0.f
                     && !IsOcculuded( OffsetRayOrigin( intersection.position, intersection.geometryNormal, sampleResult.wi ), sampleResult.wi, sampleResult.distance, threadId,
-                        g_Vertices, g_Triangles, g_BVHNodes, g_InstanceInvTransforms, g_InstanceFlags, g_MaterialIds, g_Materials, g_Textures, UVWrapSampler, rng ) )
+                        g_Vertices, g_Triangles, g_BVHNodes, g_InstanceInvTransforms, g_InstanceFlags, g_InstanceMaterialOverrides, g_MaterialIds, g_Materials, g_Textures, UVWrapSampler, rng ) )
                 {
                     float3 bsdf = EvaluateBSDF( sampleResult.wi, wo, intersection );
                     float NdotWI = abs( dot( intersection.normal, sampleResult.wi ) );
@@ -174,7 +177,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
                 pathThroughput = pathThroughput * bsdf * NdotWI / bsdfPdf;
 
                 hasHit = IntersectScene( OffsetRayOrigin( intersection.position, intersection.geometryNormal, wi ), wi, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceTransforms,
-                    g_InstanceInvTransforms, g_InstanceFlags, g_InstanceLightIndices, g_MaterialIds, g_Materials, g_Textures, UVWrapSampler, rng, intersection, hitDistance, iterationCounter );
+                    g_InstanceInvTransforms, g_InstanceFlags, g_InstanceLightIndices, g_InstanceMaterialOverrides, g_MaterialIds, g_Materials, g_Textures, UVWrapSampler, rng, intersection, hitDistance, iterationCounter );
 
                 uint lightIndex = hasHit ? intersection.lightIndex : g_EnvironmentLightIndex;
                 if ( lightIndex != LIGHT_INDEX_INVALID )
@@ -236,10 +239,11 @@ StructuredBuffer<BVHNode> g_BVHNodes    : register( t8 );
 StructuredBuffer<float4x3> g_InstanceTransforms : register( t9 );
 StructuredBuffer<float4x3> g_InstanceInvTransforms : register( t10 );
 Buffer<uint> g_InstanceFlags            : register( t11 );
-StructuredBuffer<uint> g_MaterialIds    : register( t12 );
-StructuredBuffer<Material> g_Materials  : register( t13 );
-Buffer<uint> g_InstanceLightIndices     : register( t14 );
-Texture2D<float4> g_Textures[]          : register( t16 );
+Buffer<uint> g_InstanceMaterialOverrides : register( t12 );
+StructuredBuffer<uint> g_MaterialIds    : register( t13 );
+StructuredBuffer<Material> g_Materials  : register( t14 );
+Buffer<uint> g_InstanceLightIndices     : register( t15 );
+Texture2D<float4> g_Textures[]          : register( t17 );
 RWTexture2D<float2> g_SamplePositionTexture : register( u0 );
 RWTexture2D<float3> g_SampleValueTexture    : register( u1 );
 
@@ -264,7 +268,7 @@ void main( uint threadId : SV_GroupIndex, uint2 pixelPos : SV_DispatchThreadID )
     float hitDistance = 0.0f;
     uint iterationCounter;
     if ( IntersectScene( intersection.position, wo, threadId, g_Vertices, g_Triangles, g_BVHNodes, g_InstanceTransforms, g_InstanceInvTransforms, g_InstanceFlags,
-        g_InstanceLightIndices, g_MaterialIds, g_Materials, g_Textures, UVWrapSampler, rng, intersection, hitDistance, iterationCounter ) )
+        g_InstanceLightIndices, g_InstanceMaterialOverrides, g_MaterialIds, g_Materials, g_Textures, UVWrapSampler, rng, intersection, hitDistance, iterationCounter ) )
     {
 #if defined( OUTPUT_NORMAL )
         l = intersection.normal * 0.5f + 0.5f;

@@ -1327,7 +1327,6 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                             processingParams.m_ApplyTransform = false;
                             processingParams.m_ChangeWindingOrder = true;
                             processingParams.m_FlipTexcoordV = true;
-                            processingParams.m_MaterialIndexOverride = materialId;
 
                             m_Meshes.emplace_back();
                             Mesh& newMesh = m_Meshes.back();

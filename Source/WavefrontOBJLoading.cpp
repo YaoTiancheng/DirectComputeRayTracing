@@ -160,8 +160,6 @@ static bool CreateMeshFromWavefrontOBJData( const tinyobj::attrib_t& attrib, con
     if ( normalCount == 0 )
         return false;
 
-    bool hasMaterialOverride = params.m_MaterialIndexOverride != -1;
-
     SMikkTSpaceContext mikkTSpaceContext;
     SMikkTSpaceInterface mikkTSpaceInterface;
     mikkTSpaceContext.m_pInterface = &mikkTSpaceInterface;
@@ -204,15 +202,8 @@ static bool CreateMeshFromWavefrontOBJData( const tinyobj::attrib_t& attrib, con
         {
             assert( mesh.num_face_vertices[ iFace ] == 3 );
 
-            if ( !hasMaterialOverride )
-            {
-                int materialId = mesh.material_ids[ iFace ];
-                outMesh->m_MaterialIds.push_back( materialId != -1 ? params.m_MaterialIndexBase + uint32_t( materialId ) : INVALID_MATERIAL_ID );
-            }
-            else
-            {
-                outMesh->m_MaterialIds.push_back( params.m_MaterialIndexOverride );
-            }
+            int materialId = mesh.material_ids[ iFace ];
+            outMesh->m_MaterialIds.push_back( materialId != -1 ? params.m_MaterialIndexBase + uint32_t( materialId ) : INVALID_MATERIAL_ID );
 
             for ( int iVertex = 0; iVertex < 3; ++iVertex )
             {
@@ -401,9 +392,9 @@ bool Mesh::LoadFromWavefrontOBJFile( const std::filesystem::path& filenamePath, 
         return false;
     }
 
-    bool hasMaterialOverride = params.m_MaterialIndexOverride != INVALID_MATERIAL_ID;
-    if ( !hasMaterialOverride )
+    if ( outMaterials )
     {
+        assert( outTextures );
         SMaterialTranslationContext translationContext( params.m_TextureIndexBase );
         const size_t originalSize = outMaterials->size();
         outMaterials->resize( originalSize + materials.size() );
@@ -443,7 +434,6 @@ bool CScene::LoadFromWavefrontOBJFile( const std::filesystem::path& filenamePath
     params.m_Transform = RHS2LHSMatrix;
     params.m_ChangeWindingOrder = true;
     params.m_FlipTexcoordV = true;
-    params.m_MaterialIndexOverride = INVALID_MATERIAL_ID;
 
     for ( size_t shapeIndex = 0; shapeIndex < shapes.size(); ++shapeIndex )
     {
@@ -463,15 +453,11 @@ bool CScene::LoadFromWavefrontOBJFile( const std::filesystem::path& filenamePath
         m_InstanceTransforms.emplace_back( MathHelper::s_IdentityMatrix4x3 );
     }
 
-    const bool hasMaterialOverride = params.m_MaterialIndexOverride != INVALID_MATERIAL_ID;
-    if ( !hasMaterialOverride )
-    {
-        SMaterialTranslationContext translationContext( (int32_t)m_Textures.size() );
-        const size_t originalSize = m_Materials.size();
-        m_Materials.resize( originalSize + materials.size() );
-        translationContext.TranslateMaterials( materials.data(), m_Materials.data() + originalSize, (uint32_t)materials.size() );
-        translationContext.LoadTexturesFromFiles( filenamePath, &m_Textures );
-    }
+    SMaterialTranslationContext translationContext( (int32_t)m_Textures.size() );
+    const size_t originalSize = m_Materials.size();
+    m_Materials.resize( originalSize + materials.size() );
+    translationContext.TranslateMaterials( materials.data(), m_Materials.data() + originalSize, (uint32_t)materials.size() );
+    translationContext.LoadTexturesFromFiles( filenamePath, &m_Textures );
 
     return true;
 }

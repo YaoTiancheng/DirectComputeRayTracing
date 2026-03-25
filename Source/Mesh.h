@@ -11,7 +11,6 @@ struct SMeshProcessingParams
 {
     DirectX::XMFLOAT4X4 m_Transform;
     uint32_t m_MaterialIndexBase;
-    uint32_t m_MaterialIndexOverride;
     uint32_t m_TextureIndexBase;
     bool m_ApplyTransform;
     bool m_ChangeWindingOrder;

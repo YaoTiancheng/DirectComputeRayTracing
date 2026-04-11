@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "Scene.h"
+#include "SceneRayTrace.h"
 
 using namespace DirectX;
 

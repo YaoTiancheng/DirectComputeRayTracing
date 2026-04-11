@@ -1,14 +1,17 @@
 #pragma once
 
-#include "Scene.h"
 #include "Rectangle.h"
 #include "Timers.h"
+#include "SceneRayTrace.h"
 
 struct SRenderContext;
 
-struct SRenderer
+class CDirectComputeRayTracing
 {
-    ~SRenderer();
+public:
+    explicit CDirectComputeRayTracing( HWND hWnd );
+
+    ~CDirectComputeRayTracing();
 
     bool Init();
 
@@ -44,7 +47,7 @@ struct SRenderer
 
     std::vector<GPUTexturePtr> m_sRGBBackbuffers;
 
-    CScene m_Scene;
+    class CScene* m_Scene = nullptr;
 
     uint32_t m_ActivePathTracerIndex = 0;
 
@@ -71,20 +74,4 @@ struct SRenderer
     uint32_t m_CursorPixelPosOnFilm[ 2 ];
     bool m_ShowUI = true;
     bool m_ShowRayTracingUI = false;
-};
-
-class CDirectComputeRayTracing
-{
-public:
-    explicit CDirectComputeRayTracing( HWND hWnd );
-
-    ~CDirectComputeRayTracing();
-
-    bool Init() { return m_Renderer->Init(); }
-
-    bool OnWndMessage( UINT message, WPARAM wParam, LPARAM lParam ) { return m_Renderer->OnWndMessage( message, wParam, lParam ); }
-
-    void RenderOneFrame() { m_Renderer->RenderOneFrame(); }
-
-    SRenderer* m_Renderer = nullptr;
 };

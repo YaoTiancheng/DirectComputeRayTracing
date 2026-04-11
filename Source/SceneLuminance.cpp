@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "DirectComputeRayTracing.h"
+#include "Scene.h"
 #include "D3D12Adapter.h"
 #include "D3D12DescriptorUtil.h"
 #include "Shader.h"
@@ -106,9 +107,9 @@ bool CScene::ResizeSceneLuminanceInputResolution( uint32_t resolutionWidth, uint
     return true;
 }
 
-void SRenderer::DispatchSceneLuminanceCompute( const SRenderContext& renderContext )
+void CDirectComputeRayTracing::DispatchSceneLuminanceCompute( const SRenderContext& renderContext )
 {
-    if ( !m_Scene.m_IsAutoExposureEnabled || !m_Scene.m_IsPostFXEnabled )
+    if ( !m_Scene->m_IsAutoExposureEnabled || !m_Scene->m_IsPostFXEnabled )
     {
         return;
     }
@@ -125,7 +126,7 @@ void SRenderer::DispatchSceneLuminanceCompute( const SRenderContext& renderConte
     uint32_t sumLuminanceBlockCountY = uint32_t( std::ceilf( resolutionHeight / float( SL_BLOCKSIZEY ) ) );
     sumLuminanceBlockCountY = uint32_t( std::ceilf( sumLuminanceBlockCountY / 2.0f ) );
 
-    commandList->SetComputeRootSignature( m_Scene.m_SceneLuminanceRootSignature.Get() );
+    commandList->SetComputeRootSignature( m_Scene->m_SceneLuminanceRootSignature.Get() );
 
     // Set constant buffer
     {   
@@ -139,23 +140,23 @@ void SRenderer::DispatchSceneLuminanceCompute( const SRenderContext& renderConte
 
     // Barriers
     {
-        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( m_Scene.m_FilmTexture->GetTexture(),
-            m_Scene.m_FilmTextureStates, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
-        m_Scene.m_FilmTextureStates = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
+        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( m_Scene->m_FilmTexture->GetTexture(),
+            m_Scene->m_FilmTextureStates, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
+        m_Scene->m_FilmTextureStates = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
         commandList->ResourceBarrier( 1, &barrier );
     }
 
-    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( &m_Scene.m_FilmTexture->GetSRV(), 1, &m_Scene.m_SumLuminanceBuffer1->GetUAV(), 1 );
+    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( &m_Scene->m_FilmTexture->GetSRV(), 1, &m_Scene->m_SumLuminanceBuffer1->GetUAV(), 1 );
     commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
 
-    commandList->SetPipelineState( m_Scene.m_SumLuminanceTo1DPSO.Get() );
+    commandList->SetPipelineState( m_Scene->m_SumLuminanceTo1DPSO.Get() );
     commandList->Dispatch( sumLuminanceBlockCountX, sumLuminanceBlockCountY, 1 );
 
     // Switch the PSO
-    commandList->SetPipelineState( m_Scene.m_SumLuminanceToSinglePSO.Get() );
+    commandList->SetPipelineState( m_Scene->m_SumLuminanceToSinglePSO.Get() );
 
-    GPUBuffer* sumLuminanceBuffer0 = m_Scene.m_SumLuminanceBuffer0.Get();
-    GPUBuffer* sumLuminanceBuffer1 = m_Scene.m_SumLuminanceBuffer1.Get();
+    GPUBuffer* sumLuminanceBuffer0 = m_Scene->m_SumLuminanceBuffer0.Get();
+    GPUBuffer* sumLuminanceBuffer1 = m_Scene->m_SumLuminanceBuffer1.Get();
     uint32_t blockCount = sumLuminanceBlockCountX * sumLuminanceBlockCountY;
     uint32_t iteration = 0;
     while ( blockCount != 1 )
@@ -192,5 +193,5 @@ void SRenderer::DispatchSceneLuminanceCompute( const SRenderContext& renderConte
         ++iteration;
     }
 
-    m_Scene.m_LuminanceResultBuffer = sumLuminanceBuffer1;
+    m_Scene->m_LuminanceResultBuffer = sumLuminanceBuffer1;
 }

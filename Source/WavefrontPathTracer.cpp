@@ -4,7 +4,7 @@
 #include "D3D12Resource.h"
 #include "D3D12GPUDescriptorHeap.h"
 #include "D3D12DescriptorUtil.h"
-#include "DirectComputeRayTracing.h"
+#include "Scene.h"
 #include "Shader.h"
 #include "GPUBuffer.h"
 #include "GPUTexture.h"
@@ -343,11 +343,11 @@ void CWavefrontPathTracer::Destroy()
     m_RootSignature.Reset();
 }
 
-void CWavefrontPathTracer::OnSceneLoaded( SRenderer* renderer )
+void CWavefrontPathTracer::OnSceneLoaded( CScene* scene )
 {
     for ( int i = 0; i < (int)EShaderKernel::_Count; ++i )
     {
-        CompileAndCreateShader( &renderer->m_Scene, (EShaderKernel)i );
+        CompileAndCreateShader( scene, (EShaderKernel)i );
     }
 }
 
@@ -361,10 +361,9 @@ uint32_t CalculateDispatchGroupCount( uint32_t laneCount )
     return groupCount;
 }
 
-void CWavefrontPathTracer::Render( SRenderer* renderer, const SRenderContext& renderContext )
+void CWavefrontPathTracer::Render( CScene* scene, const SRenderContext& renderContext )
 {
-    CScene* scene = &renderer->m_Scene;
-    SBxDFTextures* BxDFTextures = &renderer->m_BxDFTextures;
+    SBxDFTextures* BxDFTextures = &scene->m_BxDFTextures;
 
     uint32_t blockWidth, blockHeight;
     GetBlockDimension( &blockWidth, &blockHeight );
@@ -411,7 +410,7 @@ void CWavefrontPathTracer::Render( SRenderer* renderer, const SRenderContext& re
             constants->g_BladeVertexPos.x = cosf( halfBladeAngle ) * constants->g_ApertureRadius;
             constants->g_BladeVertexPos.y = sinf( halfBladeAngle ) * constants->g_ApertureRadius;
             constants->g_ApertureBaseAngle = scene->m_ApertureRotation;
-            constants->g_FrameSeed = renderer->m_FrameSeed;
+            constants->g_FrameSeed = scene->m_FrameSeed;
             constantBufferUploadContexts[ 1 ].Unmap();
         }
     }
@@ -524,7 +523,7 @@ bool CWavefrontPathTracer::IsImageComplete()
     return false;
 }
 
-void CWavefrontPathTracer::OnImGUI( SRenderer* renderer )
+void CWavefrontPathTracer::OnImGUI( CScene* scene )
 {
     if ( ImGui::CollapsingHeader( "Wavefront Path Tracer" ) )
     {

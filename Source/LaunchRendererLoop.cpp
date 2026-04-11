@@ -11,6 +11,7 @@
 #include "MegakernelPathTracer.h"
 #include "WavefrontPathTracer.h"
 #include "ScopedRenderAnnotation.h"
+#include "BxDFTexturesBuilding.h"
 
 using namespace DirectX;
 
@@ -41,16 +42,16 @@ bool SRenderer::Init()
 
     CD3D12Resource::CreateDeferredDeleteQueue();
 
-    m_PathTracer[ 0 ] = new CMegakernelPathTracer();
-    m_PathTracer[ 1 ] = new CWavefrontPathTracer();
+    m_Scene.m_PathTracer[ 0 ] = new CMegakernelPathTracer();
+    m_Scene.m_PathTracer[ 1 ] = new CWavefrontPathTracer();
 
-    if ( !m_PathTracer[ m_ActivePathTracerIndex ]->Create() )
+    if ( !m_Scene.m_PathTracer[ m_ActivePathTracerIndex ]->Create() )
     {
         return false;
     }
 
-    m_BxDFTextures = BxDFTexturesBuilding::Build();
-    if ( !m_BxDFTextures.AllTexturesSet() )
+    m_Scene.m_BxDFTextures = BxDFTexturesBuilding::Build();
+    if ( !m_Scene.m_BxDFTextures.AllTexturesSet() )
     {
         return false;
     }
@@ -65,10 +66,10 @@ bool SRenderer::Init()
         }
     }
 
-    if ( !InitSampleConvolution() )
+    if ( !m_Scene.InitSampleConvolution() )
         return false;
 
-    if ( !InitPostProcessing() )
+    if ( !m_Scene.InitPostProcessing() )
         return false;
 
     LoadScene( CommandLineArgs::Singleton()->GetFilename().c_str(), true );
@@ -87,8 +88,8 @@ bool SRenderer::Init()
 
 SRenderer::~SRenderer()
 {
-    m_PathTracer[ m_ActivePathTracerIndex ]->Destroy();
-    for ( auto& it : m_PathTracer )
+    m_Scene.m_PathTracer[ m_ActivePathTracerIndex ]->Destroy();
+    for ( auto& it : m_Scene.m_PathTracer )
     {
         delete it;
     }
@@ -166,7 +167,7 @@ bool SRenderer::LoadScene( const char* filepath, bool reset )
         return false;
     }
 
-    m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
+    m_Scene.m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( &m_Scene );
 
     if ( !HandleFilmResolutionChange() )
     {
@@ -195,9 +196,9 @@ static void ClearFilmTexture( SRenderer* r )
 static void DispatchRayTracing( SRenderer* r, SRenderContext* renderContext )
 {
     r->m_Scene.m_IsFilmDirty = r->m_Scene.m_IsFilmDirty || r->m_Scene.m_IsLightGPUBufferDirty || r->m_Scene.m_IsMaterialGPUBufferDirty || r->m_Scene.m_IsInstanceFlagsBufferDirty
-        || r->m_Scene.m_Camera.IsDirty() || r->m_PathTracer[ r->m_ActivePathTracerIndex ]->AcquireFilmClearTrigger();
+        || r->m_Scene.m_Camera.IsDirty() || r->m_Scene.m_PathTracer[ r->m_ActivePathTracerIndex ]->AcquireFilmClearTrigger();
 
-    renderContext->m_IsResolutionChanged = ( r->m_Scene.m_IsFilmDirty != r->m_Scene.m_IsLastFrameFilmDirty );
+    const bool isResolutionChanged = ( r->m_Scene.m_IsFilmDirty != r->m_Scene.m_IsLastFrameFilmDirty );
     renderContext->m_IsSmallResolutionEnabled = r->m_Scene.m_IsFilmDirty;
 
     r->m_Scene.m_IsLastFrameFilmDirty = r->m_Scene.m_IsFilmDirty;
@@ -206,7 +207,7 @@ static void DispatchRayTracing( SRenderer* r, SRenderContext* renderContext )
     renderContext->m_CurrentResolutionRatio = (float)renderContext->m_CurrentResolutionWidth / r->m_Scene.m_ResolutionWidth;
     renderContext->m_CurrentResolutionHeight = renderContext->m_IsSmallResolutionEnabled ? r->m_SmallResolutionHeight : r->m_Scene.m_ResolutionHeight;
 
-    if ( r->m_Scene.m_IsFilmDirty || renderContext->m_IsResolutionChanged )
+    if ( r->m_Scene.m_IsFilmDirty || isResolutionChanged )
     {
         // Transition the film texture to RTV
         if ( r->m_Scene.m_FilmTextureStates != D3D12_RESOURCE_STATE_RENDER_TARGET )
@@ -222,12 +223,12 @@ static void DispatchRayTracing( SRenderer* r, SRenderContext* renderContext )
 
         if ( r->m_FrameSeedType == SRenderer::EFrameSeedType::SampleCount )
         {
-            r->m_FrameSeed = 0;
+            r->m_Scene.m_FrameSeed = 0;
         }
 
         r->m_SPP = 0;
 
-        r->m_PathTracer[ r->m_ActivePathTracerIndex ]->ResetImage();
+        r->m_Scene.m_PathTracer[ r->m_ActivePathTracerIndex ]->ResetImage();
     }
 
     if ( r->m_Scene.m_IsLightGPUBufferDirty )
@@ -245,13 +246,13 @@ static void DispatchRayTracing( SRenderer* r, SRenderContext* renderContext )
         r->m_Scene.UpdateInstanceFlagsGPUData();
     }
 
-    r->m_PathTracer[ r->m_ActivePathTracerIndex ]->Render( r, *renderContext );
+    r->m_Scene.m_PathTracer[ r->m_ActivePathTracerIndex ]->Render( &r->m_Scene, *renderContext );
 
-    if ( r->m_PathTracer[ r->m_ActivePathTracerIndex ]->IsImageComplete() )
+    if ( r->m_Scene.m_PathTracer[ r->m_ActivePathTracerIndex ]->IsImageComplete() )
     {
         if ( r->m_FrameSeedType != SRenderer::EFrameSeedType::Fixed )
         {
-            r->m_FrameSeed++;
+            r->m_Scene.m_FrameSeed++;
         }
 
         ++r->m_SPP;
@@ -269,7 +270,6 @@ void SRenderer::RenderOneFrame()
     m_FrameTimer.BeginFrame();
 
     SRenderContext renderContext;
-    renderContext.m_EnablePostFX = true;
 
     D3D12Adapter::BeginCurrentFrame();
 
@@ -287,7 +287,7 @@ void SRenderer::RenderOneFrame()
 
         DispatchRayTracing( this, &renderContext );
 
-        if ( m_PathTracer[ m_ActivePathTracerIndex ]->IsImageComplete() || renderContext.m_IsSmallResolutionEnabled )
+        if ( m_Scene.m_PathTracer[ m_ActivePathTracerIndex ]->IsImageComplete() || renderContext.m_IsSmallResolutionEnabled )
         {
             ExecuteSampleConvolution( renderContext );
 
@@ -371,7 +371,7 @@ void SRenderer::RenderOneFrame()
 
 bool SRenderer::HandleFilmResolutionChange()
 {
-    if ( !ResizeSceneLuminanceInputResolution( m_Scene.m_ResolutionWidth, m_Scene.m_ResolutionHeight ) )
+    if ( !m_Scene.ResizeSceneLuminanceInputResolution( m_Scene.m_ResolutionWidth, m_Scene.m_ResolutionHeight ) )
     {
         return false;
     }

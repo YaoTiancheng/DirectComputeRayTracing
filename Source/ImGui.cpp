@@ -132,7 +132,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
             if ( m_FrameSeedType == EFrameSeedType::Fixed )
             {
-                if ( ImGui::InputInt( "Frame Seed", (int*)&m_FrameSeed, 1 ) )
+                if ( ImGui::InputInt( "Frame Seed", (int*)&m_Scene.m_FrameSeed, 1 ) )
                 {
                     m_Scene.m_IsFilmDirty = true;
                 }
@@ -159,12 +159,12 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
             static const char* s_PathTracerNames[] = { "Megakernel Path Tracer", "Wavefront Path Tracer" };
             if ( ImGui::Combo( "Path Tracer", (int*)&m_ActivePathTracerIndex, s_PathTracerNames, IM_ARRAYSIZE( s_PathTracerNames ) ) )
             {
-                m_PathTracer[ lastActivePathTracerIndex ]->Destroy();
-                m_PathTracer[ m_ActivePathTracerIndex ]->Create();
-                m_PathTracer[ m_ActivePathTracerIndex ]->ResetImage();
+                m_Scene.m_PathTracer[ lastActivePathTracerIndex ]->Destroy();
+                m_Scene.m_PathTracer[ m_ActivePathTracerIndex ]->Create();
+                m_Scene.m_PathTracer[ m_ActivePathTracerIndex ]->ResetImage();
                 if ( m_Scene.m_HasValidScene )
                 {
-                    m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
+                    m_Scene.m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( &m_Scene );
                 }
                 m_Scene.m_IsFilmDirty = true;
             }
@@ -216,36 +216,36 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
 
             if ( ImGui::Checkbox( "GGX VNDF Sampling", &m_Scene.m_IsGGXVNDFSamplingEnabled ) )
             {
-                m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
+                m_Scene.m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( &m_Scene );
                 m_Scene.m_IsFilmDirty = true;
             }
 
             if ( ImGui::Checkbox( "Traverse BVH Front-to-back", &m_Scene.m_TraverseBVHFrontToBack ) )
             {
-                m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
+                m_Scene.m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( &m_Scene );
                 m_Scene.m_IsFilmDirty = true;
             }
 
             if ( ImGui::Checkbox( "Lights Visble to Camera", &m_Scene.m_IsLightVisible ) )
             {
-                m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
+                m_Scene.m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( &m_Scene );
                 m_Scene.m_IsFilmDirty = true;
             }
 
             if ( ImGui::Checkbox( "Watertight Ray-triangle Intersection", &m_Scene.m_WatertightRayTriangleIntersection ) )
             {
-                m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
+                m_Scene.m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( &m_Scene );
                 m_Scene.m_IsFilmDirty = true;
             }
 
             if ( ImGui::Checkbox( "Allow Anyhit Shader", &m_Scene.m_AllowAnyHitShader ) )
             {
-                m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
+                m_Scene.m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( &m_Scene );
                 m_Scene.m_IsFilmDirty = true;
             }
         }
 
-        m_PathTracer[ m_ActivePathTracerIndex ]->OnImGUI( this );
+        m_Scene.m_PathTracer[ m_ActivePathTracerIndex ]->OnImGUI( &m_Scene );
 
         OnPostProcessingImGui();
 
@@ -333,7 +333,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                         if ( hadEnvironmentTexture )
                         {
                             // Allow the path tracer switching to a kernel without sampling the environment texture
-                            m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
+                            m_Scene.m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( &m_Scene );
                         }
 
                         m_Scene.m_ObjectSelection.m_IsEnvironmentLightSelected = false;
@@ -459,7 +459,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                     bool hasEnvTextureCurrently = m_Scene.m_EnvironmentLight->m_Texture.Get() != nullptr;
                     if ( hasEnvTexturePreviously != hasEnvTextureCurrently )
                     {
-                        m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
+                        m_Scene.m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( &m_Scene );
                     }
                     m_Scene.m_IsFilmDirty = true;
                 }
@@ -471,7 +471,7 @@ void SRenderer::OnImGUI( SRenderContext* renderContext )
                 {
                     m_Scene.m_EnvironmentLight->m_TextureFileName = "";
                     m_Scene.m_EnvironmentLight->m_Texture.Reset();
-                    m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( this );
+                    m_Scene.m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( &m_Scene );
                     m_Scene.m_IsFilmDirty = true;
                 }
             }

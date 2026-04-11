@@ -6,6 +6,7 @@
 #include "Mesh.h"
 #include "Texture.h"
 #include "Material.h"
+#include "BxDFTextures.h"
 #include "../Shaders/Material.inc.hlsl"
 
 #define INDEX_NONE -1
@@ -153,6 +154,14 @@ public:
 
     void AllocateAndUpdateTextureDescriptorTable();
 
+    bool InitSceneLuminance();
+
+    bool ResizeSceneLuminanceInputResolution( uint32_t resolutionWidth, uint32_t resolutionHeight );
+
+    bool InitSampleConvolution();
+
+    bool InitPostProcessing();
+
     const uint32_t s_MaxRayBounce = 20;
     const uint32_t s_MaxLightsCount = 5000;
     const float s_MaxFocalDistance = 999999.0f;
@@ -182,6 +191,8 @@ public:
     float m_MitchellB = 1.f / 3.f;
     float m_MitchellC = 1.f / 3.f;
     uint32_t m_LanczosSincTau = 3;
+
+    uint32_t m_FrameSeed = 0;
 
     bool m_HasValidScene = false;
     bool m_TraverseBVHFrontToBack = true;
@@ -223,6 +234,36 @@ public:
     CD3D12ResourcePtr<GPUTexture> m_RenderResultTexture;
 
     D3D12_GPU_DESCRIPTOR_HANDLE m_TextureDescriptorTable;
+
+    float m_LuminanceWhite = 1.f;
+    float m_ManualEV100 = 15.f;
+    bool m_IsPostFXEnabled = true;
+    bool m_IsAutoExposureEnabled = true;
+    bool m_CalculateEV100FromCamera = true;
+
+    int32_t m_SampleConvolutionFilterIndex = -1;
+    ComPtr<ID3D12RootSignature> m_SampleConvolutionRootSignature;
+    std::shared_ptr<ID3D12PipelineState> m_SampleConvolutionPSO;
+
+    ComPtr<ID3D12RootSignature> m_SceneLuminanceRootSignature;
+    ComPtr<ID3D12PipelineState> m_SumLuminanceTo1DPSO;
+    ComPtr<ID3D12PipelineState> m_SumLuminanceToSinglePSO;
+
+    CD3D12ResourcePtr<GPUBuffer> m_SumLuminanceBuffer0;
+    CD3D12ResourcePtr<GPUBuffer> m_SumLuminanceBuffer1;
+    GPUBuffer* m_LuminanceResultBuffer = nullptr;
+
+    GPUBufferPtr m_ScreenQuadVerticesBuffer;
+
+    ComPtr<ID3D12RootSignature> m_PostProcessingRootSignature;
+    ComPtr<ID3D12PipelineState> m_PostFXPSO;
+    ComPtr<ID3D12PipelineState> m_PostFXAutoExposurePSO;
+    ComPtr<ID3D12PipelineState> m_PostFXDisabledPSO;
+    ComPtr<ID3D12PipelineState> m_CopyPSO;
+
+    SBxDFTextures m_BxDFTextures;
+
+    class CPathTracer* m_PathTracer[ 2 ] = { nullptr, nullptr };
 
     bool m_IsMeshFlagsDirty = false;
     bool m_IsLightGPUBufferDirty = false;

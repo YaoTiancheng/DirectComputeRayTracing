@@ -1,7 +1,7 @@
 #pragma once
 
 struct SRenderContext;
-struct SRenderer;
+class CScene;
 
 class CPathTracer
 {
@@ -12,15 +12,15 @@ public:
 
     virtual void Destroy() {};
 
-    virtual void OnSceneLoaded( SRenderer* renderer ) {}
+    virtual void OnSceneLoaded( CScene* scene ) {}
 
-    virtual void Render( SRenderer* renderer, const SRenderContext& renderContext ) {}
+    virtual void Render( CScene* scene, const SRenderContext& renderContext ) {}
 
     virtual void ResetImage() {}
 
     virtual bool IsImageComplete() = 0;
 
-    virtual void OnImGUI( SRenderer* renderer ) {}
+    virtual void OnImGUI( CScene* scene ) {}
 
     virtual bool AcquireFilmClearTrigger() = 0;
 };

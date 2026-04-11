@@ -41,7 +41,7 @@ namespace
     }
 }
 
-bool SRenderer::InitPostProcessing()
+bool CScene::InitPostProcessing()
 {
     if ( !InitSceneLuminance() )
     {
@@ -190,12 +190,12 @@ void SRenderer::ExecutePostProcessing( const SRenderContext& renderContext )
 
     SPostProcessingConstant constants;
     constants.m_ReciprocalPixelCount = 1.0f / ( renderContext.m_CurrentResolutionWidth * renderContext.m_CurrentResolutionHeight );
-    constants.m_MaxWhiteSqr = m_LuminanceWhite * m_LuminanceWhite;
+    constants.m_MaxWhiteSqr = m_Scene.m_LuminanceWhite * m_Scene.m_LuminanceWhite;
     constants.m_TexcoordScale = renderContext.m_CurrentResolutionRatio;
-    constants.m_EV100 = m_CalculateEV100FromCamera ? CalculateEV100( m_Scene.m_RelativeAperture, m_Scene.m_ShutterTime, m_Scene.m_ISO ) : m_ManualEV100;
+    constants.m_EV100 = m_Scene.m_CalculateEV100FromCamera ? CalculateEV100( m_Scene.m_RelativeAperture, m_Scene.m_ShutterTime, m_Scene.m_ISO ) : m_Scene.m_ManualEV100;
 
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView = {};
-    vertexBufferView.BufferLocation = m_ScreenQuadVerticesBuffer->GetGPUVirtualAddress();
+    vertexBufferView.BufferLocation = m_Scene.m_ScreenQuadVerticesBuffer->GetGPUVirtualAddress();
     vertexBufferView.SizeInBytes = sizeof( s_ScreenQuadVertices );
     vertexBufferView.StrideInBytes = sizeof( XMFLOAT4 );
 
@@ -209,9 +209,9 @@ void SRenderer::ExecutePostProcessing( const SRenderContext& renderContext )
                 m_Scene.m_FilmTextureStates, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
             m_Scene.m_FilmTextureStates = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
         }
-        if ( m_LuminanceResultBuffer )
+        if ( m_Scene.m_LuminanceResultBuffer )
         {
-            barriers[ barrierCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( m_LuminanceResultBuffer->GetBuffer(),
+            barriers[ barrierCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( m_Scene.m_LuminanceResultBuffer->GetBuffer(),
                 D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
         }
         if ( m_Scene.m_IsRenderResultTextureRead )
@@ -227,15 +227,15 @@ void SRenderer::ExecutePostProcessing( const SRenderContext& renderContext )
         }
     }
         
-    commandList->SetGraphicsRootSignature( m_PostProcessingRootSignature.Get() );
+    commandList->SetGraphicsRootSignature( m_Scene.m_PostProcessingRootSignature.Get() );
     commandList->SetGraphicsRoot32BitConstants( 0, 4, &constants, 0 );
 
     SD3D12DescriptorHandle SRVs[] = { m_Scene.m_FilmTexture->GetSRV(),
-        m_LuminanceResultBuffer ? m_LuminanceResultBuffer->GetSRV() : D3D12Adapter::GetNullBufferSRV() };
+        m_Scene.m_LuminanceResultBuffer ? m_Scene.m_LuminanceResultBuffer->GetSRV() : D3D12Adapter::GetNullBufferSRV() };
     D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( SRVs, (uint32_t)ARRAY_LENGTH( SRVs ), nullptr, 0 );
     commandList->SetGraphicsRootDescriptorTable( 1, descriptorTable );
 
-    commandList->SetPipelineState( !m_IsPostFXEnabled || !renderContext.m_EnablePostFX ? m_PostFXDisabledPSO.Get() : ( m_IsAutoExposureEnabled ? m_PostFXAutoExposurePSO.Get() : m_PostFXPSO.Get() ) );
+    commandList->SetPipelineState( !m_Scene.m_IsPostFXEnabled ? m_Scene.m_PostFXDisabledPSO.Get() : ( m_Scene.m_IsAutoExposureEnabled ? m_Scene.m_PostFXAutoExposurePSO.Get() : m_Scene.m_PostFXPSO.Get() ) );
     commandList->IASetPrimitiveTopology( D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
     commandList->IASetVertexBuffers( 0, 1, &vertexBufferView );
     commandList->DrawInstanced( 6, 1, 0, 0 );
@@ -251,7 +251,7 @@ void SRenderer::ExecuteCopy()
     constants.m_TexcoordScale = 1.0f;
 
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView = {};
-    vertexBufferView.BufferLocation = m_ScreenQuadVerticesBuffer->GetGPUVirtualAddress();
+    vertexBufferView.BufferLocation = m_Scene.m_ScreenQuadVerticesBuffer->GetGPUVirtualAddress();
     vertexBufferView.SizeInBytes = sizeof( s_ScreenQuadVertices );
     vertexBufferView.StrideInBytes = sizeof( XMFLOAT4 );
 
@@ -263,13 +263,13 @@ void SRenderer::ExecuteCopy()
         commandList->ResourceBarrier( 1, &barrier );
     }
 
-    commandList->SetGraphicsRootSignature( m_PostProcessingRootSignature.Get() );
+    commandList->SetGraphicsRootSignature( m_Scene.m_PostProcessingRootSignature.Get() );
     commandList->SetGraphicsRoot32BitConstants( 0, 4, &constants, 0 );
 
     D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( &m_Scene.m_RenderResultTexture->GetSRV(), 1, nullptr, 0 );
     commandList->SetGraphicsRootDescriptorTable( 1, descriptorTable );
 
-    commandList->SetPipelineState( m_CopyPSO.Get() );
+    commandList->SetPipelineState( m_Scene.m_CopyPSO.Get() );
     commandList->IASetPrimitiveTopology( D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
     commandList->IASetVertexBuffers( 0, 1, &vertexBufferView );
     commandList->DrawInstanced( 6, 1, 0, 0 );
@@ -279,19 +279,19 @@ bool SRenderer::OnPostProcessingImGui()
 {
     if ( ImGui::CollapsingHeader( "Post Processing" ) )
     {
-        ImGui::Checkbox( "Enabled", &m_IsPostFXEnabled );
-        if ( m_IsPostFXEnabled )
+        ImGui::Checkbox( "Enabled", &m_Scene.m_IsPostFXEnabled );
+        if ( m_Scene.m_IsPostFXEnabled )
         {
-            ImGui::Checkbox( "Auto Exposure", &m_IsAutoExposureEnabled );
-            if ( !m_IsAutoExposureEnabled )
+            ImGui::Checkbox( "Auto Exposure", &m_Scene.m_IsAutoExposureEnabled );
+            if ( !m_Scene.m_IsAutoExposureEnabled )
             {
-                ImGui::Checkbox( "EV100 From Camera Setting", &m_CalculateEV100FromCamera );
-                if ( !m_CalculateEV100FromCamera )
+                ImGui::Checkbox( "EV100 From Camera Setting", &m_Scene.m_CalculateEV100FromCamera );
+                if ( !m_Scene.m_CalculateEV100FromCamera )
                 {
-                    ImGui::DragFloat( "EV100", &m_ManualEV100, 1.0f, -100.0f, 100.0f, "%.0f", ImGuiSliderFlags_AlwaysClamp );
+                    ImGui::DragFloat( "EV100", &m_Scene.m_ManualEV100, 1.0f, -100.0f, 100.0f, "%.0f", ImGuiSliderFlags_AlwaysClamp );
                 }
             }
-            ImGui::DragFloat( "Luminance White", &m_LuminanceWhite, 0.01f, 0.001f, 1000.0f );
+            ImGui::DragFloat( "Luminance White", &m_Scene.m_LuminanceWhite, 0.01f, 0.001f, 1000.0f );
         }
     }
 

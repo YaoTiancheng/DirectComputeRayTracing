@@ -7,7 +7,7 @@
 #include "Shader.h"
 #include "GPUBuffer.h"
 #include "GPUTexture.h"
-#include "DirectComputeRayTracing.h"
+#include "Scene.h"
 #include "RenderContext.h"
 #include "MessageBox.h"
 #include "ScopedRenderAnnotation.h"
@@ -115,16 +115,15 @@ void CMegakernelPathTracer::Destroy()
     m_RayTracingConstantsBuffer.Reset();
 }
 
-void CMegakernelPathTracer::OnSceneLoaded( SRenderer* renderer )
+void CMegakernelPathTracer::OnSceneLoaded( CScene* scene )
 {
-    CompileAndCreateRayTracingKernel( renderer );
+    CompileAndCreateRayTracingKernel( scene );
     m_FilmClearTrigger = true;
 }
 
-void CMegakernelPathTracer::Render( SRenderer* renderer, const SRenderContext& renderContext )
+void CMegakernelPathTracer::Render( CScene* scene, const SRenderContext& renderContext )
 {
-    CScene* scene = &renderer->m_Scene;
-    SBxDFTextures* BxDFTextures = &renderer->m_BxDFTextures;
+    SBxDFTextures* BxDFTextures = &scene->m_BxDFTextures;
 
     ID3D12GraphicsCommandList* commandList = D3D12Adapter::GetCommandList();
 
@@ -160,7 +159,7 @@ void CMegakernelPathTracer::Render( SRenderer* renderer, const SRenderContext& r
 
             constants->environmentLightIndex = scene->m_EnvironmentLight ? (uint32_t)scene->m_MeshLights.size() : LIGHT_INDEX_INVALID; // Environment light is right after the mesh lights.
 
-            constants->frameSeed = renderer->m_FrameSeed;
+            constants->frameSeed = scene->m_FrameSeed;
 
             rayTracingConstantBufferUpload.Unmap();
             rayTracingConstantBufferUpload.Upload();
@@ -268,10 +267,8 @@ bool CMegakernelPathTracer::IsImageComplete()
     return AreAllTilesRendered();
 }
 
-bool CMegakernelPathTracer::CompileAndCreateRayTracingKernel( SRenderer* renderer )
+bool CMegakernelPathTracer::CompileAndCreateRayTracingKernel( CScene* scene )
 {
-    CScene* scene = &renderer->m_Scene;
-
     std::vector<DxcDefine> rayTracingShaderDefines;
 
     static const uint32_t s_MaxRadix10IntegerBufferLengh = 12;
@@ -349,7 +346,7 @@ bool CMegakernelPathTracer::AreAllTilesRendered() const
     return m_CurrentTileIndex == 0;
 }
 
-void CMegakernelPathTracer::OnImGUI( SRenderer* renderer )
+void CMegakernelPathTracer::OnImGUI( CScene* scene )
 {
     if ( ImGui::CollapsingHeader( "Megakernel Path Tracer" ) )
     {
@@ -363,7 +360,7 @@ void CMegakernelPathTracer::OnImGUI( SRenderer* renderer )
         static const char* s_OutputNames[] = { "Path Tracing", "Shading Normal", "Shading Tangent", "Albedo", "Negative NdotV", "Backface", "Iteration Count"};
         if ( ImGui::Combo( "Output", (int*)&m_OutputType, s_OutputNames, IM_ARRAYSIZE( s_OutputNames ) ) )
         {
-            CompileAndCreateRayTracingKernel( renderer );
+            CompileAndCreateRayTracingKernel( scene );
             m_FilmClearTrigger = true;
         }
         

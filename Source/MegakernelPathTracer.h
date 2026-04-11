@@ -21,20 +21,20 @@ public:
 
     virtual void Destroy() override;
 
-    virtual void OnSceneLoaded( SRenderer* renderer ) override;
+    virtual void OnSceneLoaded( CScene* scene ) override;
 
-    virtual void Render( SRenderer* renderer, const SRenderContext& renderContext ) override;
+    virtual void Render( CScene* scene, const SRenderContext& renderContext ) override;
 
     virtual void ResetImage() override;
 
     virtual bool IsImageComplete() override;
 
-    virtual void OnImGUI( SRenderer* renderer );
+    virtual void OnImGUI( CScene* scene );
 
     virtual bool AcquireFilmClearTrigger();
 
 private:
-    bool CompileAndCreateRayTracingKernel( SRenderer* renderer );
+    bool CompileAndCreateRayTracingKernel( CScene* scene );
 
     void ResetTileIndex();
 

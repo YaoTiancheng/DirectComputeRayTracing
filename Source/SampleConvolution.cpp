@@ -29,7 +29,7 @@ struct alignas( 256 ) SConvolutionConstant
 
 static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 2, 1 );
 
-bool SRenderer::InitSampleConvolution()
+bool CScene::InitSampleConvolution()
 {
     CD3DX12_ROOT_PARAMETER1 rootParameters[ 2 ];
     rootParameters[ 0 ].InitAsConstantBufferView( 0 );
@@ -58,7 +58,7 @@ bool SRenderer::InitSampleConvolution()
     return true;
 }
 
-static void CompileShader( SRenderer* r, int32_t filterIndex )
+static void CompileShader( CScene* scene, int32_t filterIndex )
 {
     // Compile shader
     const wchar_t* filterDefines[] = { L"FILTER_BOX", L"FILTER_TRIANGLE", L"FILTER_GAUSSIAN", L"FILTER_MITCHELL", L"FILTER_LANCZOS_SINC" };
@@ -73,7 +73,7 @@ static void CompileShader( SRenderer* r, int32_t filterIndex )
 
     // Create PSOs
     D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
-    desc.pRootSignature = r->m_SampleConvolutionRootSignature.Get();
+    desc.pRootSignature = scene->m_SampleConvolutionRootSignature.Get();
     desc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
     desc.CS = shader->GetShaderBytecode();
     ID3D12PipelineState* PSO = nullptr;
@@ -82,7 +82,7 @@ static void CompileShader( SRenderer* r, int32_t filterIndex )
         return;
     }
 
-    r->m_SampleConvolutionPSO.reset( PSO, SD3D12ComDeferredDeleter() );
+    scene->m_SampleConvolutionPSO.reset( PSO, SD3D12ComDeferredDeleter() );
 }
 
 void SRenderer::ExecuteSampleConvolution( const SRenderContext& renderContext )
@@ -92,13 +92,13 @@ void SRenderer::ExecuteSampleConvolution( const SRenderContext& renderContext )
     SCOPED_RENDER_ANNOTATION( commandList, L"Convolute samples" );
 
     int32_t filterIndex = (int32_t)m_Scene.m_Filter;
-    if ( filterIndex != m_SampleConvolutionFilterIndex )
+    if ( filterIndex != m_Scene.m_SampleConvolutionFilterIndex )
     {
-        CompileShader( this, filterIndex );
-        m_SampleConvolutionFilterIndex = filterIndex;
+        CompileShader( &m_Scene, filterIndex );
+        m_Scene.m_SampleConvolutionFilterIndex = filterIndex;
     }
 
-    commandList->SetComputeRootSignature( m_SampleConvolutionRootSignature.Get() );
+    commandList->SetComputeRootSignature( m_Scene.m_SampleConvolutionRootSignature.Get() );
 
     // Allocate constant buffer
     {
@@ -158,7 +158,7 @@ void SRenderer::ExecuteSampleConvolution( const SRenderContext& renderContext )
     D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( SRVs, (uint32_t)ARRAY_LENGTH( SRVs ), &m_Scene.m_FilmTexture->GetUAV(), 1 );
     commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
 
-    commandList->SetPipelineState( m_SampleConvolutionPSO.get() );
+    commandList->SetPipelineState( m_Scene.m_SampleConvolutionPSO.get() );
 
     uint32_t dispatchSizeX = renderContext.m_CurrentResolutionWidth / 8;
     dispatchSizeX += renderContext.m_CurrentResolutionWidth % 8 ? 1 : 0;

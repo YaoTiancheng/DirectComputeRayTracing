@@ -125,10 +125,10 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
 
     // Assign default material
     {
+        uint32_t defaultMaterialIndex = INVALID_MATERIAL_ID;
+
         for ( size_t iMesh = meshIndexBase; iMesh < m_Meshes.size(); ++iMesh )
         {
-            uint32_t defaultMaterialIndex = INVALID_MATERIAL_ID;
-
             auto& materialIndices = m_Meshes[ iMesh ].GetMaterialIds();
             for ( auto& materialIndex : materialIndices )
             {
@@ -149,13 +149,13 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
                     materialIndex = defaultMaterialIndex;
                 }
             }
+        }
 
-            if ( defaultMaterialIndex != INVALID_MATERIAL_ID )
-            {
-                SMaterial material;
-                GetDefaultMaterial( &material );
-                m_Materials.emplace_back( material );
-            }
+        if ( defaultMaterialIndex != INVALID_MATERIAL_ID )
+        {
+            SMaterial material;
+            GetDefaultMaterial( &material );
+            m_Materials.emplace_back( material );
         }
     }
 

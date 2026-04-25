@@ -267,7 +267,8 @@ void CDirectComputeRayTracing::ExecuteCopy()
     commandList->SetGraphicsRootSignature( m_Scene->m_PostProcessingRootSignature.Get() );
     commandList->SetGraphicsRoot32BitConstants( 0, 4, &constants, 0 );
 
-    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( &m_Scene->m_RenderResultTexture->GetSRV(), 1, nullptr, 0 );
+    SD3D12DescriptorHandle SRV = m_Scene->m_RenderResultTexture->GetSRV();
+    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( &SRV, 1, nullptr, 0 );
     commandList->SetGraphicsRootDescriptorTable( 1, descriptorTable );
 
     commandList->SetPipelineState( m_Scene->m_CopyPSO.Get() );

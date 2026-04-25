@@ -156,7 +156,8 @@ void CDirectComputeRayTracing::ExecuteSampleConvolution( const SRenderContext& r
     }
 
     SD3D12DescriptorHandle SRVs[] = { m_Scene->m_SamplePositionTexture->GetSRV(), m_Scene->m_SampleValueTexture->GetSRV() };
-    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( SRVs, (uint32_t)ARRAY_LENGTH( SRVs ), &m_Scene->m_FilmTexture->GetUAV(), 1 );
+    SD3D12DescriptorHandle UAV = m_Scene->m_FilmTexture->GetUAV();
+    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( SRVs, (uint32_t)ARRAY_LENGTH( SRVs ), &UAV, 1 );
     commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
 
     commandList->SetPipelineState( m_Scene->m_SampleConvolutionPSO.get() );

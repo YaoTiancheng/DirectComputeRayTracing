@@ -146,7 +146,9 @@ void CDirectComputeRayTracing::DispatchSceneLuminanceCompute( const SRenderConte
         commandList->ResourceBarrier( 1, &barrier );
     }
 
-    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( &m_Scene->m_FilmTexture->GetSRV(), 1, &m_Scene->m_SumLuminanceBuffer1->GetUAV(), 1 );
+    SD3D12DescriptorHandle SRV = m_Scene->m_FilmTexture->GetSRV();
+    SD3D12DescriptorHandle UAV = m_Scene->m_SumLuminanceBuffer1->GetUAV();
+    D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = s_DescriptorTableLayout.AllocateAndCopyToDescriptorTable( &SRV, 1, &UAV, 1 );
     commandList->SetComputeRootDescriptorTable( 1, descriptorTable );
 
     commandList->SetPipelineState( m_Scene->m_SumLuminanceTo1DPSO.Get() );

@@ -20,8 +20,8 @@ Unidirectional MC path tracer using D3D12 compute shader.
 ![Lamp](https://onedrive.live.com/embed?resid=46FF59C600EB91ED%213292&authkey=%21AKO8mMGMpviIsv8&width=2562&height=1453)
 
 ## Build
-- Visual Studio 2017 (v141)
-- Windows SDK version 10.0.19041.0
+- Visual Studio 2026 (v145)
+- Windows SDK version 10.0.26100.0
 
 ## References
 - pbrt-v3 https://github.com/mmp/pbrt-v3.git

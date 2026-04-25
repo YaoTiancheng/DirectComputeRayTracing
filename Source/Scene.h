@@ -63,46 +63,6 @@ struct SMeshFlags
     uint8_t m_Opaque : 1;
 };
 
-struct SSceneObjectSelection
-{
-    void SelectPunctualLight( int index )
-    {
-        DeselectAll();
-        m_PunctualLightSelectionIndex = index;
-    }
-
-    void SelectMaterial( int index )
-    {
-        DeselectAll();
-        m_MaterialSelectionIndex = index;
-    }
-
-    void SelectCamera()
-    {
-        DeselectAll();
-        m_IsCameraSelected = true;
-    }
-
-    void SelectEnvironmentLight()
-    {
-        DeselectAll();
-        m_IsEnvironmentLightSelected = true;
-    }
-
-    void DeselectAll()
-    {
-        m_PunctualLightSelectionIndex = -1;
-        m_MaterialSelectionIndex = -1;
-        m_IsCameraSelected = false;
-        m_IsEnvironmentLightSelected = false;
-    }
-
-    int m_PunctualLightSelectionIndex = -1;
-    int m_MaterialSelectionIndex = -1;
-    bool m_IsCameraSelected = false;
-    bool m_IsEnvironmentLightSelected = false;
-};
-
 class CScene
 {
 public:
@@ -261,6 +221,4 @@ public:
     bool m_IsInstanceFlagsBufferRead = true;
     bool m_IsSampleTexturesRead = false;
     bool m_IsRenderResultTextureRead = true;
-
-    SSceneObjectSelection m_ObjectSelection;
 };

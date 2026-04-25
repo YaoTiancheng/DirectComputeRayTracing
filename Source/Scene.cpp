@@ -619,7 +619,6 @@ bool CScene::LoadFromFile( const std::filesystem::path& filepath )
     m_IsInstanceFlagsBufferRead = true;
 
     m_HasValidScene = true;
-    m_ObjectSelection.DeselectAll();
 
     return true;
 }
@@ -658,7 +657,6 @@ void CScene::Reset()
     m_TextureDescriptorTable.ptr = 0;
 
     m_HasValidScene = false;
-    m_ObjectSelection.DeselectAll();
 }
 
 void CScene::RebuildMeshFlagsIfDirty()

@@ -6,6 +6,54 @@
 
 struct SRenderContext;
 
+struct SSceneObjectSelection
+{
+    void SelectPunctualLight(int index)
+    {
+        DeselectAll();
+        m_PunctualLightSelectionIndex = index;
+    }
+
+    void SelectMesh(int index)
+    {
+        DeselectAll();
+        m_MeshSelectionIndex = index;
+    }
+
+    void SelectMaterial(int index)
+    {
+        DeselectAll();
+        m_MaterialSelectionIndex = index;
+    }
+
+    void SelectCamera()
+    {
+        DeselectAll();
+        m_IsCameraSelected = true;
+    }
+
+    void SelectEnvironmentLight()
+    {
+        DeselectAll();
+        m_IsEnvironmentLightSelected = true;
+    }
+
+    void DeselectAll()
+    {
+        m_PunctualLightSelectionIndex = -1;
+        m_MeshSelectionIndex = -1;
+        m_MaterialSelectionIndex = -1;
+        m_IsCameraSelected = false;
+        m_IsEnvironmentLightSelected = false;
+    }
+
+    int m_PunctualLightSelectionIndex = -1;
+    int m_MeshSelectionIndex = -1;
+    int m_MaterialSelectionIndex = -1;
+    bool m_IsCameraSelected = false;
+    bool m_IsEnvironmentLightSelected = false;
+};
+
 class CDirectComputeRayTracing
 {
 public:
@@ -48,6 +96,7 @@ public:
     std::vector<GPUTexturePtr> m_sRGBBackbuffers;
 
     class CScene* m_Scene = nullptr;
+    SSceneObjectSelection m_ObjectSelection;
 
     uint32_t m_ActivePathTracerIndex = 0;
 

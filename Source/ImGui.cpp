@@ -320,12 +320,12 @@ void CDirectComputeRayTracing::OnImGUI( SRenderContext* renderContext )
                     }
                     ImGui::EndMenu();
                 }
-                if ( ImGui::MenuItem( "Delete", "", false, m_Scene->m_ObjectSelection.m_PunctualLightSelectionIndex != -1 || m_Scene->m_ObjectSelection.m_IsEnvironmentLightSelected ) )
+                if ( ImGui::MenuItem( "Delete", "", false, m_ObjectSelection.m_PunctualLightSelectionIndex != -1 || m_ObjectSelection.m_IsEnvironmentLightSelected ) )
                 {
-                    if ( m_Scene->m_ObjectSelection.m_PunctualLightSelectionIndex != -1 )
+                    if ( m_ObjectSelection.m_PunctualLightSelectionIndex != -1 )
                     {
-                        m_Scene->m_PunctualLights.erase( m_Scene->m_PunctualLights.begin() + m_Scene->m_ObjectSelection.m_PunctualLightSelectionIndex );
-                        m_Scene->m_ObjectSelection.m_PunctualLightSelectionIndex = -1;
+                        m_Scene->m_PunctualLights.erase( m_Scene->m_PunctualLights.begin() + m_ObjectSelection.m_PunctualLightSelectionIndex );
+                        m_ObjectSelection.m_PunctualLightSelectionIndex = -1;
                     }
                     else
                     {
@@ -337,7 +337,7 @@ void CDirectComputeRayTracing::OnImGUI( SRenderContext* renderContext )
                             m_Scene->m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( m_Scene );
                         }
 
-                        m_Scene->m_ObjectSelection.m_IsEnvironmentLightSelected = false;
+                        m_ObjectSelection.m_IsEnvironmentLightSelected = false;
                     }
                     m_Scene->m_IsLightGPUBufferDirty = true;
                     m_Scene->m_IsFilmDirty = true;;
@@ -349,10 +349,10 @@ void CDirectComputeRayTracing::OnImGUI( SRenderContext* renderContext )
 
         if ( ImGui::CollapsingHeader( "Camera" ) )
         {
-            bool isSelected = m_Scene->m_ObjectSelection.m_IsCameraSelected;
+            bool isSelected = m_ObjectSelection.m_IsCameraSelected;
             if ( ImGui::Selectable( "Preview Camera", isSelected ) )
             {
-                m_Scene->m_ObjectSelection.SelectCamera();
+                m_ObjectSelection.SelectCamera();
             }
         }
 
@@ -361,11 +361,11 @@ void CDirectComputeRayTracing::OnImGUI( SRenderContext* renderContext )
             char label[ 32 ];
             for ( size_t iLight = 0; iLight < m_Scene->m_PunctualLights.size(); ++iLight )
             {
-                bool isSelected = ( iLight == m_Scene->m_ObjectSelection.m_PunctualLightSelectionIndex );
+                bool isSelected = ( iLight == m_ObjectSelection.m_PunctualLightSelectionIndex );
                 sprintf( label, "Light %d", uint32_t( iLight ) );
                 if ( ImGui::Selectable( label, isSelected ) )
                 {
-                    m_Scene->m_ObjectSelection.SelectPunctualLight( (int)iLight );
+                    m_ObjectSelection.SelectPunctualLight( (int)iLight );
                 }
             }
         }
@@ -374,10 +374,24 @@ void CDirectComputeRayTracing::OnImGUI( SRenderContext* renderContext )
         {
             if ( m_Scene->m_EnvironmentLight )
             {
-                if ( ImGui::Selectable( "Light##EnvLight", m_Scene->m_ObjectSelection.m_IsEnvironmentLightSelected ) )
+                if ( ImGui::Selectable( "Light##EnvLight", m_ObjectSelection.m_IsEnvironmentLightSelected ) )
                 {
-                    m_Scene->m_ObjectSelection.SelectEnvironmentLight();
+                    m_ObjectSelection.SelectEnvironmentLight();
                 }
+            }
+        }
+
+        if ( ImGui::CollapsingHeader( "Mesh" ) )
+        {
+            for ( size_t iMesh = 0; iMesh < m_Scene->m_Meshes.size(); ++iMesh )
+            {
+                bool isSelected = ( iMesh == m_ObjectSelection.m_MeshSelectionIndex );
+                ImGui::PushID( (int)iMesh );
+                if ( ImGui::Selectable( m_Scene->m_Meshes[ iMesh ].m_Name.c_str(), isSelected ) )
+                {
+                    m_ObjectSelection.SelectMesh( (int)iMesh );
+                }
+                ImGui::PopID();
             }
         }
 
@@ -385,11 +399,11 @@ void CDirectComputeRayTracing::OnImGUI( SRenderContext* renderContext )
         {
             for ( size_t iMaterial = 0; iMaterial < m_Scene->m_Materials.size(); ++iMaterial )
             {
-                bool isSelected = ( iMaterial == m_Scene->m_ObjectSelection.m_MaterialSelectionIndex );
+                bool isSelected = ( iMaterial == m_ObjectSelection.m_MaterialSelectionIndex );
                 ImGui::PushID( (int)iMaterial );
                 if ( ImGui::Selectable( m_Scene->m_Materials[ iMaterial ].m_Name.c_str(), isSelected ) )
                 {
-                    m_Scene->m_ObjectSelection.SelectMaterial( (int)iMaterial );
+                    m_ObjectSelection.SelectMaterial( (int)iMaterial );
                 }
                 ImGui::PopID();
             }
@@ -403,12 +417,12 @@ void CDirectComputeRayTracing::OnImGUI( SRenderContext* renderContext )
 
         ImGui::PushItemWidth( ImGui::GetFontSize() * -9 );
 
-        if ( m_Scene->m_ObjectSelection.m_PunctualLightSelectionIndex >= 0 )
+        if ( m_ObjectSelection.m_PunctualLightSelectionIndex >= 0 )
         {
             ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
-            if ( m_Scene->m_ObjectSelection.m_PunctualLightSelectionIndex < m_Scene->m_PunctualLights.size() )
+            if ( m_ObjectSelection.m_PunctualLightSelectionIndex < m_Scene->m_PunctualLights.size() )
             {
-                SPunctualLight* selection = m_Scene->m_PunctualLights.data() + m_Scene->m_ObjectSelection.m_PunctualLightSelectionIndex;
+                SPunctualLight* selection = m_Scene->m_PunctualLights.data() + m_ObjectSelection.m_PunctualLightSelectionIndex;
 
                 if ( selection->m_IsDirectionalLight )
                 {
@@ -428,7 +442,7 @@ void CDirectComputeRayTracing::OnImGUI( SRenderContext* renderContext )
                     m_Scene->m_IsLightGPUBufferDirty = true;
             }
         }
-        else if ( m_Scene->m_ObjectSelection.m_IsEnvironmentLightSelected )
+        else if ( m_ObjectSelection.m_IsEnvironmentLightSelected )
         {
             ImGui::SetColorEditOptions( ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR );
             if ( ImGui::ColorEdit3( "Radiance", (float*)&m_Scene->m_EnvironmentLight->m_Color ) )
@@ -477,11 +491,21 @@ void CDirectComputeRayTracing::OnImGUI( SRenderContext* renderContext )
                 }
             }
         }
-        else if ( m_Scene->m_ObjectSelection.m_MaterialSelectionIndex >= 0 )
+        else if ( m_ObjectSelection.m_MeshSelectionIndex >= 0 )
         {
-            if ( m_Scene->m_ObjectSelection.m_MaterialSelectionIndex < m_Scene->m_Materials.size() )
+            if ( m_ObjectSelection.m_MeshSelectionIndex < m_Scene->m_Meshes.size() )
             {
-                SMaterial* selection = m_Scene->m_Materials.data() + m_Scene->m_ObjectSelection.m_MaterialSelectionIndex;
+                const Mesh* selection = m_Scene->m_Meshes.data() + m_ObjectSelection.m_MeshSelectionIndex;
+                ImGui::LabelText( "Vertex Count", "%d", selection->m_Vertices.size() );
+                ImGui::LabelText( "Triangle Count", "%d", selection->m_Indices.size() / 3 );
+                ImGui::LabelText( "BVH Node Count", "%d", selection->m_BVHNodes.size() );
+            }
+		}
+        else if ( m_ObjectSelection.m_MaterialSelectionIndex >= 0 )
+        {
+            if ( m_ObjectSelection.m_MaterialSelectionIndex < m_Scene->m_Materials.size() )
+            {
+                SMaterial* selection = m_Scene->m_Materials.data() + m_ObjectSelection.m_MaterialSelectionIndex;
 
                 static const char* s_MaterialTypeNames[] = { "Diffuse", "Plastic", "Conductor", "Dielectric", "Thin Dielectric" };
                 if ( ImGui::Combo( "Type", (int*)&selection->m_MaterialType, s_MaterialTypeNames, IM_ARRAYSIZE( s_MaterialTypeNames ) ) )
@@ -545,7 +569,7 @@ void CDirectComputeRayTracing::OnImGUI( SRenderContext* renderContext )
                 }
             }
         }
-        else if ( m_Scene->m_ObjectSelection.m_IsCameraSelected )
+        else if ( m_ObjectSelection.m_IsCameraSelected )
         {
             m_Scene->m_Camera.OnImGUI();
 

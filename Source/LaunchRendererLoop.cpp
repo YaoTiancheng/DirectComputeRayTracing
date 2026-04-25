@@ -165,6 +165,7 @@ bool CDirectComputeRayTracing::LoadScene( const char* filepath, bool reset )
     }
 
     bool loadSceneResult = m_Scene->LoadFromFile( filepath );
+    m_ObjectSelection.DeselectAll();
     if ( !loadSceneResult )
     {
         return false;

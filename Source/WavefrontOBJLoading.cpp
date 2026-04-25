@@ -447,6 +447,7 @@ bool CScene::LoadFromWavefrontOBJFile( const std::filesystem::path& filenamePath
         newMesh.m_Name = shapes[ shapeIndex ].name;
 
         SMeshInstance instance;
+		instance.m_Name = newMesh.m_Name;
         instance.m_MeshIndex = (uint32_t)m_Meshes.size() - 1;
         instance.m_MaterialIdOverride = INVALID_MATERIAL_ID;
         m_MeshInstances.emplace_back( instance );

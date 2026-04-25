@@ -8,19 +8,25 @@ struct SRenderContext;
 
 struct SSceneObjectSelection
 {
-    void SelectPunctualLight(int index)
+    void SelectPunctualLight( int index )
     {
         DeselectAll();
         m_PunctualLightSelectionIndex = index;
     }
 
-    void SelectMesh(int index)
+    void SelectMeshInstance( int index )
+    {
+        DeselectAll();
+        m_MeshInstanceSelectionIndex = index;
+	}
+
+    void SelectMesh( int index )
     {
         DeselectAll();
         m_MeshSelectionIndex = index;
     }
 
-    void SelectMaterial(int index)
+    void SelectMaterial( int index )
     {
         DeselectAll();
         m_MaterialSelectionIndex = index;
@@ -41,6 +47,7 @@ struct SSceneObjectSelection
     void DeselectAll()
     {
         m_PunctualLightSelectionIndex = -1;
+		m_MeshInstanceSelectionIndex = -1;
         m_MeshSelectionIndex = -1;
         m_MaterialSelectionIndex = -1;
         m_IsCameraSelected = false;
@@ -48,6 +55,7 @@ struct SSceneObjectSelection
     }
 
     int m_PunctualLightSelectionIndex = -1;
+	int m_MeshInstanceSelectionIndex = -1;
     int m_MeshSelectionIndex = -1;
     int m_MaterialSelectionIndex = -1;
     bool m_IsCameraSelected = false;

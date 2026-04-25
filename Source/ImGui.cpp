@@ -381,16 +381,34 @@ void CDirectComputeRayTracing::OnImGUI( SRenderContext* renderContext )
             }
         }
 
+        if ( ImGui::CollapsingHeader( "Mesh Instances" ) )
+        {
+            for ( size_t iInstance = 0; iInstance < m_Scene->m_MeshInstances.size(); ++iInstance )
+            {
+                bool isSelected = ( iInstance == m_ObjectSelection.m_MeshInstanceSelectionIndex );
+                ImGui::PushID( (int)iInstance );
+                ImGui::PushID( "MeshInstance" );
+                if ( ImGui::Selectable( m_Scene->m_MeshInstances[ iInstance ].m_Name.c_str(), isSelected ) )
+                {
+                    m_ObjectSelection.SelectMeshInstance( (int)iInstance );
+                }
+                ImGui::PopID();
+                ImGui::PopID();
+            }
+		}
+
         if ( ImGui::CollapsingHeader( "Mesh" ) )
         {
             for ( size_t iMesh = 0; iMesh < m_Scene->m_Meshes.size(); ++iMesh )
             {
                 bool isSelected = ( iMesh == m_ObjectSelection.m_MeshSelectionIndex );
                 ImGui::PushID( (int)iMesh );
+                ImGui::PushID( "Mesh" );
                 if ( ImGui::Selectable( m_Scene->m_Meshes[ iMesh ].m_Name.c_str(), isSelected ) )
                 {
                     m_ObjectSelection.SelectMesh( (int)iMesh );
                 }
+                ImGui::PopID();
                 ImGui::PopID();
             }
         }
@@ -401,10 +419,12 @@ void CDirectComputeRayTracing::OnImGUI( SRenderContext* renderContext )
             {
                 bool isSelected = ( iMaterial == m_ObjectSelection.m_MaterialSelectionIndex );
                 ImGui::PushID( (int)iMaterial );
+                ImGui::PushID( "Material" );
                 if ( ImGui::Selectable( m_Scene->m_Materials[ iMaterial ].m_Name.c_str(), isSelected ) )
                 {
                     m_ObjectSelection.SelectMaterial( (int)iMaterial );
                 }
+                ImGui::PopID();
                 ImGui::PopID();
             }
         }
@@ -488,6 +508,36 @@ void CDirectComputeRayTracing::OnImGUI( SRenderContext* renderContext )
                     m_Scene->m_EnvironmentLight->m_Texture.Reset();
                     m_Scene->m_PathTracer[ m_ActivePathTracerIndex ]->OnSceneLoaded( m_Scene );
                     m_Scene->m_IsFilmDirty = true;
+                }
+            }
+        }
+		else if ( m_ObjectSelection.m_MeshInstanceSelectionIndex >= 0 )
+        {
+            if ( m_ObjectSelection.m_MeshInstanceSelectionIndex < m_Scene->m_MeshInstances.size() )
+            {
+                const SMeshInstance* selection = m_Scene->m_MeshInstances.data() + m_ObjectSelection.m_MeshInstanceSelectionIndex;
+
+                if ( ImGui::Button( "Select##SelectMesh" ) )
+                {
+                    m_ObjectSelection.SelectMesh( selection->m_MeshIndex );
+                }
+
+				ImGui::SameLine();
+
+                const std::string& meshName = m_Scene->m_Meshes[ selection->m_MeshIndex ].m_Name;
+                ImGui::InputText( "Mesh", const_cast<char*>( meshName.c_str() ), meshName.size(), ImGuiInputTextFlags_ReadOnly );
+
+                if ( selection->m_MaterialIdOverride != INDEX_NONE )
+                { 
+                    if ( ImGui::Button( "Select##SelectMaterial" ) )
+                    {
+                        m_ObjectSelection.SelectMaterial( selection->m_MaterialIdOverride );
+                    }
+
+                    ImGui::SameLine();
+
+                    const std::string& materialName = m_Scene->m_Materials[ selection->m_MaterialIdOverride ].m_Name;
+                    ImGui::InputText( "Material", const_cast<char*>( materialName.c_str() ), materialName.size(), ImGuiInputTextFlags_ReadOnly );
                 }
             }
         }

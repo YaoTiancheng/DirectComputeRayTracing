@@ -54,6 +54,7 @@ struct SEnvironmentLight
 
 struct SMeshInstance
 {
+    std::string m_Name;
     uint32_t m_MeshIndex;
     uint32_t m_MaterialIdOverride;
 };

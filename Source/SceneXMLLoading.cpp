@@ -1373,9 +1373,22 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
 
                 if ( instanceCreated )
                 {
+                    std::string id;
+                    if ( const SValue* idValue = rootObjectValue.second->FindObjectField( "id" ) )
+                    {
+                        id = idValue->Get<std::string_view>();
+                    }
+                    else
+                    {
+						char generatedIdBuffer[ 64 ];
+                        sprintf_s( generatedIdBuffer, "Unnamed shape %03d", (uint32_t)m_MeshInstances.size() );
+						id = generatedIdBuffer;
+                    }
+
                     uint32_t instanceIndex = (uint32_t)m_MeshInstances.size();
 
                     SMeshInstance instance;
+                    instance.m_Name = id;
                     instance.m_MeshIndex = meshIndex;
                     instance.m_MaterialIdOverride = materialId;
                     m_MeshInstances.emplace_back( instance );

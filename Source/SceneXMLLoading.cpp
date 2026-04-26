@@ -1081,6 +1081,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
     SMaterialGatheringContext materialGatheringContext( filepath, materialNameToEnumMap, &m_Materials, (uint32_t)m_Textures.size() );
 
     std::unordered_map<std::string, uint32_t> objFileToMeshIndexMap;
+	uint32_t rectangleMeshIndex = INDEX_NONE;
 
     std::vector<std::pair<std::string_view, SValue*>>& rootObjectValues = *sceneValues[ 0 ]->m_NestedObjects;
     for ( auto& rootObjectValue : rootObjectValues )
@@ -1349,18 +1350,23 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                 }
                 case EShapeType::eRectangle:
                 {
-                    Mesh mesh;
-                    if ( mesh.GenerateRectangle( materialId, true, MathHelper::s_IdentityMatrix4x4 ) )
+                    if ( rectangleMeshIndex == INDEX_NONE )
                     {
-                        mesh.SetName( "rectangle" );
-                        m_Meshes.emplace_back( mesh );
-                        meshIndex = (uint32_t)m_Meshes.size() - 1;
-                        instanceCreated = true;
-                    }
-                    else
-                    {
-                        LOG_STRING( "Failed to generate rectangle shape.\n" );
-                    }
+                        Mesh mesh;
+                        if ( mesh.GenerateRectangle( materialId, true, MathHelper::s_IdentityMatrix4x4 ) )
+                        {
+                            mesh.SetName( "rectangle" );
+							rectangleMeshIndex = (uint32_t)m_Meshes.size();
+                            m_Meshes.emplace_back( mesh );
+                        }
+                        else
+                        {
+                            LOG_STRING( "Failed to generate rectangle shape.\n" );
+                            break;
+                        }
+					}
+                    meshIndex = rectangleMeshIndex;
+                    instanceCreated = true;
                     break;
                 }
                 case EShapeType::Unsupported:

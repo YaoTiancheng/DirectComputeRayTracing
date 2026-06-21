@@ -313,7 +313,7 @@ bool CMegakernelPathTracer::CompileAndCreateRayTracingKernel( CScene* scene )
         rayTracingShaderDefines.push_back( { s_RayTracingOutputDefines[ m_OutputType ], L"0" } );
     }
 
-    ComputeShaderPtr rayTracingShader( ComputeShader::CreateFromFile( L"Shaders\\MegakernelPathTracing.hlsl", rayTracingShaderDefines ) );
+    ShaderPtr rayTracingShader( CShader::CreateComputeFromFile( L"Shaders\\MegakernelPathTracing.hlsl", rayTracingShaderDefines ) );
     if ( !rayTracingShader )
     {
         CMessagebox::GetSingleton().Append( "Failed to compile ray tracing shader.\n" );
@@ -323,7 +323,7 @@ bool CMegakernelPathTracer::CompileAndCreateRayTracingKernel( CScene* scene )
     // Create PSO
     D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.pRootSignature = m_RootSignature.Get();
-    psoDesc.CS = rayTracingShader->GetShaderBytecode();
+    psoDesc.CS = rayTracingShader->GetBytecode();
     psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
     ID3D12PipelineState* PSO = nullptr;
     if ( FAILED( D3D12Adapter::GetDevice()->CreateComputePipelineState( &psoDesc, IID_PPV_ARGS( &PSO ) ) ) )

@@ -19,7 +19,7 @@ static IDxcBlob* CompileFromFile( LPCWSTR filename, LPCWSTR entryPoint, LPCWSTR 
     arguments.emplace_back( L"-Gis" ); // IEEE strictness
     const bool shaderDebugEnabled = CommandLineArgs::Singleton()->ShaderDebugEnabled();
     const bool disableOptimizations = shaderDebugEnabled || ( compileFlags & EShaderCompileFlag_SkipOptimization ) != 0;
-    if ( shaderDebugEnabled | disableOptimizations )
+    if ( shaderDebugEnabled || disableOptimizations )
     {
         if ( shaderDebugEnabled )
         { 
@@ -89,58 +89,35 @@ static IDxcBlob* CompileFromFile( LPCWSTR filename, LPCWSTR entryPoint, LPCWSTR 
     return shaderObject;
 }
 
-GfxShader* GfxShader::CreateFromFile( const wchar_t* filename, const std::vector<DxcDefine>& defines, uint32_t compileFlags )
+CShader::~CShader()
 {
-    IDxcBlob* vertexShaderBlob = CompileFromFile( filename, L"MainVS", L"vs_6_0", defines, compileFlags );
-    if ( !vertexShaderBlob )
-        return nullptr;
-
-    IDxcBlob* pixelShaderBlob = CompileFromFile( filename, L"MainPS", L"ps_6_0", defines, compileFlags );
-    if ( !pixelShaderBlob )
+    if ( m_Bytecode )
     {
-        vertexShaderBlob->Release();
-        return nullptr;
+        m_Bytecode->Release();
+        m_Bytecode = nullptr;
     }
-
-    GfxShader* gfxShader = new GfxShader();
-    gfxShader->m_VertexShader = vertexShaderBlob;
-    gfxShader->m_PixelShader = pixelShaderBlob;
-    return gfxShader;
 }
 
-GfxShader::GfxShader()
-    : m_VertexShader( nullptr )
-    , m_PixelShader( nullptr )
+CShader* CShader::CreateVertexFromFile( const wchar_t* filename, const std::vector<DxcDefine>& defines, uint32_t compileFlags )
 {
+    IDxcBlob* blob = CompileFromFile( filename, L"MainVS", L"vs_6_0", defines, compileFlags );
+    CShader* shader = new CShader();
+    shader->m_Bytecode = blob;
+    return shader;
 }
 
-GfxShader::~GfxShader()
+CShader* CShader::CreatePixelFromFile( const wchar_t* filename, const std::vector<DxcDefine>& defines, uint32_t compileFlags )
 {
-    if ( m_VertexShader )
-        m_VertexShader->Release();
-    if ( m_PixelShader )
-        m_PixelShader->Release();
+    IDxcBlob* blob = CompileFromFile( filename, L"MainPS", L"ps_6_0", defines, compileFlags );
+    CShader* shader = new CShader();
+    shader->m_Bytecode = blob;
+    return shader;
 }
 
-ComputeShader* ComputeShader::CreateFromFile( const wchar_t* filename, const std::vector<DxcDefine>& defines, uint32_t compileFlags )
+CShader* CShader::CreateComputeFromFile( const wchar_t* filename, const std::vector<DxcDefine>& defines, uint32_t compileFlags )
 {
-    IDxcBlob* shaderBlob = CompileFromFile( filename, L"main", L"cs_6_6", defines, compileFlags );
-    if ( !shaderBlob )
-        return nullptr;
-
-    ComputeShader* computeShader = new ComputeShader();
-    computeShader->m_ComputeShader = shaderBlob;
-    return computeShader;
+    IDxcBlob* blob = CompileFromFile( filename, L"main", L"cs_6_6", defines, compileFlags );
+    CShader* shader = new CShader();
+    shader->m_Bytecode = blob;
+    return shader;
 }
-
-ComputeShader::ComputeShader()
-    : m_ComputeShader( nullptr )
-{
-}
-
-ComputeShader::~ComputeShader()
-{
-    if ( m_ComputeShader )
-        m_ComputeShader->Release();
-}
-

@@ -51,25 +51,30 @@ bool CScene::InitPostProcessing()
 
     // Compile shaders
     std::vector<DxcDefine> shaderDefines;
-    GfxShaderPtr postFXShader( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
+    ShaderPtr vertexShader( CShader::CreateVertexFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
+    if ( !vertexShader )
+        return false;
+
+    shaderDefines.clear();
+    ShaderPtr postFXShader( CShader::CreatePixelFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
     if ( !postFXShader )
         return false;
 
     shaderDefines.clear();
     shaderDefines.push_back( { L"DISABLE_POST_FX", L"0" } );
-    GfxShaderPtr postFXDisabledShader( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
+    ShaderPtr postFXDisabledShader( CShader::CreatePixelFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
     if ( !postFXDisabledShader )
         return false;
 
     shaderDefines.clear();
     shaderDefines.push_back( { L"AUTO_EXPOSURE", L"0" } );
-    GfxShaderPtr postFXAutoExposureShader( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
+    ShaderPtr postFXAutoExposureShader( CShader::CreatePixelFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
     if ( !postFXAutoExposureShader )
         return false;
 
     shaderDefines.clear();
     shaderDefines.push_back( { L"COPY", L"0" } );
-    GfxShaderPtr copyShader( GfxShader::CreateFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
+    ShaderPtr copyShader( CShader::CreatePixelFromFile( L"Shaders\\PostProcessings.hlsl", shaderDefines ) );
     if ( !copyShader )
         return false;
 
@@ -138,32 +143,32 @@ bool CScene::InitPostProcessing()
     psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 
     // PostFX PSO
-    psoDesc.VS = postFXShader->GetVertexShaderBytecode();
-    psoDesc.PS = postFXShader->GetPixelShaderBytecode();
+    psoDesc.VS = vertexShader->GetBytecode();
+    psoDesc.PS = postFXShader->GetBytecode();
     if ( FAILED( D3D12Adapter::GetDevice()->CreateGraphicsPipelineState( &psoDesc, IID_PPV_ARGS( m_PostFXPSO.GetAddressOf() ) ) ) )
     {
         return false;
     }
 
     // PostFXAutoExposure PSO
-    psoDesc.VS = postFXAutoExposureShader->GetVertexShaderBytecode();
-    psoDesc.PS = postFXAutoExposureShader->GetPixelShaderBytecode();
+    psoDesc.VS = vertexShader->GetBytecode();
+    psoDesc.PS = postFXAutoExposureShader->GetBytecode();
     if ( FAILED( D3D12Adapter::GetDevice()->CreateGraphicsPipelineState( &psoDesc, IID_PPV_ARGS( m_PostFXAutoExposurePSO.GetAddressOf() ) ) ) )
     {
         return false;
     }
 
     // PostFXDisabled PSO
-    psoDesc.VS = postFXDisabledShader->GetVertexShaderBytecode();
-    psoDesc.PS = postFXDisabledShader->GetPixelShaderBytecode();
+    psoDesc.VS = vertexShader->GetBytecode();
+    psoDesc.PS = postFXDisabledShader->GetBytecode();
     if ( FAILED( D3D12Adapter::GetDevice()->CreateGraphicsPipelineState( &psoDesc, IID_PPV_ARGS( m_PostFXDisabledPSO.GetAddressOf() ) ) ) )
     {
         return false;
     }
 
     // Copy PSO
-    psoDesc.VS = copyShader->GetVertexShaderBytecode();
-    psoDesc.PS = copyShader->GetPixelShaderBytecode();
+    psoDesc.VS = vertexShader->GetBytecode();
+    psoDesc.PS = copyShader->GetBytecode();
     if ( FAILED( D3D12Adapter::GetDevice()->CreateGraphicsPipelineState( &psoDesc, IID_PPV_ARGS( m_CopyPSO.GetAddressOf() ) ) ) )
     {
         return false;

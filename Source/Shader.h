@@ -7,42 +7,23 @@ enum EShaderCompileFlag
 };
 
 
-class GfxShader
+class CShader
 {
 public:
-    static GfxShader* CreateFromFile( const wchar_t* filename, const std::vector<DxcDefine>& defines, uint32_t compileFlags = EShaderCompileFlag_None );
+    static CShader* CreateVertexFromFile( const wchar_t* filename, const std::vector<DxcDefine>& defines, uint32_t compileFlags = EShaderCompileFlag_None );
 
-    ~GfxShader();
+    static CShader* CreatePixelFromFile( const wchar_t* filename, const std::vector<DxcDefine>& defines, uint32_t compileFlags = EShaderCompileFlag_None );
 
-    IDxcBlob* GetVertexShader() const { return m_VertexShader; }
+    static CShader* CreateComputeFromFile( const wchar_t* filename, const std::vector<DxcDefine>& defines, uint32_t compileFlags = EShaderCompileFlag_None );
 
-    IDxcBlob* GetPixelShader() const { return m_PixelShader; }
+    CShader()
+        : m_Bytecode( nullptr )
+    {
+    }
 
-    D3D12_SHADER_BYTECODE GetVertexShaderBytecode() const { return { m_VertexShader->GetBufferPointer(), m_VertexShader->GetBufferSize() }; }
+    ~CShader();
 
-    D3D12_SHADER_BYTECODE GetPixelShaderBytecode() const { return { m_PixelShader->GetBufferPointer(), m_PixelShader->GetBufferSize() }; }
+    D3D12_SHADER_BYTECODE GetBytecode() const { return { m_Bytecode->GetBufferPointer(), m_Bytecode->GetBufferSize() }; }
 
-private:
-    GfxShader();
-
-    IDxcBlob* m_VertexShader;
-    IDxcBlob* m_PixelShader;
-};
-
-
-class ComputeShader
-{
-public:
-    static ComputeShader* CreateFromFile( const wchar_t* filename, const std::vector<DxcDefine>& defines, uint32_t compileFlags = EShaderCompileFlag_None );
-
-    ~ComputeShader();
-
-    IDxcBlob* GetNative() const { return m_ComputeShader; }
-
-    D3D12_SHADER_BYTECODE GetShaderBytecode() const { return { m_ComputeShader->GetBufferPointer(), m_ComputeShader->GetBufferSize() }; }
-
-private:
-    ComputeShader();
-
-    IDxcBlob* m_ComputeShader;
+    IDxcBlob* m_Bytecode;
 };

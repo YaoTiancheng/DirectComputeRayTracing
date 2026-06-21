@@ -66,7 +66,7 @@ static void CompileShader( CScene* scene, int32_t filterIndex )
     std::vector<DxcDefine> shaderDefines;
     assert( filterIndex < ARRAY_LENGTH( filterDefines ) );
     shaderDefines.push_back( { filterDefines[ filterIndex ], L"" } );
-    ComputeShaderPtr shader( ComputeShader::CreateFromFile( L"Shaders\\SampleConvolution.hlsl", shaderDefines ) );
+    ShaderPtr shader( CShader::CreateComputeFromFile( L"Shaders\\SampleConvolution.hlsl", shaderDefines ) );
     if ( !shader )
     {
         return;
@@ -76,7 +76,7 @@ static void CompileShader( CScene* scene, int32_t filterIndex )
     D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
     desc.pRootSignature = scene->m_SampleConvolutionRootSignature.Get();
     desc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-    desc.CS = shader->GetShaderBytecode();
+    desc.CS = shader->GetBytecode();
     ID3D12PipelineState* PSO = nullptr;
     if ( FAILED( D3D12Adapter::GetDevice()->CreateComputePipelineState( &desc, IID_PPV_ARGS( &PSO ) ) ) )
     {

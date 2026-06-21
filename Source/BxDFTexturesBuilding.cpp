@@ -86,7 +86,7 @@ static CD3D12ComPtr<ID3D12PipelineState> CompileAndCreateKernel( const wchar_t* 
     ADD_SHADER_DEFINE_WITH_SHARED_BUFFER( L"BXDF_TYPE", params.m_BxDFType, L"%d" );
 #undef ADD_SHADER_DEFINE_WITH_SHARED_BUFFER
 
-    ComputeShaderPtr shader( ComputeShader::CreateFromFile( L"Shaders\\BxDFTexturesBuilding.hlsl", shaderDefines, compileFlags ) );
+    ShaderPtr shader( CShader::CreateComputeFromFile( L"Shaders\\BxDFTexturesBuilding.hlsl", shaderDefines, compileFlags ) );
     if ( !shader )
     {
         return CD3D12ComPtr<ID3D12PipelineState>();
@@ -95,7 +95,7 @@ static CD3D12ComPtr<ID3D12PipelineState> CompileAndCreateKernel( const wchar_t* 
     // Create PSO
     D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.pRootSignature = rootSignature;
-    psoDesc.CS = shader->GetShaderBytecode();
+    psoDesc.CS = shader->GetBytecode();
     psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
     ID3D12PipelineState* PSO = nullptr;
     D3D12Adapter::GetDevice()->CreateComputePipelineState( &psoDesc, IID_PPV_ARGS( &PSO ) );

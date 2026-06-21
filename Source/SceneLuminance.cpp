@@ -17,15 +17,15 @@ static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTab
 
 bool CScene::InitSceneLuminance()
 {
-    ComputeShaderPtr sumLuminanceToSingleShader, sumLuminanceTo1DShader;
+    ShaderPtr sumLuminanceToSingleShader, sumLuminanceTo1DShader;
     {
         std::vector<DxcDefine> sumLuminanceShaderDefines;
-        sumLuminanceToSingleShader.reset( ComputeShader::CreateFromFile( L"Shaders\\SumLuminance.hlsl", sumLuminanceShaderDefines ) );
+        sumLuminanceToSingleShader.reset( CShader::CreateComputeFromFile( L"Shaders\\SumLuminance.hlsl", sumLuminanceShaderDefines ) );
         if ( !sumLuminanceToSingleShader )
             return false;
 
         sumLuminanceShaderDefines.push_back( { L"REDUCE_TO_1D", L"0" } );
-        sumLuminanceTo1DShader.reset( ComputeShader::CreateFromFile( L"Shaders\\SumLuminance.hlsl", sumLuminanceShaderDefines ) );
+        sumLuminanceTo1DShader.reset( CShader::CreateComputeFromFile( L"Shaders\\SumLuminance.hlsl", sumLuminanceShaderDefines ) );
         if ( !sumLuminanceTo1DShader )
             return false;
     }
@@ -64,14 +64,14 @@ bool CScene::InitSceneLuminance()
         desc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 
         // SumLuminanceTo1D PSO
-        desc.CS = sumLuminanceTo1DShader->GetShaderBytecode();
+        desc.CS = sumLuminanceTo1DShader->GetBytecode();
         if ( FAILED( D3D12Adapter::GetDevice()->CreateComputePipelineState( &desc, IID_PPV_ARGS( m_SumLuminanceTo1DPSO.GetAddressOf() ) ) ) )
         {
             return false;
         }
 
         // SumLuminanceToSingle PSO
-        desc.CS = sumLuminanceToSingleShader->GetShaderBytecode();
+        desc.CS = sumLuminanceToSingleShader->GetBytecode();
         if ( FAILED( D3D12Adapter::GetDevice()->CreateComputePipelineState( &desc, IID_PPV_ARGS( m_SumLuminanceToSinglePSO.GetAddressOf() ) ) ) )
         {
             return false;

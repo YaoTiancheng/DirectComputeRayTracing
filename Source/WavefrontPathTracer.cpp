@@ -590,7 +590,7 @@ bool CWavefrontPathTracer::CompileAndCreateShader( CScene* scene, EShaderKernel 
     const wchar_t* s_KernelDefines[] = { L"EXTENSION_RAY_CAST", L"SHADOW_RAY_CAST", L"NEW_PATH", L"MATERIAL", L"CONTROL", L"FILL_INDIRECT_ARGUMENTS", L"SET_IDLE" };
     rayTracingShaderDefines.push_back( { s_KernelDefines[ (int)kernel ], L"0" } );
 
-    ComputeShaderPtr shader( ComputeShader::CreateFromFile( L"Shaders\\WavefrontPathTracing.hlsl", rayTracingShaderDefines ) );
+    ShaderPtr shader( CShader::CreateComputeFromFile( L"Shaders\\WavefrontPathTracing.hlsl", rayTracingShaderDefines ) );
     if ( !shader )
     {
         return false;
@@ -599,7 +599,7 @@ bool CWavefrontPathTracer::CompileAndCreateShader( CScene* scene, EShaderKernel 
     // Create PSO
     D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.pRootSignature = m_RootSignature.Get();
-    psoDesc.CS = shader->GetShaderBytecode();
+    psoDesc.CS = shader->GetBytecode();
     psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
     ID3D12PipelineState* PSO = nullptr;
     if ( FAILED( D3D12Adapter::GetDevice()->CreateComputePipelineState( &psoDesc, IID_PPV_ARGS( &PSO ) ) ) )

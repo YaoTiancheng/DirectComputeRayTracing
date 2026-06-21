@@ -218,7 +218,7 @@ void CDirectComputeRayTracing::ExecutePostProcessing( const SRenderContext& rend
         if ( m_Scene->m_IsRenderResultTextureRead )
         {
             barriers[ barrierCount++ ] = CD3DX12_RESOURCE_BARRIER::Transition( m_Scene->m_RenderResultTexture->GetTexture(),
-                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET );
+                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET );
             m_Scene->m_IsRenderResultTextureRead = false;
         }
         
@@ -259,7 +259,7 @@ void CDirectComputeRayTracing::ExecuteCopy()
     if ( !m_Scene->m_IsRenderResultTextureRead )
     {
         D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition( m_Scene->m_RenderResultTexture->GetTexture(),
-            D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
+            D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_COPY_SOURCE );
         m_Scene->m_IsRenderResultTextureRead = true;
         commandList->ResourceBarrier( 1, &barrier );
     }

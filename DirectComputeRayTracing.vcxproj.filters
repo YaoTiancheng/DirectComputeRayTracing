@@ -78,6 +78,9 @@
     <ClInclude Include="Source\RenderContext.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Source\SaveImageToFile.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Source\MegakernelPathTracer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -192,6 +195,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\SampleConvolution.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\SaveImageToFile.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\SceneXMLLoading.cpp">

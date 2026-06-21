@@ -38,6 +38,8 @@
 
 #include <fstream>
 #include <sstream>
+#include <string>
+#include <limits>
 
 #include "DirectXShaderCompiler/inc/dxcapi.h"
 #include "DirectXShaderCompiler/inc/d3d12shader.h"

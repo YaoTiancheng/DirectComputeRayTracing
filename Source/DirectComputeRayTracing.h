@@ -87,7 +87,7 @@ public:
 
     void DrawImGui( ID3D12GraphicsCommandList* commandList );
 
-    void OnImGUI( SRenderContext* renderContext );
+    void OnImGUI( SRenderContext* renderContext, std::wstring* outSaveImageFilepath );
 
     void ExecuteSampleConvolution( const SRenderContext& renderContext );
 

@@ -29,6 +29,28 @@ static bool DragFloat3RadianInDegree( const char* label, float v[3], float v_spe
     return false;
 }
 
+static bool SelectSaveImageFilepath( HWND hWnd, std::wstring* outFilepath )
+{
+    OPENFILENAMEW ofn;
+    wchar_t filepath[ MAX_PATH ];
+    ZeroMemory( &ofn, sizeof( ofn ) );
+    filepath[ 0 ] = L'\0';
+    ofn.lStructSize = sizeof( ofn );
+    ofn.hwndOwner = hWnd;
+    ofn.lpstrFile = filepath;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.lpstrFilter = L"Bitmap Image (*.bmp)\0*.bmp\0";
+    ofn.nFilterIndex = 1;
+    ofn.lpstrDefExt = L"bmp";
+    ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT | OFN_NOCHANGEDIR;
+    if ( GetSaveFileNameW( &ofn ) == TRUE )
+    {
+        *outFilepath = filepath;
+        return true;
+    }
+    return false;
+}
+
 static void AllocImGuiDescriptor( ImGui_ImplDX12_InitInfo* info, D3D12_CPU_DESCRIPTOR_HANDLE* out_cpu_desc_handle, D3D12_GPU_DESCRIPTOR_HANDLE* out_gpu_desc_handle )
 {
     SD3D12GPUDescriptorHeapHandle descriptorHandle = D3D12Adapter::GetGPUDescriptorHeap()->GetReserved( 0 );
@@ -100,8 +122,10 @@ void CDirectComputeRayTracing::DrawImGui( ID3D12GraphicsCommandList* commandList
     ImGui_ImplDX12_RenderDrawData( ImGui::GetDrawData(), commandList );
 }
 
-void CDirectComputeRayTracing::OnImGUI( SRenderContext* renderContext )
+void CDirectComputeRayTracing::OnImGUI( SRenderContext* renderContext, std::wstring* outSaveImageFilepath )
 {
+    outSaveImageFilepath->clear();
+
     ImGui_ImplDX12_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
@@ -155,6 +179,11 @@ void CDirectComputeRayTracing::OnImGUI( SRenderContext* renderContext )
 
             ImGui::DragInt( "Small Resolution Width", (int*)&m_SmallResolutionWidth, 16, 16, m_Scene->m_ResolutionWidth, "%d", ImGuiSliderFlags_AlwaysClamp );
             ImGui::DragInt( "Small Resolution Height", (int*)&m_SmallResolutionHeight, 16, 16, m_Scene->m_ResolutionHeight, "%d", ImGuiSliderFlags_AlwaysClamp );
+
+            if ( ImGui::Button( "Save Image to File" ) )
+            {
+                SelectSaveImageFilepath( m_hWnd, outSaveImageFilepath );
+            }
 
             uint32_t lastActivePathTracerIndex = m_ActivePathTracerIndex;
             static const char* s_PathTracerNames[] = { "Megakernel Path Tracer", "Wavefront Path Tracer" };

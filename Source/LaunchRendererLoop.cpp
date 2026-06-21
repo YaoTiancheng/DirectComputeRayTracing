@@ -13,6 +13,7 @@
 #include "WavefrontPathTracer.h"
 #include "ScopedRenderAnnotation.h"
 #include "BxDFTexturesBuilding.h"
+#include "SaveImageToFile.h"
 
 using namespace DirectX;
 
@@ -342,8 +343,18 @@ void CDirectComputeRayTracing::RenderOneFrame()
         ExecuteCopy();
     }
 
-    OnImGUI( &renderContext );
+    std::wstring saveImageFilepath;
+
+    OnImGUI( &renderContext, &saveImageFilepath );
     DrawImGui( commandList );
+
+    // Issue a render result texture readback if requested
+    SImageReadback saveImageReadback;
+    const bool saveImageToFile = !saveImageFilepath.empty();
+    if ( saveImageToFile )
+    {
+        saveImageReadback.ReadbackRenderResult( m_Scene );
+    }
 
     commandList->OMSetRenderTargets( 0, nullptr, true, nullptr );
 
@@ -362,6 +373,14 @@ void CDirectComputeRayTracing::RenderOneFrame()
 
     ID3D12CommandList* commandLists[] = { commandList };
     D3D12Adapter::GetCommandQueue()->ExecuteCommandLists( 1, commandLists );
+
+    // Flush the image readback and write to file
+    if ( saveImageReadback.m_Buffer )
+    {
+        D3D12Adapter::WaitForGPU();
+        saveImageReadback.SaveToFile( saveImageFilepath.c_str() );
+    }
+
     D3D12Adapter::Present( 0 );
     D3D12Adapter::MoveToNextFrame();
 

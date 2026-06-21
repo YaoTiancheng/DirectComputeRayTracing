@@ -132,6 +132,7 @@
     <ClInclude Include="Source\PointerTypes.h" />
     <ClInclude Include="Source\Rectangle.h" />
     <ClInclude Include="Source\RenderContext.h" />
+    <ClInclude Include="Source\SaveImageToFile.h" />
     <ClInclude Include="Source\Scene.h" />
     <ClInclude Include="Source\StringConversion.h" />
     <ClInclude Include="Source\Texture.h" />
@@ -158,6 +159,7 @@
     <ClCompile Include="Source\SceneRayTrace.cpp" />
     <ClCompile Include="Source\SceneXMLLoading.cpp" />
     <ClCompile Include="Source\SampleConvolution.cpp" />
+    <ClCompile Include="Source\SaveImageToFile.cpp" />
     <ClCompile Include="Source\D3D12Adapter.cpp" />
     <ClCompile Include="Source\Application.cpp" />
     <ClCompile Include="Source\Logging.cpp" />

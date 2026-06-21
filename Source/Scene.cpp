@@ -889,7 +889,7 @@ bool CScene::RecreateFilmTextures()
         , DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
         , EGPUTextureBindFlag_RenderTarget
         , 1
-        , D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ) );
+        , D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_COPY_SOURCE ) );
     if ( !m_RenderResultTexture )
     { 
         return false;

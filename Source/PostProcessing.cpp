@@ -290,7 +290,7 @@ bool CDirectComputeRayTracing::OnPostProcessingImGui()
                 ImGui::Checkbox( "EV100 From Camera Setting", &m_Scene->m_CalculateEV100FromCamera );
                 if ( !m_Scene->m_CalculateEV100FromCamera )
                 {
-                    ImGui::DragFloat( "EV100", &m_Scene->m_ManualEV100, 1.0f, -100.0f, 100.0f, "%.0f", ImGuiSliderFlags_AlwaysClamp );
+                    ImGui::DragFloat( "EV100", &m_Scene->m_ManualEV100, .5f, -100.0f, 100.0f, "%.1f", ImGuiSliderFlags_AlwaysClamp );
                 }
             }
             ImGui::DragFloat( "Luminance White", &m_Scene->m_LuminanceWhite, 0.01f, 0.001f, 1000.0f );

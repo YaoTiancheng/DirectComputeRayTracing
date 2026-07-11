@@ -36,6 +36,7 @@ float SampleTextureArrayLinear( Texture2DArray<float> tex, float3 uvw, uint3 dim
 
 #define BXDFTEX_BRDF_SIZE                float2( BXDFTEX_BRDF_SIZE_X, BXDFTEX_BRDF_SIZE_Y )
 #define BXDFTEX_BRDF_DIELECTRIC_SIZE     float3( BXDFTEX_BRDF_DIELECTRIC_SIZE_X, BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z )
+#define BXDFTEX_BRDF_DIELECTRIC_AVG_SIZE float3( BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z, 1 )
 #define BXDFTEX_BSDF_AVG_SIZE            float3( BXDFTEX_BRDF_DIELECTRIC_SIZE_Y, BXDFTEX_BRDF_DIELECTRIC_SIZE_Z, 1 )
 
 float SampleBRDFTexture( float cosThetaO, float alpha )
@@ -55,6 +56,14 @@ float SampleBRDFDielectricTexture( float cosThetaO, float alpha, float eta, bool
     float w = ( eta - 1.0f ) / 2.0f;
     float3 uvw = float3( cosThetaO, alpha, w );
     return SampleTextureArrayLinear( g_BRDFDielectricTexture, uvw, BXDFTEX_BRDF_DIELECTRIC_SIZE, sliceOffset );
+}
+
+float SampleBRDFDielectricAverageTexture( float alpha, float eta, bool isEntering )
+{
+    uint sliceOffset = isEntering ? 1 : 0;
+    float v = ( eta - 1.0f ) / 2.0f;
+    float3 uvw = float3( alpha, v, 0.0f );
+    return SampleTextureArrayLinear( g_BRDFDielectricAvgTexture, uvw, BXDFTEX_BRDF_DIELECTRIC_AVG_SIZE, sliceOffset );
 }
 
 float SampleBSDFTexture( float cosThetaO, float alpha, float eta, bool isEntering )

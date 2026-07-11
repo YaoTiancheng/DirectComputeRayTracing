@@ -30,7 +30,7 @@ static const uint32_t s_KernelGroupSize = 32;
 
 static const uint32_t s_BlockDimensionCount = 2;
 
-static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 17, 11 );
+static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 18, 11 );
 
 struct alignas( 256 ) SControlConstants
 {
@@ -938,6 +938,7 @@ void CWavefrontPathTracer::RenderOneIteration( CScene* scene, const SBxDFTexture
             , BxDFTextures.m_CookTorranceBRDF->GetSRV()
             , BxDFTextures.m_CookTorranceBRDFAverage->GetSRV()
             , BxDFTextures.m_CookTorranceBRDFDielectric->GetSRV()
+            , BxDFTextures.m_CookTorranceBRDFDielectricAverage->GetSRV()
             , BxDFTextures.m_CookTorranceBSDF->GetSRV()
             , BxDFTextures.m_CookTorranceBSDFAverage->GetSRV()
             , environmentTextureSRV

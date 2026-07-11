@@ -43,7 +43,7 @@ struct alignas( 256 ) SRayTracingConstants
     uint32_t            frameSeed;
 };
 
-static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 17, 2 );
+static SD3D12DescriptorTableLayout s_DescriptorTableLayout = SD3D12DescriptorTableLayout( 18, 2 );
 
 bool CMegakernelPathTracer::Create()
 {
@@ -217,7 +217,7 @@ void CMegakernelPathTracer::Render( CScene* scene, const SRenderContext& renderC
     {
         environmentTextureSRV = scene->m_EnvironmentLight->m_Texture->GetSRV();
     }
-    SD3D12DescriptorHandle srcDescriptors[ 19 ] =
+    SD3D12DescriptorHandle srcDescriptors[ 20 ] =
     {
           scene->m_VerticesBuffer->GetSRV()
         , scene->m_TrianglesBuffer->GetSRV()
@@ -225,6 +225,7 @@ void CMegakernelPathTracer::Render( CScene* scene, const SRenderContext& renderC
         , BxDFTextures->m_CookTorranceBRDF->GetSRV()
         , BxDFTextures->m_CookTorranceBRDFAverage->GetSRV()
         , BxDFTextures->m_CookTorranceBRDFDielectric->GetSRV()
+        , BxDFTextures->m_CookTorranceBRDFDielectricAverage->GetSRV()
         , BxDFTextures->m_CookTorranceBSDF->GetSRV()
         , BxDFTextures->m_CookTorranceBSDFAverage->GetSRV()
         , scene->m_BVHNodesBuffer ? scene->m_BVHNodesBuffer->GetSRV() : D3D12Adapter::GetNullBufferSRV()

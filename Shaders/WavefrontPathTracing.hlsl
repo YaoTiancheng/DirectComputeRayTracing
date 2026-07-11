@@ -77,7 +77,7 @@ Buffer<uint> g_InstanceMaterialOverrides            : register( t8 );
 StructuredBuffer<uint> g_MaterialIds                : register( t9 );
 StructuredBuffer<Material> g_Materials              : register( t10 );
 Buffer<float> g_OpacitySamples                      : register( t11 );
-Texture2D<float4> g_Textures[]                      : register( t17 );
+Texture2D<float4> g_Textures[]                      : register( t18 );
 RWStructuredBuffer<SRayHit> g_RayHits               : register( u0 );
 
 [numthreads( 32, 1, 1 )]
@@ -135,7 +135,7 @@ Buffer<uint> g_InstanceMaterialOverrides            : register( t8 );
 StructuredBuffer<uint> g_MaterialIds                : register( t9 );
 StructuredBuffer<Material> g_Materials              : register( t10 );
 Buffer<float> g_OpacitySamples                      : register( t11 );
-Texture2D<float4> g_Textures[]                      : register( t17 );
+Texture2D<float4> g_Textures[]                      : register( t18 );
 RWBuffer<uint> g_Flags                              : register( u0 );
 
 [numthreads( 32, 1, 1 )]
@@ -277,10 +277,11 @@ Buffer<uint> g_InstanceLightIndices                     : register( t10 );
 Texture2D<float> g_BRDFTexture                          : register( t11 );
 Texture2D<float> g_BRDFAvgTexture                       : register( t12 );
 Texture2DArray<float> g_BRDFDielectricTexture           : register( t13 );
-Texture2DArray<float> g_BSDFTexture                     : register( t14 );
-Texture2DArray<float> g_BSDFAvgTexture                  : register( t15 );
-TextureCube<float3> g_EnvTexture                        : register( t16 );
-Texture2D<float4> g_Textures[]                          : register( t17 );
+Texture2DArray<float> g_BRDFDielectricAvgTexture        : register( t14 );
+Texture2DArray<float> g_BSDFTexture                     : register( t15 );
+Texture2DArray<float> g_BSDFAvgTexture                  : register( t16 );
+TextureCube<float3> g_EnvTexture                        : register( t17 );
+Texture2D<float4> g_Textures[]                          : register( t18 );
 
 RWStructuredBuffer<SRay> g_Rays                         : register( u0 );
 RWStructuredBuffer<SRay> g_ShadowRays                   : register( u1 );

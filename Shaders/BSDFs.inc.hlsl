@@ -7,12 +7,32 @@
 #include "KullaConty.inc.hlsl"
 #include "Intersection.inc.hlsl"
 #include "LightingContext.inc.hlsl"
+#include "InternalScatteringMode.inc.hlsl"
 
 #define ALPHA_THRESHOLD 0.00052441f
 
 float SpecularWeight( float cosTheta, float alpha, float ior, bool isEntering )
 {
     return SampleBRDFDielectricTexture( cosTheta, alpha, ior, isEntering );
+}
+
+float3 CalculateInternalScatteringFactor( float alpha, float3 albedo, float ior, uint mode )
+{
+    [branch]
+    if ( mode == INTERNAL_SCATTERING_MODE_IGNORE )
+    {
+        return 1.f;
+    }
+    else 
+    {
+        float AverageInternalReflectance = SampleBRDFDielectricAverageTexture( alpha, ior, true );
+        float3 factor = ( 1.f - AverageInternalReflectance );
+        if ( mode == INTERNAL_SCATTERING_MODE_MULTIPLE )
+        {
+            factor /= 1.f - albedo * AverageInternalReflectance;
+        }
+        return factor;
+    }
 }
 
 //
@@ -52,6 +72,7 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
         float E = 0.f;
         float E_avg = 0.f;
         float3 F_ms = 0.f;
+        float3 InternalScatteringFactor = 1.f;
 
         bool hasAnyBrdf = !isInverted || intersection.isTwoSided;
 
@@ -81,6 +102,8 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
                 F_ms = MultiscatteringFresnel( E_avg, F_avg );
                 ratio_lambertBrdf = max( ratio_lambertBrdf - F_ms * ( 1.f - E ), 0.f );
             }
+
+            InternalScatteringFactor = CalculateInternalScatteringFactor( intersection.alpha, intersection.albedo, intersection.ior.r, INTERNAL_SCATTERING_MODE_MULTIPLE );
         }
         else if ( intersection.materialType == MATERIAL_TYPE_CONDUCTOR && hasAnyBrdf && !perfectSmooth )
         {
@@ -98,7 +121,7 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
     
         if ( hasLambertBrdf )
         {
-            value += EvaluateLambertBRDF( wi, wo, lightingContext ) * ratio_lambertBrdf * intersection.albedo;
+            value += EvaluateLambertBRDF( wi, wo, lightingContext ) * ratio_lambertBrdf * intersection.albedo * InternalScatteringFactor;
         }
         if ( hasCookTorranceBrdf )
         {
@@ -308,6 +331,7 @@ void SampleBSDF( float3 wo
         float E = 0.f;
         float E_avg = 0.f;
         float3 F_ms = 0.f;
+        float3 InternalScatteringFactor = 1.f;
 
         bool hasAnyBrdf = !isInverted || intersection.isTwoSided;
 
@@ -339,6 +363,8 @@ void SampleBSDF( float3 wo
                 weight_cookTorranceMultiscatteringBrdf = F_ms * ( 1.f - E );
                 weight_lambertBrdf = max( weight_lambertBrdf - weight_cookTorranceMultiscatteringBrdf, 0.f );
             }
+
+            InternalScatteringFactor = CalculateInternalScatteringFactor( intersection.alpha, intersection.albedo, intersection.ior.r, INTERNAL_SCATTERING_MODE_MULTIPLE );
         }
         else if ( intersection.materialType == MATERIAL_TYPE_CONDUCTOR && hasAnyBrdf )
         {
@@ -390,7 +416,7 @@ void SampleBSDF( float3 wo
 
         if ( hasLambertBrdf )
         {
-            value += EvaluateLambertBRDF( wi, wo, lightingContext ) * weight_lambertBrdf * intersection.albedo;
+            value += EvaluateLambertBRDF( wi, wo, lightingContext ) * weight_lambertBrdf * intersection.albedo * InternalScatteringFactor;
             pdf += EvaluateLambertBRDFPdf( wi, wo, lightingContext ) * weight_lambertBrdf;
         }
         if ( hasCookTorranceBrdf && !perfectSmooth )

@@ -79,6 +79,7 @@ void HitShader( float3 rayOrigin
     intersection.materialType = materialFlags & MATERIAL_FLAG_TYPE_MASK;
     intersection.isTwoSided = (materialFlags & MATERIAL_FLAG_IS_TWOSIDED) != 0;
     intersection.multiscattering = (materialFlags & MATERIAL_FLAG_MULTISCATTERING) != 0;
+    intersection.internalScatteringMode = ( materialFlags & MATERIAL_FLAG_INTERNAL_SCATTERING_MASK ) >> MATERIAL_FLAG_INTERNAL_SCATTERING_SHIFT;
     intersection.backface = backface;
 }
 

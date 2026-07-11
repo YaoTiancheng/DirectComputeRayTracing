@@ -870,10 +870,17 @@ bool SMaterialGatheringContext::TranslateMaterialFromBSDF( const SValue& BSDF, S
     material->m_Multiscattering = false;
     material->m_IsTwoSided = isTwoSided;
     material->m_HasRoughnessTexture = false;
+    material->m_InternalScatteringMode = INTERNAL_SCATTERING_MODE_MULTIPLE;
     if ( !isMask )
     {
         material->m_Opacity = 1.0f;
         material->m_OpacityTextureIndex = INDEX_NONE;
+    }
+
+    if ( targetMaterialType == EMaterialType::Plastic )
+    {
+        const bool nonlinear = BSDF.GetObjectField<bool>( "nonlinear", false );
+        material->m_InternalScatteringMode = nonlinear ? INTERNAL_SCATTERING_MODE_MULTIPLE : INTERNAL_SCATTERING_MODE_SINGLE;
     }
 
     if ( hasRoughness )
@@ -1288,6 +1295,7 @@ bool CScene::LoadFromXMLFile( const std::filesystem::path& filepath )
                     material.m_Multiscattering = false;
                     material.m_IsTwoSided = false;
                     material.m_HasRoughnessTexture = false;
+                    material.m_InternalScatteringMode = INTERNAL_SCATTERING_MODE_MULTIPLE;
                     material.m_Name = "LightMaterial";
                     m_Materials.emplace_back( material );
                 }

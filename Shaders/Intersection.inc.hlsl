@@ -13,6 +13,7 @@ struct Intersection
     bool    isTwoSided;
     bool    backface;
     bool    multiscattering;
+    uint    internalScatteringMode;
     uint    materialType;
     uint    lightIndex;
     uint    triangleIndex;

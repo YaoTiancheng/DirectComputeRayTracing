@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../Shaders/InternalScatteringMode.inc.hlsl"
+
 enum class EMaterialType
 {
     Diffuse = 0,
@@ -23,6 +25,7 @@ struct SMaterial
     EMaterialType m_MaterialType;
     int32_t m_AlbedoTextureIndex;
     int32_t m_OpacityTextureIndex;
+    uint32_t m_InternalScatteringMode;
     bool m_Multiscattering;
     bool m_IsTwoSided;
     bool m_HasRoughnessTexture;

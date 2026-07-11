@@ -464,7 +464,7 @@ void CDirectComputeRayTracing::OnImGUI( SRenderContext* renderContext, std::wstr
     {
         ImGui::Begin( "Inspector" );
 
-        ImGui::PushItemWidth( ImGui::GetFontSize() * -9 );
+        ImGui::PushItemWidth( ImGui::GetFontSize() * -13 );
 
         if ( m_ObjectSelection.m_PunctualLightSelectionIndex >= 0 )
         {
@@ -605,6 +605,17 @@ void CDirectComputeRayTracing::OnImGUI( SRenderContext* renderContext, std::wstr
                     {
                         const CD3DX12_GPU_DESCRIPTOR_HANDLE textureSRV( m_Scene->m_TextureDescriptorTable, selection->m_AlbedoTextureIndex, D3D12Adapter::GetDescriptorSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ) );
                         ImGui::ImageButton( "Albedo Texture", (ImTextureID)textureSRV.ptr, ImVec2( 180, 180 ) );
+                    }
+                }
+
+                if ( selection->m_MaterialType == EMaterialType::Plastic )
+                {
+                    static const char* s_InternalScatteringModeNames[] = { "Ignore", "Single", "Multiple" };
+                    int internalScatteringMode = (int)selection->m_InternalScatteringMode;
+                    if ( ImGui::Combo( "Internal Scattering", &internalScatteringMode, s_InternalScatteringModeNames, IM_ARRAYSIZE( s_InternalScatteringModeNames ) ) )
+                    {
+                        selection->m_InternalScatteringMode = (uint32_t)internalScatteringMode;
+                        m_Scene->m_IsMaterialGPUBufferDirty = true;
                     }
                 }
 

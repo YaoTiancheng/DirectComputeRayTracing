@@ -51,6 +51,7 @@ static void GetDefaultMaterial( SMaterial* material )
     material->m_Multiscattering = false;
     material->m_IsTwoSided = false;
     material->m_HasRoughnessTexture = false;
+    material->m_InternalScatteringMode = INTERNAL_SCATTERING_MODE_MULTIPLE;
     material->m_Name = "DefaultMaterial";
 }
 
@@ -763,6 +764,7 @@ void CScene::UpdateMaterialGPUData()
                 material->flags |= materialSetting->m_Multiscattering ? MATERIAL_FLAG_MULTISCATTERING : 0;
                 material->flags |= materialSetting->m_IsTwoSided ? MATERIAL_FLAG_IS_TWOSIDED : 0;
                 material->flags |= materialSetting->m_HasRoughnessTexture ? MATERIAL_FLAG_ROUGHNESS_TEXTURE : 0;
+                material->flags |= ( materialSetting->m_InternalScatteringMode << MATERIAL_FLAG_INTERNAL_SCATTERING_SHIFT ) & MATERIAL_FLAG_INTERNAL_SCATTERING_MASK;
             }
             context.Unmap();
             context.Upload();

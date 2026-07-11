@@ -318,6 +318,7 @@ void SMaterialTranslationContext::TranslateMaterials( const tinyobj::material_t*
         dstMaterial->m_Multiscattering = false;
         dstMaterial->m_IsTwoSided = false;
         dstMaterial->m_HasRoughnessTexture = false;
+        dstMaterial->m_InternalScatteringMode = INTERNAL_SCATTERING_MODE_IGNORE;
         dstMaterial->m_Name = srcMaterial->name;
 
         int32_t albedoTextureIndex = INDEX_NONE;

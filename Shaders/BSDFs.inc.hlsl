@@ -103,7 +103,7 @@ float3 EvaluateBSDF( float3 wi, float3 wo, Intersection intersection )
                 ratio_lambertBrdf = max( ratio_lambertBrdf - F_ms * ( 1.f - E ), 0.f );
             }
 
-            InternalScatteringFactor = CalculateInternalScatteringFactor( intersection.alpha, intersection.albedo, intersection.ior.r, INTERNAL_SCATTERING_MODE_MULTIPLE );
+            InternalScatteringFactor = CalculateInternalScatteringFactor( intersection.alpha, intersection.albedo, intersection.ior.r, intersection.internalScatteringMode );
         }
         else if ( intersection.materialType == MATERIAL_TYPE_CONDUCTOR && hasAnyBrdf && !perfectSmooth )
         {
@@ -364,7 +364,7 @@ void SampleBSDF( float3 wo
                 weight_lambertBrdf = max( weight_lambertBrdf - weight_cookTorranceMultiscatteringBrdf, 0.f );
             }
 
-            InternalScatteringFactor = CalculateInternalScatteringFactor( intersection.alpha, intersection.albedo, intersection.ior.r, INTERNAL_SCATTERING_MODE_MULTIPLE );
+            InternalScatteringFactor = CalculateInternalScatteringFactor( intersection.alpha, intersection.albedo, intersection.ior.r, intersection.internalScatteringMode );
         }
         else if ( intersection.materialType == MATERIAL_TYPE_CONDUCTOR && hasAnyBrdf )
         {

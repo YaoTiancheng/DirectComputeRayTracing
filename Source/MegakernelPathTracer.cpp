@@ -9,7 +9,6 @@
 #include "GPUTexture.h"
 #include "Scene.h"
 #include "RenderContext.h"
-#include "MessageBox.h"
 #include "ScopedRenderAnnotation.h"
 #include "imgui/imgui.h"
 #include "../Shaders/LightSharedDef.inc.hlsl"
@@ -317,7 +316,7 @@ bool CMegakernelPathTracer::CompileAndCreateRayTracingKernel( CScene* scene )
     ShaderPtr rayTracingShader( CShader::CreateComputeFromFile( L"Shaders\\MegakernelPathTracing.hlsl", rayTracingShaderDefines ) );
     if ( !rayTracingShader )
     {
-        CMessagebox::GetSingleton().Append( "Failed to compile ray tracing shader.\n" );
+        LOG_STRING( "Failed to compile ray tracing shader.\n" );
         return false;
     }
 

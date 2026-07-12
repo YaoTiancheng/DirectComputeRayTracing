@@ -1,5 +1,4 @@
 #include "stdafx.h"
-#include "MessageBox.h"
 #include "Logging.h"
 #include "Scene.h"
 #include "MathHelper.h"

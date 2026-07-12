@@ -8,7 +8,6 @@
 #include "Shader.h"
 #include "GPUBuffer.h"
 #include "GPUTexture.h"
-#include "MessageBox.h"
 #include "RenderContext.h"
 #include "ScopedRenderAnnotation.h"
 #include "Logging.h"

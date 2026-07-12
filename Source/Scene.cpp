@@ -3,7 +3,6 @@
 #include "CommandLineArgs.h"
 #include "Mesh.h"
 #include "Logging.h"
-#include "MessageBox.h"
 #include "GPUBuffer.h"
 #include "GPUTexture.h"
 #include "Constants.h"

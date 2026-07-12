@@ -90,9 +90,6 @@
     <ClInclude Include="Source\Scene.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Source\MessageBox.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Source\WavefrontPathTracer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -186,9 +183,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\Scene.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\MessageBox.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\WavefrontPathTracer.cpp">
